@@ -23,7 +23,7 @@ function needsCloudSignIn(director) {     // Doodle Cloud picked but nobody sign
 function wholeVideoOffline(res) {          // Doodle Cloud refused the video (quota, budget, network): say so plainly
   return res?.notes?.find((n) => n.startsWith('The offline director planned this video')) || null;
 }
-let STATE = null, current = null, board = null, dirty = false;
+let STATE = null, current = null, board = null, dirty = false, cloudEmail = '';   // the sign-in address, kept between openings
 
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
@@ -299,7 +299,7 @@ function showSettings() {
   const cloud = STATE.cloud_available ? `<section><h3>Doodle Cloud</h3>
       <p class="muted">${STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : '5 free AI-directed videos a month. No API key needed.'}
         <a href="https://edwardaiwang-svg.github.io/doodle-studio/privacy.html" target="_blank">What is sent (privacy)</a></p>
-      <div class="row"><input id="c-email" placeholder="you@example.com"><button id="c-send" class="small">Email me a code</button></div>
+      <div class="row"><input id="c-email" placeholder="you@example.com" value="${esc(cloudEmail)}"><button id="c-send" class="small">Email me a code</button></div>
       <div class="row" style="margin-top:6px"><input id="c-code" placeholder="6-digit code"><button id="c-verify" class="small">Sign in</button></div></section>` : '';
   const body = modal(`<div class="settings"><h2>Settings</h2>${cloud}
     <section><h3>Advanced directors</h3><label class="row"><input id="s-adv" type="checkbox" style="width:auto"${STATE.advanced ? ' checked' : ''}>
@@ -310,11 +310,16 @@ function showSettings() {
       <p class="muted">Saved: ${esc(Object.entries(STATE.keys).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none')}</p>` : ''}</section>
     <section><h3>Projects folder</h3><div class="row"><input id="s-root" value="${esc(STATE.projects_root)}"><button id="s-save" class="small">Save</button></div></section>
     <section><h3>Voices</h3><p class="muted">English: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · 中文: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'}</p></section></div>`);
+  $('#c-email', body)?.addEventListener('input', (e) => { cloudEmail = e.target.value.trim(); });
   $('#c-send', body)?.addEventListener('click', async () => {
-    try { await api('/api/cloud/signup', { method: 'POST', body: JSON.stringify({ email: $('#c-email', body).value }) }); toast('Code sent. Check your email.'); }
+    try { await api('/api/cloud/signup', { method: 'POST', body: JSON.stringify({ email: $('#c-email', body).value }) });
+      toast('Code sent. Check your email (and spam).'); $('#c-code', body).focus(); }
     catch (e) { toast(e.message, 6000); }
   });
   $('#c-verify', body)?.addEventListener('click', async () => {
+    if (!$('#c-email', body).value.trim()) {       // the code belongs to an address: ask for it, don't say "expired"
+      toast('Type the email address the code was sent to.', 6000); $('#c-email', body).focus(); return;
+    }
     try { const r = await api('/api/cloud/verify', { method: 'POST', body: JSON.stringify({ email: $('#c-email', body).value, code: $('#c-code', body).value }) });
       toast(r.remaining === null ? 'Signed in: unlimited videos (fair use)' : `Signed in: ${r.remaining} videos left this month`); await refreshState(); closeModal(); refreshDirectorMenus(); }
     catch (e) { toast(e.message, 6000); }
