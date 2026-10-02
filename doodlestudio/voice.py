@@ -196,7 +196,8 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
 
 # ------------------------------------------------------ your own recording
 HOP, WIN = 240, 600      # analysis frames: every 10 ms, 25 ms long
-RECORDING_VERSION = 1    # bump when recording alignment changes (invalidates cached cuts)
+RECORDING_VERSION = 2    # bump when recording alignment changes (invalidates cached cuts)
+TAKE_SR = 48000          # the clips keep the take's full sound (the mix's rate); only the alignment runs at SR
 STEP = .05               # extra cost of a frame only one side advances on (keeps the warp from zigzagging)
 EDGE = 6                 # frames of quiet kept before and after each beat
 SNAP = 30                # frames a cut may move from where the alignment put it, to land in a pause
@@ -205,10 +206,10 @@ MATCH = .4               # a reading of the script matches its guide at .45 or m
 SCALES = (.7, .75, .8, .85, .9, .95, 1., 1.05, 1.1, 1.15, 1.2)    # the take's formants against the guide's
 
 
-def _decode(path: Path) -> np.ndarray:
-    """Any audio file as mono float32 at SR, high-passed at 80 Hz."""
+def _decode(path: Path, rate: int = SR) -> np.ndarray:
+    """Any audio file as mono float32 at ``rate``, high-passed at 80 Hz."""
     run = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-i', str(path), '-af', 'highpass=f=80',
-                          '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'], capture_output=True)
+                          '-ac', '1', '-ar', str(rate), '-f', 'f32le', '-'], capture_output=True)
     if run.returncode or not run.stdout:
         why = run.stderr.decode(errors='replace').strip()[-300:]
         raise ValueError(f'{path.name} could not be read as audio: {why}')
@@ -220,11 +221,11 @@ def _read_wav(path: Path) -> np.ndarray:
         return np.frombuffer(w.readframes(w.getnframes()), '<i2').astype(np.float32) / 32768
 
 
-def _write_wav(path: Path, audio: np.ndarray):
+def _write_wav(path: Path, audio: np.ndarray, rate: int = SR):
     with wave.open(str(path), 'wb') as w:
         w.setnchannels(1)
         w.setsampwidth(2)
-        w.setframerate(SR)
+        w.setframerate(rate)
         w.writeframes((np.clip(audio, -1, 1) * 32767).astype('<i2').tobytes())
 
 
@@ -411,6 +412,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         cuts.append(_pause_between(pauses, tl, last[e], first[s]))
     cuts.append(min((p for p in long if p[1] > last[spans[-1][1]]), key=lambda p: p[0]))
     room = tl > tr                                 # anything over room tone stays: soft endings, releases, breaths
+    full, hop = _decode(recording, TAKE_SR), TAKE_SR // 100
 
     clips, rows, sounds = [], [], []
     for k, ((bid, text), guide, (gs, ge)) in enumerate(zip(beats, guides, spans)):
@@ -420,14 +422,14 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         if b - a < PAUSE or not heard:
             raise ValueError(f'{recording.name}: beat {bid} ("{text[:40]}…") was not found in the recording')
         start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
-        audio = take[start * HOP:end * HOP]
+        audio = full[start * hop:end * hop]
         gain = np.sqrt(_power(gl[gs:ge + 1], gq) / heard)
         sounds.append(audio * min(gain, .99 / max(float(np.abs(audio).max()), 1e-6)))
         t = (offsets[k] / SR + np.asarray(guide.char_times)) * 100
         i0 = np.clip(t.astype(int), 0, len(first) - 2)
         j = first[i0] + np.clip(t - i0, 0, 1) * np.minimum(1, first[i0 + 1] - first[i0])
-        char_times = np.maximum.accumulate(np.clip((j - start) / 100, 0, len(audio) / SR))
-        clips.append({'id': bid, 'wav': f'{key}-{k:03}.wav', 'duration': round(len(audio) / SR, 3),
+        char_times = np.maximum.accumulate(np.clip((j - start) / 100, 0, len(audio) / TAKE_SR))
+        clips.append({'id': bid, 'wav': f'{key}-{k:03}.wav', 'duration': round(len(audio) / TAKE_SR, 3),
                       'char_times': [round(float(x), 3) for x in char_times]})
         on = (path[:, 0] >= gs) & (path[:, 0] <= ge) & (gl[path[:, 0]] > gq)
         match = round(1 - float(cost[on].mean()), 2)
@@ -445,6 +447,6 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
                          f"{info['report']['match']:.2f}, under {MATCH}); see {report}")
     out.mkdir(parents=True, exist_ok=True)
     for c, audio in zip(clips, sounds):
-        _write_wav(out / c['wav'], audio)
+        _write_wav(out / c['wav'], audio, TAKE_SR)
     meta.write_text(json.dumps(info, ensure_ascii=False))
     return {c['id']: Clip(out / c['wav'], c['duration'], c['char_times']) for c in info['clips']}

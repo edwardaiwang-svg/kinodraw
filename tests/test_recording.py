@@ -149,3 +149,23 @@ def test_a_take_of_part_of_the_script_is_refused(take, aligned, tmp_path):
         w.writeframes(head)
     with pytest.raises(ValueError, match='record the whole script'):
         voice.from_recording(part, BEATS, 'en', aligned[2])
+
+
+@needs_models
+def test_the_cut_keeps_the_top_of_a_real_voice(take, tmp_path):
+    """The guide stops at 12 kHz, a real voice does not: clips are cut from the take at the mix's rate."""
+    with wave.open(str(take[0])) as w:
+        rate, x = w.getframerate(), np.frombuffer(w.readframes(w.getnframes()), '<i2').reshape(-1, 2) / 32768
+    x = x + .03 * np.sin(2 * np.pi * 15000 * np.arange(len(x)) / rate)[:, None]            # a voice's air
+    bright = tmp_path / 'bright.wav'
+    with wave.open(str(bright), 'wb') as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes((np.clip(x, -1, 1) * 32767).astype('<i2').tobytes())
+    clip = voice.from_recording(bright, BEATS, 'en', tmp_path / 'voice')[BEATS[0][0]]
+    with wave.open(str(clip.wav)) as w:
+        rate, y = w.getframerate(), np.frombuffer(w.readframes(w.getnframes()), '<i2') / 32768
+    spectrum, hz = np.abs(np.fft.rfft(y * np.hanning(len(y)))), np.fft.rfftfreq(len(y), 1 / rate)
+    assert hz[-1] > 15000, f'the clip stops at {hz[-1]:.0f} Hz'
+    assert spectrum[np.abs(hz - 15000) < 20].max() > 30 * np.median(spectrum[(hz > 13000) & (hz < 17000)])
