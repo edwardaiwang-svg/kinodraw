@@ -64,16 +64,14 @@ def page(prod, stage):
     sheet = ui.raster(ui.script_page(lines, prod.lang))
     px, py = PAGE
     els.append(Piece(sheet, px, py, stage.start + .1, first.beat, 'page.sheet', enter='drop', cue='paper'))
-    if first.emphasis:
-        for k, line in enumerate(lines[:3]):
-            i = line.lower().find(first.emphasis.lower())
-            if i >= 0:
-                x0, x1, y = ui.page_line_box(lines, k, i, i + len(first.emphasis), prod.lang)
-                ox, oy = px - sheet.width / 2, py - sheet.height / 2
-                pts = [(ox + x0 + (x1 - x0) * j / 12, oy + y + 12 + (2 if j % 2 else -1)) for j in range(13)]
-                els.append(Stroke(pts, prod.word_time(first, first.emphasis), dur=.35, color=(239, 123, 58), width=9,
-                                  beat=first.beat, ident='page.underline'))
-                break
+    if first.emphasis:                                # underline it on the page, line by line
+        ox, oy = px - sheet.width / 2, py - sheet.height / 2
+        t = prod.word_time(first, first.emphasis)
+        for k, a, b in _line_spans(lines, ' '.join(lines).lower().find(first.emphasis.lower()), len(first.emphasis)):
+            x0, x1, y = ui.page_line_box(lines, k, a, b, prod.lang)
+            pts = [(ox + x0 + (x1 - x0) * j / 12, oy + y + 12 + (2 if j % 2 else -1)) for j in range(13)]
+            els.append(Stroke(pts, t, dur=.3, color=(239, 123, 58), width=9, beat=first.beat, ident=f'page.underline.{k}'))
+            t += .25
     poses = [(stage.start, 'think', 'wonder')]
     for k, s in enumerate(stage.sentences[1:], 1):
         items = promo.items_in(s.text, prod.lang)
@@ -87,6 +85,19 @@ def page(prod, stage):
             els += promo.sticker_row(prod, s, k)
     prod.pose(stage, poses)
     return els
+
+
+def _line_spans(lines, at, n):
+    """(line, start, end) of the characters at..at+n of the lines joined by spaces (a phrase that wraps)."""
+    out, pos = [], 0
+    if at < 0:
+        return out
+    for k, line in enumerate(lines):
+        a, b = max(at, pos), min(at + n, pos + len(line))
+        if a < b:
+            out.append((k, a - pos, b - pos))
+        pos += len(line) + 1
+    return out
 
 
 def _around(prod, s, items):
