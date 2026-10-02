@@ -11,7 +11,7 @@ import math
 
 from PIL import Image, ImageDraw
 
-from .. import motion
+from .. import ink, motion
 
 FPS = 30
 SHADOW = (6, 9)                     # resting shadow offset; it grows while a piece is in the air
@@ -275,6 +275,95 @@ class Confetti(Element):
 
     def cues(self):
         return [{'t': round(self.start, 4), 'kind': 'confetti', 'strength': .8, 'id': self.ident}]
+
+
+def _pen_ends(drawing):
+    """Where the pen first touches and last leaves an ink drawing (in its own pixels)."""
+    if hasattr(drawing, 'polys'):
+        return tuple(drawing.polys[0][0]), tuple(drawing.polys[-1][-1])
+    return tuple(drawing.points[0]), tuple(drawing.points[-1])
+
+
+class Ink(Element):
+    """Pictures and words drawn by the drawing hand, one after another: ``items`` = [(drawing, x, y, t0), ...] with
+    each ink drawing (a doodle or handwriting) centred on (x, y). Between drawings the hand glides over, lifted.
+    ``then`` (an image) pops in over the last drawing once it is done: a written name becoming a paper sticker."""
+    layer = 2
+
+    def __init__(self, items, hand, beat=None, ident='', until=None, then=None):
+        super().__init__(items[0][3], beat, ident, until)
+        self.items, self.hand = items, hand
+        self.end = max(t0 + d.duration for d, _, _, t0 in items)
+        last = items[-1]
+        self.then = None if then is None else Piece(then, last[1], last[2], last[3] + last[0].duration, beat,
+                                                    ident + '.then', energy=2, cue=None, jitter=False, until=until)
+
+    def _origin(self, k):
+        d, x, y, _ = self.items[k]
+        return x - d.size[0] / 2, y - d.size[1] / 2
+
+    def draw(self, canvas, t):
+        if t < self.start or self.gone(t):
+            return
+        alpha = self.fade_out(t)
+        for k, (d, _, _, t0) in enumerate(self.items):
+            if t < t0 or (self.then is not None and k == len(self.items) - 1 and t >= self.then.start + .3):
+                continue
+            img, _, _ = d.state(t - t0)
+            if img is not None:
+                ox, oy = self._origin(k)
+                ink.paste(canvas, img if alpha >= 1 else motion._fade(img, alpha), ox, oy)
+        if self.then is not None:
+            self.then.draw(canvas, t)
+        pen = self.pen(t)
+        if pen is not None:
+            self.hand.paste(canvas, pen[:2], lifted=not pen[2])
+
+    def pen(self, t):
+        """(x, y, down) of the hand on the canvas at ``t``, or None when it is not drawing."""
+        for k, (d, _, _, t0) in enumerate(self.items):
+            ox, oy = self._origin(k)
+            if t0 <= t < t0 + d.duration:
+                _, point, down = d.state(t - t0)
+                return None if point is None else (ox + point[0], oy + point[1], down)
+            nxt = self.items[k + 1] if k + 1 < len(self.items) else None
+            if nxt is not None and t0 + d.duration <= t < nxt[3]:       # gliding to the next drawing
+                (_, a), (b, _) = _pen_ends(d), _pen_ends(nxt[0])
+                nx, ny = self._origin(k + 1)
+                u = motion.cubic_in_out((t - t0 - d.duration) / max(1e-6, nxt[3] - t0 - d.duration))
+                return (ox + a[0] + (nx + b[0] - ox - a[0]) * u, oy + a[1] + (ny + b[1] - oy - a[1]) * u, False)
+        return None
+
+    def cues(self):
+        out = [{'t': round(t0, 4), 'kind': 'write', 'strength': .5, 'id': f'{self.ident}.{k}',
+                'dur': round(d.duration, 3)} for k, (d, _, _, t0) in enumerate(self.items)]
+        return out + ([{'t': round(self.then.start, 4), 'kind': 'pop', 'strength': .8, 'id': self.then.ident}]
+                      if self.then is not None else [])
+
+
+class Board(Element):
+    """A whiteboard panel that grows from ``box_a`` to ``box_b`` (x0, y0, x1, y1) over ``dur`` seconds from ``t0``."""
+
+    def __init__(self, box_a, box_b, t0, dur=.45, beat=None, ident='', until=None, fill=(253, 252, 248)):
+        super().__init__(t0, beat, ident, until)
+        self.a, self.b, self.dur, self.fill = box_a, box_b, dur, fill
+        self.end = t0 + dur
+
+    def box(self, t):
+        u = motion.expo_out(motion.clamp01((t - self.start) / self.dur))
+        return tuple(a + (b - a) * u for a, b in zip(self.a, self.b))
+
+    def draw(self, canvas, t):
+        if t < self.start or self.gone(t):
+            return
+        x0, y0, x1, y1 = self.box(t)
+        alpha = round(255 * self.fade_out(t))
+        d = ImageDraw.Draw(canvas)
+        d.rounded_rectangle((x0 + 6, y0 + 9, x1 + 6, y1 + 9), 14, fill=(0, 0, 0, round(alpha * .16)))
+        d.rounded_rectangle((x0, y0, x1, y1), 14, fill=(*self.fill, alpha), outline=(207, 198, 180, alpha), width=4)
+
+    def cues(self):
+        return [{'t': round(self.start, 4), 'kind': 'whoosh', 'strength': .5, 'id': self.ident}]
 
 
 class Tap(Element):

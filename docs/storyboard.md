@@ -28,7 +28,7 @@ Each project folder holds a `storyboard.json`. You can edit it by hand or in Stu
 - `music`: `true`, `false`, or `{"primary": "fresh_focus", "secondary": "natural_vibes"}`.
 - `host`: optional, `{"photo": "photos/me.jpg", "badge": {"en": "Name · role"}}`. It adds a photo badge to the title board and end card.
 - `look`, `story`, `motion`: the direction dials, all optional. `look` is `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `collage` or `bold`. `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
-- `brand`: optional, `{"name", "url", "cta"}`, all text. Without it the brand is found in the script: a domain such as `friendr.nl`, or a name said twice that the title or a "Meet X" backs up.
+- `brand`: optional, `{"name", "url", "cta", "reveal"}`, all text; `"reveal": "hand"` has the drawing hand write the name. Without it the brand is found in the script: a domain such as `friendr.nl`, or a name said twice that the title or a "Meet X" backs up.
 
 ## Chapters
 
@@ -113,7 +113,7 @@ The collage and bold looks turn every sentence into a scene from a fixed templat
 | look | story | scenes |
 |---|---|---|
 | whiteboard | any | board |
-| collage | promo, showcase | chat_pileup, chaos, brand_reveal, step_card, share_link, rsvp, feature_chips, threshold, use_case_grid, brand_endcard, sticker_row |
+| collage | promo, showcase | chat_pileup, chaos, brand_reveal, step_card, share_link, rsvp, feature_chips, threshold, use_case_grid, brand_endcard, script_page, app_paste, app_press, hand_draws, sticker_row |
 | collage | story, explain | title_question, crowd, stack, sky_speech, room_reaction, journey, document_reveal, collect, moodboard, box_reveal, tools_idea, assemble, end_line, sticker_row |
 | bold | any | slam_line, bracket_focus, count_up, marquee_rings, morph, particle_assemble, iris_end |
 

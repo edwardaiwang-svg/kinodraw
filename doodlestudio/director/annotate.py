@@ -47,7 +47,7 @@ ENERGY_TREATMENT = {                                  # what a renderer does wit
     2: 'lively: a quick entrance with overshoot; the emphasis pops (scale or colour); a small camera push',
     3: "showpiece: the scene's full move (burst, morph, assemble, camera sweep); a few a video, 12 s apart"}
 _PROMO = ['chat_pileup', 'chaos', 'brand_reveal', 'step_card', 'share_link', 'rsvp', 'feature_chips', 'threshold',
-          'use_case_grid', 'brand_endcard', 'sticker_row']
+          'use_case_grid', 'brand_endcard', 'script_page', 'app_paste', 'app_press', 'hand_draws', 'sticker_row']
 _STORY = ['title_question', 'crowd', 'stack', 'sky_speech', 'room_reaction', 'journey', 'document_reveal', 'collect',
           'moodboard', 'box_reveal', 'tools_idea', 'assemble', 'end_line', 'sticker_row']
 _BOLD = ['slam_line', 'bracket_focus', 'count_up', 'marquee_rings', 'morph', 'particle_assemble', 'iris_end']
@@ -89,6 +89,7 @@ KIND_SCENES = {'closing': {'promo': 'brand_endcard', 'story': 'end_line', 'bold'
                'title': {'story': 'title_question', 'bold': 'slam_line'},
                'endcard': {'promo': 'brand_endcard'}}      # (a promo's sign-off run, from the brand to the cta)
 CUE_FIRST = {'none', 'problem', 'step', 'number', 'quote', 'social', 'tagline'}   # roles whose words choose
+LEADS = {'script_page', 'app_paste', 'app_press', 'hand_draws'}   # scenes that show exactly what the words say lead
 
 
 def _cues(*pairs):
@@ -96,7 +97,13 @@ def _cues(*pairs):
 
 
 CUES = {'board': [], 'bold': [],                     # (bold: a salient number counts up)
-        'promo': _cues((r'\b(?:messages?|texts?|chats?|pings?|notifications?|another one)\b', 'chat_pileup'),
+        'promo': _cues((r'^(?:(?:first|just|simply|now|then),?\s+)?(?:paste|type|drop|upload|import)\b', 'app_paste'),
+                       (r'^(?:(?:then|now|just|and|next),?\s+)?(?:press|click|tap|hit)\s+(?:on\s+)?(?:the\s+)?[“"]?'
+                        r'(?-i:[A-Z])', 'app_press'),
+                       (r'\b(?:hand|pen|pencil|marker)\s+(?:draws?|sketch(?:es)?|doodles?|writes?)\b', 'hand_draws'),
+                       (r"\b(?:you|i|we|they)\s+(?:wrote|write|have\s+written|typed)\b|"
+                        r'\b(?:your|my|a)\s+(?:script|essay|notes|draft|lesson plan)\b', 'script_page'),
+                       (r'\b(?:messages?|texts?|chats?|pings?|notifications?|another one)\b', 'chat_pileup'),
                        (r"\b(?:chaos|mess|who'?s|nobody|no one|confus\w*)\b", 'chaos'),
                        (r'\b(?:links?|share|send|invite)\b', 'share_link'),
                        (r'\b(?:sign(?:s|ed)? up|rsvps?|taps?|join\w*|coming|say yes)\b', 'rsvp'),
@@ -239,6 +246,9 @@ def annotate(board: dict) -> dict:
         if entry is None:
             phrases = _phrases(r['text'], r['role'], lang, brand, r['head'], names=r['kind'] != 'title')
             scenes = _scenes(r['role'], r['text'], r.get('lead', r['kind']), family, prev, lang)
+            if r['role'] == 'none' and prev == 'feature_chips' and 'feature_chips' in scenes and \
+                    len(_body(r['text']).split()) <= 8:       # "No account. It all runs on your computer." goes on
+                scenes = ['feature_chips'] + [x for x in scenes if x != 'feature_chips']
             energy = min(ROLES[r['role']], MOTION[motion][0])
             if energy >= 2 and not _readable(phrases[0] if phrases else '', lang):
                 energy = 1
@@ -584,6 +594,9 @@ def _roles(rows, content, lang, story, brand):
             r['role'] = 'tagline'                     # what follows the call to action signs off
     elif content:
         content[-1]['role'] = 'end_line'
+    for a, b in zip(content, content[1:]):            # what follows the uses in their paragraph sums them up
+        if a['role'] == 'use_cases' and b['role'] == 'none' and a['beat'] is b['beat'] and story in ('promo', 'showcase'):
+            b['role'] = 'tagline'
     for r in content:                                 # the closing run: "Everything that's better together."
         short = len(_body(r['text']).split()) <= 6 if lang == 'en' else len(re.findall(r'[一-鿿]', r['text'])) <= 12
         if r['role'] == 'none' and r['k'] / max(1, n - 1) >= TAIL and short and not QUESTION[lang].search(r['text']) \
@@ -607,6 +620,7 @@ def _scenes(role, text, kind, family, prev, lang):
     picks = [scene for scene in PICKS[family].get(role, []) if scene != 'count_up' or counts]
     cued = [scene for pattern, scene in CUES[family] if pattern.search(text)] + (['count_up'] if counts else [])
     order = ([s for s in cued if s in picks] + picks + cued) if role in CUE_FIRST else picks + cued
+    order = [s for s in cued if s in LEADS] + order
     lead = KIND_SCENES.get(kind, {}).get(family)
     out = list(dict.fromkeys(([lead] if lead else []) + order))[:2]
     for extra in (DEFAULT_SCENE[family], prev, SPARE[family]):

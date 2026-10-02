@@ -16,7 +16,7 @@ from PIL import Image
 
 from .. import captions as cap
 from .. import ink, motion
-from . import plan, promo, puppet
+from . import plan, product, promo, puppet
 
 W, H = 1920, 1080
 FPS = 30
@@ -25,6 +25,7 @@ PUPPET_X, PUPPET_Y, PUPPET_H = 330, 1010, 560
 SHOWPIECES = {'calm': 0, 'lively': 2, 'showreel': 5}
 PUSH = {'calm': 0., 'lively': .02, 'showreel': .04}
 PUNCH = {'calm': 0., 'lively': .045, 'showreel': .07}
+BUILDERS = {**promo.BUILDERS, **product.BUILDERS}
 
 
 class CollageProduction:
@@ -54,7 +55,7 @@ class CollageProduction:
         self.stage_els, self.els = [], []
         for k, st in enumerate(self.stages):
             self._current = k
-            els = promo.BUILDERS.get(st.kind, promo.stickers_stage)(self, st)
+            els = BUILDERS.get(st.kind, promo.stickers_stage)(self, st)
             els.sort(key=lambda e: (e.layer, e.start))
             self.stage_els.append(els)
             self.els += els

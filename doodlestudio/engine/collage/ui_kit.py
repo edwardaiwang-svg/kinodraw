@@ -24,9 +24,9 @@ INK, PAPER, NAVY, TEAL, ORANGE, GREEN = '#1B1B1B', '#FBF7EE', '#2F3A6B', '#3E8E8
 
 LABELS = {  # fixed interface words, per language
     'en': {'continue': 'Continue →', 'in': "I'm in!", 'out': "Can't make it", 'going': '{n} of {m} going',
-           'min': 'min. {n}', 'free': 'FREE', 'on': "IT'S ON!", 'you_in': '✓ You\'re in!'},
+           'min': 'min. {n}', 'free': 'FREE', 'on': "IT'S ON!", 'you_in': '✓ You\'re in!', 'script': 'Script'},
     'zh': {'continue': '继续 →', 'in': '我参加！', 'out': '去不了', 'going': '{m}人中{n}人参加', 'min': '至少{n}人',
-           'free': '免费', 'on': '成了！', 'you_in': '✓ 已报名'},
+           'free': '免费', 'on': '成了！', 'you_in': '✓ 已报名', 'script': '脚本'},
 }
 CHATTER = {  # decorative group-chat lines for problem scenes (a fixed bank, picked by seed)
     'en': ['Saturday?', 'Hello...??', 'who else is coming?', 'maybe', 'can I bring someone?', 'could we do Sunday?',
@@ -159,6 +159,51 @@ def link_chip(text, lang='en') -> str:
             f'<path d="M10 16 l8 -8 a8 8 0 0 1 11 11 l-5 5"/><path d="M16 10 l-5 5 a8 8 0 0 0 11 11 l8 -8"/></g>')
     return _doc(w, h, f'<rect x="4" y="4" width="{w - 8}" height="{h - 8}" rx="10" fill="#FFFFFF" stroke="#D9D0BF" '
                       f'stroke-width="3"/>{icon}' + _text(76, 50, text, fam, size))
+
+
+def app_window(title, lang='en', w=1240, h=760) -> str:
+    """A desktop app's window on paper: a title bar with three dots and the app's name, an empty body."""
+    dots = ''.join(f'<circle cx="{44 + 32 * k}" cy="37" r="11" fill="{c}" stroke="{INK}" stroke-width="2.5"/>'
+                   for k, c in enumerate(('#E5484D', '#F2C14E', '#46B96E')))
+    body = (f'<rect x="6" y="6" width="{w - 12}" height="{h - 12}" rx="20" fill="{PAPER}" stroke="{INK}" stroke-width="5"/>'
+            f'<path d="M6 70 V26 Q6 6 26 6 H{w - 26} Q{w - 6} 6 {w - 6} 26 V70 Z" fill="#E6DFCF" stroke="{INK}" '
+            f'stroke-width="5"/>{dots}' + _text(w / 2, 48, title, _family(lang), 28, anchor='middle'))
+    return _doc(w, h, body)
+
+
+def text_area(lines, lang='en', w=540, h=560, size=22, title='') -> str:
+    """A text box with a small label above it, showing ``lines`` (empty: just the box)."""
+    fam = _family(lang)
+    top = 40 if title else 0
+    body = (_text(8, 26, title, fam, 22, fill='#6A6A6A') if title else '')
+    body += (f'<rect x="4" y="{top + 4}" width="{w - 8}" height="{h - top - 8}" rx="12" fill="#FFFFFF" stroke="#CFC6B4" '
+             f'stroke-width="3"/>')
+    for k, line in enumerate(lines):
+        body += _text(26, top + 46 + size * 1.5 * k, line, fam, size, fill='#2B2B2B', weight=400)
+    return _doc(w, h, body)
+
+
+def wrap(text, lang='en', size=22, width=480, hand=False) -> list[str]:
+    """``text`` broken into lines no wider than ``width`` in the kit's font."""
+    return _wrap(text, _family(lang, hand), size, width)
+
+
+def script_page(lines, lang='en', w=600, h=780, size=30) -> str:
+    """A sheet of lined paper with handwritten ``lines`` (something the viewer wrote)."""
+    fam, gap = _family(lang, hand=True), round(size * 1.55)
+    body = f'<rect x="6" y="6" width="{w - 12}" height="{h - 12}" rx="6" fill="#FFFDF7" stroke="#D9D0BF" stroke-width="3"/>'
+    body += ''.join(f'<path d="M24 {y} H{w - 24}" stroke="#BCD3EA" stroke-width="2"/>' for y in range(96, h - 30, gap))
+    body += f'<path d="M86 20 V{h - 20}" stroke="#F0A3A3" stroke-width="3"/>'
+    for k, line in enumerate(lines):
+        body += _text(104, 96 - 8 + gap * k, line, fam, size, fill='#24324F')
+    return _doc(w, h, body)
+
+
+def page_line_box(lines, k, a, b, lang='en', size=30) -> tuple[float, float, float]:
+    """Where characters a..b of line ``k`` of ``script_page`` sit: (x0, x1, baseline y), in the page's pixels."""
+    fam, gap = _family(lang, hand=True), round(size * 1.55)
+    x0 = 104 + text_width(lines[k][:a], fam, size)
+    return x0, x0 + text_width(lines[k][a:b], fam, size), 96 - 8 + gap * k
 
 
 def label(text, lang='en', hand=True, size=30, color=INK, paper='#FFFFFF') -> str:

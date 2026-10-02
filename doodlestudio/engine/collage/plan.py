@@ -14,10 +14,12 @@ from ...numbers import normalize
 STAGE_OF = {
     'chat_pileup': 'chat', 'chaos': 'chat', 'brand_reveal': 'brand', 'step_card': 'how', 'share_link': 'how',
     'rsvp': 'how', 'threshold': 'threshold', 'use_case_grid': 'uses', 'brand_endcard': 'end', 'sticker_row': 'stickers',
+    'script_page': 'page', 'app_paste': 'app', 'app_press': 'app', 'hand_draws': 'app',
 }
 FOLLOWS = {'feature_chips'}         # scenes that add to whatever stage is showing
+JOINS = {'page': {'use_case_grid', 'chaos', 'chat_pileup', 'sticker_row'}}   # what else a stage takes in
 BACKGROUND = {'chat': 'cream', 'brand': 'sky', 'how': 'sky', 'threshold': 'sky', 'uses': 'grid', 'end': 'sky',
-              'stickers': 'cream'}
+              'stickers': 'cream', 'page': 'cream', 'app': 'sky'}
 LEAD = .25                          # a stage appears this long before its first sentence is said
 LOUD_ENTRANCES = {'brand', 'end'}
 
@@ -77,9 +79,12 @@ def sentences(board: dict, tl: dict, lang: str) -> list[Sentence]:
 def stages(said: list[Sentence], tl: dict) -> list[Stage]:
     out: list[Stage] = []
     for s in said:
-        joins = s.scene in FOLLOWS or (s.role == 'tagline' and s.scene == 'sticker_row')   # a tagline is written
-        kind = out[-1].kind if joins and out else STAGE_OF.get(s.scene, 'stickers')          # on the current stage
-        if out and out[-1].kind == kind and kind != 'stickers':
+        joins = s.scene in FOLLOWS or (s.role == 'tagline' and s.scene == 'sticker_row') or \
+            (bool(out) and s.scene in JOINS.get(out[-1].kind, ()))     # a tagline is written on the current stage
+        kind = out[-1].kind if joins and out else STAGE_OF.get(s.scene, 'stickers')
+        second_grid = kind == 'uses' and s.role in ('use_cases', 'list') and out and \
+            any(x.role in ('use_cases', 'list') for x in out[-1].sentences)       # one list of stickers a stage
+        if out and out[-1].kind == kind and kind != 'stickers' and not second_grid:
             out[-1].sentences.append(s)
             continue
         start = max(0., s.start - LEAD) if out else 0.

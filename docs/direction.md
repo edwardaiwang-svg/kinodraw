@@ -12,7 +12,7 @@ model may pick among the options the rules offer, but it never invents what is d
 | `story` | `explain` (sections, agenda, takeaways), `promo` (problem → brand → steps → proof → call to action), `story` (question → journey → twist → end line), `showcase` (one idea per beat, a signature end card) | `explain` |
 | `motion` | `calm` (no big moves), `lively`, `showreel` (beat-synced, many showpieces) | `lively` |
 
-`brand` (optional) is `{name, url, cta}` for promos. Set the dials with `doodle make --look collage --story promo`.
+`brand` (optional) is `{name, url, cta, reveal}` for promos; `reveal: "hand"` has the drawing hand write the name (and a closing line) instead of slamming it in. Set the dials with `doodle make --look collage --story promo`.
 
 ## Who decides what
 
@@ -83,6 +83,11 @@ mix to −14 LUFS with a −1 dBTP limiter. The whiteboard mix is unchanged.
   avatars with ✓/✗, stamp, traffic light, slots with a minimum marker, badges.
 - **Promo scenes:** `chat_pileup`, `chaos`, `brand_reveal`, `step_card`, `share_link`, `rsvp`, `feature_chips`,
   `threshold`, `use_case_grid`, `brand_endcard`, and `sticker_row` for anything else.
+- **Software promos:** `script_page` ("You wrote…": a lined page with the video's own words; the list after it pops up
+  around the page, the trouble piles up on it), `app_paste` ("Paste your script.": the app window, the narration
+  pasted into its script box), `app_press` ("Press Make video.": that button, tapped), `hand_draws` ("A hand draws
+  every idea": the video panel grows over the window and the drawing hand draws the key phrase's doodle, then the
+  ones the script's use cases name). Their words lead the scene choice whatever the sentence's role.
 
 On-screen words come only from the script, the `brand` fields, or fixed interface labels ("I'm in!", "Continue").
 Decorative chat messages come from a fixed bilingual bank, never from a model.

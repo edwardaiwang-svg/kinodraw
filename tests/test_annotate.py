@@ -308,3 +308,16 @@ def test_normalize_fills_the_dials_and_nothing_else():
         assert (filled['look'], filled['story'], filled['motion']) == ('whiteboard', 'explain', 'lively')
         assert {k: v for k, v in filled.items() if k not in DIALS} == {**board, 'chapters': filled['chapters']}
     assert normalize({**board, 'look': 'collage', 'motion': 'calm'})['look'] == 'collage'
+
+
+def test_a_software_promo_shows_the_page_the_window_and_the_hand():
+    board = _board('promo_doodle.md', look='collage', story='promo')
+    annotate(board)
+    said = {s: (e['role'], e['scene']) for s, e in _said(board)}
+    assert said['You wrote something worth explaining.'] == ('hook', 'script_page')
+    assert said['Paste your script.'] == ('step', 'app_paste')
+    assert said['Press Make video.'] == ('step', 'app_press')
+    assert said['A hand draws every idea while the voice reads it.'][1] == 'hand_draws'
+    assert said['It all runs on your own computer.'][1] == 'feature_chips'         # goes on from "No account."
+    assert said['Anything you can say, it can draw.'][0] == 'tagline'               # sums up the uses before it
+    assert said['Paste a script.'][1] == 'brand_endcard'                            # the end card keeps its lines

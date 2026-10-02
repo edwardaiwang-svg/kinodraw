@@ -61,3 +61,27 @@ def test_the_calm_dial_has_no_showpieces(tmp_path):
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     prod = renderer.make_production(board, tl, 'en', tmp_path)
     assert not any(c['kind'] == 'confetti' for c in prod.cues()) and prod._zoom(2, prod.stages[2].start + 2) == 1
+
+
+def test_a_software_promo_has_a_page_an_app_window_and_the_drawing_hand(tmp_path):
+    from doodlestudio.director.annotate import annotate
+    from doodlestudio.engine.collage import promo
+    board = script.build(ingest.read(FIX / 'promo_doodle.md'), 'promo')
+    board.update({'look': 'collage', 'story': 'promo', 'motion': 'lively',
+                  'brand': {'name': 'Doodle Studio', 'url': 'example.org', 'reveal': 'hand'}})
+    annotate(board)
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    a = renderer.make_production(board, tl, 'en', tmp_path)
+    b = renderer.make_production(board, tl, 'en', tmp_path)
+    assert [s.kind for s in a.stages] == ['page', 'brand', 'app', 'uses', 'uses', 'end']
+    for st in a.stages:
+        t = (st.start + st.end) / 2
+        assert np.array_equal(np.asarray(a.frame(t)), np.asarray(b.frame(t)))
+    app = next(st for st in a.stages if st.kind == 'app')
+    drawing = next(e for e in a.stage_els[a.stages.index(app)] if e.ident == 'app.ink')
+    t = drawing.items[0][3] + drawing.items[0][0].duration / 2
+    assert drawing.pen(t) is not None and len(drawing.items) >= 2      # the hand is at work, doodle after doodle
+    writes = [c for c in a.cues() if c['kind'] == 'write']
+    assert any(c['id'].startswith('brand.written') for c in writes) and any(c['id'].startswith('app.ink') for c in writes)
+    assert promo.items_in('Captions, chapters and a thumbnail come with it.', 'en') == ['Captions', 'chapters',
+                                                                                      'a thumbnail']

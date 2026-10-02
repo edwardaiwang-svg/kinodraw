@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from .. import motion
+from .. import ink, motion
 from . import stickers, ui_kit as ui
 from .elements import Burst, Confetti, Counter, Piece, Stroke, Swap, Tap, Typed, wobbly_ellipse
 
@@ -58,6 +58,21 @@ def items_of(text: str) -> list[str]:
     body = re.sub(r'^(?:and|or|so|like|such as|including)\s+', '', text.strip().rstrip('.!?。！？'), flags=re.I)
     parts = [p.strip(' .') for p in LIST_SPLIT.split(body) if p and p.strip(' .')]
     return [p for p in parts if 0 < len(p.split()) <= 4][:6]
+
+
+def items_in(text: str, lang: str) -> list[str]:
+    """The things a sentence lists, as the annotator finds them ("Captions, chapters and a thumbnail come with it."
+    -> Captions, chapters, a thumbnail); else split at commas and "or"."""
+    from ...director import annotate
+    body = annotate._body(text)
+    spans = annotate._zh_items(body) if lang == 'zh' else annotate._whole_list(body) or annotate._inline_list(body)
+    out = []
+    for a, b in spans:
+        words = re.sub(r'^(?:and|or|like)\s+', '', body[a:b].strip(' ,'), flags=re.I).split()
+        if len(words) > 3:                            # "a thumbnail come with it" -> "a thumbnail"
+            words = words[:2] if words[0].lower() in annotate.DETS else words[:1]
+        out.append(' '.join(words))
+    return [x for x in out if x][:6] or items_of(text)
 
 
 def _hero(prod, text, size=150, color='#EF7B3A'):
@@ -141,13 +156,22 @@ def brand(prod, stage):
     t_name = prod.word_time(hit, name) if name in hit.text else hit.start + .1
     els.append(Stroke(wobbly_ellipse(960, 470, 470, 190, f'{prod.seed}.oval'), stage.start + .35, dur=.8,
                       color=(255, 255, 255), width=9, ident='brand.oval'))
-    els.append(Piece(_hero(prod, name), 960, 470, t_name, hit.beat, 'brand.name', enter=_energy_enter(max(2, hit.energy)),
-                     energy=3, cue='slam'))
+    if prod.brand.get('reveal') == 'hand':           # the drawing hand writes the name, which becomes a sticker
+        from .elements import Ink
+        from .product import hand
+        written = ink.TextDrawing([name], prod.lang, 150, color='#EF7B3A', pace=1.3, max_dur=1.2)
+        els.append(Ink([(written, 960, 470, t_name - .05)], hand(), hit.beat, 'brand.written', then=_hero(prod, name)))
+        prod.pose(stage, [(stage.start, 'look_up', 'wonder'), (t_name, 'wave', 'happy')])
+        t_name += written.duration - .05
+    else:
+        els.append(Piece(_hero(prod, name), 960, 470, t_name, hit.beat, 'brand.name',
+                         enter=_energy_enter(max(2, hit.energy)), energy=3, cue='slam'))
     els.append(Burst(960, 470, t_name + .08, r0=520, r1=580, n=12, ident='brand.burst'))
     for k, s in enumerate(stage.sentences):
         if s.scene == 'feature_chips':
             els += feature_chip(prod, s, k)
-    prod.pose(stage, [(stage.start, 'wave', 'happy')])
+    if prod.brand.get('reveal') != 'hand':
+        prod.pose(stage, [(stage.start, 'wave', 'happy')])
     prod.cue('riser', t_name, dur=1.0, strength=.7)            # a riser peaks on its time
     prod.cue('impact', t_name, strength=.9)
     return els
@@ -296,10 +320,13 @@ def threshold(prod, stage):
 
 
 def uses(prod, stage):
-    els = []
+    els, chips = [], []
     k_item = 0
     for k, s in enumerate(stage.sentences):
-        items = items_of(s.text) if s.role in ('use_cases', 'list') else []
+        if s.role == 'feature' or s.scene == 'feature_chips':
+            chips.append(s)
+            continue
+        items = items_in(s.text, prod.lang) if s.role in ('use_cases', 'list') else []
         if len(items) >= 2:
             n = len(items)
             per_row = n if n <= 4 else (n + 1) // 2
@@ -315,7 +342,7 @@ def uses(prod, stage):
                 els.append(Piece(ui.raster(ui.label(item, prod.lang, size=40, color='#2F8F9D', paper='#FBF7EE')), x,
                                  y + 175, t + .15, s.beat, f'uselabel.{k}.{j}', tilt=(-3, 2)[j % 2], cue='tape'))
                 k_item += 1
-            heart = stickers.sticker(stickers.HEART, 80)
+            heart = stickers.sticker(stickers.HEART, 80) if s.role == 'use_cases' else None
             if heart is not None:
                 for j in range(min(3, n - 1)):
                     x = 1110 - 350 * (min(per_row, n) - 1) / 2 + 350 * j + 175
@@ -323,12 +350,37 @@ def uses(prod, stage):
                                      tilt=(-10, 8, -6)[j]))
             continue
         els += _handline(prod, s, 960, 930)
+    els += _chip_rows(prod, chips, 1110, 800)
     prod.pose(stage, [(stage.start, 'cheer', 'happy')])
+    return els
+
+
+def _chip_rows(prod, chips, cx, y, width=1180):
+    """Claims ("No editing.", "No account.") on paper strips in centred rows under the stickers."""
+    els, rows, row = [], [], []
+    imgs = [ui.raster(ui.label(s.text.strip(), prod.lang, hand=False, size=40)) for s in chips]
+    for s, img in zip(chips, imgs):
+        if row and sum(i.width + 30 for _, i in row) + img.width > width:
+            rows.append(row)
+            row = []
+        row.append((s, img))
+    rows += [row] if row else []
+    for r, row in enumerate(rows):
+        x = cx - (sum(i.width for _, i in row) + 30 * (len(row) - 1)) / 2
+        for s, img in row:
+            els.append(Piece(img, x + img.width / 2, y + 110 * r, s.start + .05, s.beat, f'chip.{s.beat}.{s.i}',
+                             tilt=(-3, 2, -2)[(s.i + r) % 3], enter=_energy_enter(s.energy), energy=s.energy, cue='tape'))
+            x += img.width + 30
     return els
 
 
 def _handline(prod, s, x, y):
     text = s.text.strip()
+    if prod.brand.get('reveal') == 'hand':           # the drawing hand writes it
+        from .elements import Ink
+        from .product import hand
+        written = ink.TextDrawing([text], prod.lang, 56, pace=1.6, max_dur=max(.8, min(2.2, s.end - s.start - .4)))
+        return [Ink([(written, x, y, s.start + .1)], hand(), s.beat, f'line.{s.beat}.{s.i}')]
     fam = ui._family(prod.lang, hand=True)
 
     def render(k, text=text):
@@ -373,9 +425,10 @@ def end(prod, stage):
     url = prod.brand.get('url')
     if url:
         t_url = prod.word_time(cta, url.split('.')[0]) if url.split('.')[0].lower() in cta.text.lower() else t_cta + .6
-        u_img = ui.raster(ui._doc(ui.text_width(url, ui.SANS, 52) + 20, 80, ui._text(10, 58, url, ui.SANS, 52)))
-        els.append(Piece(u_img, 960, 790, t_url, cta.beat, 'end.url', shadow=False))
-        els.append(Stroke([(960 - u_img.width / 2 + 10 + k * (u_img.width - 20) / 20, 832 + (3 if k % 2 else 0))
+        size = 52 if ui.text_width(url, ui.SANS, 52) < 860 else 44
+        u_img = ui.raster(ui._doc(ui.text_width(url, ui.SANS, size) + 20, 80, ui._text(10, 58, url, ui.SANS, size)))
+        els.append(Piece(u_img, 1010, 830, t_url, cta.beat, 'end.url', shadow=False))
+        els.append(Stroke([(1010 - u_img.width / 2 + 10 + k * (u_img.width - 20) / 20, 878 + (3 if k % 2 else 0))
                            for k in range(21)], t_url + .2, dur=.45, color=(239, 123, 58), width=7, ident='end.underline'))
         hand = stickers.sticker(stickers.TAP_HAND, 150)
         if hand is not None:
