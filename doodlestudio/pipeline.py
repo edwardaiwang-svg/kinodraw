@@ -1,11 +1,12 @@
 """End to end in a project folder: script -> storyboard -> voice -> timeline -> render -> mix -> package.
 
 Project folder:
-  project.json        settings (language, voice, speed, director, workers)
+  project.json        settings (language, voice, speed, director, workers, recording)
   script.<ext>        the source script
+  recording.<ext>     optional: your own reading of the script, used as the narration
   storyboard.json     chapters + beats + visuals (editable; re-running keeps your edits)
   doodles/ photos/    optional: your own SVG doodles and photos
-  voice/              cached narration clips
+  voice/              cached narration clips (recording-align.json: where each beat is in your recording)
   build/              timeline, narration, mix, silent render, captions
   <Title>.mp4         the finished video, with .srt/.vtt, chapters, transcript, description and thumbnail
 """
@@ -65,8 +66,26 @@ def storyboard(project_dir: Path) -> dict:
     return _load(Path(project_dir) / 'storyboard.json')
 
 
+def set_recording(project_dir: Path, source) -> dict:
+    """Narrate with your own reading of the script: copy it into the project as recording.<ext> and name it in
+    project.json (``None`` goes back to the synthesized voice)."""
+    project_dir = Path(project_dir)
+    cfg = settings(project_dir)
+    if source is None:
+        cfg.pop('recording', None)
+    else:
+        source = Path(source)
+        target = project_dir / f'recording{source.suffix.lower()}'
+        if source.resolve() != target.resolve():
+            shutil.copyfile(source, target)
+        cfg['recording'] = target.name
+    _save(project_dir / 'project.json', cfg)
+    return cfg
+
+
 def narrate(project_dir: Path, progress=None) -> dict:
-    """Synthesize (or reuse cached) clips for every beat (takeaways first say what their notes show)."""
+    """Synthesize (or reuse cached) clips for every beat (takeaways first say what their notes show). With a
+    recording in project.json the clips are cut from it instead, guided by the synthesized ones."""
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
@@ -79,6 +98,10 @@ def narrate(project_dir: Path, progress=None) -> dict:
         clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'], cfg['speed'])
         if progress:
             progress('voice', i + 1, len(board['beats']))
+    if cfg.get('recording'):
+        beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
+        clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice', cfg['voice'],
+                                     cfg['speed'])
     return clips
 
 

@@ -3,11 +3,13 @@ import json
 import re
 import wave
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 from scipy.signal import butter, resample_poly, sosfilt
 
-from doodlestudio import voice
+from doodlestudio import cli, pipeline, voice
 
 needs_models = pytest.mark.skipif(bool(voice.missing_files('en')),
                                   reason='Kokoro models not downloaded (doodle setup --lang en)')
@@ -24,6 +26,33 @@ OTHER = ['Bananas are a good source of potassium. They ripen faster in a paper b
          'Water boils at a lower temperature on a mountain, so pasta takes longer to cook up there than at the beach.']
 WORD = re.compile(r"(?<![\w'’])\w")
 NOISE = .002
+
+
+def test_a_project_is_narrated_from_its_recording_once_it_has_one(tmp_path, monkeypatch, capsys):
+    project = tmp_path / 'video'
+    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    calls = []
+
+    def cut(*args):
+        calls.append(args)
+        (project / 'voice' / 'recording-align.json').write_text(json.dumps(
+            {'match': .6, 'beats': [{'id': 'b002', 'match': .3, 'check': True}]}))
+        return {}
+    monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('guide.wav'), 1., [0.] * len(text)))
+    monkeypatch.setattr(voice, 'from_recording', cut)
+    monkeypatch.setattr(pipeline, 'build_audio', lambda *a: {'duration': 1, 'captions': []})
+    (project / 'voice').mkdir()
+    (tmp_path / 'Take 1.M4A').write_bytes(b'audio')
+    cli.main(['voice', str(project), '--recording', str(tmp_path / 'Take 1.M4A')])
+    assert pipeline.settings(project)['recording'] == 'recording.m4a'
+    assert (project / 'recording.m4a').read_bytes() == b'audio'
+    beats = [(beat['id'], beat['spoken']['en']) for beat in board['beats']]
+    assert calls == [(project / 'recording.m4a', beats, 'en', project / 'voice', 'af_heart', 1.0)]
+    assert '! b002 matches its text poorly (0.30)' in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        cli.main(['voice', str(project), '--recording', str(tmp_path / 'missing.wav')])
+    cli.main(['voice', str(project), '--recording', 'none'])
+    assert 'recording' not in pipeline.settings(project) and len(calls) == 1
 
 
 def test_the_warp_follows_a_known_stretch():

@@ -125,6 +125,12 @@ The collage and bold looks turn every sentence into a scene from a fixed templat
 
 On every dial, showpieces are at least 12 seconds apart; the 3 seconds after a sentence at 2 or more stay at 1 or less, unless the sentences go on with the same list or cascade ("No app. No account."); and a sentence reaches 2 only with an emphasis of at most four words. When something has to give, the anchors (the first hook, the brand reveal, and the final call to action or end line) stay up longest.
 
+## Your own voice
+
+`project.json` (next to `storyboard.json`) can name a recording of you reading the script: `"recording": "recording.m4a"`, a path in the project folder or an absolute one. `doodle voice MyVideo --recording take.m4a` copies the file in (wav, m4a, mp3 or aiff) and sets the key; `--recording none` removes it and the Kokoro voice reads again.
+
+Read every beat's `spoken` text in one take, at your own pace, with a pause between paragraphs. Kokoro still reads the script as a guide; the guide is aligned to your take, every beat is cut out of it at a pause, and the captions and drawings follow your words. `voice/recording-align.json` shows where each beat was found and how well it matched: about 0.35 for other words and 0.45 or more for a reading of the script, and beats under 0.4 are marked `check`. A take that is not a reading of this script is refused. A false start, a repeated sentence or an ad-lib stays in the beat it falls in (and the words around it may be timed a little off), so record that part again or edit it out of the take.
+
 ## Your own doodles
 
 Put SVG files in the project's `doodles/` folder and reference them by file name (without `.svg`). They take precedence over the built-in library. For the drawing hand to trace them well, follow `doodlestudio/assets/doodles/STYLE.md`.
