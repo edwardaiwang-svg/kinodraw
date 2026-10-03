@@ -27,6 +27,7 @@ from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_picture
 from ..package import sha
 
 STATIC = Path(__file__).resolve().parent / 'static'
+SVG_POLICY = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox"
 FONTS = Path(__file__).resolve().parents[1] / 'assets' / 'fonts'
 CONFIG = paths.config_dir() / 'studio.json'
 
@@ -537,6 +538,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({'error': 'not found'}, 404)
         ctype = ctype or mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
         size = path.stat().st_size
+        extra = {'Accept-Ranges': 'bytes'}
+        if ctype == 'image/svg+xml':    # a picture opened as a page (its URL carries the token) runs no scripts here
+            extra['Content-Security-Policy'] = SVG_POLICY
         rng = re.match(r'bytes=(\d+)-(\d*)', self.headers.get('Range') or '')
         if rng:                                        # <video> seeks with range requests
             a = int(rng.group(1))
@@ -544,8 +548,8 @@ class Handler(BaseHTTPRequestHandler):
             with path.open('rb') as f:
                 f.seek(a)
                 data = f.read(b - a + 1)
-            return self._send(206, data, ctype, {'Content-Range': f'bytes {a}-{b}/{size}', 'Accept-Ranges': 'bytes'})
-        self._send(200, path.read_bytes(), ctype, {'Accept-Ranges': 'bytes'})
+            return self._send(206, data, ctype, {**extra, 'Content-Range': f'bytes {a}-{b}/{size}'})
+        self._send(200, path.read_bytes(), ctype, extra)
 
     # -- routes
     def do_GET(self):

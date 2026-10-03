@@ -287,3 +287,16 @@ def test_search_never_offers_own_pictures():
     if not all((folder / name).is_file() for name in files):
         pytest.skip('doodle-search model is not installed')
     assert not any(item['id'].startswith('own:') for item in server.search_doodles('cat', 'en'))
+
+
+def test_uploaded_svg_cannot_run_scripts_when_opened_as_a_page(studio):
+    # A picture URL carries the Studio token, so a scripted SVG opened in its own tab must not run on our origin.
+    scripted = ('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><script>alert(1)</script>'
+                '<rect width="10" height="10"/></svg>')
+    assert studio('/api/projects/Honey/pictures?filename=evil.svg', scripted.encode())[0] == 200
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for route in (f'/doodle/own%3Aevil.svg.svg?project=Honey&token={server.Handler.token}',
+                  f'/files/Honey/pictures/evil.svg?token={server.Handler.token}'):
+        with opener.open(f'http://127.0.0.1:{server.Handler.port}{route}', timeout=10) as reply:
+            policy = reply.headers.get('Content-Security-Policy') or ''
+        assert 'sandbox' in policy and "default-src 'none'" in policy, (route, policy)
