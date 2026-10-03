@@ -55,6 +55,9 @@ def test_pronunciations_match_words_and_strip_clause_marks(tmp_path):
     assert voice.respell('蜂蜜水和蜂蜜', {'蜂蜜': '甜蜜', '蜂蜜水': '糖水'}, 'zh') == '糖水和甜蜜'
     assert voice.respell('a+b aab', {'a+b': 'sum'}, 'en') == 'sum aab'
     assert voice.respell('GIF', {'GIF': 'honey', 'honey': 'sweet'}, 'en') == 'honey'
+    acronyms = voice.parse_lexicon('IT = eye tee\nWHO = double you aitch oh\nus = uss\nUS = you ess')
+    assert (voice.respell('The IT team said it works, but who knows what WHO said. Join us, Us, US.', acronyms, 'en')
+            == 'The eye tee team said it works, but who knows what double you aitch oh said. Join uss, uss, you ess.')
     marks = ''.join(voice.CLAUSE.values()) + voice.PHONE_MARKS
     path.write_text(f'GIF = {marks}jif{marks}', encoding='utf-8')
     assert voice.read_lexicon(path) == {'GIF': 'jif'}

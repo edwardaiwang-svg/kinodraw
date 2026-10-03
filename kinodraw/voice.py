@@ -198,11 +198,11 @@ def respell(text: str, lexicon: dict, lang: str) -> str:
     """Change spoken words while keeping the script's spelling elsewhere."""
     if not lexicon:
         return text
-    keys = sorted(lexicon, key=len, reverse=True)
-    pattern = '|'.join(re.escape(key) for key in keys)
-    if lang == 'en':
-        lookup = {key.lower(): lexicon[key] for key in keys}
-        return re.sub(r'\b(?:' + pattern + r')\b', lambda m: lookup[m[0].lower()], text, flags=re.I)
+    if lang == 'en':        # "WHO" or "Nguyen" matches only as typed, "honey" in any case; exact entries first
+        keys = sorted(lexicon, key=lambda key: (-len(key), key.islower()))
+        pattern = '|'.join(f'(?i:{re.escape(key)})' if key.islower() else re.escape(key) for key in keys)
+        return re.sub(r'\b(?:' + pattern + r')\b', lambda m: lexicon.get(m[0]) or lexicon[m[0].lower()], text)
+    pattern = '|'.join(re.escape(key) for key in sorted(lexicon, key=len, reverse=True))
     return re.sub(pattern, lambda m: lexicon[m[0]], text)
 
 
