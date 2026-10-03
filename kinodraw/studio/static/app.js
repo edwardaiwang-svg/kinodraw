@@ -378,6 +378,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#modal .close').onclick = closeModal;
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
   await refreshState();
+  if (STATE.notice) toast(STATE.notice, 30000);      // Doodle Studio's projects could not be brought over yet
   const items = await api('/api/projects');
   if (items.length && !items[0].broken) openProject(items[0].name); else showSample();
 });

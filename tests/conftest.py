@@ -8,4 +8,5 @@ def _keep_the_developers_own_folders(monkeypatch, tmp_path):
     Studio's projects folder is a temporary one."""
     from kinodraw import paths
     monkeypatch.setattr(paths, 'migrate', lambda moves=None, settings=None: [])
+    monkeypatch.setattr(paths, 'left_behind', [])
     monkeypatch.setattr(paths, 'projects_dir', lambda: tmp_path / 'projects')

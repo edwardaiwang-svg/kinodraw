@@ -256,7 +256,8 @@ def state() -> dict:
             'models': SUGGESTED,
             'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
                        'zh': ['zf_001', 'zf_002', 'zm_010', 'zm_020']},
-            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')}}
+            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')},
+            'notice': paths.NOT_MOVED if paths.left_behind else None}   # Doodle Studio's folders could not move yet
 
 
 # ------------------------------------------------------------------ HTTP

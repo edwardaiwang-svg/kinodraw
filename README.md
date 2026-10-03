@@ -24,9 +24,10 @@ The app isn't notarized by Apple or signed for Windows yet, so the first launch 
 - **Windows:** unzip and run *KinoDraw.exe* in the *KinoDraw* folder. If SmartScreen appears, click **More info** → **Run anyway**.
 - **Linux:** unpack and run *KinoDraw/KinoDraw*.
 
-**Coming from Doodle Studio?** KinoDraw moves your Doodle Studio projects, settings and downloaded voice over the first
-time it opens. Sign in to KinoDraw Cloud and re-enter any saved API keys once, then delete *Doodle Studio.app* (or the
-*Doodle Studio* folder on Windows and Linux).
+**Coming from Doodle Studio?** Close Doodle Studio, then open KinoDraw: it moves your Doodle Studio projects, settings
+and downloaded voice over the first time it opens (if Doodle Studio was still open, KinoDraw says so and finishes the move
+the next time it opens). Sign in to KinoDraw Cloud and re-enter any saved API keys once, then delete *Doodle Studio.app*
+(or the *Doodle Studio* folder on Windows and Linux).
 
 **Command line** (Python 3.10–3.12):
 

@@ -162,3 +162,101 @@ def test_own_key_variables_accept_both_names(tmp_path, monkeypatch):
     monkeypatch.setenv('KINODRAW_COMPAT_API_KEY', 'k')
     monkeypatch.setenv('DOODLE_DIRECTOR_COMMAND', 'my-director')
     assert {'compat', 'command'} <= providers.saved()
+
+
+def _lock(monkeypatch, *folders) -> set:
+    """Renaming these folders fails, as on Windows while Doodle Studio (or an antivirus scan) has a file in them
+    open. Empty the returned set to "close Doodle Studio"."""
+    locked, rename = {Path(f) for f in folders}, os.rename
+
+    def refuse(src, dst, *args, **kwargs):
+        if Path(src) in locked:
+            raise PermissionError(13, 'The process cannot access the file because it is being used by another process',
+                                  str(src))
+        return rename(src, dst, *args, **kwargs)
+    monkeypatch.setattr(os, 'rename', refuse)
+    return locked
+
+
+def test_nothing_moves_out_of_a_folder_that_could_not_move(tmp_path, monkeypatch):
+    """Windows keeps the cache and settings inside the data folder. When the data folder could not be renamed, the
+    cache inside it was moved on its own, which made KinoDraw's data folder exist, so the data folder (models,
+    settings) was never moved on any later launch."""
+    from kinodraw.paths import legacy_moves
+    _fake_dirs(monkeypatch, tmp_path)
+    old = _old_install(tmp_path)
+    _lock(monkeypatch, old)
+    new = tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw'
+    assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [(tmp_path / 'Videos' / 'Doodle Studio',
+                                                                  tmp_path / 'Videos' / 'KinoDraw')]
+    assert (old / 'Cache' / 'embed' / 'model.onnx').exists() and not (new / 'Cache').exists()
+    assert (old / 'models' / 'voices-v1.0.bin').exists() and (old / 'studio.json').exists()
+
+
+def test_a_folder_that_could_not_move_comes_over_on_a_later_launch(tmp_path, monkeypatch):
+    """...even after the user carried on in KinoDraw in the meantime: KinoDraw's own files stay, everything else of
+    Doodle Studio's comes over, and a project with the same name as a KinoDraw one comes over renamed."""
+    from kinodraw import paths
+    from kinodraw.paths import legacy_moves
+    _fake_dirs(monkeypatch, tmp_path)
+    old = _old_install(tmp_path)
+    (old / 'models' / 'kokoro-zh.onnx').write_bytes(b'zh')
+    videos, new = tmp_path / 'Videos', tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw'
+    locked = _lock(monkeypatch, old, old / 'models' / 'kokoro-zh.onnx', videos / 'Doodle Studio')
+    assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == []
+    assert set(paths.left_behind) == {old, videos / 'Doodle Studio'}
+    (new / 'models').mkdir(parents=True)                       # KinoDraw downloads the English voice again,
+    (new / 'models' / 'voices-v1.0.bin').write_bytes(b'new voice')
+    (new / 'studio.json').write_text(json.dumps({'credit': True}))     # saves a setting, makes the sample video
+    (videos / 'KinoDraw' / 'My Video').mkdir(parents=True)
+    (videos / 'KinoDraw' / 'My Video' / 'project.json').write_text('{"kinodraw": 1}')
+    locked.discard(old)                                        # next launch, a model file is still in use
+    assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [(videos / 'Doodle Studio', videos / 'KinoDraw')]
+    assert paths.left_behind == [old] and (new / 'Cache' / 'embed' / 'model.onnx').read_bytes() == b'embed'
+    locked.clear()                                             # Doodle Studio closed: the rest comes over
+    assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [(old, new)] and paths.left_behind == []
+    assert (new / 'models' / 'kokoro-zh.onnx').read_bytes() == b'zh'
+    assert (new / 'models' / 'voices-v1.0.bin').read_bytes() == b'new voice'        # KinoDraw's own file stays
+    assert (old / 'models' / 'voices-v1.0.bin').read_bytes() == b'voice'            # nothing is deleted
+    assert (videos / 'KinoDraw' / 'My Video' / 'project.json').read_text() == '{"kinodraw": 1}'
+    assert (videos / 'KinoDraw' / 'My Video (Doodle Studio)' / 'project.json').read_text() == '{}'
+    assert json.loads((new / 'studio.json').read_text()) == {'projects': str(videos / 'KinoDraw'), 'credit': True}
+    assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [] and paths.left_behind == []   # done for good
+    assert not (paths.config_dir() / paths.PENDING).exists()
+
+
+def test_the_user_is_told_when_their_doodle_studio_folder_could_not_move(tmp_path, monkeypatch, capsys):
+    import re
+    from kinodraw import cli, paths
+    from kinodraw.studio import server
+    monkeypatch.setattr(paths, 'migrate', REAL_MIGRATE)
+    monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
+    _fake_dirs(monkeypatch, tmp_path)
+    old = _old_install(tmp_path)
+    locked = _lock(monkeypatch, old)
+    with pytest.raises(SystemExit):
+        cli.main(['--help'])
+    err = capsys.readouterr().err
+    assert 'Close Doodle Studio' in err and str(old) in err
+    assert 'Close Doodle Studio' in server.state()['notice']
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    assert re.search(r'await refreshState\(\);\s*if \(STATE\.notice\) toast\(STATE\.notice, \d{5}\)', js)
+    locked.clear()
+    with pytest.raises(SystemExit):
+        cli.main(['--help'])
+    assert 'Doodle Studio' not in capsys.readouterr().err and server.state()['notice'] is None
+
+
+def test_a_projects_folder_inside_doodle_studios_follows_it(tmp_path, monkeypatch):
+    """Settings -> Projects folder can be a folder inside the old one, e.g. Videos/Doodle Studio/Class."""
+    from kinodraw.paths import legacy_moves
+    _fake_dirs(monkeypatch, tmp_path)
+    old = _old_install(tmp_path)
+    videos, new = tmp_path / 'Videos', tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw'
+    (videos / 'Doodle Studio' / 'Class' / 'Lesson 1').mkdir(parents=True)
+    (videos / 'Doodle Studio' / 'Class' / 'Lesson 1' / 'project.json').write_text('{}')
+    (old / 'studio.json').write_text(json.dumps({'projects': str(videos / 'Doodle Studio' / 'Class')}))
+    assert len(REAL_MIGRATE(legacy_moves(), new / 'studio.json')) == 2
+    assert json.loads((new / 'studio.json').read_text()) == {'projects': str(videos / 'KinoDraw' / 'Class')}
+    assert (videos / 'KinoDraw' / 'Class' / 'Lesson 1' / 'project.json').exists()
+
