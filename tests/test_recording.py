@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from scipy.signal import butter, resample_poly, sosfilt
 
-from doodlestudio import cli, pipeline, voice
+from doodlestudio import cli, pipeline, script, voice
 
 needs_models = pytest.mark.skipif(bool(voice.missing_files('en')),
                                   reason='Kokoro models not downloaded (doodle setup --lang en)')
@@ -122,6 +122,37 @@ def test_a_take_in_another_voice_is_cut_in_its_pauses_and_timed_to_its_words(tak
     errors = np.abs(errors)
     assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
     assert not any(row['check'] for row in report['beats']) and report['match'] > voice.MATCH
+    assert [row['text'] for row in report['sentences']] == [s for _, text in BEATS for s in script.sentences(text, 'en')]
+    assert not any(row['check'] for row in report['sentences'])
+
+
+def _sentence_take(path, replace=None, skip=()):
+    """The script read sentence by sentence by another voice (am_michael at 0.85), with short pauses inside a beat and
+    longer ones between beats; ``replace`` reads other words instead of some sentences, ``skip`` leaves some out
+    (numbered from 1, as the Studio shows them)."""
+    rng = np.random.default_rng(0)
+    parts, n = [np.zeros(round(.4 * voice.SR), np.float32)], 0
+    for _, text in BEATS:
+        for sentence in script.sentences(text, 'en'):
+            n += 1
+            if n not in skip:
+                clip = voice.synthesize((replace or {}).get(n, sentence), 'en', path.parent / 'take', 'am_michael', .85)
+                parts += [voice._read_wav(clip.wav), np.zeros(round(rng.uniform(.25, .45) * voice.SR), np.float32)]
+        parts.append(np.zeros(round(rng.uniform(.3, .8) * voice.SR), np.float32))
+    x = np.concatenate(parts)
+    voice._write_wav(path, x + rng.normal(0, NOISE, len(x)).astype(np.float32))
+    return path
+
+
+@needs_models
+@pytest.mark.parametrize('replace, skip', [({2: 'The council met on Tuesday.'}, ()), ({}, (7,))])
+def test_each_sentence_is_checked_on_its_own(tmp_path, replace, skip):
+    """One sentence of a three-sentence beat read as other words, or one sentence left out: that sentence is marked,
+    and the sentences read correctly beside it (in its beat, or the next one) are not."""
+    take = _sentence_take(tmp_path / 'take.wav', replace, skip)
+    voice.from_recording(take, BEATS, 'en', tmp_path / 'voice')
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    assert [n for n, row in enumerate(report['sentences'], 1) if row['check']] == sorted([*replace, *skip])
 
 
 @needs_models
@@ -209,3 +240,4 @@ def test_a_chinese_take_is_cut_and_timed_as_well_as_an_english_one(tmp_path):
     errors = np.abs(errors)
     assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
     assert not any(row['check'] for row in report['beats']) and report['match'] > voice.MATCH
+    assert len(report['sentences']) == 6 and not any(row['check'] for row in report['sentences'])

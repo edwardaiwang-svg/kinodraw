@@ -25,6 +25,7 @@ import numpy as np
 import platformdirs
 
 from .net import download
+from .script import sentences as sentences_of
 
 MODEL_DIR = Path(os.environ.get('DOODLE_MODELS') or Path(platformdirs.user_data_dir('DoodleStudio')) / 'models').expanduser()
 RELEASE = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/'
@@ -181,13 +182,14 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
 
 # ------------------------------------------------------ your own recording
 HOP, WIN = 240, 600      # analysis frames: every 10 ms, 25 ms long
-RECORDING_VERSION = 2    # bump when recording alignment changes (invalidates cached cuts)
+RECORDING_VERSION = 3    # bump when recording alignment changes (invalidates cached cuts)
 TAKE_SR = 48000          # the clips keep the take's full sound (the mix's rate); only the alignment runs at SR
 STEP = .05               # extra cost of a frame only one side advances on (keeps the warp from zigzagging)
 EDGE = 6                 # frames of quiet kept before and after each beat
 SNAP = 30                # frames a cut may move from where the alignment put it, to land in a pause
 PAUSE = 10               # quiet stretches shorter than this are inside words (stop consonants)
 MATCH = .4               # a reading of the script matches its guide at .45 or more, other words at about .35
+FIT = .06                # a sentence fitting the take this much worse than the take's typical sentence: check
 SCALES = (.7, .75, .8, .85, .9, .95, 1., 1.05, 1.1, 1.15, 1.2)    # the take's formants against the guide's
 
 
@@ -322,6 +324,19 @@ def _warp(G, level, power, quiet, f=4, radius=30):
     return _dtw(G, R, lo, hi), R, float(scale)
 
 
+def _fit(G, R, path, cost, speech) -> np.ndarray:
+    """For every step of the path, the share of the take's speech that its guide frame resembles less than the take
+    frame it was aligned to. A sentence read as written fits at about .9, other words at about .8 and a skipped
+    sentence at about .55; the level shifts with the voice, so each sentence is compared with the take's typical one."""
+    pool = R[np.flatnonzero(speech)]
+    pool = pool[::max(1, len(pool) // 2000)].T
+    out = np.empty(len(path), np.float32)
+    for a in range(0, len(path), 4096):            # in blocks: a long take never holds every comparison at once
+        p = path[a:a + 4096]
+        out[a:a + 4096] = (G[p[:, 0]] @ pool < 1 - cost[a:a + 4096, None]).mean(1)
+    return out
+
+
 def _pauses(level, quiet) -> list:
     """Quiet runs (first frame, frame after) of at least PAUSE frames; the take's edges count as quiet."""
     edges = np.flatnonzero(np.diff(np.r_[True, level < quiet, True].astype(np.int8)))
@@ -355,7 +370,8 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     """Clips like synthesize()'s, cut from one continuous reading of the script; ``beats`` is [(beat id, spoken
     text)] in order. Kokoro reads the beats as a guide, aligned to the take frame by frame (dynamic time warping):
     every cut lands in a pause, every character time follows the take, and each clip gets its guide's speech level.
-    Writes recording-align.json next to the cache: where each beat was found, and how well it matched."""
+    Writes recording-align.json next to the cache: where each beat and each sentence was found, and how well it
+    matched; a sentence that fits the take clearly worse than the rest (skipped, or other words) is marked check."""
     recording, cache_dir = Path(recording), Path(cache_dir)
     voice = voice or LANGS[lang]['voice']
     digest = hashlib.sha256(recording.read_bytes()).hexdigest()
@@ -422,12 +438,32 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         match = round(1 - float(cost[on].mean()), 2)
         rows.append({'id': bid, 'start': round(start / 100, 2), 'end': round(end / 100, 2), 'match': match,
                      'check': match < MATCH, 'pause_before': bool(cuts[k][0] < cuts[k][1])})
+    fits, sentences = _fit(G, R, path, cost, tl > tq), []
+    for k, ((bid, text), guide) in enumerate(zip(beats, guides)):
+        at = 0
+        for line in sentences_of(text, lang):      # the sentences the Studio shows to read aloud
+            c = text.index(line, at)
+            at = c + len(line)
+            t = np.array([guide.char_times[c], guide.char_times[at] if at < len(text) else guide.duration])
+            a, b = ((offsets[k] + t * SR) // HOP).astype(int)
+            loud = a + np.flatnonzero(gl[a:b] > gq)
+            gs, ge = (loud[0], loud[-1]) if len(loud) else (a, max(a, b - 1))
+            on = (path[:, 0] >= gs) & (path[:, 0] <= ge)
+            heard = on & (gl[path[:, 0]] > gq)
+            on = heard if heard.any() else on
+            sentences.append({'beat': bid, 'text': line, 'start': round(first[gs] / 100, 2),
+                              'end': round(last[ge] / 100, 2), 'match': round(1 - float(cost[on].mean()), 2),
+                              'fit': round(float(fits[on].mean()), 3)})
+    typical = float(np.median([s['fit'] for s in sentences]))
+    for s in sentences:
+        s['check'] = s['fit'] < typical - FIT
     on = gl[path[:, 0]] > gq
     info = {'clips': clips, 'report': {
         'recording': str(recording), 'sha256': digest, 'seconds': round(len(take) / SR, 2),
         'speech_ratio': round(said / script, 2), 'voice_scale': scale, 'match': round(1 - float(cost[on].mean()), 2),
         'note': f'match: about 0.35 for unrelated speech, 0.45 or more for a reading of the script; beats under '
-                f'{MATCH} are marked check', 'beats': rows}}
+                f'{MATCH} are marked check, and sentences whose fit is {FIT} under the typical sentence\'s',
+        'beats': rows, 'sentences': sentences}}
     report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1))
     if info['report']['match'] < MATCH:
         raise ValueError(f"{recording.name} does not sound like a reading of this script (match "
