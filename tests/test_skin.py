@@ -226,3 +226,17 @@ def test_each_skin_renders_its_paper_ink_and_captions(tmp_path):
         assert (np.abs(board_px - skin.ink).max(-1) < 40).sum() > 2000, look                  # its ink
         caps = frame[880:1046].reshape(-1, 3)
         assert (np.abs(caps - skin.caption).max(-1) < 30).sum() > 1500, look                 # its captions
+
+
+def test_every_key_phrase_in_one_text_is_highlighted_in_english_and_chinese():
+    from types import SimpleNamespace as NS
+    for lang, text, phrases in (('en', 'Sun warms oceans. Rain fills lakes.', ('Sun', 'Rain')),
+                                ('zh', '太阳温暖海洋。雨水注入湖泊。', ('太阳', '雨水'))):
+        td = ink.TextDrawing([text], lang, 60)
+        elements = [NS(drawing=td, x=40, y=60, trigger=1.)]
+        episode = {'beats': [{'id': 'b1', 'direction': [{'emphasis': p} for p in phrases]}]}
+        skins.highlight_phrases(episode, {'beats': {'b1': {'start': .5, 'end': 3.}}}, elements)
+        lit = elements[0].drawing
+        assert isinstance(lit, skins.Highlighted) and len(lit.boxes) == 2, lang
+        assert lit.boxes[0][2] < lit.boxes[1][0], lang                  # the first phrase, then the second
+

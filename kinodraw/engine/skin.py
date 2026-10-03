@@ -387,15 +387,18 @@ def highlight_phrases(episode, tline, elements):
         lo, hi = info.get('prep', info['start']) - .5, info['end'] + .5
         texts = [e for e in elements if isinstance(e.drawing, ink.TextDrawing) and lo <= e.trigger <= hi
                  and not _coloured(e.drawing)]      # coloured words already stand out, and lose contrast on a band
+        found: dict = {}                    # element -> its phrases' boxes, so one text can carry several phrases
         for phrase in phrases:
             for el in texts:
                 boxes = phrase_boxes(el.drawing, phrase)
                 if boxes:
-                    x0, y0, x1, y1, _ = boxes[0]
-                    under = _under(elements, el, el.x + (x0 + x1) / 2, el.y + (y0 + y1) / 2)
-                    el.drawing = Highlighted(el.drawing, boxes, ON_YELLOW if _yellow(under) else HIGHLIGHTER)
-                    texts.remove(el)
+                    found.setdefault(id(el), (el, []))[1].extend(boxes)
                     break
+        for el, boxes in found.values():
+            x0, y0, x1, y1, _ = boxes[0]
+            under = _under(elements, el, el.x + (x0 + x1) / 2, el.y + (y0 + y1) / 2)
+            el.drawing = Highlighted(el.drawing, sorted(boxes, key=lambda b: b[4]),
+                                     ON_YELLOW if _yellow(under) else HIGHLIGHTER)
 
 
 def _coloured(td) -> bool:
