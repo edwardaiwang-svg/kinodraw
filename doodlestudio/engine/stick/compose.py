@@ -983,8 +983,26 @@ class Composer:
         it.head = (feet[0] - dr.origin[0] + hx, feet[1] - dr.origin[1] + hy, hr)
         if walk:
             it.head = (it.head[0] + walk[0], it.head[1], hr)
+        it.fig, it.feet = fig, feet
         shot.items.append(it)
         return it
+
+    def _held(self, shot, it, card):
+        """A holding figure carries the shot's picture in its hands (drawn over them), instead of on the stage."""
+        fig, feet = it.fig, it.feet
+        dr = rig.draw(fig, 0, 0)
+        hx, hy = dr.hands[0]
+        x, y = feet[0] - dr.origin[0] + hx, feet[1] - dr.origin[1] + hy
+        side = int(fig.height * .3)
+        did = card.data['doodle']
+        first = paint.doodle(did, (side, side), 0, self.project_dir)
+        px = x - first.width / 2 + fig.facing * first.width * .15
+        py = y - first.height * .7
+        prop = image_item('doodle', lambda v: paint.doodle(did, (side, side), v, self.project_dir), px, py,
+                          shot.start, group=it.group, boil=True, layer=3, pop=False)
+        shot.items.append(prop)
+        shot.targets = getattr(shot, 'targets', {})
+        shot.targets[card.vid] = prop.rect
 
     def _cards(self, shot, cards, region, tail='left'):
         """Place up to two cards side by side in ``region``; a relation glyph or arrow between two doodles."""
@@ -1026,8 +1044,10 @@ class Composer:
             lane = (lane[0] + (0 if side > 0 else 220), lane[1], lane[2] - (220 if side > 0 else 0), lane[3])
         it = self._figure(shot, fig, lane, shot.start, walk=walk,
                           talk=pose in ('talk', 'point') and (face is None or face[2] not in ('o',)))
-        if walk and side < 0:
-            pass
+        held = next((c for c in cards if c.kind == 'doodle'), None) if pose == 'hold' else None
+        if held:
+            self._held(shot, it, held)
+            cards = [c for c in cards if c is not held]
         self._cards(shot, cards, region, tail='left' if side > 0 else 'right')
         return it
 

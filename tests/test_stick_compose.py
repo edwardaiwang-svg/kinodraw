@@ -90,3 +90,18 @@ def test_number_and_cue_rules():
     assert cues.pose_for('So there was no single cause. Rome fell.', 'en')[0] == 'shrug'
     assert cues.pose_for('Why is the sky blue?', 'en')[0] == 'think'
     assert cues.pose_for('我们没看到紫色', 'zh')[0] is None
+
+
+def test_a_holding_figure_carries_its_picture():
+    p = build('printing_press.md')
+    comp = p.composer
+    shot = comp.base(0., 4., 'left', None, [], words='')
+    card = compose.Card('doodle', .5, {'doodle': 'coin_stack', 'label': 'Coins'}, 'v1')
+    comp.lay_left(shot, None, [card], None, None, 'hold', None, None, None, 7, False, '')
+    fig = next(i for i in shot.items if i.kind == 'figure')
+    held = [i for i in shot.items if i.kind == 'doodle']
+    assert len(held) == 1 and held[0].group == fig.group, 'the picture should be in the hands, not on the stage'
+    hx0, hy0, hx1, hy1 = held[0].rect
+    fx0, fy0, fx1, fy1 = fig.rect
+    assert fx0 - 60 < (hx0 + hx1) / 2 < fx1 + 120 and fy0 < (hy0 + hy1) / 2 < fy1
+    assert not compose.overlaps(shot)
