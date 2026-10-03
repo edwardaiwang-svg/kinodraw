@@ -58,8 +58,10 @@ function bindSpeed(id) {
   slider.oninput();
 }
 let sampleAudio = null;
-async function playSample(lang, id, speed) {
+async function playSample(lang, id, speed, button) {      // the first sample of a voice takes a few seconds
   const url = `/api/voices/${encodeURIComponent(lang)}/${encodeURIComponent(id)}/sample?speed=${speed}&token=${T}`;
+  const label = button.textContent;
+  button.disabled = true; button.textContent = 'Loading…';
   try {
     const r = await fetch(url, { headers: { 'X-Studio-Token': T } });
     if (!r.ok) throw new Error((await r.json()).error || 'Could not play this sample.');
@@ -67,7 +69,7 @@ async function playSample(lang, id, speed) {
     sampleAudio = new Audio(url);
     sampleAudio.onerror = () => toast('Could not play this sample.', 6000);
     await sampleAudio.play();
-  } catch (e) { toast(e.message, 6000); }
+  } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
 }
 
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
@@ -126,7 +128,7 @@ function showNew() {
   fillVoices();
   $('#speed-wrap').innerHTML = speedRow('speed');
   bindSpeed('speed');
-  $('#voice-play').onclick = () => playSample(voiceLang(), voiceSel.value, $('#speed').value);
+  $('#voice-play').onclick = (e) => playSample(voiceLang(), voiceSel.value, $('#speed').value, e.currentTarget);
   const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
   document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
   dirSel.innerHTML = directorOptions(STATE.default_director);
@@ -490,7 +492,7 @@ function renderNarrator(name, info, choice = info.narrator) {
     const form = $('#n-voice-form', box), select = $('#n-voice', form), slider = $('#n-speed', form);
     const pronounce = $('#n-pronounce', form), save = $('#n-save', form);
     bindSpeed('n-speed');
-    $('#n-play', form).onclick = () => playSample(info.lang, select.value, slider.value);
+    $('#n-play', form).onclick = (e) => playSample(info.lang, select.value, slider.value, e.currentTarget);
     api(`/api/projects/${encodeURIComponent(name)}/voice`).then((settings) => {
       if (!form.isConnected) return;
       select.value = settings.voice; slider.value = settings.speed; slider.oninput();
