@@ -27,14 +27,22 @@ class Section:
 @dataclass
 class Document:
     title: str
-    lang: str                                   # 'en' or 'zh'
+    lang: str                                   # 'en', 'zh' or 'es'
     preamble: list[str] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
 
 
 def detect_lang(text: str) -> str:
     letters = [c for c in text if c.isalpha()]
-    return 'zh' if letters and sum(bool(CJK.match(c)) for c in letters) / len(letters) > .3 else 'en'
+    if letters and sum(bool(CJK.match(c)) for c in letters) / len(letters) > .3:
+        return 'zh'
+    tokens = re.findall(r'[^\W\d_]+', text.lower())
+    spanish = set('el la los las de del que y en un una es por con para se no su al lo como más pero sus le ya o '
+                  'este esta son también'.split())
+    english = set('the and of to is in that it for was on are with as this be by you'.split())
+    es = sum(t in spanish for t in tokens) + len(re.findall(r'[áéíóúü]', text, re.I)) + 2 * len(re.findall(r'[¿¡ñ]', text, re.I))
+    en = sum(t in english for t in tokens)
+    return 'es' if es >= 2 and es > en + 1 else 'en'
 
 
 def read(source: str | Path, title: str | None = None) -> Document:

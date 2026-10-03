@@ -181,6 +181,61 @@ def normalize_en(display: str) -> Normalized:
     return _rewrite(display, EN_PATTERN, _en_speak)
 
 
+# ============================================================== Spanish
+ES_CUR = {'US$': ('dólar', 'dólares'), '$': ('dólar', 'dólares'), '€': ('euro', 'euros'),
+          '£': ('libra', 'libras'), '¥': ('yen', 'yenes'), '₹': ('rupia', 'rupias')}
+ES_SCALES = {'k': ('mil', 'mil'), 'thousand': ('mil', 'mil'), 'mil': ('mil', 'mil'),
+             'm': ('millón', 'millones'), 'mn': ('millón', 'millones'), 'mm': ('millón', 'millones'),
+             'million': ('millón', 'millones'), 'millón': ('millón', 'millones'), 'millones': ('millón', 'millones'),
+             'b': ('mil millones', 'mil millones'), 'bn': ('mil millones', 'mil millones'),
+             'billion': ('mil millones', 'mil millones'), 't': ('billón', 'billones'),
+             'tn': ('billón', 'billones'), 'trillion': ('billón', 'billones')}
+_es_scale = '|'.join(re.escape(k) for k in sorted(ES_SCALES, key=len, reverse=True))
+ES_PATTERN = re.compile(
+    rf'(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>{_es_scale})\b)?'
+    rf'|(?P<ra>{NUM})\s?(?:-|–|a)\s?(?P<rb>{NUM})\s?(?P<rpct>%)'
+    rf'|(?P<pct>-?(?:{NUM}))\s?%'
+    rf'|(?P<samt>{NUM})\s?(?P<sscale>{_es_scale})\b'
+    rf'|(?P<neg>(?<![\w.])-)?(?P<num>{NUM})'
+)
+
+
+def es_number(token: str) -> str:
+    whole, dot, fraction = token.replace(',', '').partition('.')
+    words = num2words(int(whole), lang='es')
+    if dot:
+        words += ' punto ' + ' '.join(num2words(int(d), lang='es') for d in fraction)
+    return words
+
+
+def _es_speak(m: re.Match) -> str:
+    g = m.groupdict()
+    if g['cur'] or g['samt']:
+        amount = g['camt'] or g['samt']
+        scale = g['cscale'] or g['sscale']
+        one = Decimal(amount.replace(',', '')) == 1
+        words = es_number(amount)
+        if scale or (g['cur'] and '.' not in amount):
+            words = re.sub(r'veintiuno$', 'veintiún', words)
+            words = re.sub(r'uno$', 'una' if g['cur'] in ('£', '₹') and not scale else 'un', words)
+        if scale:
+            words = 'mil' if one and ES_SCALES[scale][1] == 'mil' else words + ' ' + ES_SCALES[scale][0 if one else 1]
+        if g['cur']:
+            singular, plural = ES_CUR[g['cur']]
+            words += (' de ' if scale and ES_SCALES[scale][1] != 'mil' else ' ') + (singular if one and not scale else plural)
+        return words
+    if g['rpct']:
+        return f"{es_number(g['ra'])} a {es_number(g['rb'])} por ciento"
+    if g['pct']:
+        token = g['pct']
+        return ('menos ' if token.startswith('-') else '') + f"{es_number(token.lstrip('-'))} por ciento"
+    return ('menos ' if g['neg'] else '') + es_number(g['num'])
+
+
+def normalize_es(display: str) -> Normalized:
+    return _rewrite(display, ES_PATTERN, _es_speak)
+
+
 # ============================================================== Chinese
 ZH_CUR = {'US$': '美元', '$': '美元', '€': '欧元', '£': '英镑', '¥': '元', '￥': '元', 'HK$': '港元'}
 _zcur = '|'.join(re.escape(c) for c in sorted(ZH_CUR, key=len, reverse=True))
@@ -230,5 +285,7 @@ def normalize_zh(display: str) -> Normalized:
 
 
 def normalize(display: str, lang: str) -> Normalized:
+    if lang == 'es':
+        return normalize_es(display)
     return normalize_en(display) if lang == 'en' else normalize_zh(display)
 
