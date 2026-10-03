@@ -180,13 +180,16 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
 
 # ------------------------------------------------------ your own recording
 HOP, WIN = 240, 600      # analysis frames: every 10 ms, 25 ms long
-RECORDING_VERSION = 2    # bump when recording alignment changes (invalidates cached cuts)
+RECORDING_VERSION = 3    # bump when recording alignment changes (invalidates cached cuts)
 TAKE_SR = 48000          # the clips keep the take's full sound (the mix's rate); only the alignment runs at SR
 STEP = .05               # extra cost of a frame only one side advances on (keeps the warp from zigzagging)
 EDGE = 6                 # frames of quiet kept before and after each beat
 SNAP = 30                # frames a cut may move from where the alignment put it, to land in a pause
 PAUSE = 10               # quiet stretches shorter than this are inside words (stop consonants)
 MATCH = .4               # a reading of the script matches its guide at .45 or more, other words at about .35
+SHORT, SHORTISH, WEAK = .5, .65, .8   # a beat left out of the take: its cut holds under SHORT of the speech its
+                         # text predicts at the take's usual pace, or under SHORTISH while matching under WEAK of the
+                         # take's usual match (80 whole readings in 13 voices: speech never under .70; .72 at .76 match)
 SCALES = (.7, .75, .8, .85, .9, .95, 1., 1.05, 1.1, 1.15, 1.2)    # the take's formants against the guide's
 
 
@@ -412,7 +415,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     room = tl > tr                                 # anything over room tone stays: soft endings, releases, breaths
     full, hop = _decode(recording, TAKE_SR), TAKE_SR // 100
 
-    clips, rows, sounds = [], [], []
+    clips, rows, sounds, paces = [], [], [], []
     for k, ((bid, text), guide, (gs, ge)) in enumerate(zip(beats, guides, spans)):
         a, b = max(0, sum(cuts[k]) // 2), min(len(tl), sum(cuts[k + 1]) // 2)     # the middles of the pauses
         sound = a + np.flatnonzero(room[a:b])
@@ -432,19 +435,33 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
                       'char_times': [round(float(x), 3) for x in char_times]})
         on = (path[:, 0] >= gs) & (path[:, 0] <= ge) & (gl[path[:, 0]] > gq)
         match = round(1 - float(cost[on].mean()), 2)
+        paces.append((tl[start:end] > tq).sum() / max(1, (gl[gs:ge + 1] > gq).sum()))
         rows.append({'id': bid, 'start': round(start / 100, 2), 'end': round(end / 100, 2), 'match': match,
                      'check': match < MATCH, 'pause_before': bool(cuts[k][0] < cuts[k][1])})
+    usual_pace = max(float(np.median(paces)), 1e-6)
+    usual_match = max(float(np.median([r['match'] for r in rows])), 1e-6)
+    for row, pace in zip(rows, paces):
+        row['speech'] = round(float(pace) / usual_pace, 2)
+        row['missing'] = row['speech'] < SHORT or (row['speech'] < SHORTISH and row['match'] / usual_match < WEAK)
     on = gl[path[:, 0]] > gq
     info = {'clips': clips, 'report': {
         'recording': str(recording), 'sha256': digest, 'seconds': round(len(take) / SR, 2),
         'speech_ratio': round(said / script, 2), 'voice_scale': scale, 'match': round(1 - float(cost[on].mean()), 2),
         'note': f'match: about 0.35 for unrelated speech, 0.45 or more for a reading of the script; beats under '
-                f'{MATCH} are marked check', 'beats': rows}}
+                f'{MATCH} are marked check. speech: the speech heard in the beat\'s cut over what its text predicts, '
+                f'at the take\'s usual pace (1 is usual); under {SHORT} (or {SHORTISH} with a weak match) the beat '
+                f'is missing from the take', 'beats': rows}}
     report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1))
     if info['report']['match'] < MATCH:
         raise RecordingError(f"Your recording does not sound like a reading of this script (match "
                              f"{info['report']['match']:.2f}, under {MATCH}). Record this script, as written, and "
                              f"try again; where each part was heard: {report}")
+    missing = [(row['speech'], k) for k, row in enumerate(rows) if row['missing']]
+    if missing:
+        bid, text = beats[min(missing)[1]]
+        raise RecordingError(f'Part of the script seems to be missing from your recording, around the part that says '
+                             f'"{_quote(text)}" ({bid}). Read the whole script once through, every sentence as '
+                             'written, and try again.')
     out.mkdir(parents=True, exist_ok=True)
     for c, audio in zip(clips, sounds):
         _write_wav(out / c['wav'], audio, TAKE_SR)

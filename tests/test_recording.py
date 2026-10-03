@@ -48,7 +48,9 @@ def test_a_project_is_narrated_from_its_recording_once_it_has_one(tmp_path, monk
     assert (project / 'recording.m4a').read_bytes() == b'audio'
     beats = [(beat['id'], beat['spoken']['en']) for beat in board['beats']]
     assert calls == [(project / 'recording.m4a', beats, 'en', project / 'voice', 'af_heart', 1.0)]
-    assert '! b002 matches its text poorly (0.30)' in capsys.readouterr().out
+    out = capsys.readouterr().out                         # which part, and what to do about it
+    assert '! b002 ("Honey is one of the oldest foods people still eat.") sounds unlike its text (0.30). Watch that ' \
+           'part of the video: if the pictures are out of step with your voice there, record the script again' in out
     with pytest.raises(SystemExit):
         cli.main(['voice', str(project), '--recording', str(tmp_path / 'missing.wav')])
     cli.main(['voice', str(project), '--recording', 'none'])
@@ -121,7 +123,7 @@ def test_a_take_in_another_voice_is_cut_in_its_pauses_and_timed_to_its_words(tak
         assert loud[0] == pytest.approx(loud[1], abs=3)             # at the guide's speech level
     errors = np.abs(errors)
     assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
-    assert not any(row['check'] for row in report['beats']) and report['match'] > voice.MATCH
+    assert not any(row['check'] or row['missing'] for row in report['beats']) and report['match'] > voice.MATCH
 
 
 @needs_models
@@ -206,6 +208,25 @@ def test_a_take_that_skips_sentences_says_what_to_do_instead_of_a_traceback(tmp_
     assert f'kinodraw voice "{project}" --recording none' in message
     cli.main(['voice', str(project), '--recording', 'none'])
     assert 'captions' in capsys.readouterr().out
+
+
+@needs_models
+def test_a_take_that_leaves_out_one_part_is_refused_and_names_it(tmp_path):
+    """One whole beat left out: the cut used to squeeze its neighbours into its place, so every step went on to a video
+    whose pictures ran ahead of the voice, with only a warning that blamed the wrong part."""
+    project = tmp_path / 'video'
+    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    beats = [(beat['id'], beat['spoken']['en']) for beat in board['beats']]
+    take = _skipping_take(tmp_path, beats, {1})
+    with pytest.raises(SystemExit) as end:
+        cli.main(['voice', str(project), '--recording', str(take)])
+    message = str(end.value.code)
+    assert 'Part of the script seems to be missing from your recording, around the part that says "Honey is one of ' \
+           'the oldest foods people still eat." (b002). Read the whole script once through' in message
+    assert f'kinodraw voice "{project}" --recording none' in message and 'Traceback' not in message
+    report = json.loads((project / 'voice' / 'recording-align.json').read_text())
+    assert next(row for row in report['beats'] if row['id'] == 'b002')['missing']
+    assert not (project / 'build' / 'timeline.json').exists()                  # nothing goes on to render
 
 
 def test_the_studio_shows_a_recording_problem_as_a_plain_sentence(monkeypatch):

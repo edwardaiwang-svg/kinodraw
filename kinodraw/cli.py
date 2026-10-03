@@ -69,9 +69,13 @@ def cmd_voice(args):
     if pipeline.settings(project).get('recording'):
         report = json.loads((project / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
         print(f"  your recording: match {report['match']:.2f} (where each beat is: voice/recording-align.json)")
+        lang = pipeline.settings(project)['lang']
+        said = {beat['id']: beat['spoken'][lang] for beat in pipeline.storyboard(project)['beats']}
         for beat in report['beats']:
             if beat['check']:
-                print(f"  ! {beat['id']} matches its text poorly ({beat['match']:.2f}): was it read as written?")
+                print(f"  ! {beat['id']} (\"{pipeline.voice._quote(said.get(beat['id'], ''))}\") sounds unlike its "
+                      f"text ({beat['match']:.2f}). Watch that part of the video: if the pictures are out of step "
+                      "with your voice there, record the script again, every sentence as written.")
 
 
 def cmd_render(args):
