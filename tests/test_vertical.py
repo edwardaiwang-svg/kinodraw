@@ -156,3 +156,29 @@ def test_a_long_title_never_runs_off_the_frame(tmp_path, key):
     left, right = _ink_columns(img)
     assert img.width <= 1080 and left >= 40 and right <= 1040, (left, right)
     assert img.height <= vertical.BOARD[1] - vertical.TITLE_GAP - 200
+
+
+def test_a_caption_with_one_enormous_word_shrinks_until_it_fits_above_the_buttons():
+    text = 'https://example.com/' + 'a' * 700
+    lines, size = vertical.caption_lines(text, 'en')
+    f = vertical.ink.font('en_caption', size)
+    assert ''.join(lines) == text, lines                                  # nothing cut off
+    assert all(f.getlength(l) <= vertical.TEXT_W for l in lines), lines
+    img = vertical.caption_image(text, 'en')
+    assert vertical.BOARD[1] + vertical.BOARD[3] + vertical.CAP_GAP + img.height <= 1920 - 240
+
+
+@pytest.mark.parametrize('key', ['title', 'chapter'])
+def test_a_title_with_one_enormous_word_stays_under_the_top_bar(tmp_path, key):
+    prod, tl = _prod(tmp_path, 'notebook', 'en')
+    long = 'https://example.com/' + 'a' * 500
+    if key == 'title':
+        prod.ep['title'] = {'en': long}
+        img = prod._title_image(('title',))
+    else:
+        ch = next(c for c in prod.ep['chapters'] if c['kind'] == 'section')
+        ch['title'] = {'en': long}
+        img = prod._title_image(('chapter', ch['id']))
+    left, right = _ink_columns(img)
+    assert left >= 40 and right <= 1040, (left, right)
+    assert img.height <= vertical.BOARD[1] - vertical.TITLE_GAP - 200

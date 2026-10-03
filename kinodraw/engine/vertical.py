@@ -23,6 +23,7 @@ W, H = 1080, 1920
 BOARD = (0, 656, 1080, 608)            # x, y, w, h: the 16:9 frame, scaled 0.5625, in the middle
 TEXT_W = 960                           # captions and titles keep 60 px from either side
 TITLE_GAP = 40                         # between the title block and the board
+TITLE_H = BOARD[1] - TITLE_GAP - 200   # the title block stays under the app's top bar
 CAP_GAP = 44                           # between the board and the captions
 CAP_SIZE, CAP_MIN, CAP_LINES = 64, 44, 3
 FADE_IN, FADE_OUT = .4, .3             # titles fade like the 16:9 chrome does; nothing pops
@@ -110,18 +111,21 @@ class Vertical:
             from .render import source_line
             source = source_line(ch, lang)
             size, lines_max = 80, 2
-        lines, size = ink.fit_text(title, lang, TEXT_W, lines_max, size, min_size=48, fonts=fonts)
-        if any(ink.text_width(l, lang, size, fonts) > TEXT_W for l in lines):
-            while True:
-                lines = _wrap(title, lang, TEXT_W, lambda t: ink.text_width(t, lang, size, fonts))
-                if len(lines) <= lines_max or size <= 40:
-                    break
-                size = max(40, size - 2)
-        lh = int(size * 1.2)
         parts = []                                       # (image, gap above)
         if label and label.strip().lower() != title.strip().lower():
             label = label.upper() if lang == 'en' else label
             parts.append((_ui_line(_fit_ui(label, 38, fonts), 38, self._label_color(color), fonts), 0))
+        room = TITLE_H - 6 * bool(parts) - sum(img.height for img, _ in parts) - (18 if color else 0) \
+            - (56 if source else 0)                     # what the title lines may use, beside label, bar and source
+        lines, size = ink.fit_text(title, lang, TEXT_W, lines_max, size, min_size=48, fonts=fonts)
+        tall = lambda: int(size * 1.2) * len(lines) + 16 > room
+        if any(ink.text_width(l, lang, size, fonts) > TEXT_W for l in lines) or tall():
+            while True:
+                lines = _wrap(title, lang, TEXT_W, lambda t: ink.text_width(t, lang, size, fonts))
+                if size <= 8 or (len(lines) <= lines_max or size <= 40) and not tall():
+                    break                                # below 40 px only when the title would not fit otherwise
+                size = max(8, size - 2)
+        lh = int(size * 1.2)
         block = Image.new('RGBA', (W, lh * len(lines) + 16), (0, 0, 0, 0))
         d = ImageDraw.Draw(block)
         for k, line in enumerate(lines):
@@ -240,7 +244,19 @@ def _break_unit(unit, width, measure):
     if start < len(unit):
         pieces.append(unit[start:])
     return [part for piece in pieces for part in
-            ([piece] if measure(piece.strip()) <= width else list(piece))]
+            ([piece] if measure(piece.strip()) <= width else _chunks(piece, width, measure))]
+
+
+def _chunks(piece, width, measure):
+    """The longest runs of characters that fit ``width``, so a very long word wraps in one pass."""
+    out, cur = [], ''
+    for ch in piece:
+        if cur and measure(cur + ch) > width:
+            out.append(cur)
+            cur = ch
+        else:
+            cur += ch
+    return out + [cur] if cur else out
 
 
 def _wrap(text, lang, width, measure):
@@ -306,16 +322,16 @@ def _wrap(text, lang, width, measure):
 
 @lru_cache(maxsize=1024)
 def caption_lines(text, lang, fonts=ink.FONTS):
-    """Prefer CAP_LINES at CAP_MIN or larger; then use the available height, with an absolute floor of 36 px."""
+    """Prefer CAP_LINES at CAP_MIN or larger; then the largest size whose lines fit the height above the buttons."""
     for size in range(CAP_SIZE, CAP_MIN - 1, -2):
         lines = wrap(text, lang, size, fonts)
         if len(lines) <= CAP_LINES:
             return lines, size
     available = H - 240 - (BOARD[1] + BOARD[3] + CAP_GAP)
-    for size in range(CAP_MIN, 35, -2):
+    for size in range(CAP_MIN, 7, -2):
         lines = wrap(text, lang, size, fonts)
-        if _caption_height(len(lines), size) <= available or size == 36:
-            return lines, size                       # at 36 px every word is still shown, even past the margin
+        if _caption_height(len(lines), size) <= available or size == 8:
+            return lines, size                       # below 36 px only for one enormous word: smaller, never cut off
 
 
 def _caption_height(line_count, size):
