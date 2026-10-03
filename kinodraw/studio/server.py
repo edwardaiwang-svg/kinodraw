@@ -128,6 +128,39 @@ def _summary(path: Path) -> dict:
 
 
 # ------------------------------------------------------------------ actions
+def _voice_settings(lang: str, voice_id, speed) -> dict:
+    if voice_id not in dict(voice.VOICES.get(lang, [])):
+        raise ValueError('Choose a voice for this language.')
+    try:
+        speed = round(float(speed), 2)
+    except (TypeError, ValueError):
+        raise ValueError('Speed should be between 0.85 and 1.15.') from None
+    if not voice.SPEEDS[0] <= speed <= voice.SPEEDS[1]:
+        raise ValueError('Speed should be between 0.85 and 1.15.')
+    return {'voice': voice_id, 'speed': speed}
+
+
+def voice_settings(name: str, body: dict | None = None) -> dict:
+    """Read or save the project's voice, speed and pronunciations."""
+    path = _project(name)
+    cfg = pipeline.settings(path)
+    pronounce = path / pipeline.PRONOUNCE
+    if body is not None:
+        settings = _voice_settings(cfg['lang'], body.get('voice'), body.get('speed'))
+        text = body.get('pronounce', '')
+        if not isinstance(text, str):
+            raise ValueError('Pronunciations should be text: word = how to say it.')
+        voice.parse_lexicon(text)
+        pipeline._save(path / 'project.json', {**cfg, **settings})
+        if text.strip():
+            pronounce.write_text(text, encoding='utf-8')
+        else:
+            pronounce.unlink(missing_ok=True)
+        cfg.update(settings)
+    return {'lang': cfg['lang'], 'voice': cfg['voice'], 'speed': cfg['speed'],
+            'pronounce': pronounce.read_text(encoding='utf-8') if pronounce.exists() else ''}
+
+
 def create_project(body: dict) -> dict:
     text = (body.get('text') or '').strip()
     if not text:
@@ -138,7 +171,9 @@ def create_project(body: dict) -> dict:
     name = _slug(doc.title)
     path = projects_root() / name
     mode = body.get('director') or 'rules'
-    settings = {k: body[k] for k in ('voice', 'workers') if body.get(k)}
+    lang = body.get('lang') or doc.lang
+    settings = {k: body[k] for k in ('workers',) if body.get(k)}
+    settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
     settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
 
     def job(progress):
@@ -418,8 +453,8 @@ def state() -> dict:
                         {'value': '9:16', 'label': 'Vertical 9:16 (Shorts, TikTok, Reels)'}],
             'styles': [{'value': f"{e['id']}/{e['stories'][0]}", 'label': e['name']['en']}   # the registry's looks
                        for e in styles.looks(ready=True)],                               # that render now
-            'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
-                       'zh': ['zf_001', 'zf_002', 'zm_010', 'zm_020']},
+            'voices': {lang: [{'id': vid, 'name': name} for vid, name in choices]
+                       for lang, choices in voice.VOICES.items()},
             'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')},
             'notice': paths.NOT_MOVED if paths.left_behind else None}   # Doodle Studio's folders could not move yet
 
@@ -534,6 +569,9 @@ class Handler(BaseHTTPRequestHandler):
     def _api(self, method, p, q):
         if p == ['state'] and method == 'GET':
             return self._json(state())
+        if len(p) == 4 and p[0] == 'voices' and p[3] == 'sample' and method == 'GET':
+            settings = _voice_settings(p[1], p[2], q.get('speed', 1.0))
+            return self._file(voice.preview(settings['voice'], p[1], settings['speed']), 'audio/wav')
         if p == ['projects'] and method == 'GET':
             items = [_summary(d) for d in projects_root().iterdir() if (d / 'project.json').exists()]
             return self._json(sorted(items, key=lambda x: -x['modified']))
@@ -548,6 +586,8 @@ class Handler(BaseHTTPRequestHandler):
                                    'qa': json.loads((path / 'build/qa.json').read_text(encoding='utf-8')) if (path / 'build/qa.json').exists() else None})
             if p[2:] == ['storyboard'] and method == 'PUT':
                 return self._json(save_storyboard(name, self._body()))
+            if p[2:] == ['voice'] and method in ('GET', 'PUT'):
+                return self._json(voice_settings(name, self._body() if method == 'PUT' else None))
             if p[2:] == ['direct'] and method == 'POST':
                 return self._json(redirect(name, self._body()))
             if p[2:] == ['format'] and method == 'POST':
