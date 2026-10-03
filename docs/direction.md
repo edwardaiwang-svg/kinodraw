@@ -8,7 +8,7 @@ model may pick among the options the rules offer, but it never invents what is d
 
 | Key | Values | Default |
 |---|---|---|
-| `look` | `whiteboard`, `collage` (paper cut-outs, stickers, a paper puppet), `bold` (kinetic type, shapes, particles) | `whiteboard` |
+| `look` | `whiteboard`, `collage` (paper cut-outs, stickers, a paper puppet); `bold` (kinetic type, shapes, particles) is planned, not available yet | `whiteboard` |
 | `story` | `explain` (sections, agenda, takeaways), `promo` (problem → brand → steps → proof → call to action), `story` (question → journey → twist → end line), `showcase` (one idea per beat, a signature end card) | `explain` |
 | `motion` | `calm` (no big moves), `lively`, `showreel` (beat-synced, many showpieces) | `lively` |
 

@@ -30,7 +30,7 @@ from . import captions as cap
 from . import ink
 from . import scenes
 from . import timeline as tl
-from .storyboard import normalize
+from .storyboard import drawable, normalize
 from .board import COL, PAN_SECONDS, Camera, Layout, Scheduler
 
 HERE = Path(__file__).resolve().parent
@@ -545,7 +545,7 @@ class Production:
 def make_production(episode, tline, lang, project_dir, relaxed=False):
     """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
     A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does."""
-    if episode.get('look') == 'collage':
+    if drawable(episode.get('look') or 'whiteboard') == 'collage':
         from .collage.render import CollageProduction
         return CollageProduction(episode, tline, lang, project_dir, relaxed=relaxed)
     return Production(episode, tline, lang, project_dir, relaxed=relaxed)

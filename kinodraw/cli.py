@@ -205,12 +205,11 @@ def _direction(args):
 
 
 MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
-LOOKS, STORIES, MOTIONS = ['whiteboard', 'collage', 'bold'], ['explain', 'promo', 'story', 'showcase'], \
-    ['calm', 'lively', 'showreel']
 
 
 def main(argv=None):
     from . import paths
+    from .engine.storyboard import DIALS, LOOKS
     paths.migrate()                                   # once: Doodle Studio's folders become KinoDraw's
     if paths.left_behind:
         print(paths.NOT_MOVED, *(f'  still in {p}' for p in paths.left_behind), sep='\n', file=sys.stderr)
@@ -228,8 +227,9 @@ def main(argv=None):
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
         p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
-        p.add_argument('--story', choices=STORIES, help='story shape (default explain)')
-        p.add_argument('--motion', choices=MOTIONS, help='how lively the animation is (default lively)')
+        p.add_argument('--story', choices=DIALS['story'], help='story shape (default explain)')
+        p.add_argument('--motion', choices=DIALS['motion'],
+                       help='how lively a collage video moves (default lively; the whiteboard ignores it)')
         p.add_argument('--brand', help='a promo\'s product name, as it should appear (default: from the script)')
         p.add_argument('--brand-url', help='a promo\'s website, for the end card (default: from the script)')
         p.add_argument('--brand-cta', help='a promo\'s button text, e.g. "Try it for free" (default: from the script)')

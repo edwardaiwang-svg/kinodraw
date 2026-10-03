@@ -13,6 +13,14 @@ KINDS = {'intro', 'agenda', 'section', 'board', 'outro'}
 DIALS = {'look': ('whiteboard', 'collage', 'bold'),              # the first value is the default
          'story': ('explain', 'promo', 'story', 'showcase'),
          'motion': ('lively', 'calm', 'showreel')}
+LOOKS = ('whiteboard', 'collage')   # the looks KinoDraw can draw; bold is only planned (director/annotate.py)
+
+
+def drawable(look: str) -> str:
+    """``look`` if KinoDraw can draw it, else a ValueError that says what to choose."""
+    if look not in LOOKS:
+        raise ValueError(f'The "{look}" look is not available yet. Choose {" or ".join(LOOKS)}.')
+    return look
 
 
 def normalize(episode: dict) -> dict:

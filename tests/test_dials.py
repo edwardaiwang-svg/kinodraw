@@ -89,3 +89,26 @@ def test_a_revealed_name_of_several_words_wins_over_the_website(tmp_path):
         end = [s.text for s in prod.stages[-1].sentences]
         assert prod.stages[-1].kind == 'end' and end == [f'{name}.', 'Learn at your own pace.', "It's free for everyone.",
                                                          f'Visit {site}.']
+
+
+def test_a_look_that_cannot_be_drawn_yet_is_refused_in_plain_words(tmp_path, monkeypatch):
+    """--look bold was accepted and the video silently came out as a whiteboard."""
+    import pytest
+    from kinodraw import cli, director
+    from kinodraw.studio import server
+    monkeypatch.setattr(director, 'direct', lambda *a: {})
+    with pytest.raises(SystemExit) as refused:
+        cli.main(['new', str(FIX / 'tiny.md'), '-o', str(tmp_path / 'cli'), '--look', 'bold'])
+    assert refused.value.code == 2 and not (tmp_path / 'cli').exists()
+    with pytest.raises(ValueError, match=r'^The "bold" look is not available yet\. Choose whiteboard or collage\.$'):
+        pipeline.new_project(FIX / 'tiny.md', tmp_path / 'api', direction={'look': 'bold'})
+    board = pipeline.new_project(FIX / 'tiny.md', tmp_path / 'p')
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    with pytest.raises(ValueError, match='not available yet'):                     # a hand-edited storyboard
+        renderer.make_production({**board, 'look': 'bold'}, tl, 'en', tmp_path / 'p')
+    page = (server.STATIC / 'index.html').read_text(encoding='utf-8')
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    assert 'bold' not in page.lower().replace('font-weight', '')
+    assert '<label id="motion-wrap" class="hidden">Motion' in page             # the whiteboard ignores Motion
+    assert "$('#motion-wrap').classList.toggle('hidden', !collage)" in js and \
+        "motion: look === 'collage' ? $('#motion').value : null" in js

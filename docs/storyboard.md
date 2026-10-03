@@ -27,7 +27,7 @@ Each project folder holds a `storyboard.json`. You can edit it by hand or in Stu
 - `narrator`: `"none"` hides the character. Any other value is a prefix, and poses are looked up as `<prefix>_wave`, `<prefix>_head`, `<prefix>_present`, `<prefix>_thumbs`, and so on (see "Your own doodles" below).
 - `music`: `true`, `false`, or `{"primary": "fresh_focus", "secondary": "natural_vibes"}`.
 - `host`: optional, `{"photo": "photos/me.jpg", "badge": {"en": "Name · role"}}`. It adds a photo badge to the title board and end card.
-- `look`, `story`, `motion`: the direction dials, all optional. `look` is `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `collage` or `bold`. `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
+- `look`, `story`, `motion`: the direction dials, all optional. `look` is `whiteboard` (the default: the hand-drawn board, which ignores the other dials) or `collage` (`bold` is planned, not available yet). `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
 - `brand`: optional, `{"name", "url", "cta", "reveal"}`, all text; `"reveal": "hand"` has the drawing hand write the name. Without it the brand is found in the script: a domain such as `friendr.nl`, or a name said twice that the title or a "Meet X" backs up.
 
 ## Chapters

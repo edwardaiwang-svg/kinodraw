@@ -20,6 +20,7 @@ from pathlib import Path
 from . import ingest, script, voice
 from .audio import mix as audio
 from .engine import render as renderer
+from .engine.storyboard import drawable
 from .package import clock, contact_sheet, encoded_qa, mux, publish, sha
 
 
@@ -35,6 +36,8 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
                 direction: dict | None = None, **settings) -> dict:
     """Create the project folder from a script file or pasted text and build the storyboard skeleton.
     ``direction`` sets the storyboard's dials: look, story, motion and brand (see docs/storyboard.md)."""
+    if (direction or {}).get('look'):
+        drawable(direction['look'])
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
     src = Path(source) if isinstance(source, Path) or (len(str(source)) < 1024 and '\n' not in str(source)) else None
