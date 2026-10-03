@@ -1,5 +1,8 @@
 """Spanish narration and the Latin rendering path, without downloads or synthesis."""
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +27,35 @@ def test_detection_and_all_existing_fixtures():
     for path in FIX.iterdir():
         if path.suffix in ('.md', '.txt') and path.name != 'miel_es.md':
             assert ingest.read(path).lang == ('zh' if path.name == 'sleep_zh.md' else 'en'), path.name
+
+
+ENGLISH_WITH_SPANISH_NAMES = [
+    'El Niño and La Niña: why California gets wet winters.',
+    'Día de los Muertos: how families in Mexico remember loved ones.',
+    'How to grow jalapeño peppers on a balcony.',
+    'Plan a piñata party for a class of 25.',
+    'José and María went to México.',
+]
+SPANISH_SHORT = ['¿Cómo comen las plantas?', '¡Hola!', 'Cómo funciona un volcán',
+                 'Las abejas hacen la miel de las flores del campo.']
+
+
+def test_english_with_spanish_names_stays_english():
+    assert [ingest.detect_lang(t) for t in ENGLISH_WITH_SPANISH_NAMES] == ['en'] * 5
+    assert [ingest.detect_lang(t) for t in SPANISH_SHORT] == ['es'] * 4
+
+
+@pytest.mark.skipif(not shutil.which('node'), reason='node not installed')
+def test_studio_detect_matches_the_server(tmp_path):
+    app = (Path(ingest.__file__).parent / 'studio' / 'static' / 'app.js').read_text(encoding='utf-8')
+    body = app[app.index("    const text = $('#script').value;"):app.index('    voiceSel.innerHTML')]
+    texts = ENGLISH_WITH_SPANISH_NAMES + SPANISH_SHORT + [(FIX / 'miel_es.md').read_text(encoding='utf-8')]
+    (tmp_path / 'detect.js').write_text(
+        'const detect = new Function("text", "langSel", ' + json.dumps(body.replace("const text = $('#script').value;", ''))
+        + ' + "return lang;");\n' + f'console.log(JSON.stringify({json.dumps(texts)}.map((t) => detect(t, {{value: ""}}))));',
+        encoding='utf-8')
+    out = subprocess.run(['node', str(tmp_path / 'detect.js')], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == [ingest.detect_lang(t) for t in texts]
 
 
 def test_spanish_storyboard_lines():

@@ -93,12 +93,14 @@ function showNew() {
   const langSel = $('#lang'), voiceSel = $('#voice'), dirSel = $('#director');
   const fillVoices = () => {
     const text = $('#script').value;
-    const words = text.toLowerCase().match(/\p{L}+/gu) || [];
+    const words = text.match(/\p{L}+/gu) || [];
+    const caps = words.map((w) => w[0] !== w[0].toLowerCase()).concat(false);
     const spanish = new Set('el la los las de del que y en un una es por con para se no su al lo como más pero sus le ya o este esta son también'.split(' '));
     const english = new Set('the and of to is in that it for was on are with as this be by you'.split(' '));
-    const es = words.filter((w) => spanish.has(w)).length + (text.match(/[¿¡ñáéíóúü]/gi) || []).length;
-    const en = words.filter((w) => english.has(w)).length;
-    const lang = langSel.value || (/[一-鿿]/.test(text) ? 'zh' : /[¿¡ñ]/i.test(text) || (es >= 2 && es > en + 1) ? 'es' : 'en');
+    const es = words.filter((w, i) => spanish.has(w.toLowerCase()) && !(caps[i] && caps[i + 1])).length   // same rule as ingest.detect_lang
+      + words.filter((w, i) => !caps[i]).join(' ').replace(/[^áéíóúüñ]/g, '').length + 2 * (text.match(/[¿¡]/g) || []).length;
+    const en = words.filter((w) => english.has(w.toLowerCase())).length;
+    const lang = langSel.value || (/[一-鿿]/.test(text) ? 'zh' : es >= 2 && es > 2 * en + 1 ? 'es' : 'en');
     voiceSel.innerHTML = STATE.voices[lang].map((v) => `<option>${esc(v)}</option>`).join('');
   };
   langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
