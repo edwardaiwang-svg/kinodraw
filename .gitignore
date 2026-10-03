@@ -5,6 +5,7 @@ private_presets/
 projects/
 *.mp4
 !docs/media/*.mp4
+!doodlestudio/studio/static/sample/*.mp4
 *.wav
 .DS_Store
 /dist/

@@ -70,6 +70,13 @@ async function loadProjects() {
   $('#projects').querySelectorAll('a').forEach((a) => (a.onclick = () => openProject(a.dataset.name)));
 }
 
+// ---------------------------------------------------------------- example
+function showSample() {          // a finished video that ships with the app: plays at once, nothing to download
+  current = null; loadProjects();
+  $('#main').replaceChildren($('#tpl-sample').content.cloneNode(true));
+  $('#s-make').onclick = showNew;
+}
+
 // ---------------------------------------------------------------- new video
 function showNew() {
   current = null; loadProjects();
@@ -355,10 +362,11 @@ function refreshDirectorMenus() {          // after Settings changes, without cl
 
 document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-new').onclick = showNew;
+  $('#btn-sample').onclick = showSample;
   $('#btn-settings').onclick = showSettings;
   $('#modal .close').onclick = closeModal;
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
   await refreshState();
   const items = await api('/api/projects');
-  if (items.length && !items[0].broken) openProject(items[0].name); else showNew();
+  if (items.length && !items[0].broken) openProject(items[0].name); else showSample();
 });

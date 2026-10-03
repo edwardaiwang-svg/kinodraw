@@ -12,12 +12,26 @@
 <aside id="side">
   <div class="brand">Doodle <span>Studio</span></div>
   <button id="btn-new" class="primary wide">+ New video</button>
+  <button id="btn-sample" class="ghost wide">Watch an example</button>
   <div class="side-label">Your videos</div>
   <nav id="projects"></nav>
   <button id="btn-settings" class="ghost wide">Settings</button>
   <a id="feedback" href="https://github.com/edwardaiwang-svg/doodle-studio/issues/new/choose" target="_blank">Feedback or a problem? Tell us</a>
 </aside>
 <main id="main"></main>
+
+<template id="tpl-sample">
+  <section class="page">
+    <h1>Here's a video Doodle Studio made</h1>
+    <p class="muted">It was made from a short script about why the sky is blue: Doodle Studio chose the doodles, drew
+      them and narrated every line, with captions and chapters. Paste your own script to make one like it.</p>
+    <video controls preload="metadata" poster="/static/sample/why-is-the-sky-blue.jpg"
+      src="/static/sample/why-is-the-sky-blue.mp4"></video>
+    <button id="s-make" class="primary big">Make your own video</button>
+    <p class="muted">No account needed. Your first video downloads the voice and the doodle search once
+      (about 260 MB for English).</p>
+  </section>
+</template>
 
 <template id="tpl-new">
   <section class="page">

@@ -1,5 +1,6 @@
 """The Studio as a new user first opens it: no projects yet, not signed in to Doodle Cloud."""
 import json
+import re
 import urllib.request
 
 import pytest
@@ -34,3 +35,19 @@ def test_signed_out_users_start_with_the_offline_director(studio, monkeypatch):
     assert json.loads(studio('/api/state')[2])['default_director'] == 'cloud'
     js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
     assert 'directorOptions(STATE.default_director)' in js           # the New video page follows it
+
+
+def test_first_open_shows_a_finished_example_with_nothing_to_download(studio):
+    """A new user's first video takes about a minute plus a 260 MB download; the example that ships with the
+    app plays at once, offline."""
+    assert json.loads(studio('/api/projects')[2]) == []             # first open: nothing made yet
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    assert re.search(r'openProject\(items\[0\]\.name\);\s*else showSample\(\)', js)   # ...so the example opens
+    page = studio('/')[2].decode()
+    sample = re.search(r'<template id="tpl-sample">.*?</template>', page, re.S).group(0)
+    video, poster = re.search(r'<video[^>]* src="([^"]+)"', sample).group(1), re.search(r'poster="([^"]+)"', sample).group(1)
+    status, headers, head = studio(video, Range='bytes=0-1023')    # how <video> asks for it
+    assert status == 206 and headers['Content-Type'] == 'video/mp4' and head[4:8] == b'ftyp'
+    assert 1e6 < int(headers['Content-Range'].split('/')[1]) < 6e6   # a finished video, small enough to ship
+    assert studio(poster)[1]['Content-Type'] == 'image/jpeg'
+    assert 'id="btn-sample"' in page and 'btn-sample' in js          # and it can be watched again later
