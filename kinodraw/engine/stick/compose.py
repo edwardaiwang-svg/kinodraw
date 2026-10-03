@@ -893,9 +893,8 @@ class Composer:
                 holds.append((min(t, min(e['t'] for e in c.data['events'])) - .05, min(b, last + 2.5)))
         bounds = sorted({round(t, 3) for t, _, _ in cuts if not any(h0 < t < h1 for h0, h1 in holds)}
                         | {round(max(a, h0), 3) for h0, _ in holds} | {round(h1, 3) for _, h1 in holds if h1 < b})
-        bounds = [x for x in bounds if a <= x < b] or [a]
-        if bounds[0] > a:
-            bounds[0] = a
+        bounds = [x for x in bounds if round(a, 3) <= x < b] or [a]   # a cut at a may have rounded below it
+        bounds[0] = a
         segs = [[x, y] for x, y in zip(bounds, bounds[1:] + [b])]
         merged = []                                           # every shot at least MIN_SHOT long
         for s in segs:

@@ -267,3 +267,17 @@ def test_a_timeline_holds_until_its_last_event():
     assert events
     for t in events:
         assert any(s.layout == 'timeline' and s.start - .1 <= t < s.end for s in p.shots), t
+
+
+def test_a_beat_starting_off_the_millisecond_keeps_its_sentence_cuts():
+    """A beat whose start is not a whole millisecond still cuts at its second sentence (rounding the first cut
+    below the beat start once dropped it, and the beat start then replaced the second sentence's cut)."""
+    p = built('printing_press.md')
+    c = p.composer
+    starts = {round(s.start, 3) for s in p.shots}
+    for bid, opening in (('b002', 'A single Bible'), ('b007', 'He cast small metal')):
+        beat = next(b for b in c.beats if b['id'] == bid)
+        assert round(c.bt[bid]['start'], 3) != c.bt[bid]['start']          # the case: not on a millisecond
+        t = next(t for t, _, sent in c.sentence_times(beat) if sent.startswith(opening))
+        assert round(t, 3) in starts, (bid, t, sorted(starts))
+
