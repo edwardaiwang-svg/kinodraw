@@ -397,9 +397,11 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     if beat in tl['beats']:
         info = tl['beats'][beat]
         t = min(info['start'] + offset, info['end'] - .1)
-    prod = renderer.make_production(board, tl, lang, path)
-    buf = io.BytesIO()
-    prod.frame(min(t, tl['duration'] - .05)).convert('RGB').resize((960, 540)).save(buf, 'JPEG', quality=85)
+    aspect = pipeline.settings(path).get('aspect', '16:9')
+    prod = renderer.make_production(board, tl, lang, path, aspect=aspect)
+    buf = io.BytesIO()                                # the project's own format, at half its video size
+    prod.frame(min(t, tl['duration'] - .05)).convert('RGB').resize((540, 960) if aspect == '9:16' else (960, 540)) \
+        .save(buf, 'JPEG', quality=85)
     return buf.getvalue()
 
 
