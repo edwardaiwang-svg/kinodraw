@@ -79,7 +79,7 @@ class LLMDirector:
                 'rules_draft': [_summary(v, lang) for v in b['visuals']],
             })
         title = (chapter.get('title') or {}).get(lang, '')
-        return {'language': lang, 'video_title': board['title'][lang], 'section_title': title,
+        return {'language': 'Spanish' if lang == 'es' else lang, 'video_title': board['title'][lang], 'section_title': title,
                 'section_kind': chapter['kind'], 'sections_in_video': n_sections,
                 'narrator_poses': NARRATOR_POSES, 'beats': out}
 
@@ -119,7 +119,7 @@ class LLMDirector:
                 original['hook'] = {lang: hook}
             take = next((b for b in beats if b['kind'] == 'take'), None)
             head = _clean(answer.get('takeaway'))
-            fits = head and (len(head.split()) <= lim['takeaway_words'] if lang == 'en' else len(head) <= lim['takeaway_chars'])
+            fits = head and (len(head.split()) <= lim['takeaway_words'] if lang != 'zh' else len(head) <= lim['takeaway_chars'])
             if take and fits and _numbers_ok(head, section_text):
                 take['take']['headline'] = {lang: head}
                 script.sync_takes(board)              # the narrator says what the note shows
