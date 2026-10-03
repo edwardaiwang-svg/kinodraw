@@ -161,7 +161,7 @@ def finish(project_dir: Path) -> dict:
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
-    publish(board, tl, lang, build, project_dir, stem, project_dir)
+    publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')))
     contact_sheet(tl, video, build / 'contact-sheet.jpg')
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
     _save(build / 'qa.json', qa)

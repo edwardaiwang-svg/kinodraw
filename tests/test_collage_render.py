@@ -182,7 +182,7 @@ def test_text_written_over_text_fails_the_finish(tmp_path, monkeypatch):
     (tmp_path / 'p' / 'build' / 'timeline.json').write_text(json.dumps(prod.tl), encoding='utf-8')
     monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
     for name in ('mux', 'publish', 'contact_sheet'):
-        monkeypatch.setattr(pipeline, name, lambda *a: None)
+        monkeypatch.setattr(pipeline, name, lambda *a, **k: None)
     monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a: {'ok': True, 'problems': []})
     monkeypatch.setattr(pipeline.renderer, 'make_production', lambda *a: prod)
     qa = pipeline.finish(tmp_path / 'p')

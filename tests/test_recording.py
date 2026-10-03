@@ -265,3 +265,34 @@ def test_a_recording_problem_names_the_way_back_to_the_ai_voice(tmp_path, monkey
     with pytest.raises(voice.RecordingError, match=r'30 s to read\. To narrate with the AI voice instead, run: '
                                                    r'kinodraw voice ".*video" --recording none'):
         pipeline.narrate(project)
+
+
+def test_a_video_in_your_own_voice_does_not_credit_the_ai_voice(tmp_path, monkeypatch):
+    """The description of a video narrated with the creator's own recording said "Narration: Kokoro AI voice", and
+    so did the Studio under the finished video."""
+    from kinodraw import package
+    from kinodraw.studio import server
+    project = tmp_path / 'video'
+    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    build = project / 'build'
+    build.mkdir()
+    for ext in ('srt', 'vtt'):
+        (build / f'captions.{ext}').write_text('', encoding='utf-8')
+    tl = {'chapters': [{'id': c['id'], 'start': 0, 'title': ''} for c in board['chapters']], 'duration': 1}
+    (build / 'timeline.json').write_text(json.dumps(tl), encoding='utf-8')
+    monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
+    for name in ('mux', 'contact_sheet'):
+        monkeypatch.setattr(pipeline, name, lambda *a: None)
+    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a: {'ok': True, 'problems': []})
+    monkeypatch.setattr(package, 'thumbnail', lambda *a: None)
+
+    def description():
+        pipeline.finish(project)
+        return next(project.glob('*-description.txt')).read_text(encoding='utf-8')
+    assert 'Narration: Kokoro AI voice.' in description()
+    (tmp_path / 'take.wav').write_bytes(b'audio')
+    pipeline.set_recording(project, tmp_path / 'take.wav')
+    text = description()
+    assert 'Kokoro' not in text and "Narration: the creator's own voice." in text
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    assert "p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'" in js

@@ -303,7 +303,7 @@ function renderVideo(p) {
   const qa = p.qa ? `<div class="qa ${p.qa.ok ? 'ok' : 'bad'}">${p.qa.ok ? '✓ Checked: every frame decodes, audio matches, chapters embedded.' : `Check: ${esc(p.qa.problems.join('; '))}`}</div>` : '';
   box.innerHTML = `<video controls preload="metadata" poster="${fileSrc(`${stem}-thumbnail.png`)}" src="${fileSrc(video)}"></video>${qa}
     <div class="files">${files.map(([f, l]) => `<a href="${fileSrc(f)}" target="_blank">${l}</a>`).join('')}</div>
-    <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). Narration: Kokoro AI voice.</p>`;
+    <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). ${p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
 }
 
 // ---------------------------------------------------------------- settings

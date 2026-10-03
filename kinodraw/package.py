@@ -162,8 +162,10 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
     img.convert('RGB').save(path)
 
 
-def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, stem: str, project_dir: Path):
-    """Captions, chapters, transcript, description text and thumbnail next to the video."""
+def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, stem: str, project_dir: Path,
+            own_voice: bool = False):
+    """Captions, chapters, transcript, description text and thumbnail next to the video (``own_voice``: narrated
+    with the creator's own recording)."""
     for ext in ('srt', 'vtt'):
         shutil.copyfile(build / f'captions.{ext}', folder / f'{stem}.{ext}')
     chapters = [f"{clock(c['start'])} {c['title']}" for c in tl['chapters'] if c['title']]
@@ -175,8 +177,10 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
             parts.append(f"## {tc['title']}")
         parts += [b['display'][lang] for b in storyboard['beats'] if b['chapter'] == c['id']]
     (folder / f'{stem}-transcript.md').write_text('\n\n'.join(parts) + '\n', encoding='utf-8')
-    credit = (f'Made with {PRODUCT["name"]}. Narration: Kokoro AI voice. Music: FreePD (CC0).' if lang == 'en' else
-              f'由 {PRODUCT["name"]} 制作。旁白：Kokoro AI 语音。音乐：FreePD（CC0）。')
+    voice = ("the creator's own voice" if own_voice else 'Kokoro AI voice') if lang == 'en' else \
+        ('作者本人的声音' if own_voice else 'Kokoro AI 语音')
+    credit = (f'Made with {PRODUCT["name"]}. Narration: {voice}. Music: FreePD (CC0).' if lang == 'en' else
+              f'由 {PRODUCT["name"]} 制作。旁白：{voice}。音乐：FreePD（CC0）。')
     head = 'Chapters' if lang == 'en' else '章节'
     (folder / f'{stem}-description.txt').write_text(
         f"{storyboard['title'][lang]}\n\n{head}\n" + '\n'.join(chapters) + f'\n\n{credit}\n', encoding='utf-8')
