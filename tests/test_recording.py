@@ -178,8 +178,9 @@ def test_a_second_run_reuses_the_cut(take, aligned, monkeypatch):
 @needs_models
 def test_a_reading_of_another_script_is_refused(take, aligned):
     other = [(bid, text) for (bid, _), text in zip(BEATS, OTHER)]
-    with pytest.raises(voice.RecordingError, match='does not sound like a reading of this script'):
+    with pytest.raises(voice.RecordingError, match='does not sound like a reading of this script') as refused:
         voice.from_recording(take[0], other, 'en', aligned[2])
+    assert 'match' not in refused.value.plain and '.json' not in refused.value.plain     # the Studio's words
 
 
 @needs_models
@@ -245,7 +246,7 @@ def test_a_take_that_skips_sentences_says_what_to_do_instead_of_a_traceback(tmp_
         cli.main(['voice', str(project), '--recording', str(take)])
     message = str(end.value.code)
     assert 'Traceback' not in message and 'ValueError' not in message
-    assert 'Your recording skips or changes the part that says "And finally: Bees work hard." (b004)' in message
+    assert 'Your recording skips or changes the part that says "And finally: Bees work hard."' in message
     assert 'Read the whole script once through' in message
     assert f'kinodraw voice "{project}" --recording none' in message
     cli.main(['voice', str(project), '--recording', 'none'])
@@ -264,7 +265,7 @@ def test_a_take_that_leaves_out_one_part_is_refused_and_names_it(tmp_path):
         cli.main(['voice', str(project), '--recording', str(take)])
     message = str(end.value.code)
     assert 'Part of the script seems to be missing from your recording, around the part that says "Honey is one of ' \
-           'the oldest foods people still eat." (b002). Read the whole script once through' in message
+           'the oldest foods people still eat." Read the whole script once through' in message
     assert f'kinodraw voice "{project}" --recording none' in message and 'Traceback' not in message
     report = json.loads((project / 'voice' / 'recording-align.json').read_text())
     assert next(row for row in report['beats'] if row['id'] == 'b002')['missing']

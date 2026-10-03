@@ -387,6 +387,12 @@ def _quote(text: str, n: int = 50) -> str:
     return cut.rstrip(',.;:，。；：') + '…'
 
 
+def _said(text: str) -> str:
+    """A beat's first words in quotes, ending a sentence: a full stop only if the words don't end one already."""
+    quote = _quote(text)
+    return f'"{quote}"' + ('' if quote.endswith(tuple('.!?…。！？')) else '.')
+
+
 def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | None = None,
                    speed: float = 1.0) -> dict:
     """Clips like synthesize()'s, cut from one continuous reading of the script; ``beats`` is [(beat id, spoken
@@ -443,7 +449,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         sound = a + np.flatnonzero(room[a:b])
         heard = _power(tl[a:b], tq)
         if b - a < PAUSE or not heard:
-            raise RecordingError(f'Your recording skips or changes the part that says "{_quote(text)}" ({bid}). '
+            raise RecordingError(f'Your recording skips or changes the part that says {_said(text)} '
                                  'Read the whole script once through, every sentence as written, and try again.', bid)
         start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
         audio = full[start * hop:end * hop]
@@ -497,12 +503,14 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     if info['report']['match'] < MATCH:
         raise RecordingError(f"Your recording does not sound like a reading of this script (match "
                              f"{info['report']['match']:.2f}, under {MATCH}). Record this script, as written, and "
-                             f"try again; where each part was heard: {report}")
+                             f"try again; where each part was heard: {report}", None,
+                             'Your recording does not sound like a reading of this script. Record this script, as '
+                             'written, and try again.')
     missing = [(row['speech'], k) for k, row in enumerate(rows) if row['missing']]
     if missing:
         bid, text = beats[min(missing)[1]]
         raise RecordingError(f'Part of the script seems to be missing from your recording, around the part that says '
-                             f'"{_quote(text)}" ({bid}). Read the whole script once through, every sentence as '
+                             f'{_said(text)} Read the whole script once through, every sentence as '
                              'written, and try again.', bid)
     out.mkdir(parents=True, exist_ok=True)
     for c, audio in zip(clips, sounds):

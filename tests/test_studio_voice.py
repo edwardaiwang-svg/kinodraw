@@ -294,8 +294,8 @@ def test_a_take_that_leaves_out_a_part_is_refused_on_the_narrator_tab_naming_it(
     check = info['check']
     assert check['ok'] is False
     assert check['problem'].startswith('Part of the script seems to be missing from your recording, around the part '
-                                       'that says "Honey is one of the oldest foods people still eat." (b002).')
-    assert 'kinodraw voice' not in check['problem']
+                                       'that says "Honey is one of the oldest foods people still eat."')
+    assert 'kinodraw voice' not in check['problem'] and 'b002' not in check['problem']    # no internal part ids
     assert check['missing'] == [n for n, line in enumerate(info['lines'], 1) if line['beat'] == 'b002'] == [2]
     assert studio('/api/projects/Honey/narrator')[1]['check'] == check             # still shown when opened again
 
@@ -319,7 +319,7 @@ def test_the_command_line_names_the_text_to_read_when_a_take_misses_a_line_kinod
     with pytest.raises(SystemExit) as end:
         cli.main(['voice', str(project), '--recording', str(_reading(tmp_path, beats, {6}))])
     message = str(end.value.code)
-    assert '"Key takeaway: It never spoils." (b007)' in message
+    assert '"Key takeaway: It never spoils."' in message and 'b007' not in message
     assert f'The script to read, as it is narrated (one numbered sentence a line, with the lines KinoDraw adds to ' \
            f'yours), is in "{project / "read-aloud.txt"}".' in message
     assert (project / 'read-aloud.txt').read_text(encoding='utf-8') == _read_aloud_page(studio, 'Honey')
