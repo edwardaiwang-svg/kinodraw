@@ -273,7 +273,24 @@ function visualCard(b, v, i) {
 }
 
 async function pickDoodle(query, onPick) {
-  const body = modal(`<h3>Choose a doodle</h3><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
+  const project = current;
+  const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
+  $('#picture-file', body).onchange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error(`“${file.name}” is too big (over 10 MB). Make it smaller and try again.`);
+      const res = await api(`/api/projects/${encodeURIComponent(project)}/pictures?filename=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+      closeModal(); onPick(res.id);
+    } catch (e) { toast(e.message, 6000); }
+    event.target.value = '';
+  };
+  api(`/api/projects/${encodeURIComponent(project)}/pictures`).then((items) => {
+    if (!items.length) return;
+    $('#own-pictures', body).classList.remove('hidden');
+    $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc(d.name)}</div></div>`).join('');
+    $('#own-picks', body).querySelectorAll('.pick').forEach((p) => (p.onclick = () => { closeModal(); onPick(p.dataset.id); }));
+  }).catch((e) => toast(e.message, 6000));
   const run = async () => {
     const items = await api(`/api/doodles?q=${encodeURIComponent($('#q', body).value)}&lang=${board.lang}`);
     $('#picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc((d.desc || d.id).slice(0, 40))}</div></div>`).join('');

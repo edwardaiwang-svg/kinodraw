@@ -6,6 +6,7 @@ injects into the page, so other web pages on this computer cannot drive it.
 from __future__ import annotations
 
 import difflib
+import io
 import json
 import mimetypes
 import re
@@ -22,7 +23,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import PRODUCT, director, paths, pipeline, styles, voice
 from ..director.validate import validate
-from ..library import resolve
+from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
 from ..package import sha
 
 STATIC = Path(__file__).resolve().parent / 'static'
@@ -248,6 +249,77 @@ def _changed(path: Path, digest: str | None, lines: list[dict]) -> list[int]:
     return sorted(n + 1 for n in changed)
 
 
+def list_pictures(name: str) -> list[dict]:
+    """The project's pictures available for manual picking, in filename order."""
+    folder = _project(name) / PICTURES
+    pictures = []
+    for path in sorted(folder.glob('*')):
+        if path.name.startswith('.') or path.suffix.lower() not in PICTURE_TYPES:
+            continue
+        if resolve(OWN + path.name, folder.parent):
+            pictures.append({'id': OWN + path.name, 'name': path.name})
+    return pictures
+
+
+_picture_lock = threading.Lock()
+
+
+def save_picture(name: str, filename: str, stream, length: int) -> dict:
+    """Validate and keep the raw picture locally, without overwriting another picture."""
+    import resvg_py
+    from PIL import Image
+    project = _project(name)
+    if length <= 0:
+        raise ValueError(f'“{filename}” is empty. Choose your picture again.')
+    if length > PICTURE_MAX:
+        raise ValueError(f'“{filename}” is too big (over 10 MB). Make it smaller and try again.')
+    suffix = Path(filename).suffix.lower()
+    if suffix not in PICTURE_TYPES:
+        raise ValueError('Choose a PNG, JPG or SVG picture.')
+    data = stream.read(length)
+    if len(data) != length:
+        raise ValueError(f'The upload of “{filename}” stopped part-way. Try again.')
+    try:
+        if suffix == '.svg':
+            text = data.decode('utf-8')
+            if '<svg' not in text:
+                raise ValueError('no SVG')
+            resvg_py.svg_to_bytes(svg_string=text, width=64, height=64)
+        else:
+            signature = b'\x89PNG\r\n\x1a\n' if suffix == '.png' else b'\xff\xd8\xff'
+            if not data.startswith(signature):
+                raise ValueError('wrong picture type')
+            with Image.open(io.BytesIO(data)) as image:
+                image.verify()
+    except Exception:
+        raise ValueError(f'“{filename}” isn’t a picture KinoDraw can open. Save it again as a PNG, JPG or SVG '
+                         'and upload it again.') from None
+    stem = re.sub(r'[^\w\-]', '', Path(filename).stem.replace(' ', '-'))[:60] or 'picture'
+    folder = project / PICTURES
+    folder.mkdir(exist_ok=True)
+    with _picture_lock:
+        number = 1
+        while True:
+            filename = f'{stem}{"" if number == 1 else f"-{number}"}{suffix}'
+            target = folder / filename
+            if not target.exists() and not target.is_symlink():
+                own_path(OWN + filename, project)
+                break
+            if resolve(OWN + filename, project) and target.read_bytes() == data:
+                return {'id': OWN + filename, 'name': filename, 'pictures': list_pictures(name)}
+            number += 1
+        part = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=folder, prefix='.upload-', delete=False) as f:
+                part = Path(f.name)
+                f.write(data)
+            part.rename(target)
+        finally:
+            if part:
+                part.unlink(missing_ok=True)
+    return {'id': OWN + filename, 'name': filename, 'pictures': list_pictures(name)}
+
+
 def save_take(name: str, filename: str, stream, length: int) -> dict:
     """Keep an uploaded (or recorded) reading of the script as the project's narration, as it is: anything the
     bundled ffmpeg can play is fine (phone voice memos, mp3, wav, ogg, webm, 3gp, amr...)."""
@@ -379,6 +451,9 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     path = _project(name)
     tl_path = path / 'build' / 'timeline.json'
     board = pipeline.storyboard(path)
+    messages = missing_pictures(board, path)
+    if messages:
+        raise ValueError('\n'.join(messages))
     lang = board['lang']
     if tl_path.exists() and json.loads(tl_path.read_text(encoding='utf-8')).get('storyboard_sha256') == sha(path / 'storyboard.json'):
         tl = json.loads(tl_path.read_text(encoding='utf-8'))
@@ -503,7 +578,11 @@ class Handler(BaseHTTPRequestHandler):
             if parts[0] == 'doodle' and method == 'GET' and len(parts) >= 2:
                 did = Path(parts[-1]).stem
                 proj = projects_root() / q['project'] if q.get('project') else None
+                if did.startswith(OWN) and q.get('project'):
+                    proj = _project(q['project'])
                 path = resolve(did, proj)
+                if did.startswith(OWN):
+                    return self._file(path) if path else self._json({'error': 'no doodle'}, 404)
                 return self._file(path, 'image/svg+xml') if path else self._json({'error': 'no doodle'}, 404)
             if parts[0] == 'files' and method == 'GET' and len(parts) >= 3:
                 root = _project(parts[1])
@@ -546,6 +625,12 @@ class Handler(BaseHTTPRequestHandler):
             if p[2:] == ['recording'] and method == 'POST':      # the file itself is the body (it can be large)
                 return self._json(save_take(name, q.get('filename') or 'recording', self.rfile,
                                             int(self.headers.get('Content-Length') or 0)))
+            if p[2:] == ['pictures']:
+                if method == 'GET':
+                    return self._json(list_pictures(name))
+                if method == 'POST':
+                    return self._json(save_picture(name, q.get('filename') or 'picture', self.rfile,
+                                                   int(self.headers.get('Content-Length') or 0)))
             if p[2:] == ['align'] and method == 'POST':
                 return self._json(use_take(name))
             if p[2:] == ['still'] and method == 'GET':
