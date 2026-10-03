@@ -256,3 +256,14 @@ def test_a_spoken_english_unit_keeps_both_words():
 def test_two_crowd_shots_never_follow_each_other(name):
     shots = built(name).shots
     assert not [s.start for s, n in zip(shots, shots[1:]) if s.layout == n.layout == 'crowd']
+
+
+def test_a_timeline_holds_until_its_last_event():
+    """A timeline whose events run past the longest shot stays one shot, so its later events appear."""
+    p = built('bicycle.md')
+    c = p.composer
+    events = [e['t'] for b in c.beats for _, card in c.cards_of(b) if card.kind == 'timeline'
+              for e in card.data['events']]
+    assert events
+    for t in events:
+        assert any(s.layout == 'timeline' and s.start - .1 <= t < s.end for s in p.shots), t

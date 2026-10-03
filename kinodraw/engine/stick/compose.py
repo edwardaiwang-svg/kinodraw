@@ -918,7 +918,9 @@ class Composer:
                 s1, g1 = pending.pop(0)
                 main = [c for c in g1 if c.kind in ('doodle', 'number', 'quote', 'term', 'title', 'grid')]
                 cut = None
-                if s1[1] - s1[0] > MAX_SHOT or len(main) > 2:
+                if any(c.kind == 'timeline' for c in g1):     # a timeline holds until its last event
+                    pass
+                elif s1[1] - s1[0] > MAX_SHOT or len(main) > 2:
                     for c in main[1:]:
                         if c.t - s1[0] >= 2.0 and s1[1] - c.t >= 2.0:
                             cut = c.t
