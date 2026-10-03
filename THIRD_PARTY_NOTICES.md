@@ -1,8 +1,8 @@
 # Third-party notices
 
-Doodle Studio's own code is MIT-licensed. Its original doodles, narrator character and drawing hand are CC BY 4.0. The components below keep their own licences.
+KinoDraw's own code is MIT-licensed. Its original doodles, narrator character and drawing hand are CC BY 4.0. The components below keep their own licences.
 
-The packaged apps on the Releases page also contain GPL components (FFmpeg built with x264/x265, espeak-ng and phonemizer), so each packaged app as a whole is distributed under the GNU General Public License, version 3 ([LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt)). Doodle Studio's own source code stays MIT on its own; see "GPL components and source" below.
+The packaged apps on the Releases page also contain GPL components (FFmpeg built with x264/x265, espeak-ng and phonemizer), so each packaged app as a whole is distributed under the GNU General Public License, version 3 ([LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt)). KinoDraw's own source code stays MIT on its own; see "GPL components and source" below.
 
 ## Bundled with the app
 
@@ -57,4 +57,4 @@ The packaged apps include these GPL components, unmodified:
 - **espeak-ng** (library and data, through espeakng-loader), which turns English text into phonemes. Source: https://github.com/espeak-ng/espeak-ng.
 - **phonemizer 3.4.0**. Source: https://github.com/bootphon/phonemizer.
 
-Doodle Studio's own source for every release is this repository at the release's tag. For three years after each release, anyone can ask for the complete corresponding source of any GPL component in that release by opening an issue at https://github.com/edwardaiwang-svg/doodle-studio/issues.
+KinoDraw's own source for every release is this repository at the release's tag. For three years after each release, anyone can ask for the complete corresponding source of any GPL component in that release by opening an issue at https://github.com/edwardaiwang-svg/kinodraw/issues.

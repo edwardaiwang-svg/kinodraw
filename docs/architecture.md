@@ -9,7 +9,7 @@ kinodraw/
     match.py       doodle search: keyword hits (plural-aware, rarity-weighted) + bge-small embeddings (bundled vectors)
     rules.py       offline director: quotes, definitions, numbers, timelines, questions, concept doodles, narrator poses
     validate.py    the gate every storyboard passes (structure, parity, triggers, doodles)
-    llm/           schema + system prompt (shared with the server), providers (Doodle Cloud, OpenAI, Anthropic, compatible), checker
+    llm/           schema + system prompt (shared with the server), providers (KinoDraw Cloud, OpenAI, Anthropic, compatible), checker
   voice.py         Kokoro via kokoro-onnx; per-beat clips cached by hash; character timing from phoneme durations
   audio/mix.py     narration master at -18 LUFS, SRT/VTT captions, CC0 music bed ducked under speech
   engine/          the renderer: a camera over an endless paper strip
@@ -72,4 +72,4 @@ The rules director always runs first; its plan is both the draft and the fallbac
 
 The answer is constrained to a JSON schema and checked by code. A beat whose answer fails any check keeps its draft. Code also decides how much is drawn: sentence by sentence, the model's visuals replace the draft's only when they put at least as much on the board (every doodle, number, quote or note counts), so the model can re-pick a sentence's pictures but never leave a listed thing or an illustrated sentence without its picture.
 
-Doodle Cloud (a separate, private service) runs the same contract on the server. That way the model keys never ship in the app, and quotas and costs are enforced in one place.
+KinoDraw Cloud (a separate, private service) runs the same contract on the server. That way the model keys never ship in the app, and quotas and costs are enforced in one place.
