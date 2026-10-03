@@ -978,6 +978,10 @@ class Composer:
         else:
             self.side = -self.side
             layout = 'left' if self.side > 0 else 'right'
+        if layout == self.last_layout == 'crowd' and not main:   # a second crowd in a row shows a picture instead
+            main = self.fill(ch, beats, a, b, words)
+            doodles = [c for c in main if c.kind == 'doodle']
+            layout = 'close' if not main else layout
         if layout == self.last_layout and layout in ('crowd', 'close') and main:
             self.side = -self.side
             layout = 'left' if self.side > 0 else 'right'

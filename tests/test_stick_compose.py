@@ -249,3 +249,10 @@ def test_a_spoken_english_unit_keeps_both_words():
     beat = dict(c.beats[0], display={'en': 'Its lake holds 40 cubic kilometers of water.'})
     card = c.spoken_number([beat], c.bt[beat['id']]['start'] - 1, c.bt[beat['id']]['start'] + 30)
     assert card.data == {'value': '40', 'label': 'cubic kilometers'}
+
+
+@pytest.mark.parametrize('name', ['printing_press.md', 'sky_blue.md', 'sleep_zh.md', 'stick_hijack.md', 'bicycle.md',
+                                  'stick_bridge.md'])
+def test_two_crowd_shots_never_follow_each_other(name):
+    shots = built(name).shots
+    assert not [s.start for s, n in zip(shots, shots[1:]) if s.layout == n.layout == 'crowd']
