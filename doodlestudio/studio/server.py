@@ -212,16 +212,22 @@ def narrator(name: str) -> dict:
 
 
 def _check(path: Path, take: Path | None, board: dict) -> dict | None:
-    """How ``take`` matched the script (its report from the alignment), or None if it has not been used since it was
-    recorded or the sentences changed."""
-    report = path / 'voice' / 'recording-align.json'
-    if not take or not report.is_file():
+    """How ``take`` matched the script when it was last used (the alignment's report, or why it could not be cut), or
+    None if it has not been used since it was recorded or the sentences changed."""
+    if not take:
         return None
-    info = json.loads(report.read_text(encoding='utf-8'))
-    if info.get('sha256') != sha(take) or [r['id'] for r in info['beats']] != [b['id'] for b in board['beats']]:
-        return None
-    return {'ok': info['match'] >= voice.MATCH, 'poor': [r['id'] for r in info['beats'] if r['check']],
-            'missing': None, 'problem': None}
+    digest, ids, check = sha(take), [b['id'] for b in board['beats']], None
+    report, problem = path / 'voice' / 'recording-align.json', path / 'voice' / 'recording-problem.json'
+    if report.is_file():
+        info = json.loads(report.read_text(encoding='utf-8'))
+        if info.get('sha256') == digest and [r['id'] for r in info['beats']] == ids:
+            check = {'ok': info['match'] >= voice.MATCH, 'poor': [r['id'] for r in info['beats'] if r['check']],
+                     'missing': None, 'problem': None}
+    if problem.is_file():
+        info = json.loads(problem.read_text(encoding='utf-8'))
+        if info['sha256'] == digest and info['beats'] == ids:
+            check = {**(check or {'poor': []}), 'ok': False, 'missing': info['missing'], 'problem': info['problem']}
+    return check
 
 
 def save_take(name: str, filename: str, stream, length: int) -> dict:
@@ -281,13 +287,17 @@ def use_take(name: str) -> dict:
         raise ValueError('Upload or record your reading of the script first.')
 
     def job(progress):
+        problem = path / 'voice' / 'recording-problem.json'
+        problem.unlink(missing_ok=True)
         try:
             clips = pipeline.narrate(path, progress)
-        except ValueError as error:
-            info = narrator(name)
-            info['check'] = {**(info['check'] or {'ok': False, 'poor': []}), 'ok': False,
-                             'missing': getattr(error, 'beat', None), 'problem': str(error)}
-            return info
+        except ValueError as error:                # remembered, so the project shows it when opened again
+            take, board = path / pipeline.settings(path)['recording'], pipeline.storyboard(path)
+            problem.parent.mkdir(exist_ok=True)
+            problem.write_text(json.dumps({'sha256': sha(take), 'beats': [b['id'] for b in board['beats']],
+                                           'missing': getattr(error, 'beat', None), 'problem': str(error)},
+                                          ensure_ascii=False), encoding='utf-8')
+            return narrator(name)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)
         return narrator(name)

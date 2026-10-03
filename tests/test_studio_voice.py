@@ -206,11 +206,13 @@ def test_a_recording_of_something_else_says_which_sentences_were_not_found(studi
     check = job['result']['check']
     assert check['ok'] is False and check['missing'] == 'b005' and 'was not found' in check['problem']
     assert 'Traceback' not in json.dumps(job)
+    assert studio('/api/projects/Honey/narrator')[1]['check'] == check        # still shown when opened again
 
     _fake_alignment(monkeypatch, project, match=.33, poor=('b002', 'b003'))
     job = _wait(studio, studio('/api/projects/Honey/align', {})[1]['job'])
     check = job['result']['check']
     assert check['ok'] is False and check['poor'] == ['b002', 'b003'] and 'does not sound like' in check['problem']
+    assert check['missing'] is None                                           # the earlier take's problem is gone
 
 
 def test_a_failed_video_explains_itself_without_python_words(studio, monkeypatch):

@@ -169,3 +169,43 @@ def test_the_cut_keeps_the_top_of_a_real_voice(take, tmp_path):
     spectrum, hz = np.abs(np.fft.rfft(y * np.hanning(len(y)))), np.fft.rfftfreq(len(y), 1 / rate)
     assert hz[-1] > 15000, f'the clip stops at {hz[-1]:.0f} Hz'
     assert spectrum[np.abs(hz - 15000) < 20].max() > 30 * np.median(spectrum[(hz > 13000) & (hz < 17000)])
+
+
+ZH = [('b001', '人的一生大约有三分之一的时间在睡觉。很多人觉得睡觉是在浪费时间，但科学家发现，睡眠其实是大脑和身体最忙碌的维修时间。'),
+      ('b002', '白天，大脑工作时会产生很多代谢废物。研究发现，人在深度睡眠时，脑细胞之间的空隙会变大。'),
+      ('b003', '实验显示，学完新内容后睡一觉的人，第二天的考试成绩往往比熬夜复习的人更好。'),
+      ('b004', '今晚早点睡，就是对明天的自己最好的投资。')]
+
+
+@pytest.mark.skipif(bool(voice.missing_files('zh')), reason='Kokoro zh models not downloaded (doodle setup --lang zh)')
+def test_a_chinese_take_is_cut_and_timed_as_well_as_an_english_one(tmp_path):
+    """Own voice is offered for Chinese scripts too: a take in another voice (zm_010, slower) is cut in its pauses
+    and every character is drawn when it is said."""
+    rng = np.random.default_rng(0)
+    highpass = butter(2, 80, 'highpass', fs=voice.SR, output='sos')
+    parts, truth, t = [np.zeros(round(.4 * voice.SR), np.float32)], [], .4
+    for _, text in ZH:
+        clip = voice.synthesize(text, 'zh', tmp_path / 'take', 'zm_010', .85)
+        audio = voice._read_wav(clip.wav)
+        n = len(audio) // 240
+        level = 10 * np.log10((sosfilt(highpass, audio)[:n * 240].reshape(n, 240) ** 2).mean(1) + 1e-10)
+        heard = np.flatnonzero(level > 20 * np.log10(NOISE) + 6)
+        truth.append({'start': t + heard[0] / 100, 'end': t + (heard[-1] + 1) / 100, 'chars': [t + c for c in clip.char_times]})
+        gap = round(rng.uniform(.3, 1.2) * voice.SR)
+        parts += [audio, np.zeros(gap, np.float32)]
+        t += (len(audio) + gap) / voice.SR
+    x = np.concatenate(parts)
+    path = tmp_path / 'take.wav'
+    voice._write_wav(path, x + rng.normal(0, NOISE, len(x)).astype(np.float32))
+    clips = voice.from_recording(path, ZH, 'zh', tmp_path / 'voice')
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    errors = []
+    for k, ((bid, text), row) in enumerate(zip(ZH, report['beats'])):
+        before = truth[k - 1]['end'] if k else 0.
+        after = truth[k + 1]['start'] if k + 1 < len(ZH) else np.inf
+        assert before <= row['start'] <= truth[k]['start'] and truth[k]['end'] <= row['end'] <= after, (row, truth[k])
+        errors += [row['start'] + clips[bid].char_times[i] - truth[k]['chars'][i]
+                   for i, ch in enumerate(text) if re.match('[一-鿿]', ch)]
+    errors = np.abs(errors)
+    assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
+    assert not any(row['check'] for row in report['beats']) and report['match'] > voice.MATCH

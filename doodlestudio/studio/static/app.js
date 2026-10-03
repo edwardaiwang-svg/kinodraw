@@ -58,7 +58,7 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
     const frac = j.total ? j.done / j.total : 0;
     const k = Math.max(0, order.includes(j.stage) ? order.indexOf(j.stage) : order.indexOf(SLOT[j.stage]));
     $('#prog-fill').style.width = `${Math.min(99, ((k + frac) / order.length) * 100)}%`;
-    const count = j.stage in SLOT ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
+    const count = j.stage.startsWith('download') ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
       : j.total > 1 ? ` · ${j.done}/${j.total}` : '';
     $('#prog-stage').textContent = `${STAGES[j.stage] || 'Starting'}${count}`;
     if (j.state === 'done' || j.state === 'failed') {
@@ -180,7 +180,7 @@ async function openProject(name, tab = null) {
   document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
   renderBoard();
   renderVideo(p);
-  loadNarrator(name);
+  loadNarrator(name, tab === 'narrator' ? 'own' : undefined);     // opened from New video with My own voice chosen
   if (tab || p.videos?.length) showTab(tab || 'video');
 }
 
@@ -289,21 +289,31 @@ async function saveBoard() {
 
 async function makeVideo(name) {
   if (dirty && !(await saveBoard())) return;
-  const narr = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
+  let narr = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
   const own = narr.narrator === 'own';
-  if (own && narr.check && !narr.check.ok) {      // a take that does not fit: fix it there first
-    showTab('narrator'); renderNarrator(name, narr);
-    toast('Your recording doesn’t match the script yet. Record it again, or choose the built-in voice.', 8000);
+  if (!own && document.querySelector('input[name="n-pick"]:checked')?.value === 'own') {   // chosen, nothing recorded yet
+    showTab('narrator');
+    toast('Upload your recording first, or choose the built-in voice.', 8000);
     return;
   }
   try {
+    if (own && !narr.check) {                     // a new recording: check it against the script first
+      narr = await watch((await api(`/api/projects/${encodeURIComponent(name)}/align`, { method: 'POST' })).job,
+        'Listening to your recording', ['voice', 'align', 'timeline'], true);
+      renderNarrator(name, narr);
+    }
+    if (own && !narr.check.ok) {                  // a take that does not fit: fix it there first
+      showTab('narrator'); renderNarrator(name, narr);
+      toast('Your recording doesn’t match the script yet. Record it again, or choose the built-in voice.', 8000);
+      return;
+    }
     const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/make`, { method: 'POST' })).job, 'Making your video', MAKE, own);
     toast(res.ok ? `Video ready (${res.length})` : `Video made, with warnings: ${res.problems[0]}`, 6000);
     await openProject(name);
     document.querySelector('.tabs button[data-tab="video"]').click();
   } catch (e) {
     $('#progress').classList.add('hidden'); toast(e.message, 10000);
-    if (own) { showTab('narrator'); loadNarrator(name); }
+    if (own) { showTab('narrator'); loadNarrator(name, undefined, e.message); }
   }
 }
 
@@ -335,8 +345,12 @@ function sentences(ns) {                       // [4, 5, 6, 9] -> "Sentences 4�
   return `${ns.length === 1 ? 'Sentence' : 'Sentences'} ${list}`;
 }
 
-async function loadNarrator(name) {
-  try { renderNarrator(name, await api(`/api/projects/${encodeURIComponent(name)}/narrator`)); }
+async function loadNarrator(name, choice, problem) {
+  try {
+    const info = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
+    if (problem) info.check = { ok: false, poor: [], missing: null, problem };    // what just went wrong, in its words
+    renderNarrator(name, info, choice || info.narrator);
+  }
   catch (e) { toast(e.message, 6000); }
 }
 
@@ -353,13 +367,14 @@ function narratorResult(info) {
       <button id="n-make" class="primary">Make video</button></div>`;
   }
   if (check.ok) {
-    return `<div class="result warn"><p>${sentences(poor)} didn’t come through clearly (marked below). For the best video,
-      record the script again. Or make it now: those sentences may be drawn a little early or late.</p>
+    return `<div class="result warn"><p>${sentences(poor)} didn’t match your recording: ${poor.length === 1 ? 'it' : 'they'}
+      may have been skipped or read differently (marked below). ${again}</p>
+      <p>Or make the video now: the drawings for ${poor.length === 1 ? 'that sentence' : 'those sentences'} may not line up.</p>
       <button id="n-make" class="ghost">Make the video anyway</button></div>`;
   }
   if (missing.length) {
-    return `<div class="result bad"><p>${sentences(missing)} ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in your
-      recording (marked below). ${again}</p>${detail}</div>`;
+    return `<div class="result bad"><p>Your recording doesn’t follow the script: ${sentences(missing).toLowerCase()}
+      ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in it (marked below). ${again}</p>${detail}</div>`;
   }
   if (poor.length) {
     return `<div class="result bad"><p>Your recording doesn’t sound like this script. ${again}</p>${detail}</div>`;
@@ -382,7 +397,7 @@ function renderNarrator(name, info, choice = info.narrator) {
   } else {
     const lines = info.lines.map((l) => {
       const mark = check?.missing === l.beat ? 'miss' : check?.poor.includes(l.beat) ? 'poor' : '';
-      const tag = { miss: 'not found', poor: check?.ok ? 'unclear' : 'didn’t match' }[mark];
+      const tag = { miss: 'not found', poor: 'didn’t match' }[mark];
       return `<li class="${mark}">${esc(l.text)}${tag ? ` <span class="tag">${tag}</span>` : ''}</li>`;
     }).join('');
     box.innerHTML = `${pick}
@@ -393,7 +408,7 @@ function renderNarrator(name, info, choice = info.narrator) {
         <span id="n-take" class="muted">${info.take ? `Your recording: ${esc(info.take)}` : 'No recording yet'}</span>
       </div>
       ${info.take ? `<audio controls preload="none" src="${fileSrc(info.take)}"></audio>` : ''}
-      <button id="n-use" class="primary"${info.take ? '' : ' disabled'}>Use it for this video</button>
+      <button id="n-use" class="${check?.ok ? 'ghost' : 'primary'}"${info.take ? '' : ' disabled'}>Use it for this video</button>
       <div id="n-result">${narratorResult(info)}</div>
       <p class="tip"><b>Read it naturally</b>, at your usual pace, and pause for a moment between sentences. Record it in
         one go, start to finish, somewhere quiet. A phone’s voice memo app works well: send the recording to this
