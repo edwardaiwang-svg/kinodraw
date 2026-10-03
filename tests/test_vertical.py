@@ -96,3 +96,63 @@ def test_captions_wrap_into_even_lines():
     assert max(widths) <= vertical.TEXT_W and max(widths) - min(widths) < 400
     zh, _ = vertical.caption_lines('植物利用阳光、水和空气制造养分，同时释放出我们呼吸的氧气，这个过程叫做光合作用。', 'zh')
     assert all(not l[:1] in '，。、' for l in zh)
+
+
+URL_LINE = 'Visit https://www.example.com/products/documentation/ for details.'
+
+
+def _ink_columns(img):
+    """(left, right) of the drawn pixels of an RGBA image."""
+    box = img.getchannel('A').getbbox()
+    return box[0], box[2]
+
+
+def test_a_caption_with_a_long_web_address_fits_the_width_and_keeps_every_word(tmp_path):
+    script = tmp_path / 'url.md'
+    script.write_text(f'# Docs\n\n{URL_LINE} The guide has every step.\n', encoding='utf-8')
+    board = pipeline.new_project(script, tmp_path / 'p', direction={'look': 'whiteboard'})
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = renderer.make_production(board, tl, 'en', tmp_path / 'p', aspect='9:16')
+    assert any('example.com' in c['text'] for c in tl['captions'])
+    for c in tl['captions']:
+        lines, size = vertical.caption_lines(c['text'], 'en', prod.fonts)
+        f = vertical.ink.font('en_caption', size, prod.fonts)
+        assert all(f.getlength(l) <= vertical.TEXT_W for l in lines), (c['text'], lines)
+        assert ''.join(lines).replace(' ', '') == c['text'].replace(' ', ''), lines     # no word lost
+        x, y, w, h = prod.caption_box(c['text'])
+        assert 0 <= x and x + w <= 1080 and y + h <= 1920 - 240, (c['text'], (x, y, w, h))
+        left, right = _ink_columns(prod.caption_image(c['text']))
+        assert x + left >= 40 and x + right <= 1040, c['text']
+
+
+@pytest.mark.parametrize('lang,text', [
+    ('en', URL_LINE),
+    ('en', ' '.join(['Plants turn sunlight, water and air into sugar.'] * 6)),
+    ('zh', '请访问 https://www.example.com/products/documentation/ 了解详情，' * 3),
+])
+def test_no_caption_ever_loses_words_or_runs_past_the_side_margins(lang, text):
+    lines, size = vertical.caption_lines(text, lang)
+    f = vertical.ink.font('en_caption' if lang == 'en' else 'zh_caption', size)
+    assert ''.join(lines).replace(' ', '') == text.replace(' ', ''), lines
+    assert all(f.getlength(l) <= vertical.TEXT_W for l in lines), lines
+    assert size >= 36                                                     # still easy to read on a phone
+    img = vertical.caption_image(text, lang)
+    assert img.width <= vertical.TEXT_W + 40
+    assert vertical.BOARD[1] + vertical.BOARD[3] + vertical.CAP_GAP + img.height <= 1920 - 240   # clear of the buttons
+
+
+@pytest.mark.parametrize('key', ['title', 'chapter'])
+def test_a_long_title_never_runs_off_the_frame(tmp_path, key):
+    prod, tl = _prod(tmp_path, 'notebook', 'en')
+    long = 'https://www.example.com/products/enterprise-collaboration-platform'
+    if key == 'title':
+        prod.ep['title'] = {'en': long}
+        img = prod._title_image(('title',))
+    else:
+        ch = next(c for c in prod.ep['chapters'] if c['kind'] == 'section')
+        ch['title'] = {'en': long}
+        ch['label'] = {'en': 'Part one of the internationalization and telecommunications onboarding walkthrough'}
+        img = prod._title_image(('chapter', ch['id']))
+    left, right = _ink_columns(img)
+    assert img.width <= 1080 and left >= 40 and right <= 1040, (left, right)
+    assert img.height <= vertical.BOARD[1] - vertical.TITLE_GAP - 200

@@ -2,8 +2,9 @@
 
 Every frame is 1080 x 1920 on the look's paper colour. The look's own 16:9 frame (board, hand, transitions; no chrome
 and no captions) is scaled to 1080 x 608 in the middle; the section's title is written above it in the look's
-handwriting and the captions are set below it, larger than they could be on the scaled board (at most 3 lines, 960 px
-wide). At the end card the title above is the video's and the "Made with ..." credit is set below at a readable size.
+handwriting and the captions are set below it, larger than they could be on the scaled board (normally at most 3
+lines, 960 px wide). At the end card the title above is the video's and the "Made with ..." credit is set below at a
+readable size.
 
 Vertical wraps any production (whiteboard, its skins, collage) and answers what they answer (frame, warnings,
 ctx.elements, cues), so pacing, parallel rendering, stills, the mix and packaging treat it like the others.
@@ -110,12 +111,17 @@ class Vertical:
             source = source_line(ch, lang)
             size, lines_max = 80, 2
         lines, size = ink.fit_text(title, lang, TEXT_W, lines_max, size, min_size=48, fonts=fonts)
-        while size > 40 and max((ink.text_width(l, lang, size, fonts) for l in lines), default=0) > TEXT_W:
-            size -= 4                                    # one long word cannot wrap: shrink it instead
+        if any(ink.text_width(l, lang, size, fonts) > TEXT_W for l in lines):
+            while True:
+                lines = _wrap(title, lang, TEXT_W, lambda t: ink.text_width(t, lang, size, fonts))
+                if len(lines) <= lines_max or size <= 40:
+                    break
+                size = max(40, size - 2)
         lh = int(size * 1.2)
         parts = []                                       # (image, gap above)
         if label and label.strip().lower() != title.strip().lower():
-            parts.append((_ui_line(label.upper() if lang == 'en' else label, 38, self._label_color(color), fonts), 0))
+            label = label.upper() if lang == 'en' else label
+            parts.append((_ui_line(_fit_ui(label, 38, fonts), 38, self._label_color(color), fonts), 0))
         block = Image.new('RGBA', (W, lh * len(lines) + 16), (0, 0, 0, 0))
         d = ImageDraw.Draw(block)
         for k, line in enumerate(lines):
@@ -219,12 +225,33 @@ def wrap(text, lang, size, fonts=ink.FONTS, width=TEXT_W):
     """Balanced lines of ``text`` no wider than ``width`` in the caption font at ``size``: the fewest lines, then the
     narrowest widest line, so a two-line caption is two even lines rather than a full one and a stub."""
     f = ink.font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
-    us = cap.units(text.strip(), lang)
+    return _wrap(text, lang, width, f.getlength)
+
+
+def _break_unit(unit, width, measure):
+    """Keep fitting words intact; split wide ones after URL separators, then between characters."""
+    if measure(unit.strip()) <= width:
+        return [unit]
+    pieces, start = [], 0
+    for k, ch in enumerate(unit):
+        if ch in '/.-_?&=#:':
+            pieces.append(unit[start:k + 1])
+            start = k + 1
+    if start < len(unit):
+        pieces.append(unit[start:])
+    return [part for piece in pieces for part in
+            ([piece] if measure(piece.strip()) <= width else list(piece))]
+
+
+def _wrap(text, lang, width, measure):
+    """Balance intact words and fragments using the supplied caption or title measurement."""
+    us = [piece for unit in cap.units(text.strip(), lang) for piece in _break_unit(unit, width, measure)]
+    closing = '，。！？；：、）」』”’%'
 
     def greedy(limit):
         lines, cur = [], ''
         for u in us:
-            if cur and f.getlength((cur + u).strip()) > limit:
+            if cur and measure((cur + u).strip()) > limit:
                 lines.append(cur.strip())
                 cur = u
             else:
@@ -233,35 +260,66 @@ def wrap(text, lang, size, fonts=ink.FONTS, width=TEXT_W):
             lines.append(cur.strip())
         if lang == 'zh':                                 # no line starts with closing punctuation
             for k in range(1, len(lines)):
-                while lines[k][:1] and lines[k][0] in '，。！？；：、）」』”’%' and len(lines[k]) > 1:
+                while lines[k][:1] and lines[k][0] in closing and len(lines[k]) > 1:
                     lines[k - 1] += lines[k][0]
                     lines[k] = lines[k][1:]
         return lines
 
     lines = greedy(width)
+    if lang == 'zh' and (any(measure(line) > width for line in lines) or
+                         any(line[:1] in closing for line in lines[1:])):
+        # Reserve room for punctuation without discarding the word and URL break opportunities.
+        grouped = []
+        for unit in us:
+            if unit[:1] in closing and grouped:
+                tail = grouped.pop()
+                while tail.isspace() and grouped:
+                    tail = grouped.pop() + tail
+                grouped.append(tail + unit)
+            else:
+                grouped.append(unit)
+        us = []
+        for unit in grouped:
+            for piece in _break_unit(unit, width, measure):
+                if piece[:1] in closing and us:
+                    tail = us.pop()
+                    while tail.isspace() and us:
+                        tail = us.pop() + tail
+                    us.append(tail + piece)
+                else:
+                    us.append(piece)
+        lines = greedy(width)
     n = len(lines)
     lo, hi = 1., float(width)
     for _ in range(14):                                  # the narrowest limit that keeps the same number of lines
         mid = (lo + hi) / 2
         trial = greedy(mid)
-        if len(trial) <= n and all(f.getlength(l) <= width for l in trial):
+        if len(trial) <= n and all(measure(l) <= width for l in trial):
             hi = mid
         else:
             lo = mid
     best = greedy(hi)
-    return best if len(best) <= n else lines
+    if lang == 'zh' and any(line[:1] in closing for line in best[1:]):
+        return lines
+    return best if len(best) <= n and all(measure(l) <= width for l in best) else lines
 
 
 @lru_cache(maxsize=1024)
 def caption_lines(text, lang, fonts=ink.FONTS):
-    """(lines, size): the largest size from CAP_SIZE down whose balanced lines fit CAP_LINES lines of TEXT_W."""
-    size = CAP_SIZE
-    while True:
+    """Prefer CAP_LINES at CAP_MIN or larger; then use the available height, with an absolute floor of 36 px."""
+    for size in range(CAP_SIZE, CAP_MIN - 1, -2):
         lines = wrap(text, lang, size, fonts)
-        f = ink.font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
-        if (len(lines) <= CAP_LINES and all(f.getlength(l) <= TEXT_W for l in lines)) or size <= CAP_MIN:
-            return lines[:CAP_LINES], size
-        size -= 2
+        if len(lines) <= CAP_LINES:
+            return lines, size
+    available = H - 240 - (BOARD[1] + BOARD[3] + CAP_GAP)
+    for size in range(CAP_MIN, 35, -2):
+        lines = wrap(text, lang, size, fonts)
+        if _caption_height(len(lines), size) <= available or size == 36:
+            return lines, size                       # at 36 px every word is still shown, even past the margin
+
+
+def _caption_height(line_count, size):
+    return int(size * 1.18) * line_count + 2 * max(5, round(size / 10)) + 10
 
 
 @lru_cache(maxsize=1024)
@@ -273,7 +331,7 @@ def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 25
     lh = int(size * 1.18)
     widths = [f.getlength(l) for l in lines]
     w = int(max(widths)) + 2 * stroke + 8
-    h = lh * len(lines) + 2 * stroke + 10
+    h = _caption_height(len(lines), size)
     img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
