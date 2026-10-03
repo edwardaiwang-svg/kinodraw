@@ -47,8 +47,21 @@ CROWD = {'en': re.compile(r'\b(people|citizens|population|armies|army|soldiers|w
                           r'everyone|everybody|millions of|thousands of|humans|families|workers|villagers)\b', I),
          'zh': re.compile(r'人们|人口|军队|士兵|百姓|民众|大家|人类|农民|战士|居民')}
 SHOCK = {'en': re.compile(r'\b(shocking|disturbing|deadliest|worst|horrif\w*|terrible|murdered|killed|crushed|sacked|'
-                          r'soared|enormous|huge|massive|incredible|millions)\b', I),
-         'zh': re.compile(r'竟然|惊人|可怕|恐怖|巨大|暴涨|几乎都|十六倍|16倍|死|杀')}
+                          r'soared|enormous|huge|massive|incredible|millions|bombs?|explosives?|dynamite|guns?)\b', I),
+         'zh': re.compile(r'竟然|惊人|可怕|恐怖|巨大|暴涨|几乎都|十六倍|16倍|死|杀|炸弹|枪')}
+# Words that make a calm narrator look worried (crime, danger, death, fear, loss).
+GRIM = {'en': re.compile(r'\b(bombs?|explosiv\w*|dynamite|guns?|weapons?|knife|knives|hijack\w*|kidnap\w*|ransom|'
+                         r'threat\w*|danger\w*|crimes?|criminals?|murder\w*|kill\w*|dead|death|died|blood\w*|missing|'
+                         r'vanish\w*|disappear\w*|unsolved|never (?:found|seen)|steal\w*|stole\w*|rob\w*|thie(?:f|ves)|'
+                         r'fear\w*|afraid|scared|terrif\w*|panic\w*|insults?|bad news|negative|warning|alarm\w*|'
+                         r'prison|jail|arrest\w*|suspects?|victims?)\b', I),
+        'zh': re.compile(r'炸弹|枪|武器|劫持|劫机|绑架|赎金|威胁|危险|犯罪|罪犯|谋杀|杀|死|血|失踪|消失|悬案|偷|抢|害怕|恐惧|'
+                         r'恐慌|侮辱|坏消息|负面|警告|警报|监狱|逮捕|嫌疑|受害')}
+# A video that keeps talking about crime is told with a straight face throughout.
+CRIME = {'en': re.compile(r'\b(hijack\w*|ransom|FBI|police|detectives?|murder\w*|killers?|crimes?|criminals?|suspects?|'
+                          r'victims?|kidnap\w*|bombs?|robber\w*|heists?|stolen|investigat\w*|unsolved|prison|jail|'
+                          r'arrest\w*|homicide|evidence)\b', I),
+         'zh': re.compile(r'劫机|劫持|赎金|警察|侦探|谋杀|凶手|犯罪|罪犯|嫌疑|受害|绑架|炸弹|抢劫|盗窃|调查|悬案|监狱|逮捕|证据')}
 STRONG = {'en': re.compile(r'\b(largest|biggest|first|only|last|most|greatest|oldest|longest|enormous|'
                            r'for good|itself)\b', I),
           'zh': re.compile(r'最|第一|唯一|整个')}
@@ -110,6 +123,16 @@ def shock(text: str, lang: str) -> int:
     """Position of the first shock word, or -1."""
     m = SHOCK[lang].search(text)
     return m.start() if m else -1
+
+
+def grim(text: str, lang: str) -> bool:
+    return bool(GRIM[lang].search(text))
+
+
+def tone(texts: list[str], lang: str) -> str:
+    """'grim' for a video that talks about crime at least three times (true crime: no grinning narrator), else
+    'bright'."""
+    return 'grim' if len(CRIME[lang].findall(' '.join(texts))) >= 3 else 'bright'
 
 
 def strong(text: str, lang: str) -> int:

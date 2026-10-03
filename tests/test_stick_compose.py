@@ -9,7 +9,7 @@ from PIL import ImageFont
 from doodlestudio import ingest, script
 from doodlestudio.director.rules import RulesDirector
 from doodlestudio.engine import timeline as tl
-from doodlestudio.engine.stick import compose, cues, text
+from doodlestudio.engine.stick import compose, cues, rig, text
 from doodlestudio.engine.stick.render import StickProduction
 
 FIX = Path(__file__).parent / 'fixtures'
@@ -105,3 +105,27 @@ def test_a_holding_figure_carries_its_picture():
     fx0, fy0, fx1, fy1 = fig.rect
     assert fx0 - 60 < (hx0 + hx1) / 2 < fx1 + 120 and fy0 < (hy0 + hy1) / 2 < fy1
     assert not compose.overlaps(shot)
+
+
+def test_a_true_crime_narrator_never_grins():
+    """Grim words ("a bomb", "the ransom") make the narrator look worried or shocked, and a video that keeps talking
+    about crime is told with a straight face: no smile or grin on a figure that stands, talks, points or holds."""
+    p = build('stick_hijack.md')
+    assert p.composer.tone == 'grim'
+    faces = {}
+    for s in p.shots:
+        for it in s.items:
+            fig = getattr(it, 'fig', None)
+            if fig is not None and fig.pose in rig.CALM_POSES:
+                eyes, brows, mouth = fig.face or rig.FACES[fig.pose]
+                assert mouth not in ('smile', 'grin'), f'{fig.pose} grins at "{s.words}"'
+                faces[s.words] = fig.face
+    bomb = next(f for w, f in faces.items() if w.startswith('It said he had a bomb'))
+    assert bomb == compose.SHOCKED
+    assert any(f == compose.WORRIED for w, f in faces.items() if 'unsolved hijacking' in w)
+
+
+def test_a_cheerful_topic_keeps_its_smile():
+    p = build('printing_press.md')
+    assert p.composer.tone == 'bright'
+    assert p.composer.calm_face('Printing let new ideas move faster.') is None

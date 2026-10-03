@@ -29,6 +29,7 @@ STAGE_TOP = 130
 MIN_SHOT, MAX_SHOT = 2.2, 8.0
 POP = 1 / DRAW_FPS                         # a card is drawn 8% larger for one drawing frame when it appears
 FIG_H = 600.
+SHOCKED, WORRIED, SERIOUS = ('wide', 'raised', 'o'), ('open', 'worried', 'frown'), ('open', 'flat', 'flat')
 UI = {'en': {'take': 'Key takeaway', 'thanks': 'Thanks for watching!', 'part': 'Part {n}'},
       'zh': {'take': '本节要点', 'thanks': '感谢收看！', 'part': '第{n}部分'}}
 
@@ -419,6 +420,7 @@ class Composer:
         texts = [self.T(board.get('title'))] + [b['display'][lang] for b in self.beats]
         self.ground = cues.ground(texts)
         self.era = cues.era(texts, lang)
+        self.tone = cues.tone(texts, lang)
         self.warnings = []
         self.last_layout = ''
         self.side = 1
@@ -476,6 +478,13 @@ class Composer:
 
     def accent(self, chapter_id):
         return palette.accent(self.numbers.get(chapter_id, 0))
+
+    def calm_face(self, words=''):
+        """Face of a figure that stands, talks, points, holds or walks: worried at grim words (a bomb, a murder,
+        bad news), straight in a true-crime video, else the pose's own smile."""
+        if words and cues.grim(words, self.lang):
+            return WORRIED
+        return SERIOUS if self.tone == 'grim' else None
 
     def gid(self, *parts):
         return ':'.join(map(str, parts))
@@ -561,6 +570,7 @@ class Composer:
         question = bool(cues.QUESTION.search(title))
         hat = cues.costume(title, self.lang, self.era)
         fig = rig.Figure(pose='think' if question else 'wave', height=430, facing=1, hat=hat,
+                         face=('happy', 'flat', 'smile') if self.tone == 'grim' and not question else None,
                          seed=rig.seed_of(self.seed, 'title'))
         fig, feet = fit_figure(fig, (300, 470, 860, GROUND_Y))
         fi = figure_item(fig, feet, t0)
@@ -610,7 +620,7 @@ class Composer:
         sections = [c for c in self.board['chapters'] if c['kind'] == 'section']
         times = [self.bt[beats[min(i, len(beats) - 1)]['id']]['start'] + (.9 if i == 0 else .15)
                  for i in range(len(sections))]
-        fig = rig.Figure(pose='point', height=470, facing=1, seed=rig.seed_of(self.seed, 'agenda'))
+        fig = rig.Figure(pose='point', height=470, facing=1, face=self.calm_face(), seed=rig.seed_of(self.seed, 'agenda'))
         fig, feet = fit_figure(fig, (60, 260, 600, GROUND_Y))
         shot.items.append(figure_item(fig, feet, a))
         shot.pose = 'point'
@@ -634,7 +644,7 @@ class Composer:
         walk = min(1500., 430. * dur)
         hat = cues.costume(self.T(ch.get('title')), self.lang, self.era)
         fig = rig.Figure(pose='walk', height=320, facing=1, shirt=self.accent(ch['id']), hat=hat,
-                         seed=rig.seed_of(self.seed, ch['id']))
+                         face=self.calm_face(), seed=rig.seed_of(self.seed, ch['id']))
         fig, feet = fit_figure(fig, (80, 560, 1840, GROUND_Y), travel=walk)
         shot.items.append(figure_item(fig, feet, t0, walk=(walk, t0, t0 + dur * .92)))
         shot.pose = 'walk'
@@ -661,7 +671,8 @@ class Composer:
         shot.items.append(mark_item(marks.Mark('underline', (x0 + 10, y0, x1 - 10, y1 - 14), t_head + 1.2, seed=9,
                                                dur=.6)))
         fig = rig.Figure(pose='point', height=560, facing=1, shirt=self.accent(ch['id']),
-                         hat=cues.costume(head, self.lang, self.era), seed=rig.seed_of(self.seed, ch['id'], 'take'))
+                         hat=cues.costume(head, self.lang, self.era), face=self.calm_face(head),
+                         seed=rig.seed_of(self.seed, ch['id'], 'take'))
         fig, feet = fit_figure(fig, (50, 300, 480, GROUND_Y))
         shot.items.append(figure_item(fig, feet, prep, talk=self.talking))
         shot.pose = 'point'
@@ -906,7 +917,9 @@ class Composer:
         shocked = cues.shock(words, lang)
         face = None
         if shocked >= 0 and pose in ('stand', 'talk', 'point', 'hold', 'walk'):
-            face = ('wide', 'raised', 'o')
+            face = SHOCKED
+        elif pose in rig.CALM_POSES:
+            face = self.calm_face(words)
         seed = rig.seed_of(self.seed, ch['id'] if ch else '', round(a, 2))
         shot.pose = pose
         t_shock = a + .5
@@ -1099,7 +1112,8 @@ class Composer:
         mood = cues.MOOD.get(pose, 'calm')
         n = 3 + seed % 5
         top = 520 if cards else 260
-        c = rig.Crowd(n=n, height=GROUND_Y - top - 40, mood=mood, facing=1, hat=hat, seed=seed)
+        c = rig.Crowd(n=n, height=GROUND_Y - top - 40, mood=mood, facing=1, hat=hat, seed=seed,
+                      face=self.calm_face(words) if mood == 'calm' else None)
         c, feet = fit_crowd(c, (140, top, W - 140, GROUND_Y))
         shot.items.append(crowd_item(c, feet, shot.start))
         if cards:

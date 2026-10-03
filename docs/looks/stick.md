@@ -94,6 +94,11 @@ list (pose, framing, ground colour), never invent new ones.
   compounds that only contain a cue character (拿走 is taking, not walking; 也就是说 is "that is", not speech;
   问题 is a problem, not a question) and plain hedges (可能). A fallen figure gets X eyes and a wavy mouth and no
   "!" marks.
+- **Face**: a figure that stands, talks, points, holds or walks looks shocked (wide eyes, an "o" mouth and two
+  red "!") at shock words (a bomb, a gun, "killed", "millions"), worried (tilted brows, a frown) at grim words
+  (crime, danger, death, fear, a ransom, bad news), and otherwise wears its pose's own smile, except in a video
+  that names crime three times or more (true crime), where it keeps a straight face and talks with a small oval
+  mouth instead of a grin. Crowds follow the same rule.
 - **Crowd**: people, army, citizens, population (and Chinese equivalents) bring 3 to 7 figures.
 - **Costume** by topic words: Roman, legion, gladiator -> crested helmet; soldier, army, warrior -> the crested
   helmet in an ancient story and a plain green combat helmet in a modern one (a story is ancient when it names

@@ -58,7 +58,7 @@ FACES = {
 }
 EYES = ('open', 'up', 'down', 'wide', 'happy', 'x', 'dot', 'half', 'shades')
 BROWS = ('none', 'flat', 'raised', 'worried', 'angry')
-MOUTHS = ('smile', 'grin', 'flat', 'o', 'frown', 'shout', 'wavy', 'teeth')
+MOUTHS = ('smile', 'grin', 'flat', 'o', 'open', 'frown', 'shout', 'wavy', 'teeth')
 HATS = ('helmet', 'combat', 'crown', 'strawhat', 'cap', 'tophat')
 
 
@@ -272,7 +272,10 @@ def _rot(v, deg):
 def _face(d, fig, p, hc, R, lw, f, tilt, rng):
     eyes, brows, mouth = fig.face or FACES.get(fig.pose, FACES['stand'])
     if fig.mouth_open is not None and mouth in ('smile', 'flat', 'grin', 'o', 'frown'):
-        mouth = 'grin' if fig.mouth_open else ('flat' if mouth in ('o', 'grin') else mouth)
+        if fig.mouth_open:                             # a happy face talks with a grin, a serious one with a small oval
+            mouth = 'grin' if mouth in ('smile', 'grin') else 'open'
+        elif mouth in ('o', 'grin'):
+            mouth = 'flat'
     frontal = p['frontal'] or fig.pose in ('fall',)
     ink, white = (0, 0, 0, 255), (255, 255, 255, 255)
     fw = lw * .85
@@ -341,13 +344,15 @@ def _face(d, fig, p, hc, R, lw, f, tilt, rng):
         _stroke(d, [m(-.15, 0), m(.15, .01)], fw)
     elif mouth == 'wavy':
         _stroke(d, [m(-.2 + .4 * i / 8, .035 * (-1) ** i) for i in range(9)], fw)
-    elif mouth in ('grin', 'shout', 'o', 'teeth'):
+    elif mouth in ('grin', 'shout', 'o', 'open', 'teeth'):
         if mouth == 'grin':
             pts = [m(.24 * math.cos(a), .2 * math.sin(a) + .05) for a in np.linspace(math.pi, 2 * math.pi, 14)]
         elif mouth == 'shout':
             pts = [m(.2 * math.cos(a), .2 * math.sin(a) - .02) for a in np.linspace(0, 2 * math.pi, 18)[:-1]]
         elif mouth == 'o':
             pts = [m(.1 * math.cos(a), .13 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 14)[:-1]]
+        elif mouth == 'open':
+            pts = [m(.16 * math.cos(a), .075 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 16)[:-1]]
         else:
             pts = [m(-.2, .07), m(.2, .07), m(.2, -.09), m(-.2, -.09)]
         fill = (255, 255, 255, 255) if mouth == 'teeth' else PALETTE['maroon'] + (255,)
@@ -420,6 +425,7 @@ class Crowd:
     facing: int = 1
     hat: str | None = None
     seed: int = 0
+    face: tuple | None = None              # for members who stand, talk or point (a serious crowd)
 
 
 def crowd_members(c: Crowd) -> list:
@@ -435,11 +441,13 @@ def crowd_members(c: Crowd) -> list:
         pose = poses[int(rng.integers(len(poses)))]
         facing = c.facing if rng.random() < .75 else -c.facing
         fig = Figure(pose=pose, height=h, facing=facing, shirt=SHIRT_ORDER[shirts[i % len(shirts)]],
-                     hat=c.hat if c.hat and rng.random() < .7 else None, seed=seed_of(c.seed, i))
+                     hat=c.hat if c.hat and rng.random() < .7 else None, seed=seed_of(c.seed, i),
+                     face=c.face if pose in CALM_POSES else None)
         out.append((fig, (i - (n - 1) / 2) * gap + float(rng.normal(0, gap * .06))))
     return out
 
 
+CALM_POSES = ('stand', 'talk', 'point', 'hold', 'walk', 'sit')
 SHIRT_ORDER = ['blue', 'orange', 'green', 'purple', 'yellow', 'sky', 'brown', 'pink', 'grey', 'lime']
 
 
