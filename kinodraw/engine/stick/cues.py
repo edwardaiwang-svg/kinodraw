@@ -11,7 +11,7 @@ I = re.I
 POSE = {
     'en': [
         ('fall', r'\b(fell|falls?|falling|collaps\w*|died|dies|death|killed|murdered|perished|destroyed|toppled|'
-                 r'overthrown|removed|ended|crashed|wiped out)\b'),
+                 r'overthrown|crashed|wiped out)\b'),
         ('angry', r'\b(wars?|battles?|fights?|fought|attack\w*|invad\w*|rebel\w*|revolt\w*|ang(?:er|ry)|furious|'
                   r'enem(?:y|ies)|crushed|sacked|raid\w*|conquer\w*)\b'),
         ('run', r'\b(ran|run|runs|running|fled|flee\w*|escap\w*|chas\w*|rushed|raced|hurr\w*)\b'),
@@ -93,20 +93,27 @@ MOOD = {'fall': 'sad', 'sad': 'sad', 'angry': 'upset', 'cheer': 'happy', 'run': 
 
 
 WEAK = ('talk', 'hold', 'point')
-NEGATION = {'en': re.compile(r"(?:\b(?:not|never|no|nor|without|nobody|none|neither|no one)|n['’]t)\s+(\w+\s+)?$", I),
+NEGATION = {'en': re.compile(r"(?:\b(?:not|never|no|nor|without|nobody|none|neither|no one)|n['’]t)"
+                          r"(?:\s+(?:a\s+single\s+\w+|of\s+(?:them|us|the\s+\w+)|\w+))?"
+                          r"(?:\s+(?:was|were|is|are|be|been|had|has|have|got|ever))*\s+$", I),
             'zh': re.compile(r'不|没|未|别|无人|从未|并非')}
 # A Chinese negation can stand a few characters before its verb (没有人被杀, 他不会死), so it counts anywhere in the
 # cue's clause; these words only look negative.
 ZH_NOT_NEGATION = re.compile(r'不久|不少|不过|不断|不同|不仅|不但|不得不|不幸|差不多|没想到|不料|不知不觉|不禁')
 ZH_CLAUSE_END = re.compile(r'[，。！？；：、,.!?;:]')
-# Words that hold a cue but mean something else ("笑死我了" is laughing hard).
-FALSE_FRIENDS = {('zh', 'fall'): re.compile(r'笑死|气死|急死|累死|烦死|死心|死板|死机')}
+# Words that hold a cue but mean something else
+# ("笑死我了" is laughing hard; "in the fall of 1989" is autumn; "prices fall" is a number going down).
+FALSE_FRIENDS = {('zh', 'fall'): re.compile(r'笑死|气死|急死|累死|烦死|死心|死板|死机'),
+                 ('en', 'fall'): re.compile(r'\b(?:this|last|next|every|early|late|in the)\s+fall\b(?!\s+of\s+[^\d\s])|'
+                                            r'\bfall\s+of\s+\d|\b(?:prices?|rates?|costs?|sales|profits?|values?|shares|'
+                                            r'stocks?|numbers|levels?|temperatures?|demand|supply|wages?|incomes?)\s+'
+                                            r'(?:\w+\s+)?(?:fell|falls?|falling)\b', I)}
 
 
 def negated(text: str, at: int, lang: str) -> bool:
     """Whether the cue at ``at`` is said negated ("did not fall", "没有人被杀")."""
     if lang != 'zh':
-        return bool(NEGATION[lang].search(text[max(0, at - 24):at]))
+        return bool(NEGATION[lang].search(text[max(0, at - 40):at]))
     clause = ZH_CLAUSE_END.split(text[:at])[-1][-8:]
     return bool(NEGATION['zh'].search(ZH_NOT_NEGATION.sub('', clause)))
 

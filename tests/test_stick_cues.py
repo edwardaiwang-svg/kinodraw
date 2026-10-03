@@ -29,6 +29,19 @@ def test_words_that_only_look_negative_still_fall(text):
     assert cues.pose_for(text, 'zh')[0] == 'fall'
 
 
+@pytest.mark.parametrize('text', ['In the fall of 1989, the wall came down.', 'Last fall the shop opened.',
+                                  'The meeting ended at noon.', 'He removed his hat.', 'Prices fall when supply rises.',
+                                  'Not a single person was killed.', 'None of them died.'])
+def test_seasons_prices_endings_and_wider_english_negations_are_not_falls(text):
+    assert cues.pose_for(text, 'en')[0] != 'fall'
+
+
+@pytest.mark.parametrize('text', ['The fall of Rome shocked everyone.', 'In the fall of Rome, cities burned.',
+                                  'Nobody expected that Rome fell.', 'Thousands died of the plague.'])
+def test_real_falls_still_fall(text):
+    assert cues.pose_for(text, 'en')[0] == 'fall'
+
+
 def test_taking_something_away_is_not_walking():
     assert cues.pose_for('他拿走了钱', 'zh')[0] != 'walk'
 
