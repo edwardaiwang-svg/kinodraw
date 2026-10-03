@@ -282,6 +282,7 @@ NUMBER = {'en': re.compile(r'(?<![\w.,$€£¥])([$€£¥]?)(\d{1,3}(?:,\d{3})+
           'zh': re.compile(r'(?<![\d.,])([$€£¥]?)(\d{1,3}(?:,\d{3})+|\d{2,})(%|年|倍|亿|万|岁|度|公里|米)?'
                            r'(美元|元|欧元|英镑|日元)?')}
 CURRENCY_WORD = re.compile(r'\s+(dollars?|euros?|pounds?|yen)\b', re.I)
+UNIT_AFTER = re.compile(r'(?:%|年|倍|亿|万|岁|度|公里|米)?(?:美元|元|欧元|英镑|日元)?')
 SYMBOL = {'dollar': '$', 'euro': '€', 'pound': '£', 'yen': '¥'}
 MONTH = (r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|'
          r'Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)')
@@ -311,11 +312,23 @@ def stat_label(value, label, display, lang):
     if date:
         return date, ''
     label = _clean_label(label, sent, lang)
+    after = pos + len(value)
+    if '–' in shown:                                      # a range: read on from its second end
+        end = sent.find(shown.split('–')[1], after)
+        after = end + len(shown.split('–')[1]) if end >= 0 else after
+    if lang == 'zh':                                      # the unit goes with the number: 300米, 250万美元
+        unit = UNIT_AFTER.match(sent, after).group(0)
+        if unit:
+            shown, after = shown + unit, after + len(unit)
+            label = label[len(unit):] if label.startswith(unit) else label
+            label = label if len(label) >= 2 else ''
+    elif value[:1] not in SYMBOL.values():                # "500 dollars" -> $500
+        cur = CURRENCY_WORD.match(sent, after)
+        if cur:
+            shown, after = SYMBOL[cur.group(1).lower().rstrip('s')] + shown, cur.end()
+            if label.split()[:1] and label.split()[0].lower() == cur.group(1).lower():
+                label = label[len(cur.group(1)):].strip()
     if label:
-        after = pos + len(value)
-        if '–' in shown:                                  # a range: read on from its second end
-            end = sent.find(shown.split('–')[1], after)
-            after = end + len(shown.split('–')[1]) if end >= 0 else after
         first = label.split()[0] if lang == 'en' else label[:2]
         at = sent.find(first, after)
         if at >= 0 and re.search(r'\d', sent[after:at]):

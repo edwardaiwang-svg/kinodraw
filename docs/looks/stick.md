@@ -130,7 +130,7 @@ list (pose, framing, ground colour), never invent new ones.
 - **Numbers** are big plain text with a red underline drawn as they are said ("between 235 and 284" ->
   235–284, "the 270s" -> 270s). A shot with nothing else to show puts the number its narrator says on screen
   (a year, a count, a percentage, an amount). A number keeps its currency and unit as written or said ("$200,000",
-  "$2.5 million", "20 dollar bills" -> $20, "20万美元"), and the day or year of a date shows the whole date
+  "$2.5 million", "20 dollar bills" -> $20, "20万美元"), a director's stat included ("300米", "102岁", "500 dollars" -> $500), and the day or year of a date shows the whole date
   ("November 24, 1971", "1971年11月24日"). A number's label is shown only when its words are in the same sentence
   as the number and no other number stands between them, and an English glossary name keeps only its
   capitalised words, so a director slip ("378: Visigoths sacked Rome", "Odoacer removed", "24: quiet man") never

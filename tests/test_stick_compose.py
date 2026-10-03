@@ -162,6 +162,19 @@ def test_big_numbers_keep_their_currency_and_dates_stay_whole():
     assert found == ['$5,800', '$2.5 million']
 
 
+@pytest.mark.parametrize('value,label,disp,lang,shown', [
+    ('300', '米', '这座塔高300米。', 'zh', ('300米', '')),
+    ('102', '岁', '他一直活到了102岁。', 'zh', ('102岁', '')),
+    ('80', '元', '这本书卖了80元。', 'zh', ('80元', '')),
+    ('50', '元钱', '一张票当时要50元钱。', 'zh', ('50元', '')),
+    ('250', '万美元', '这座城市花了250万美元修新的大门。', 'zh', ('250万美元', '')),
+    ('500', 'dollars', 'The new gate cost 500 dollars.', 'en', ('$500', '')),
+    ('20', 'dollar bills', 'He found 20 dollar bills in the sand.', 'en', ('$20', 'bills')),
+])
+def test_a_directors_stat_keeps_its_unit(value, label, disp, lang, shown):
+    assert compose.stat_label(value, label, disp, lang) == shown
+
+
 def test_a_spoken_dollar_amount_gets_its_sign():
     p = build('stick_hijack.md')
     c = p.composer
