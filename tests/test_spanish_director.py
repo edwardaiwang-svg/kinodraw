@@ -206,3 +206,15 @@ def test_spanish_definition_card_is_the_noun_phrase_before_llamado(sentence, car
     director.lang = 'es'
     found = director._definition({'id': 'b001'}, sentence, numbers.normalize(sentence, 'es'), [])
     assert (found and (found[0]['term']['es'], found[0]['text']['es'])) == card
+
+
+@pytest.mark.parametrize('sentence,kind,shown', [
+    ('La lluvia subió un 3,5% este año.', 'stat', '3,5%'),
+    ('La zona tiene 3.000 años de historia.', 'stat', '3.000'),
+    ('El 3,5% de las personas vive cerca de un volcán.', 'grid100', '3,5%'),
+])
+def test_spanish_board_number_keeps_decimal_comma_and_thousands(sentence, kind, shown):
+    director = RulesDirector('es')
+    v, _ = director._number({'id': 'b001', 'chapter': 'b1'}, sentence, numbers.normalize(sentence, 'es'), set())
+    assert v['type'] == kind
+    assert (v['value']['es'] if kind == 'stat' else v['title']['es']).startswith(shown)

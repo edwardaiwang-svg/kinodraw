@@ -649,9 +649,9 @@ class RulesDirector:
         pct = re.search(r'(\d+(?:\.\d+)?)\s?%\s+of\s+(?:the\s+)?([a-z][\w-]*(?: [a-z][\w-]*)?)' if self.lang == 'en'
                         else r'(\d+(?:\.\d+)?)\s?[%％]的([一-鿿]{2,6})', text)
         if self.lang == 'es':
-            pct = re.search(r'(\d+(?:\.\d+)?)\s?%\s+(?:de\s+(?:(?:los|las|el|la)\s+)?|del\s+)'
+            pct = re.search(r'(\d+(?:[.,]\d+)?)\s?%\s+(?:de\s+(?:(?:los|las|el|la)\s+)?|del\s+)'
                             r'([^\W\d_][\w-]*(?: [^\W\d_][\w-]*)?)', text)
-        if pct and 1 <= float(pct.group(1)) <= 99:
+        if pct and 1 <= float(pct.group(1).replace(',', '.')) <= 99:
             value = pct.group(0).split('of')[0].strip() if self.lang == 'en' else pct.group(1) + '%'
             if self.lang == 'es':
                 value = text[pct.start():text.index('%', pct.end(1)) + 1]
@@ -666,7 +666,7 @@ class RulesDirector:
             if self.lang == 'es':
                 title = text[pct.start():pct.start(2) + len(label)]
             v = {'id': f"{beat['id']}p", 'type': 'grid100', 'title': {self.lang: title},
-                 'filled': round(float(pct.group(1))),
+                 'filled': round(float(pct.group(1).replace(',', '.'))),
                  'legend': [{'text': {self.lang: label}, 'kind': 'filled'}]}
             trig = self._spoken(norm, value)
             if trig:
@@ -675,11 +675,17 @@ class RulesDirector:
         num = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?'
         pattern = (rf'(?:\$|€|£)?{num}(?:\s?(?:%|×|(?:percent|million|billion|trillion|thousand|bn|m|x)\b))?'
                    if self.lang == 'en' else rf'{num}\s?(?:%|％|万亿|亿|万|千|倍)?')
-        if self.lang == 'es':
+        if self.lang == 'es':                      # '3,5%', '3.000 años' as numbers.normalize_es reads them
+            num = f'(?:{numbers.ES_NUM})'
             pattern = rf'(?:\$|€|£)?{num}(?:\s?(?:%|×|(?:por ciento|mil|millón|millones|billón|billones|veces|x)\b))?'
         for m in re.finditer(pattern, text):
             token = m.group(0).strip()
             digits = re.sub(r'[^\d.]', '', token)
+            if self.lang == 'es':
+                digits = re.sub(r'[^\d.,]', '', token)
+                digits = digits.replace('.', '') if re.fullmatch(r'\d{1,3}(?:\.\d{3})+(?:,\d+)?', digits) \
+                    else digits.replace(',', '') if re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', digits) else digits
+                digits = digits.replace(',', '.')
             if not digits or digits == '.':
                 continue
             is_year = re.fullmatch(r'1[1-9]\d\d|20\d\d', token) is not None
