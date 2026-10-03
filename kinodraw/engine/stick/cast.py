@@ -8,6 +8,10 @@ shrugs; an emoji face becomes a figure wearing that feeling. A picture of a grou
 two grown-ups and two children). The parachute emoji, the one object picture with a person in it, becomes our
 figure hanging under a striped canopy.
 
+Only a picture the figure says all of is redrawn. One whose point is a thing we cannot draw on a stick figure (a
+wheelchair, a bike, a bed, an astronaut's suit, a vampire, red arrow signs, a medical mask, a money mouth, a
+sleeping face) keeps its library drawing, since a plain smiling figure in its place would say something else.
+
 ``kind(doodle_id)`` says whether a doodle is one of these; ``image(...)`` draws it to fit a box, in boil drawing
 ``variant`` (0-2), like ``paint.doodle``.
 """
@@ -32,15 +36,24 @@ GROUP = re.compile(r'\b(people|men|women|busts|family|couple|hugging|wrestling|t
 NOT_HUMAN = re.compile(r'\b(cat|monkey|alien|robot|ghost|skull|poo|goblin|ogre|devil|imp|horns|moon|sun|wind)\b', re.I)
 POSES = [('run', r'running'), ('walk', r'walking'), ('shrug', r'shrugging'), ('wave', r'raising hand|waving'),
          ('angry', r'angry|pouting|rage|steam|symbols on mouth|gesturing no'),
+         ('cheer', r'tears of joy'),
          ('sad', r'cry|sad|disappointed|frown|pensive|weary|tired|anguished|worried|downcast|persevering|confounded|'
-                 r'unamused|pleading|tears|sleep|yawning|facepalming'),
+                 r'unamused|pleading|tears|facepalming'),
          ('think', r'thinking|monocle|raised eyebrow|diagonal|confused|peeking'),
          ('cheer', r'grinning|smiling|beaming|joy|laugh|partying|star-struck|heart|halo|kiss|savoring|tongue|zany|'
-                   r'winking|hugging|dancing|cartwheeling|juggling|lifting weights|superhero')]
+                   r'winking|hugging|dancing|cartwheeling')]
 SHOCK = re.compile(r'fear|scream|anxious|astonished|hushed|flushed|open mouth|shaking|grimacing|spiral', re.I)
 CAP = re.compile(r'\b(pilots?|police|officers?|guards?|detectives?|cops?|captains?|security|mechanics?)\b', re.I)
 CROWN = re.compile(r'\b(princes?|princess(?:es)?|royal|crown)\b', re.I)
 FAMILY = re.compile(r'\b(family|parents|children|kids)\b', re.I)
+STRAIGHT = re.compile(r'\b(neutral|expressionless)\b', re.I)
+SERIOUS = ('open', 'flat', 'flat')                       # compose.SERIOUS: a straight face
+# What a stick figure cannot show: the thing, place or costume a picture is about. These keep the library drawing.
+KEEP = re.compile(r'bik|wheelchair|cane|\bbed\b|bath|surf|swim|rowing|polo|golf|ski|snowboard|climb|ball|fencing|'
+                  r'haircut|massage|feeding|lotus|steamy|levitat|bowing|kneeling|tipping|gesturing ok|juggl|weights|'
+                  r'astronaut|firefight|\bcook|judge|claus|elf|fairy|genie|mage|vampire|zombie|troll|ninja|mer(?:man|'
+                  r'maid|person|people)|super(?:hero|villain)|pregnant|turban|veil|headscarf|skullcap|tuxedo|angel|'
+                  r'bunny|wrestl|sign|connected', re.I)
 PROPS = {'fl_parachute': 'parachute'}
 SHIRTS = ('blue', 'orange', 'green', 'purple', 'yellow', 'sky', 'brown', 'pink')
 
@@ -54,13 +67,20 @@ def kind(doodle_id: str) -> str | None:
     if e is None:
         return None
     desc, cat = e.get('desc', ''), e.get('category')
+    if KEEP.search(desc):
+        return None
     if cat == 'people':                                   # the curated library's own group drawings
         return 'group'
     if cat == 'People & Body' and PERSON.search(desc):
         return 'group' if GROUP.search(desc) else 'person'
-    if cat == 'Smileys & Emotion' and re.search(r'\bface\b', desc) and not NOT_HUMAN.search(desc):
+    if cat == 'Smileys & Emotion' and re.search(r'\bface\b', desc) and not NOT_HUMAN.search(desc) and (
+            SHOCK.search(desc) or STRAIGHT.search(desc) or _pose(desc) != 'stand'):   # only a feeling we can wear
         return 'person'
     return None
+
+
+def _pose(desc: str) -> str:
+    return next((p for p, rx in POSES if re.search(rx, desc, re.I)), 'stand')
 
 
 def figure_for(doodle_id: str, words: str = '', era: str = 'modern', face=None, height: float = 400.,
@@ -68,15 +88,17 @@ def figure_for(doodle_id: str, words: str = '', era: str = 'modern', face=None, 
     """The stick figure standing in for a picture of one person (``words``: its label, for the costume)."""
     e = catalog().get(doodle_id) or {}
     desc = e.get('desc', '')
-    pose = next((p for p, rx in POSES if re.search(rx, desc, re.I)), 'stand')
+    pose = _pose(desc)
     own = None
     if SHOCK.search(desc):
         own = ('wide', 'raised', 'o')
+    elif STRAIGHT.search(desc):
+        own = SERIOUS
     elif pose == 'stand':
         own = face
     text = f'{desc} {words}'
     hat = cues.costume(text, 'en', era) or ('crown' if CROWN.search(text) else 'cap' if CAP.search(text) else None)
-    return rig.Figure(pose=pose, height=height, facing=-1, face=own, hat=hat,
+    return rig.Figure(pose=pose, height=height, facing=1 if 'facing right' in desc else -1, face=own, hat=hat,
                       shirt=SHIRTS[seed % len(SHIRTS)], seed=seed)
 
 

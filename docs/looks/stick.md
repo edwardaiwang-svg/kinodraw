@@ -103,7 +103,8 @@ list (pose, framing, ground colour), never invent new ones.
 - **Costume** by topic words: Roman, legion, gladiator -> crested helmet; soldier, army, warrior -> the crested
   helmet in an ancient story and a plain green combat helmet in a modern one (a story is ancient when it names
   antiquity, Rome, legions, pharaohs, more often than it gives modern years or modern things like planes or the
-  FBI); emperor, king, queen -> crown; worker, farmer -> straw hat; otherwise none.
+  FBI); emperor, king, queen -> crown; worker, farmer -> straw hat (not an office or health worker);
+  otherwise none.
 - **Framing** alternates so two shots in a row never share a layout: figure left with props right, figure right
   with props left, close-up with big text, crowd, text card.
 - **No bare figure**: the reference channels almost never leave a figure alone on white, so a sentence the
@@ -115,6 +116,13 @@ list (pose, framing, ground colour), never invent new ones.
   whole sentence finds nothing; else the picture still in play in the same section, without its label and never
   circled (`engine/stick/fill.py`). Only a short question shot with its "?" marks is left as a figure alone.
 - **Narrator pictures** (think, wave, explain...) in the storyboard become poses of our figure, not doodles.
+- **Library people become our figures** (`engine/stick/cast.py`): a library picture of a person or a group is
+  redrawn as stick figures in the same line and palette (a pilot or police officer in a cap, a prince in a crown,
+  a farmer in a straw hat, a running person running, an emoji face as a figure wearing that feeling, a family as
+  two grown-ups and two children, the parachute as our figure under a striped canopy). A picture whose point is
+  something a stick figure cannot show keeps its library drawing: a wheelchair, a bike, a bed, a costume we don't
+  draw (astronaut, firefighter, vampire), sellers holding signs, a sick, money-mouth or sleeping face. A figure
+  never holds a picture of a person.
 - **Numbers** are big plain text with a red underline drawn as they are said ("between 235 and 284" ->
   235–284, "the 270s" -> 270s). A shot with nothing else to show puts the number its narrator says on screen
   (a year, a count, a percentage, an amount). A number keeps its currency and unit as written or said ("$200,000",

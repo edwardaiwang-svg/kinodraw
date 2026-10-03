@@ -69,7 +69,7 @@ STRONG = {'en': re.compile(r'\b(largest|biggest|first|only|last|most|greatest|ol
 COSTUME = {'en': [('crown', r'\b(emperors?|kings?|queens?|pharaohs?|throne|rulers?|monarchs?|empress)\b'),
                   ('helmet', r'\b(romans?|legions?|legionar\w*|gladiators?|centurions?|spartans?|hoplites?)\b'),
                   ('soldier', r'\b(soldiers?|army|armies|troops|warriors?|(?<!in )general)\b'),
-                  ('strawhat', r'\b(farmers?|peasants?|workers?|villagers?)\b')],
+                  ('strawhat', r'\b(farmers?|peasants?|(?<!office )(?<!health )workers?|villagers?)\b')],
            'zh': [('crown', r'皇帝|国王|女王|王位|统治者'), ('helmet', r'罗马人|罗马军|军团|角斗士|斯巴达'),
                   ('soldier', r'士兵|军队|战士|将军|部队'), ('strawhat', r'农民|工人|村民')]}
 COSTUME_RE = {lang: [(hat, re.compile(rx, I)) for hat, rx in rules] for lang, rules in COSTUME.items()}
