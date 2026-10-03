@@ -240,3 +240,10 @@ def test_every_key_phrase_in_one_text_is_highlighted_in_english_and_chinese():
         assert isinstance(lit, skins.Highlighted) and len(lit.boxes) == 2, lang
         assert lit.boxes[0][2] < lit.boxes[1][0], lang                  # the first phrase, then the second
 
+
+def test_an_english_key_phrase_is_highlighted_as_a_word_not_inside_another_word():
+    td = ink.TextDrawing(['Sunday brings sun.'], 'en', 60)
+    (x0, _, x1, _, _), = skins.phrase_boxes(td, 'sun')
+    assert x0 > td.size[0] * .6                                         # the word "sun", not the "Sun" of Sunday
+    (w0, _, _, _, _), = skins.phrase_boxes(ink.TextDrawing(['It warms up'], 'en', 60), 'warm')
+    assert w0 > 0                                                       # a word's start still matches its stem

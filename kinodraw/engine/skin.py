@@ -357,7 +357,12 @@ def phrase_boxes(td: ink.TextDrawing, phrase: str):
     if not target:
         return []
     low = text.lower()
-    at = low.find(target)
+    if td.lang == 'en':        # a whole word first, else the start of a word ('warm' in 'warms'), never inside one
+        hit = (re.search(rf'(?<!\w){re.escape(target)}(?!\w)', low)
+               or re.search(rf'(?<!\w){re.escape(target)}', low))
+        at = hit.start() if hit else -1
+    else:
+        at = low.find(target)
     if at < 0:
         return []
     spans: dict = {}
