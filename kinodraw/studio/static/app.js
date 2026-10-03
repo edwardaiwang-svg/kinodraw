@@ -307,6 +307,7 @@ function beatCard(b, ch) {
   el.querySelector('.prev').onclick = () => {
     const img = document.createElement('img');
     img.alt = 'preview';
+    img.onload = () => img.classList.toggle('tall', img.naturalHeight > img.naturalWidth);
     img.src = `/api/projects/${encodeURIComponent(current)}/still?beat=${encodeURIComponent(b.id)}&offset=4&token=${T}`;
     el.querySelector('.preview').replaceChildren(img);
   };
