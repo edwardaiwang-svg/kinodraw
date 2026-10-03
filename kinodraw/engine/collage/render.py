@@ -56,6 +56,8 @@ class CollageProduction:
         for k, st in enumerate(self.stages):
             self._current = k
             els = BUILDERS.get(st.kind, promo.stickers_stage)(self, st)
+            if k == len(self.stages) - 1 and tline.get('credit'):     # "Made with ..." while the end card holds
+                els += promo.credit(self, tline['credit']['start'])
             els.sort(key=lambda e: (e.layer, e.start))
             self.stage_els.append(els)
             self.els += els

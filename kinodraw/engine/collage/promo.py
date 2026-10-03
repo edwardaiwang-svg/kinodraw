@@ -441,6 +441,16 @@ def end(prod, stage):
     return els
 
 
+def credit(prod, t):
+    """The "Made with ..." credit (the project's credit switch) on a paper slip at the foot of the last stage, in
+    by ``t`` and held to the end, whatever that stage shows."""
+    from ... import PRODUCT
+    from ..auto_scenes import CREDIT_LINE
+    img = ui.raster(ui.credit_slip(CREDIT_LINE[prod.lang].format(**PRODUCT), PRODUCT['url'], prod.lang))
+    return [Piece(img, 960, 1080 - 56 - img.height / 2, t - .3, ident='credit', tilt=-1.5, energy=0, cue='paper',
+                  layer=3)]
+
+
 def sticker_row(prod, s, k):
     """Anything else: the sentence's pictures as stickers in a row (the director's picks, or one for its emphasis)."""
     ids = [it['doodle'] for v in prod.beat(s.beat).get('visuals', []) if v.get('type') == 'cluster'

@@ -76,4 +76,7 @@ def test_the_product_name_and_address_live_in_one_place():
     from kinodraw.engine import auto_scenes
     src = Path(auto_scenes.__file__).read_text(encoding='utf-8')
     assert 'KinoDraw' not in src.split('def build_credit')[1].split('\ndef ')[0]        # the credit reads PRODUCT
+    from kinodraw.engine.collage import promo
+    src = Path(promo.__file__).read_text(encoding='utf-8')
+    assert 'KinoDraw' not in src.split('def credit')[1].split('\ndef ')[0]                # so does the collage's
     assert 'KinoDraw' not in Path(package.__file__).read_text(encoding='utf-8')         # so do the metadata and description

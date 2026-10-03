@@ -63,6 +63,24 @@ def test_the_calm_dial_has_no_showpieces(tmp_path):
     assert not any(c['kind'] == 'confetti' for c in prod.cues()) and prod._zoom(2, prod.stages[2].start + 2) == 1
 
 
+def test_a_collage_video_ends_with_the_made_with_credit_unless_it_is_switched_off(tmp_path):
+    """The collage look used to hold its end card through the credit's 2 seconds without drawing the credit."""
+    board = _promo_board()
+    clips = timeline.synthetic_clips(board, 'en')
+    on = renderer.make_production(board, timeline.layout(board, 'en', clips), 'en', tmp_path)
+    off = renderer.make_production(board, timeline.layout(board, 'en', clips, credit=False), 'en', tmp_path)
+    credit = [e for e in on.els if e.ident == 'credit']
+    assert len(credit) == 1 and not any(e.ident == 'credit' for e in off.els)
+    window = on.tl['credit']
+    assert credit[0].end <= window['start'] and credit[0].until is None       # in when the 2 seconds start, held
+    t = window['end'] - .1
+    shown = np.asarray(on.frame(t), np.int16)
+    on.stage_els[-1].remove(credit[0])
+    changed = np.argwhere(np.abs(shown - np.asarray(on.frame(t), np.int16)).sum(2) > 30)
+    assert len(changed) > 5000                                                 # drawn on the last frames
+    assert changed[:, 0].min() > 880 and abs(changed[:, 1].mean() - 960) < 40  # at the foot, centred
+
+
 def test_a_software_promo_has_a_page_an_app_window_and_the_drawing_hand(tmp_path):
     from kinodraw.director.annotate import annotate
     from kinodraw.engine.collage import promo

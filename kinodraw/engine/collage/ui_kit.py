@@ -216,6 +216,17 @@ def label(text, lang='en', hand=True, size=30, color=INK, paper='#FFFFFF') -> st
     return _doc(w, h, body)
 
 
+def credit_slip(line, url, lang='en', color='#55606A') -> str:
+    """The video's end credit on a small torn paper slip: "Made with ..." in handwriting, the address under it."""
+    fam = _family(lang, hand=True)
+    w, h = max(text_width(line, fam, 34), text_width(url, SANS, 22)) + 56, 104
+    edge = ' '.join(f'{x:.0f},{(4 if k % 2 else 0) + h - 6:.0f}' for k, x in enumerate(range(int(w) - 6, 4, -14)))
+    body = (f'<polygon points="4,6 {w - 6:.0f},4 {edge} 6,{h - 4:.0f}" fill="{PAPER}" stroke="#D4CBB8" stroke-width="2"/>'
+            + _text(w / 2, 48, line, fam, 34, fill=color, anchor='middle')
+            + _text(w / 2, 82, url, SANS, 22, fill=color, anchor='middle'))
+    return _doc(w, h, body)
+
+
 def stamp(text, lang='en', color=GREEN) -> str:
     fam, size = _family(lang), 58
     w, h = text_width(text, fam, size) + 72, 112
