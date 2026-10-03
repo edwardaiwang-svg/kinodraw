@@ -27,7 +27,7 @@ Each project folder holds a `storyboard.json`. You can edit it by hand or in Stu
 - `narrator`: `"none"` hides the character. Any other value is a prefix, and poses are looked up as `<prefix>_wave`, `<prefix>_head`, `<prefix>_present`, `<prefix>_thumbs`, and so on (see "Your own doodles" below).
 - `music`: `true`, `false`, or `{"primary": "fresh_focus", "secondary": "natural_vibes"}`.
 - `host`: optional, `{"photo": "photos/me.jpg", "badge": {"en": "Name · role"}}`. It adds a photo badge to the title board and end card.
-- `look`, `story`, `motion`: the direction dials, all optional. `look` is any id in `doodlestudio/styles/registry.json`: `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `collage` or `bold`; looks with `"status": "skin"` are the whiteboard with another paper, ink, fills, fonts and hand (`doodlestudio/engine/skin.py`). `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
+- `look`, `story`, `motion`: the direction dials, all optional. `look` is any id in `doodlestudio/styles/registry.json`: `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `chalkboard`, `notebook`, `collage` or `bold`; looks with `"status": "skin"` are the whiteboard with another paper, ink, fills, fonts and hand (`doodlestudio/engine/skin.py`): `chalkboard` is chalk on a slate-green board, `notebook` pencil on lined paper with a highlighter. `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
 - `brand`: optional, `{"name", "url", "cta", "reveal"}`, all text; `"reveal": "hand"` has the drawing hand write the name. Without it the brand is found in the script: a domain such as `friendr.nl`, or a name said twice that the title or a "Meet X" backs up.
 
 ## Chapters
@@ -106,13 +106,13 @@ The collage and bold looks turn every sentence into a scene from a fixed templat
 - `role`: `hook`, `question`, `problem`, `turn`, `brand`, `step`, `feature`, `channels`, `social`, `mechanic`, `use_cases`, `list`, `number`, `quote`, `reveal`, `tagline`, `cta`, `end_line` or `none`. A `step` also has `n`, its number in the video.
 - `energy`: 0 still, 1 calm, 2 lively, 3 a showpiece.
 - `scene`: one of `options.scene`, which offers 2–3 templates from the look's library with the rules' pick first (the whiteboard has only `board`).
-- `emphasis`: the key phrase shown big, cut from the sentence (at most three words): one of `options.emphasis`, or empty.
+- `emphasis`: the key phrase shown big, cut from the sentence (at most three words): one of `options.emphasis`, or empty. The notebook look swipes a highlighter behind it where the board writes it (pink on a yellow note).
 - `options`: what an AI may later choose from, by index. `energy` is `[low, high]`.
 - `source`: `rules`, or `user` for an entry you set by hand. Annotating again never changes a `user` entry, and planning only reports where it breaks the dial.
 
 | look | story | scenes |
 |---|---|---|
-| whiteboard | any | board |
+| whiteboard, chalkboard, notebook | any | board |
 | collage | promo, showcase | chat_pileup, chaos, brand_reveal, step_card, share_link, rsvp, feature_chips, threshold, use_case_grid, brand_endcard, script_page, app_paste, app_press, hand_draws, sticker_row |
 | collage | story, explain | title_question, crowd, stack, sky_speech, room_reaction, journey, document_reveal, collect, moodboard, box_reveal, tools_idea, assemble, end_line, sticker_row |
 | bold | any | slam_line, bracket_focus, count_up, marquee_rings, morph, particle_assemble, iris_end |
