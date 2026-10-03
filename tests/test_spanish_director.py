@@ -193,3 +193,16 @@ def test_a_spanish_percentage_grid_is_titled_without_a_dangling_que():
     beat = {'id': 'b001', 'display': {'es': text}, 'spoken': {'es': numbers.normalize(text, 'es').spoken}}
     v, _ = RulesDirector('es')._number(beat, text, numbers.normalize(text, 'es'), [])
     assert v['title']['es'] == '10% del aire' and v['legend'][0]['text']['es'] == 'aire'
+
+
+@pytest.mark.parametrize('sentence,card', [
+    ('Dentro de la Tierra hay roca fundida llamada magma.', ('Magma', 'Roca fundida')),
+    ('La planta tiene un tubo llamado tallo que lleva el agua.', ('Tallo', 'Un tubo')),
+    ('El tubo que lleva el agua hacia arriba se llama tallo.', None),     # 'is called': defined elsewhere
+    ('Mi hermana se llama Sofía y tiene un acuario.', None),
+])
+def test_spanish_definition_card_is_the_noun_phrase_before_llamado(sentence, card):
+    director = RulesDirector.__new__(RulesDirector)
+    director.lang = 'es'
+    found = director._definition({'id': 'b001'}, sentence, numbers.normalize(sentence, 'es'), [])
+    assert (found and (found[0]['term']['es'], found[0]['text']['es'])) == card

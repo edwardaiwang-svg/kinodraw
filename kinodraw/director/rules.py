@@ -134,6 +134,8 @@ ES_DETERMINERS = set('el la los las un una unos unas este esta estos estas ese e
                       'nuestra cada todo toda todos todas algún alguna algunos algunas'.split())
 ES_AUX = set('es son era eran fue fueron será serán está están estaba estaban ha han había habían puede pueden'.split())
 ES_CONNECTIVES = set('cuando mientras y e donde después antes porque entonces que quien quienes'.split())
+ES_VERBS = set('hay tiene tienen hace hacen usa usan produce producen forma forman crea crean lleva llevan '
+               'necesita necesitan contiene contienen'.split())   # end a noun phrase read backwards
 ES_PAST = set('inventó inventaron creó crearon construyó construyeron descubrió descubrieron escribió escribieron '
               'publicó publicaron vendió vendieron comenzó comenzaron llegó llegaron cambió cambiaron nació nacieron '
               'fundó fundaron hizo hicieron dio dieron enseñó enseñaron usó usaron producían imprimían'.split())
@@ -609,14 +611,27 @@ class RulesDirector:
                 return None                                # 'this process is called X': the definition is elsewhere
             gloss = ' '.join(words)
         elif self.lang == 'es':
+            # 'roca fundida llamada magma' only: 'X se llama Y' is 'X is called Y', the definition is elsewhere
             m = re.search(r'\b((?:(?:un|una|el|la) )?[^\W\d_][\w-]*(?: [^\W\d_][\w-]*){0,3}) '
-                          r'(?:llamado|llamada|conocido como|conocida como|se llama) '
+                          r'(?:llamado|llamada|llamados|llamadas|conocido como|conocida como) '
                           r'(?:(?:un|una|el|la) )?([^\W\d_][\w-]*(?: [^\W\d_][\w-]*){0,2})\b', text)
             if not m:
                 return None
-            term, gloss = m.group(2), m.group(1)
-            if gloss.split()[-1] in ES_AUX:
+            stop = ES_AUX | ES_PREPS | ES_DETERMINERS | ES_CONNECTIVES | ES_VERBS
+            words, term = [], []
+            for w in reversed(m.group(1).split()):         # the noun phrase right before 'llamada'
+                if w.lower() in stop:
+                    if w.lower() in ('un', 'una') and words:   # 'un tubo' reads as a definition
+                        words.insert(0, w)
+                    break
+                words.insert(0, w)
+            for w in m.group(2).split():                   # 'tallo que lleva' -> 'tallo'
+                if w.lower() in stop:
+                    break
+                term.append(w)
+            if not words or not term:
                 return None
+            term, gloss = ' '.join(term), ' '.join(words)
         else:
             m = re.search(r'([一-鿿]{2,12})(?:叫做|称为|被称为|叫作)([一-鿿A-Za-z]{2,8})', text)
             if not m:
