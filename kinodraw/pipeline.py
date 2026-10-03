@@ -4,6 +4,7 @@ Project folder:
   project.json        settings (language, voice, speed, director, workers, credit, recording)
   script.<ext>        the source script
   recording.<ext>     optional: your own reading of the script, used as the narration
+  read-aloud.txt      the script as it is narrated, one numbered sentence a line: what to read for your recording
   storyboard.json     chapters + beats + visuals (editable; re-running keeps your edits)
   doodles/ photos/    optional: your own SVG doodles and photos
   voice/              cached narration clips (recording-align.json: where each beat is in your recording)
@@ -17,7 +18,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import ingest, script, voice
+from . import PRODUCT, ingest, script, voice
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
@@ -69,6 +70,18 @@ def storyboard(project_dir: Path) -> dict:
     return _load(Path(project_dir) / 'storyboard.json')
 
 
+READ_ALOUD = 'read-aloud.txt'
+
+
+def read_aloud(project_dir: Path) -> list[dict]:
+    """The script as the sentences that will be narrated, in order ([{beat, text}], numbered from 1 where shown): every
+    beat's spoken words, with the lines the storyboard adds to the script (a takeaway says its note's words). The
+    Studio's read-aloud page and read-aloud.txt show these, and recording-align.json checks each of them."""
+    project_dir = Path(project_dir)
+    lang, board = settings(project_dir)['lang'], script.sync_takes(storyboard(project_dir))
+    return [{'beat': b['id'], 'text': s} for b in board['beats'] for s in script.sentences(b['spoken'][lang], lang)]
+
+
 def set_recording(project_dir: Path, source) -> dict:
     """Narrate with your own reading of the script: copy it into the project as recording.<ext> and name it in
     project.json (``None`` goes back to the synthesized voice)."""
@@ -88,7 +101,8 @@ def set_recording(project_dir: Path, source) -> dict:
 
 def narrate(project_dir: Path, progress=None) -> dict:
     """Synthesize (or reuse cached) clips for every beat (takeaways first say what their notes show). With a
-    recording in project.json the clips are cut from it instead, guided by the synthesized ones."""
+    recording in project.json the clips are cut from it instead, guided by the synthesized ones. Writes read-aloud.txt:
+    what to read to narrate the video yourself."""
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
@@ -96,6 +110,9 @@ def narrate(project_dir: Path, progress=None) -> dict:
     script.sync_takes(board)
     if json.dumps(board, ensure_ascii=False, sort_keys=True) != before:
         _save(project_dir / 'storyboard.json', board)
+    text = project_dir / READ_ALOUD                 # what to read to narrate it yourself (the Studio shows the same)
+    text.write_text(''.join(f'{n}. {line["text"]}\n' for n, line in enumerate(read_aloud(project_dir), 1)),
+                    encoding='utf-8')
     voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
@@ -110,9 +127,10 @@ def narrate(project_dir: Path, progress=None) -> dict:
             clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
                                          cfg['voice'], cfg['speed'])
         except voice.RecordingError as error:
-            raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: '
-                                       f'kinodraw voice "{project_dir}" --recording none', error.beat,
-                                       error.plain) from None
+            raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: kinodraw voice '
+                                       f'"{project_dir}" --recording none. The script to read, as it is narrated (one '
+                                       f'numbered sentence a line, with the lines {PRODUCT["name"]} adds to yours), is '
+                                       f'in "{text}".', error.beat, error.plain) from None
     return clips
 
 

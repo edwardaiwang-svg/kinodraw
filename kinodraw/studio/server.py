@@ -197,19 +197,12 @@ def _takes(path: Path) -> list[Path]:
     return sorted(path.glob('recording.*'))
 
 
-def _lines(path: Path) -> list[dict]:
-    """The script as the sentences that will be narrated (an edited takeaway note says its new words)."""
-    from .. import script
-    lang, board = pipeline.settings(path)['lang'], script.sync_takes(pipeline.storyboard(path))
-    return [{'beat': b['id'], 'text': s} for b in board['beats'] for s in script.sentences(b['spoken'][lang], lang)]
-
-
 def narrator(name: str) -> dict:
     """The Narrator tab: who narrates, the script as sentences to read aloud (exactly what the built-in voice says,
     numbers written out), the project's recording, how it matched each sentence when it was last used, and which
     sentences changed after it was recorded. Sentences are numbered from 1, as on the page."""
     path = _project(name)
-    cfg, lines = pipeline.settings(path), _lines(path)
+    cfg, lines = pipeline.settings(path), pipeline.read_aloud(path)
     take = path / cfg['recording'] if cfg.get('recording') else next(iter(_takes(path)), None)
     take = take if take and take.is_file() else None
     digest = sha(take) if take else None
@@ -288,7 +281,7 @@ def save_take(name: str, filename: str, stream, length: int) -> dict:
     pipeline.set_recording(path, take)
     snapshot = path / 'voice' / 'recording-script.json'        # what it reads, so later edits can be pointed out
     snapshot.parent.mkdir(exist_ok=True)
-    snapshot.write_text(json.dumps({'sha256': sha(take), 'lines': [line['text'] for line in _lines(path)]},
+    snapshot.write_text(json.dumps({'sha256': sha(take), 'lines': [line['text'] for line in pipeline.read_aloud(path)]},
                                  ensure_ascii=False), encoding='utf-8')
     return narrator(name)
 
@@ -324,7 +317,7 @@ def use_take(name: str) -> dict:
             take = path / pipeline.settings(path)['recording']
             problem.parent.mkdir(exist_ok=True)
             problem.write_text(json.dumps({'sha256': sha(take), 'lines': [[line['beat'], line['text']]
-                                                                          for line in _lines(path)],
+                                                                          for line in pipeline.read_aloud(path)],
                                            'missing': getattr(error, 'beat', None), 'problem': _plain(error)},
                                           ensure_ascii=False), encoding='utf-8')
             return narrator(name)

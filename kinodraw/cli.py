@@ -5,7 +5,7 @@
   kinodraw new script.md -o MyVideo             storyboard only (edit storyboard.json, then continue)
   kinodraw direct MyVideo                       (re)add visuals to the storyboard
   kinodraw voice MyVideo                        narration + timeline
-  kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of the script (none: Kokoro again)
+  kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of MyVideo/read-aloud.txt (none: Kokoro again)
   kinodraw render MyVideo [--stills 5,30]       silent video (or preview stills)
   kinodraw finish MyVideo                       music, mux, captions, chapters, QA
   kinodraw setup [--lang en zh]                 download the voice models once
@@ -79,11 +79,18 @@ def cmd_voice(args):
         print(f"  your recording: match {report['match']:.2f} (where each beat is: voice/recording-align.json)")
         lang = pipeline.settings(project)['lang']
         said = {beat['id']: beat['spoken'][lang] for beat in pipeline.storyboard(project)['beats']}
+        again = f'record the script again, every sentence as written in {project / pipeline.READ_ALOUD}'
         for beat in report['beats']:
             if beat['check']:
                 print(f"  ! {beat['id']} (\"{pipeline.voice._quote(said.get(beat['id'], ''))}\") sounds unlike its "
                       f"text ({beat['match']:.2f}). Watch that part of the video: if the pictures are out of step "
-                      "with your voice there, record the script again, every sentence as written.")
+                      f"with your voice there, {again}.")
+        poor = [(n, line['text']) for n, line in enumerate(report.get('sentences', []), 1) if line['check']]
+        for n, text in poor:                          # numbered as in read-aloud.txt and the Studio's read-aloud page
+            print(f"  ! sentence {n} of {pipeline.READ_ALOUD} (\"{pipeline.voice._quote(text)}\") didn't match your "
+                  "recording: it may have been skipped or read differently.")
+        if poor:
+            print(f"  Watch those parts of the video: if the pictures are out of step with your voice there, {again}.")
 
 
 def cmd_render(args):
@@ -256,8 +263,9 @@ def main(argv=None):
     p.set_defaults(func=cmd_studio)
     p = sub.add_parser('voice')
     p.add_argument('project')
-    p.add_argument('--recording', help='your own reading of the whole script, in one take (wav, m4a, mp3, aiff), '
-                                       'or "none" to go back to the Kokoro voice')
+    p.add_argument('--recording', help='your own reading of the whole script as the project\'s read-aloud.txt says it '
+                                       '(the voice step writes it), in one take (wav, m4a, mp3, aiff), or "none" to '
+                                       'go back to the Kokoro voice')
     p.set_defaults(func=cmd_voice)
     p = sub.add_parser('render')
     p.add_argument('project')

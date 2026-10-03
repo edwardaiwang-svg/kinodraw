@@ -12,7 +12,7 @@ import imageio_ffmpeg
 import numpy as np
 import pytest
 
-from kinodraw import pipeline, script, voice
+from kinodraw import cli, pipeline, script, voice
 from kinodraw.director.llm import providers
 from kinodraw.studio import server
 
@@ -301,3 +301,40 @@ def test_a_take_that_leaves_out_a_part_is_refused_on_the_narrator_tab_naming_it(
 
     job = _wait(studio, studio('/api/projects/Honey/make', {})[1]['job'], 600)
     assert job['state'] == 'failed' and job['error'] == check['problem']
+
+
+def _read_aloud_page(studio, name):
+    """The Studio's read-aloud page as text: its numbered sentences, one a line."""
+    return ''.join(f'{n}. {line["text"]}\n' for n, line in enumerate(studio(f'/api/projects/{name}/narrator')[1]['lines'], 1))
+
+
+@pytest.mark.skipif(bool(voice.missing_files('en')), reason='Kokoro models not downloaded (kinodraw setup --lang en)')
+def test_the_command_line_names_the_text_to_read_when_a_take_misses_a_line_kinodraw_added(studio, tmp_path):
+    """Someone narrating from the command line read their own script file, which has no "Key takeaway: ..." line:
+    the refusal named a part they had never seen. The voice step writes read-aloud.txt, the script as it is narrated
+    (the Studio's read-aloud page, sentence for sentence), and the refusal names it."""
+    project = studio.root / 'Honey'
+    beats = [(b['id'], b['spoken']['en']) for b in pipeline.storyboard(project)['beats']]
+    assert beats[6] == ('b007', 'Key takeaway: It never spoils.')
+    with pytest.raises(SystemExit) as end:
+        cli.main(['voice', str(project), '--recording', str(_reading(tmp_path, beats, {6}))])
+    message = str(end.value.code)
+    assert '"Key takeaway: It never spoils." (b007)' in message
+    assert f'The script to read, as it is narrated (one numbered sentence a line, with the lines KinoDraw adds to ' \
+           f'yours), is in "{project / "read-aloud.txt"}".' in message
+    assert (project / 'read-aloud.txt').read_text(encoding='utf-8') == _read_aloud_page(studio, 'Honey')
+    assert '8. Key takeaway: It never spoils.\n' in _read_aloud_page(studio, 'Honey')
+
+
+def test_a_generated_line_that_did_not_match_is_named_with_the_text_to_read(studio, monkeypatch, capsys):
+    """A take that reads "Part one: It never spoils." differently: the command line says which sentence of
+    read-aloud.txt did not match, and to record again from that file."""
+    project = studio.root / 'Honey'
+    _fake_alignment(monkeypatch, project, poor=(6,))
+    monkeypatch.setattr(pipeline, 'build_audio', lambda *a: {'duration': 1, 'captions': []})
+    (project / 'take.wav').write_bytes(b'audio')
+    cli.main(['voice', str(project), '--recording', str(project / 'take.wav')])
+    out = capsys.readouterr().out
+    assert '! sentence 6 of read-aloud.txt ("Part one: It never spoils.") didn\'t match your recording' in out
+    assert f'every sentence as written in {project / "read-aloud.txt"}' in out
+    assert (project / 'read-aloud.txt').read_text(encoding='utf-8') == _read_aloud_page(studio, 'Honey')
