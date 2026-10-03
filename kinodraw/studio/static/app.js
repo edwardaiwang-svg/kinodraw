@@ -42,6 +42,34 @@ function toast(msg, ms = 3500) {
 function modal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.remove('hidden'); return $('#modal-body'); }
 function closeModal() { $('#modal').classList.add('hidden'); }
 
+function voiceName(id) {
+  return Object.values(STATE.voices).flat().find((v) => v.id === id)?.name || id;
+}
+function voiceOptions(lang, selected) {
+  return STATE.voices[lang].map((v) => `<option value="${esc(v.id)}"${v.id === selected ? ' selected' : ''}>${esc(v.name)}</option>`).join('');
+}
+function speedRow(id) {
+  return `<label for="${id}">Speed <output id="${id}-label">1.00×</output></label>
+    <div class="row muted"><span>Slower</span><input id="${id}" type="range" min="0.85" max="1.15" step="0.05" value="1"><span>Faster</span></div>`;
+}
+function bindSpeed(id) {
+  const slider = $(`#${id}`), label = $(`#${id}-label`);
+  slider.oninput = () => { label.textContent = `${Number(slider.value).toFixed(2)}×`; };
+  slider.oninput();
+}
+let sampleAudio = null;
+async function playSample(lang, id, speed) {
+  const url = `/api/voices/${encodeURIComponent(lang)}/${encodeURIComponent(id)}/sample?speed=${speed}&token=${T}`;
+  try {
+    const r = await fetch(url, { headers: { 'X-Studio-Token': T } });
+    if (!r.ok) throw new Error((await r.json()).error || 'Could not play this sample.');
+    sampleAudio?.pause();
+    sampleAudio = new Audio(url);
+    sampleAudio.onerror = () => toast('Could not play this sample.', 6000);
+    await sampleAudio.play();
+  } catch (e) { toast(e.message, 6000); }
+}
+
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
 async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
@@ -90,12 +118,15 @@ function showNew() {
   current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-new').content.cloneNode(true));
   const langSel = $('#lang'), voiceSel = $('#voice'), dirSel = $('#director');
+  const voiceLang = () => langSel.value || (/[一-鿿]/.test($('#script').value) ? 'zh' : 'en');
   const fillVoices = () => {
-    const lang = langSel.value || (/[一-鿿]/.test($('#script').value) ? 'zh' : 'en');
-    voiceSel.innerHTML = STATE.voices[lang].map((v) => `<option>${esc(v)}</option>`).join('');
+    voiceSel.innerHTML = voiceOptions(voiceLang());
   };
   langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
   fillVoices();
+  $('#speed-wrap').innerHTML = speedRow('speed');
+  bindSpeed('speed');
+  $('#voice-play').onclick = () => playSample(voiceLang(), voiceSel.value, $('#speed').value);
   const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
   document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
   dirSel.innerHTML = directorOptions(STATE.default_director);
@@ -147,6 +178,7 @@ function showNew() {
       const [look, story] = $('#style').value.split('/');
       const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
+        speed: Number($('#speed').value),
         director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story,
         motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' ? brand : null };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
@@ -166,7 +198,7 @@ async function openProject(name, tab = null) {
   board = p.storyboard;
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
-  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${p.settings.voice}`}`;
+  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${voiceName(p.settings.voice)}`}`;
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (needsCloudSignIn($('#p-director').value)) return;
@@ -410,11 +442,18 @@ function renderNarrator(name, info, choice = info.narrator) {
   const pick = `<div class="narrator-pick">
     <span class="pick-label">Narrator</span>
     <label class="seg"><input type="radio" name="n-pick" value="builtin"${own ? '' : ' checked'}><b>Built-in voice</b>
-      <small>A natural AI voice (${esc(info.voice)}) reads your script</small></label>
+      <small>A natural AI voice (${esc(voiceName(info.voice))}) reads your script</small></label>
     <label class="seg"><input type="radio" name="n-pick" value="own"${own ? ' checked' : ''}><b>My own voice</b>
       <small>You read the script aloud; every drawing follows your voice</small></label></div>`;
   if (!own) {
-    box.innerHTML = `${pick}<p class="muted">The built-in voice reads exactly what the storyboard says. Press <b>Make video</b> when you’re ready.</p>`;
+    box.innerHTML = `${pick}<form id="n-voice-form">
+      <div class="grid"><div><label for="n-voice">Voice</label><div class="row">
+        <select id="n-voice">${voiceOptions(info.lang, info.voice)}</select>
+        <button id="n-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button>
+      </div></div><div>${speedRow('n-speed')}</div></div>
+      <label>Pronunciations <textarea id="n-pronounce" rows="4" placeholder="GIF = jif&#10;Nguyen = win"></textarea></label>
+      <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling.</p>
+      <button id="n-save" type="submit" class="primary" disabled>Save voice settings</button></form>`;
   } else {
     const lines = info.lines.map((l, i) => {
       const mark = check?.missing.includes(i + 1) ? 'miss' : info.changed.includes(i + 1) ? 'changed'
@@ -443,11 +482,34 @@ function renderNarrator(name, info, choice = info.narrator) {
         const next = await api(`/api/projects/${encodeURIComponent(name)}/narrator`, { method: 'POST', body: JSON.stringify({ narrator: r.value }) });
         toast(r.value === 'own' ? 'Your video will be narrated in your own voice' : 'Your video will use the built-in voice');
         renderNarrator(name, next);
-        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : `voice ${next.voice}`}`);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : `voice ${voiceName(next.voice)}`}`);
       } else renderNarrator(name, info, r.value);
     } catch (e) { toast(e.message, 6000); }
   }));
-  if (!own) return;
+  if (!own) {
+    const form = $('#n-voice-form', box), select = $('#n-voice', form), slider = $('#n-speed', form);
+    const pronounce = $('#n-pronounce', form), save = $('#n-save', form);
+    bindSpeed('n-speed');
+    $('#n-play', form).onclick = () => playSample(info.lang, select.value, slider.value);
+    api(`/api/projects/${encodeURIComponent(name)}/voice`).then((settings) => {
+      if (!form.isConnected) return;
+      select.value = settings.voice; slider.value = settings.speed; slider.oninput();
+      pronounce.value = settings.pronounce; save.disabled = false;
+    }).catch((e) => toast(e.message, 6000));
+    form.onsubmit = async (e) => {
+      e.preventDefault(); save.disabled = true;
+      try {
+        const settings = await api(`/api/projects/${encodeURIComponent(name)}/voice`, { method: 'PUT',
+          body: JSON.stringify({ voice: select.value, speed: Number(slider.value), pronounce: pronounce.value }) });
+        info.voice = settings.voice;
+        renderNarrator(name, info);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` voice ${voiceName(settings.voice)}`);
+        toast('Saved');
+      } catch (err) { toast(err.message, 6000); }
+      finally { save.disabled = false; }
+    };
+    return;
+  }
   const showProblem = (msg) => { $('#n-result', box).innerHTML = `<div class="result bad"><p>${esc(msg)}</p></div>`; };
   $('#n-file', box).onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;

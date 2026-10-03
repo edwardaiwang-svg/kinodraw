@@ -53,7 +53,11 @@
     <div class="grid">
       <label>Title <input id="title" placeholder="from the script"></label>
       <label>Language <select id="lang"><option value="">Detect</option><option value="en">English</option><option value="zh">中文</option></select></label>
-      <label id="voice-wrap">Voice <select id="voice"></select></label>
+      <div id="voice-wrap">
+        <label for="voice">Voice</label><div class="row"><select id="voice"></select>
+          <button id="voice-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button></div>
+        <div id="speed-wrap"></div>
+      </div>
       <label>Director <select id="director"></select></label>
       <label>Style <select id="style"></select></label>
       <label id="motion-wrap" class="hidden">Motion <select id="motion"><option value="calm">Calm</option><option value="lively" selected>Lively</option>
