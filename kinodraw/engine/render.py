@@ -24,11 +24,12 @@ from pathlib import Path
 import imageio_ffmpeg
 from PIL import Image
 
-from .. import script
+from .. import script, styles
 from . import auto_scenes as auto
 from . import captions as cap
 from . import ink
 from . import scenes
+from . import skin as skins
 from . import timeline as tl
 from .storyboard import drawable, normalize
 from .board import COL, PAN_SECONDS, Camera, Layout, Scheduler
@@ -57,17 +58,20 @@ class Production:
         self.ep, self.tl, self.lang = normalize(episode), tline, lang
         self.relaxed = relaxed
         self.project_dir = Path(project_dir)
+        self.skin = skins.for_look(self.ep.get('look'))       # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
         self.layout = Layout()
-        self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir)
+        self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir, self.skin)
         self.camera = Camera()
         self.cuts, self.stock, self.modes = [], [], []
         self.cut_marks = []            # index of the first element drawn on each cut's stretch
         self.cards, self.notes, self.pages = {}, {}, {}
         self.agenda_x = None
         self.warnings = []
-        self.hand = ink.Hand()
+        self.hand = ink.Hand(self.skin.hand)
         self._build()
+        if self.skin.emphasis == 'highlighter':              # each sentence's key phrase, where it is written
+            skins.highlight_phrases(self.ep, self.tl, self.ctx.elements)
         self._schedule()
         self._pin_notes()
         self._index()
@@ -364,7 +368,7 @@ class Production:
         return 'board', {}, None, None
 
     def view(self, t, L, hand=True):
-        frame = ink.paper().copy()
+        frame = self.skin.background().copy()
         lo, hi = L - 20, L + SIZE[0] + 20
         for layer in (0, 1):
             for e in self.els:
@@ -427,7 +431,7 @@ class Production:
         path = self.project_dir / 'stock/MANIFEST.json'
         clips = playlist(json.loads(path.read_text(encoding='utf-8')), clip) if path.exists() else []
         if not clips:
-            return ink.paper().copy()
+            return self.skin.background().copy()
         key = (clip, a)
         if self._stock_reader is None or self._stock_reader.key != key:
             if self._stock_reader:
@@ -515,15 +519,15 @@ class Production:
             return
         ch, a, b = span
         alpha = min(1., (t - a) / .4, (b - t) / .3)       # labels fade in and out; nothing pops
-        chip = faded(chip_image(ch, self.lang), alpha)
+        chip = faded(chip_image(ch, self.lang, self.skin.fonts), alpha)
         ink.paste(frame, chip, 36, 22)
         src = source_line(ch, self.lang)
         if src:
-            img = faded(ui_text(src, 34, (85, 96, 106)), alpha)
+            img = faded(ui_text(src, 34, self.skin.soft, self.skin.fonts), alpha)
             ink.paste(frame, img, 1920 - 40 - img.width, 26)
         footer = self.ctx.T(self.ep.get('footer'))
         if footer:
-            ink.paste(frame, ui_text(footer, 24, (110, 118, 126)), 40, 1080 - 34)
+            ink.paste(frame, ui_text(footer, 24, self.skin.faint, self.skin.fonts), 40, 1080 - 34)
 
     def _chapter_span(self, t):
         for c in self.tl['chapters']:
@@ -538,7 +542,7 @@ class Production:
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
             return
-        img = cap.caption_image(c['text'], self.lang)
+        img = cap.caption_image(c['text'], self.lang, self.skin.fonts, self.skin.caption, self.skin.caption_edge)
         ink.paste(frame, img, (SIZE[0] - img.width) / 2, 1046 - img.height)
 
 
@@ -637,27 +641,27 @@ def faded(img, alpha):
     return out
 
 
-def ui_text(text, size, color):
-    key = (text, size, color)
+def ui_text(text, size, color, fonts=ink.FONTS):
+    key = (text, size, tuple(color), fonts)
     if key not in _txt_cache:
-        f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size)
+        f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size, fonts)
         w = int(f.getlength(text)) + 6
         img = Image.new('RGBA', (w, size + 12), (0, 0, 0, 0))
         from PIL import ImageDraw
-        ImageDraw.Draw(img).text((2, 2), text, font=f, fill=color + (255,))
+        ImageDraw.Draw(img).text((2, 2), text, font=f, fill=tuple(color) + (255,))
         _txt_cache[key] = img
     return _txt_cache[key]
 
 
-def chip_image(ch, lang):
-    key = (ch['id'], lang)
+def chip_image(ch, lang, fonts=ink.FONTS):
+    label = (ch.get('label') or {}).get(lang, '')
+    title = (ch.get('title') or {}).get(lang, '')
+    short = title.split(':')[0].split('：')[0] if ch['kind'] == 'section' else title
+    text = f'{label} · {short}' if label and short and short.strip().lower() != label.strip().lower() else (label or short)
+    key = (text, ch.get('color'), lang, fonts)     # by what it shows: one process may render several videos
     if key not in _chip_cache:
         from PIL import ImageDraw
-        label = (ch.get('label') or {}).get(lang, '')
-        title = (ch.get('title') or {}).get(lang, '')
-        short = title.split(':')[0].split('：')[0] if ch['kind'] == 'section' else title
-        text = f'{label} · {short}' if label and short and short.strip().lower() != label.strip().lower() else (label or short)
-        f = ink.font('ui' if lang == 'en' else 'zh_caption', 32)
+        f = ink.font('ui' if lang == 'en' else 'zh_caption', 32, fonts)
         w = int(f.getlength(text)) + 44
         img = Image.new('RGBA', (w, 52), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
@@ -780,7 +784,7 @@ def main(argv=None):
     project = Path(args.project)
     inputs = {str(p): sha(p) for p in [Path(args.episode), *sorted(HERE.glob('*.py')), *ink.FONT_FILES,
         *sorted((project / 'doodles').glob('*.svg')), *sorted((project / 'photos').glob('*.jpg')),
-        ink.ASSETS / 'hand' / 'hand.png', ink.ASSETS / 'hand' / 'hand.json']}
+        ink.ASSETS / 'hand' / 'hand.png', ink.ASSETS / 'hand' / 'hand.json', styles.REGISTRY]}
     if args.timeline:
         inputs[str(Path(args.timeline))] = sha(args.timeline)
     manifest = {'output': str(output), 'sha256': sha(output), 'frames': n, 'fps': FPS, 'start': args.start,

@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import re
 
-from .. import numbers, script
+from .. import numbers, script, styles
 from ..engine.storyboard import DIALS
 
 ROLES = {                                             # role -> baseline energy (plan() fits it to the motion dial)
@@ -51,7 +51,8 @@ _PROMO = ['chat_pileup', 'chaos', 'brand_reveal', 'step_card', 'share_link', 'rs
 _STORY = ['title_question', 'crowd', 'stack', 'sky_speech', 'room_reaction', 'journey', 'document_reveal', 'collect',
           'moodboard', 'box_reveal', 'tools_idea', 'assemble', 'end_line', 'sticker_row']
 _BOLD = ['slam_line', 'bracket_focus', 'count_up', 'marquee_rings', 'morph', 'particle_assemble', 'iris_end']
-SCENES = {'whiteboard': {story: ['board'] for story in DIALS['story']},        # the existing renderer: one scene
+SCENES = {**{look: {story: ['board'] for story in DIALS['story']}            # the whiteboard renderer (and every
+             for look in DIALS['look'] if styles.renderer(look) == 'whiteboard'},   # skin over it): one scene
           'collage': {'explain': list(_STORY), 'promo': list(_PROMO), 'story': list(_STORY), 'showcase': list(_PROMO)},
           'bold': {story: list(_BOLD) for story in DIALS['story']}}
 
@@ -367,7 +368,7 @@ def _dials(board):
 def _family(look, story):
     """Which template rules a look and story use: collage promos and showcases share one library."""
     if look != 'collage':
-        return 'board' if look == 'whiteboard' else 'bold'
+        return 'board' if styles.renderer(look) == 'whiteboard' else 'bold'
     return 'promo' if story in ('promo', 'showcase') else 'story'
 
 

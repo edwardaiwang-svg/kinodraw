@@ -20,12 +20,12 @@ def ui(ep, lang):
     return {**UI_DEFAULTS[lang], **(ep.get('ui') or {}).get(lang, {})}
 
 
-def fit_title(text, lang, max_w, size):
+def fit_title(text, lang, max_w, size, fonts=ink.FONTS):
     """One line when it fits at >= 80% of ``size``, otherwise two lines."""
-    lines, fitted = ink.fit_text(text, lang, max_w, 1, size, min_size=round(size * .8))
+    lines, fitted = ink.fit_text(text, lang, max_w, 1, size, min_size=round(size * .8), fonts=fonts)
     if len(lines) == 1:
         return lines, fitted
-    return ink.fit_text(text, lang, max_w, 2, size, min_size=round(size * .55))
+    return ink.fit_text(text, lang, max_w, 2, size, min_size=round(size * .55), fonts=fonts)
 
 
 def narrator(ep, pose):
@@ -50,8 +50,8 @@ def photo_badge(ctx, photo, diameter, x, y, t, color=ink.INK, ring_w=8):
 def build_title_board(ctx, beat, x0, t):
     ep = ctx.ep
     els = []
-    lines, size = fit_title(ctx.T(ep.get('title')), ctx.lang, 1150, 118)
-    title = ink.TextDrawing(lines, ctx.lang, size, color=ink.INK)
+    lines, size = fit_title(ctx.T(ep.get('title')), ctx.lang, 1150, 118, ctx.fonts)
+    title = ink.TextDrawing(lines, ctx.lang, size, color=ink.INK, fonts=ctx.fonts)
     els.append(ctx.add(title, x0 + 80, 150, t))
     tw = title.size[0]
     und = ctx.strokes((tw, 30), [[(6 + i * (tw - 12) / 30, 12 + 5 * math.sin(i / 2.5)) for i in range(31)]],
@@ -167,7 +167,7 @@ def build_section_opener(ctx, chapter, beat, x0, t):
     els.append(ctx.add(show, x0 + 384, show_y, t))
     credit = photo_credit(ctx.project_dir, sp.get('photo', ''), ctx.lang)
     if credit:
-        cimg = ink.StaticDrawing(ui_small(credit, 26), pop=.3)
+        cimg = ink.StaticDrawing(ui_small(credit, 26, ctx.skin), pop=.3)
         # Under the photo, and below the show line when that wraps far enough to meet it.
         els.append(ctx.add(cimg, x0 + 90, max(by + 268, show_y + show.size[1] + 6), t, hand=False, after=els[2]))
     return els
@@ -183,11 +183,12 @@ def photo_credit(project_dir, photo, lang):
     return line
 
 
-def ui_small(text, size):
+def ui_small(text, size, skin=None):
     from PIL import Image, ImageDraw
-    f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size)
+    fonts, color = (skin.fonts, skin.color((95, 104, 112))) if skin else (ink.FONTS, (95, 104, 112))
+    f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size, fonts)
     img = Image.new('RGBA', (int(f.getlength(text)) + 8, size + 12), (0, 0, 0, 0))
-    ImageDraw.Draw(img).text((3, 3), text, font=f, fill=(95, 104, 112, 255))
+    ImageDraw.Draw(img).text((3, 3), text, font=f, fill=color + (255,))
     return img
 
 
@@ -225,19 +226,19 @@ def build_end_card(ctx, x0, t):
     ep = ctx.ep
     pose = narrator(ep, 'thumbs')
     shift = 150 if pose else 0
-    lines, size = fit_title(ctx.T(ep.get('title')), ctx.lang, 1150, 120)
-    brand = ink.TextDrawing(lines, ctx.lang, size, pace=1.8)
+    lines, size = fit_title(ctx.T(ep.get('title')), ctx.lang, 1150, 120, ctx.fonts)
+    brand = ink.TextDrawing(lines, ctx.lang, size, pace=1.8, fonts=ctx.fonts)
     els = [ctx.add(brand, x0 + (1920 - brand.size[0]) / 2 - shift, 240, t)]
     dy = int(size * 1.18) * (len(lines) - 1)
     second = ctx.T(ep.get('subtitle')) or ui(ep, ctx.lang)['thanks']
-    sub = ink.TextDrawing([second], ctx.lang, 60, color=ink.SECTION_COLORS['blue'], pace=1.8)
+    sub = ink.TextDrawing([second], ctx.lang, 60, color=ink.SECTION_COLORS['blue'], pace=1.8, fonts=ctx.fonts)
     els.append(ctx.add(sub, x0 + (1920 - sub.size[0]) / 2 - shift, 400 + dy, t))
     host = ep.get('host') or {}
     if host.get('photo'):
         els += photo_badge(ctx, host['photo'], 200, x0 + 560, 530 + dy, t)
     if host.get('badge'):
-        lines_b, size_b = ink.fit_text(ctx.T(host['badge']), ctx.lang, 600, 2, 40, min_size=30)
-        badge = ink.TextDrawing(lines_b, ctx.lang, size_b, pace=1.8)
+        lines_b, size_b = ink.fit_text(ctx.T(host['badge']), ctx.lang, 600, 2, 40, min_size=30, fonts=ctx.fonts)
+        badge = ink.TextDrawing(lines_b, ctx.lang, size_b, pace=1.8, fonts=ctx.fonts)
         bx = x0 + 790 if host.get('photo') else x0 + (1920 - badge.size[0]) / 2 - shift
         els.append(ctx.add(badge, bx, 630 + dy - badge.size[1] / 2, t))
     if pose:
@@ -251,8 +252,9 @@ CREDIT_LINE = {'en': 'Made with {name}', 'zh': '由 {name} 制作'}
 def build_credit(ctx, x0, t):
     """The end credit, small and soft at the foot of the closing page: the app's name, then where to get it."""
     from .. import PRODUCT
-    made = ink.TextDrawing([CREDIT_LINE[ctx.lang].format(**PRODUCT)], ctx.lang, 40, color=SOFT_INK, pace=1.6, max_dur=1.)
-    url = ink.TextDrawing([PRODUCT['url']], 'en', 30, color=SOFT_INK, pace=2.5, max_dur=.6)
+    made = ink.TextDrawing([CREDIT_LINE[ctx.lang].format(**PRODUCT)], ctx.lang, 40, color=SOFT_INK, pace=1.6, max_dur=1.,
+                           fonts=ctx.fonts)
+    url = ink.TextDrawing([PRODUCT['url']], 'en', 30, color=SOFT_INK, pace=2.5, max_dur=.6, fonts=ctx.fonts)
     y = 1080 - 70 - made.size[1] - url.size[1]
     return [ctx.add(made, x0 + (1920 - made.size[0]) / 2, y, t),
             ctx.add(url, x0 + (1920 - url.size[0]) / 2, y + made.size[1], t + made.duration)]

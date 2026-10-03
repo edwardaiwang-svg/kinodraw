@@ -100,7 +100,7 @@ def test_a_look_that_cannot_be_drawn_yet_is_refused_in_plain_words(tmp_path, mon
     with pytest.raises(SystemExit) as refused:
         cli.main(['new', str(FIX / 'tiny.md'), '-o', str(tmp_path / 'cli'), '--look', 'bold'])
     assert refused.value.code == 2 and not (tmp_path / 'cli').exists()
-    with pytest.raises(ValueError, match=r'^The "bold" look is not available yet\. Choose whiteboard or collage\.$'):
+    with pytest.raises(ValueError, match=r'^The "bold" look is not available yet\. Choose whiteboard, chalkboard, notebook or collage\.$'):
         pipeline.new_project(FIX / 'tiny.md', tmp_path / 'api', direction={'look': 'bold'})
     board = pipeline.new_project(FIX / 'tiny.md', tmp_path / 'p')
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))

@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 
 from . import PRODUCT
 from .audio.mix import SR, read_wav
-from .engine import auto_scenes, ink
+from .engine import auto_scenes, ink, skin as skins
 from .engine.storyboard import normalize
 from .library import resolve
 
@@ -119,27 +119,29 @@ def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0):
 
 def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
     """1280x720: the title in big handwriting, section colours, and the video's own actor: the narrator giving a
-    thumbs-up, or in the collage look the paper puppet cheering on cream paper."""
+    thumbs-up in the video's skin, or in the collage look the paper puppet cheering on cream paper."""
     collage = storyboard.get('look') == 'collage'
+    skin = skins.for_look(storyboard.get('look'))
     if collage:
         from .engine import motion
         img = motion.paper_texture((1280, 720), 'cream').convert('RGBA')
     else:
-        img = ink.paper(1280, 720).copy()
+        img = skin.background(1280, 720).copy()
     d = ImageDraw.Draw(img)
     storyboard = normalize(storyboard)
     title = storyboard['title'][lang]
-    lines, size = ink.fit_text(title, lang, 800, 3, 124, min_size=56)
-    while size > 40 and max(ink.text_width(line, lang, size) for line in lines) > 800:
+    lines, size = ink.fit_text(title, lang, 800, 3, 124, min_size=56, fonts=skin.fonts)
+    while size > 40 and max(ink.text_width(line, lang, size, skin.fonts) for line in lines) > 800:
         size -= 4                              # a single long word cannot wrap; shrink it instead
     y = 90 if len(lines) < 3 else 60
     for line in lines:
         x = 56
-        for part, pf in ink.font_runs(line, lang, size):
-            d.text((x, y), part, font=pf, fill=(27, 27, 27), stroke_width=3, stroke_fill=(255, 255, 255))
+        for part, pf in ink.font_runs(line, lang, size, skin.fonts):
+            d.text((x, y), part, font=pf, fill=skin.color((27, 27, 27)), stroke_width=3, stroke_fill=skin.caption_edge)
             x += pf.getlength(part)
         y += int(size * 1.15)
-    colors = [ink.SECTION_COLORS[c['color']] for c in storyboard['chapters'] if c['kind'] == 'section' and c.get('color')]
+    colors = [skin.color(ink.SECTION_COLORS[c['color']]) for c in storyboard['chapters']
+              if c['kind'] == 'section' and c.get('color')]
     for i, col in enumerate(colors[:6]):
         d.rounded_rectangle((56 + i * 70, 640, 106 + i * 70, 668), 10, fill=col)
     if collage:
@@ -157,7 +159,7 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
     pose = auto_scenes.narrator(storyboard, 'thumbs')
     art = resolve(pose, project_dir) if pose else None
     if art:
-        dr = ink.svg_drawing(art, (400, 600))
+        dr = skin.dress(ink.svg_drawing(art, (400, 600)))
         img.alpha_composite(dr.color, (1280 - dr.color.width - 30, 720 - dr.color.height - 20))
     img.convert('RGB').save(path)
 
