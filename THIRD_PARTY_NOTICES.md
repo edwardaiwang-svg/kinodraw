@@ -14,6 +14,8 @@ The packaged apps on the Releases page also contain GPL components (FFmpeg built
 | Doodle Kai Medium (a subset of LXGW WenKai, renamed as the OFL Reserved Font Name clause requires) | `assets/fonts/` | SIL OFL 1.1, © LXGW |
 | Arimo Bold (static instance) | `assets/fonts/` | SIL OFL 1.1, © The Arimo Project Authors |
 | Noto Sans SC Bold | `assets/fonts/` | SIL OFL 1.1, © Adobe / Google |
+| Silkscreen Regular | `assets/fonts/` | SIL OFL 1.1, © The Silkscreen Project Authors; see `fonts/OFL-Silkscreen.txt` and `LICENSES/OFL-Silkscreen.txt` |
+| Cinzel Bold (static instance of the variable font) | `assets/fonts/` | SIL OFL 1.1, © The Cinzel Project Authors; see `fonts/OFL-Cinzel.txt` and `LICENSES/OFL-Cinzel.txt` |
 | Music: *Fresh Focus* and *Natural Vibes* (Kevin MacLeod), *Inventing Flight* (Bryan Teoh) | `assets/music/` | CC0 / public domain, via FreePD.com; see `music/NOTICE.md` |
 | Sound effects from Kenney's *Interface Sounds*, *RPG Audio* and *Casino Audio*, and OwlishMedia's *202 More Sound Effects* (OpenGameArt) | `assets/sfx/` | CC0 1.0; see `sfx/NOTICE.md` |
 
