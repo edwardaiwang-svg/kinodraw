@@ -247,8 +247,9 @@ def state() -> dict:
     from ..director.llm import cloud
     from ..director.llm.providers import SUGGESTED, saved
     names = saved()                    # names only: opening the app never reads the keychain (no macOS prompt)
-    return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL),
-            'cloud_signed_in': bool(cloud.URL) and ('cloud-token' in names or bool(os.environ.get('DOODLE_CLOUD_TOKEN'))),
+    signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(os.environ.get('DOODLE_CLOUD_TOKEN')))
+    return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
+            'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
             'models': SUGGESTED,

@@ -81,7 +81,7 @@ function showNew() {
   };
   langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
   fillVoices();
-  dirSel.innerHTML = directorOptions(STATE.cloud_available ? 'cloud' : 'rules');
+  dirSel.innerHTML = directorOptions(STATE.default_director);
   const note = () => {
     const d = dirSel.value;
     $('#byo').classList.toggle('hidden', !['openai', 'anthropic', 'compat', 'command'].includes(d));
