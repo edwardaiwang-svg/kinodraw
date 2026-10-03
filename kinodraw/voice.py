@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import wave
 from dataclasses import dataclass
@@ -17,11 +16,11 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-import platformdirs
 
+from . import paths
 from .net import download
 
-MODEL_DIR = Path(os.environ.get('DOODLE_MODELS') or Path(platformdirs.user_data_dir('DoodleStudio')) / 'models').expanduser()
+MODEL_DIR = Path(paths.getenv('KINODRAW_MODELS') or paths.data_dir() / 'models').expanduser()
 RELEASE = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/'
 FILES = {       # name: (url, sha256, bytes)
     'kokoro-v1.0.fp16.onnx': (RELEASE + 'kokoro-v1.0.fp16.onnx',
@@ -74,7 +73,7 @@ def _espeak_config():
     from kokoro_onnx.config import EspeakConfig
     data = Path(espeakng_loader.get_data_path())
     if len(str(data)) > 140:
-        short = Path(platformdirs.user_cache_dir('DoodleStudio')) / 'espeak-ng-data'
+        short = paths.cache_dir() / 'espeak-ng-data'
         if not (short / 'phontab').exists():
             shutil.copytree(data, short, dirs_exist_ok=True)
         data = short

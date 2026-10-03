@@ -1,4 +1,4 @@
-"""Doodle Studio's local server: a JSON API for the single-page app, bound to 127.0.0.1 only.
+"""KinoDraw's local server: a JSON API for the single-page app, bound to 127.0.0.1 only.
 
 Every API request must carry the per-launch token (header X-Studio-Token) that the server
 injects into the page, so other web pages on this computer cannot drive it.
@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
 import re
 import secrets
 import tempfile
@@ -20,21 +19,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-import platformdirs
-
-from .. import PRODUCT, director, pipeline, voice
+from .. import PRODUCT, director, paths, pipeline, voice
 from ..director.validate import validate
 from ..library import resolve
 from ..package import sha
 
 STATIC = Path(__file__).resolve().parent / 'static'
 FONTS = Path(__file__).resolve().parents[1] / 'assets' / 'fonts'
-CONFIG = Path(platformdirs.user_config_dir('DoodleStudio')) / 'studio.json'
+CONFIG = paths.config_dir() / 'studio.json'
 
 
 def projects_root() -> Path:
     cfg = _config()
-    root = Path(cfg.get('projects') or Path(platformdirs.user_videos_dir()) / 'Doodle Studio')
+    root = Path(cfg.get('projects') or paths.projects_dir())
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -250,7 +247,7 @@ def state() -> dict:
     from ..director.llm import cloud
     from ..director.llm.providers import SUGGESTED, saved
     names = saved()                    # names only: opening the app never reads the keychain (no macOS prompt)
-    signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(os.environ.get('DOODLE_CLOUD_TOKEN')))
+    signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(paths.getenv('KINODRAW_CLOUD_TOKEN')))
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
@@ -264,7 +261,7 @@ def state() -> dict:
 
 # ------------------------------------------------------------------ HTTP
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'DoodleStudio'
+    server_version = 'KinoDraw'
     token = ''
     port = 0
 
@@ -403,7 +400,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({'text': docx_script(str(b.get('name') or ''), base64.b64decode(b.get('data') or ''))})
         if p == ['doodles'] and method == 'GET':
             return self._json(search_doodles(q.get('q', ''), q.get('lang', 'en')))
-        if p == ['cloud', 'me'] and method == 'GET':        # read the sign-in token only when Doodle Cloud is chosen
+        if p == ['cloud', 'me'] and method == 'GET':        # read the sign-in token only when KinoDraw Cloud is chosen
             from ..director.llm import cloud
             return self._json(cloud.me())
         if p == ['cloud', 'signup'] and method == 'POST':

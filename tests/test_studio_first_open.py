@@ -15,6 +15,7 @@ def studio(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
     server._save_config({'projects': str(tmp_path / 'videos')})
     monkeypatch.setattr(cloud, 'URL', 'https://api.example.org')     # Doodle Cloud is offered on every install
+    monkeypatch.delenv('KINODRAW_CLOUD_TOKEN', raising=False)
     monkeypatch.delenv('DOODLE_CLOUD_TOKEN', raising=False)
     monkeypatch.setattr(providers, 'saved', lambda: set())           # nobody signed in
     httpd, url = server.serve(0)

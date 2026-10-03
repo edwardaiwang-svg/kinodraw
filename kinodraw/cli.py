@@ -174,6 +174,8 @@ MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
 
 
 def main(argv=None):
+    from . import paths
+    paths.migrate()                                   # once: Doodle Studio's folders become KinoDraw's
     ap = argparse.ArgumentParser(prog='kinodraw', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='command', required=True)
     for name, fn in (('make', cmd_make), ('new', cmd_new)):

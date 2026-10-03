@@ -1,4 +1,4 @@
-"""Doodle Cloud client: AI-directed videos (free and paid plans) without your own API key.
+"""KinoDraw Cloud client: AI-directed videos (free and paid plans) without your own API key.
 
 The server holds the model keys, builds the prompt itself from the structured section
 payload, and enforces quotas; the app only ever sees the resulting JSON.
@@ -6,21 +6,18 @@ payload, and enforces quotas; the app only ever sees the resulting JSON.
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 import urllib.request
 import uuid
-from pathlib import Path
 
-import platformdirs
-
+from ... import paths
 from ...net import urlopen
 from .providers import ProviderError, Usage
 
-URL = os.environ.get('DOODLE_CLOUD_URL', 'https://api.doodlecloud.org')   # the env var points a test build elsewhere
+URL = paths.getenv('KINODRAW_CLOUD_URL') or 'https://api.doodlecloud.org'   # the env var points a test build elsewhere
 # Cloudflare refuses Python's default "Python-urllib" signature (error 1010), so the app names itself.
-USER_AGENT = 'DoodleStudio (+https://github.com/edwardaiwang-svg/doodle-studio)'
-INSTALL_ID = Path(platformdirs.user_data_dir('DoodleStudio')) / 'install-id'
+USER_AGENT = 'KinoDraw (+https://github.com/edwardaiwang-svg/kinodraw)'
+INSTALL_ID = paths.data_dir() / 'install-id'
 
 
 def install_id() -> str:
@@ -31,11 +28,11 @@ def install_id() -> str:
 
 
 def _token() -> str | None:
-    if os.environ.get('DOODLE_CLOUD_TOKEN'):         # CI / headless machines
-        return os.environ['DOODLE_CLOUD_TOKEN']
+    if paths.getenv('KINODRAW_CLOUD_TOKEN'):         # CI / headless machines
+        return paths.getenv('KINODRAW_CLOUD_TOKEN')
     try:
         import keyring
-        return keyring.get_password('DoodleStudio', 'cloud-token')
+        return keyring.get_password(paths.APP, 'cloud-token')
     except Exception:  # noqa: BLE001 - no keychain backend
         return None
 
@@ -70,7 +67,7 @@ def verify(email: str, code: str) -> dict:
     out = _call('/v1/verify', {'email': email, 'code': code, 'install_id': install_id()})
     import keyring
     from .providers import remember
-    keyring.set_password('DoodleStudio', 'cloud-token', out['token'])
+    keyring.set_password(paths.APP, 'cloud-token', out['token'])
     remember('cloud-token')
     return {k: v for k, v in out.items() if k != 'token'}
 
@@ -80,7 +77,7 @@ def me() -> dict:
 
 
 class CloudProvider:
-    name, model = 'cloud', 'doodle-cloud'
+    name, model = 'cloud', 'kinodraw-cloud'
 
     def __init__(self):
         self.token = _token()
@@ -99,6 +96,6 @@ class CloudProvider:
             raise ProviderError('open_video() first')
         out = _call('/v1/direct', {'video_id': self.video_id, 'section': payload}, self.token)
         u = out.get('usage') or {}
-        usage.add(u.get('model', 'doodle-cloud'), u.get('input_tokens', 0), u.get('output_tokens', 0),
+        usage.add(u.get('model', 'kinodraw-cloud'), u.get('input_tokens', 0), u.get('output_tokens', 0),
                   u.get('cached_tokens', 0), 0.0)       # the plan pays; nothing is billed to you per call
         return out['section']

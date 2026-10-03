@@ -7,7 +7,7 @@ def test_long_espeak_data_path_is_copied_somewhere_short(tmp_path, monkeypatch):
     (deep / 'phontab').write_bytes(b'x')
     import espeakng_loader
     monkeypatch.setattr(espeakng_loader, 'get_data_path', lambda: str(deep))
-    monkeypatch.setattr(voice.platformdirs, 'user_cache_dir', lambda name: str(tmp_path / 'cache'))
+    monkeypatch.setattr(voice.paths, 'cache_dir', lambda: tmp_path / 'cache')
     config = voice._espeak_config()
     assert len(config.data_path) < len(str(deep)) and (tmp_path / 'cache' / 'espeak-ng-data' / 'phontab').exists()
 

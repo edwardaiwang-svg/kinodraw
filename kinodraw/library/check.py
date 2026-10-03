@@ -3,7 +3,7 @@
 
 Usage: python -m kinodraw.library.check [ids...] [--set bespoke|fluent] [--sheet NAME]
 --set fluent (converted emoji): same rules minus the palette and the 5-element minimum.
-Writes PNG contact sheets to <user cache>/DoodleStudio/review/doodles/.
+Writes PNG contact sheets to <user cache>/KinoDraw/review/doodles/.
 Prints one JSON report; exit code 1 when any file fails.
 """
 from __future__ import annotations
@@ -21,12 +21,12 @@ import resvg_py
 import svgelements
 from PIL import Image, ImageDraw, ImageFont
 
-import platformdirs
+from .. import paths
 
 HERE = Path(__file__).resolve().parents[1]          # kinodraw/
 LIBRARY = HERE / 'assets' / 'doodles'
 DOODLES = LIBRARY / 'bespoke'
-REVIEW = Path(platformdirs.user_cache_dir('DoodleStudio')) / 'review' / 'doodles'
+REVIEW = paths.cache_dir() / 'review' / 'doodles'
 SVGNS = '{http://www.w3.org/2000/svg}'
 PALETTE = {c.lower() for c in (
     '#E53935 #1E6FD9 #64B5F6 #1A3A6B #43A047 #9CCC65 #FDD835 #F9A825 #FB8C00 #8E24AA '

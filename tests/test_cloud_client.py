@@ -25,7 +25,7 @@ def test_requests_carry_the_app_signature(monkeypatch):
     monkeypatch.setattr(cloud, 'URL', 'https://api.example.org')
     monkeypatch.setattr(cloud, 'urlopen', urlopen)
     cloud.signup('someone@example.org')
-    assert seen['ua'].startswith('DoodleStudio')
+    assert seen['ua'].startswith('KinoDraw')
 
 
 def test_https_trusts_certifi_where_the_system_has_no_certificates(monkeypatch):

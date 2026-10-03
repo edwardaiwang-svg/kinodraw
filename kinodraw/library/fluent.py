@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Convert Microsoft Fluent Emoji "Flat" SVGs (MIT) into Doodle Studio's outlined style.
+"""Convert Microsoft Fluent Emoji "Flat" SVGs (MIT) into KinoDraw's outlined style.
 
 Usage: python -m kinodraw.library.fluent SRC_DIR
 
-SRC_DIR (e.g. ~/Library/Caches/DoodleStudio/src) must contain
+SRC_DIR (e.g. ~/Library/Caches/KinoDraw/src) must contain
   fluentui-emoji/                    sparse clone: LICENSE, assets/*/metadata.json, Flat SVGs
   cldr_zh_annotations.json           cldr-json annotations/zh/annotations.json
   cldr_zh_annotations_derived.json   cldr-json annotationsDerived/zh/annotations.json

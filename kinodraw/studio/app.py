@@ -5,10 +5,12 @@ import sys
 import time
 import webbrowser
 
+from .. import paths
 from .server import serve
 
 
 def main(browser: bool = False, port: int = 0):
+    paths.migrate()                     # once: Doodle Studio's folders become KinoDraw's
     server, url = serve(port)
     if not browser:
         try:

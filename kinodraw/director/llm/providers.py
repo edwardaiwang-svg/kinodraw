@@ -1,11 +1,11 @@
 """LLM providers: one structured-JSON call per section, with usage and cost.
 
-- cloud:     Doodle Cloud (free and paid plans); the key stays on the server.
+- cloud:     KinoDraw Cloud (free and paid plans); the key stays on the server.
 - openai:    your OpenAI key (default gpt-6-luna).
 - anthropic: your Anthropic key (default claude-opus-5), official SDK.
 - compat:    any OpenAI-compatible endpoint (OpenRouter, DeepInfra, Groq, Ollama, LM Studio).
 - command:   a program you choose: it gets the request as JSON on stdin and prints the section JSON.
-Keys (and the command) come from the OS keychain (service "DoodleStudio") or environment variables.
+Keys (and the command) come from the OS keychain (service "KinoDraw") or environment variables.
 """
 from __future__ import annotations
 
@@ -14,10 +14,8 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass, field
-from pathlib import Path
 
-import platformdirs
-
+from ... import paths
 from .schema import SECTION_SCHEMA, SYSTEM
 
 # $ per million tokens: input, output, cached input (OpenRouter model list, 2026-09-24)
@@ -25,12 +23,12 @@ PRICES = {'gpt-6-luna': (.10, .50, .01), 'claude-opus-5-5': (4.0, 20.0, .20), 'c
           'claude-haiku-4-5': (1.0, 5.0, .10)}
 SUGGESTED = {'openai': ['gpt-6-luna'], 'anthropic': ['claude-opus-5', 'claude-opus-5-5', 'claude-haiku-4-5'],
              'compat': [], 'command': []}
-KEY_ENV = {'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY', 'compat': 'DOODLE_COMPAT_API_KEY',
-           'command': 'DOODLE_DIRECTOR_COMMAND'}
+KEY_ENV = {'openai': 'OPENAI_API_KEY', 'anthropic': 'ANTHROPIC_API_KEY', 'compat': 'KINODRAW_COMPAT_API_KEY',
+           'command': 'KINODRAW_DIRECTOR_COMMAND'}
 # The names (never the values) of the keychain entries this app has saved. macOS asks the user before an app
 # reads an entry it did not create, and every unsigned update counts as a new app, so the app only reads a key
 # when a video uses it; this list answers "is a key saved?" without touching the keychain.
-SAVED = Path(platformdirs.user_config_dir('DoodleStudio')) / 'saved-keys.json'
+SAVED = paths.config_dir() / 'saved-keys.json'
 
 
 class ProviderError(RuntimeError):
@@ -62,17 +60,17 @@ def api_key(provider: str) -> str | None:
     """The user's key from the OS keychain, else the environment."""
     try:
         import keyring
-        key = keyring.get_password('DoodleStudio', provider)
+        key = keyring.get_password(paths.APP, provider)
         if key:
             return key
     except Exception:  # noqa: BLE001 - no keychain backend (e.g. headless Linux): fall back to the environment
         pass
-    return os.environ.get(KEY_ENV.get(provider, ''))
+    return paths.getenv(KEY_ENV.get(provider, ''))
 
 
 def save_key(provider: str, key: str):
     import keyring
-    keyring.set_password('DoodleStudio', provider, key)
+    keyring.set_password(paths.APP, provider, key)
     remember(provider)
 
 
@@ -91,7 +89,7 @@ def remember(name: str):
 
 def saved() -> set:
     """Names with a saved key (or an environment variable set), found without reading the keychain."""
-    return _saved_file() | {p for p, env in KEY_ENV.items() if os.environ.get(env)}
+    return _saved_file() | {p for p, env in KEY_ENV.items() if paths.getenv(env)}
 
 
 class OpenAIProvider:
@@ -164,7 +162,7 @@ class CommandProvider:
         self.name, self.model, self.timeout = 'command', model or '', timeout
         line = command or api_key('command')
         if not line:
-            raise ValueError('save the command first (Settings, or the DOODLE_DIRECTOR_COMMAND variable)')
+            raise ValueError('save the command first (Settings, or the KINODRAW_DIRECTOR_COMMAND variable)')
         self.argv = line if os.name == 'nt' else shlex.split(line)   # Windows parses a command line itself
 
     def direct_section(self, payload: dict, usage: Usage) -> dict:

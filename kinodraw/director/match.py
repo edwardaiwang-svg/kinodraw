@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import math
-import os
 import re
 import threading
 from dataclasses import dataclass
@@ -11,13 +10,13 @@ from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-import platformdirs
 
+from .. import paths
 from ..library import ASSETS, catalog
 
 EMBED_MODELS = {'en': 'BAAI/bge-small-en-v1.5', 'zh': 'BAAI/bge-small-zh-v1.5'}
-CACHE = (Path(os.environ['DOODLE_MODELS']).expanduser() / 'embed' if os.environ.get('DOODLE_MODELS')
-         else Path(platformdirs.user_cache_dir('DoodleStudio')) / 'embed')
+CACHE = (Path(paths.getenv('KINODRAW_MODELS')).expanduser() / 'embed' if paths.getenv('KINODRAW_MODELS')
+         else paths.cache_dir() / 'embed')
 HF = 'https://huggingface.co/'
 EMBED_FILES = {   # lang: (Hugging Face repo at a fixed revision, {file: (sha256, bytes)}), what fastembed loads
     'en': ('Qdrant/bge-small-en-v1.5-onnx-Q/resolve/aa8f8b060edb00e03bfdd08813a2949946c8ba55/', {
