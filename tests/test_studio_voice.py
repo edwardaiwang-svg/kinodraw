@@ -12,7 +12,7 @@ import imageio_ffmpeg
 import numpy as np
 import pytest
 
-from doodlestudio import pipeline, voice
+from doodlestudio import pipeline, script, voice
 from doodlestudio.director.llm import providers
 from doodlestudio.studio import server
 
@@ -119,6 +119,7 @@ def test_phone_recordings_are_kept_as_they_are(studio, tmp_path, name):
     assert status == 200, info
     suffix = Path(name).suffix.lower()
     assert info['narrator'] == 'own' and info['take'] == f'recording{suffix}' and info['check'] is None
+    assert info['changed'] == []
     assert (studio.root / 'Honey' / f'recording{suffix}').read_bytes() == data
     assert pipeline.settings(studio.root / 'Honey')['recording'] == f'recording{suffix}'
 
@@ -156,21 +157,25 @@ def test_switching_back_to_the_built_in_voice_and_again_to_your_own(studio, tmp_
 
 
 def _fake_alignment(monkeypatch, project, poor=(), match=.6, missing=None):
-    """voice.from_recording without Kokoro: writes the report the real one writes, or refuses like it."""
+    """voice.from_recording without Kokoro: writes the report the real one writes (``poor``: the sentences, numbered
+    from 1, that it marks), or refuses like it."""
     calls = []
     monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('guide.wav'), 1., [0.] * len(text)))
     monkeypatch.setattr(voice, 'ensure_models', lambda *a: None)
 
-    def cut(recording, beats, *args):
+    def cut(recording, beats, lang, *args):
         calls.append(recording)
         if missing:
             error = ValueError(f'take.wav: beat {missing} was not found in the recording')
             error.beat = missing
             raise error
         (project / 'voice').mkdir(exist_ok=True)
+        lines = [(bid, s) for bid, text in beats for s in script.sentences(text, lang)]
         (project / 'voice' / 'recording-align.json').write_text(json.dumps({
             'sha256': server.sha(recording), 'match': match,
-            'beats': [{'id': bid, 'match': .3 if bid in poor else .6, 'check': bid in poor} for bid, _ in beats]}))
+            'beats': [{'id': bid, 'match': .6, 'check': False} for bid, _ in beats],
+            'sentences': [{'beat': bid, 'text': s, 'fit': .8 if n in poor else .9, 'check': n in poor}
+                          for n, (bid, s) in enumerate(lines, 1)]}))
         if match < voice.MATCH:
             raise ValueError('take.wav does not sound like a reading of this script')
         return {bid: voice.Clip(Path('clip.wav'), 1., [0.] * len(text)) for bid, text in beats}
@@ -180,8 +185,10 @@ def _fake_alignment(monkeypatch, project, poor=(), match=.6, missing=None):
 
 
 def test_use_it_for_this_video_matches_every_sentence(studio, tmp_path, monkeypatch):
+    """Each sentence is judged on its own: one wrong sentence of a two-sentence beat (b003: lines 3 and 4) is marked,
+    the other is not."""
     project = studio.root / 'Honey'
-    calls = _fake_alignment(monkeypatch, project, poor=('b004',))
+    calls = _fake_alignment(monkeypatch, project, poor=(4,))
     stages = []
     start = server.JOBS.start
 
@@ -193,7 +200,7 @@ def test_use_it_for_this_video_matches_every_sentence(studio, tmp_path, monkeypa
     assert job['state'] == 'done' and calls == [project / 'recording.wav']
     assert 'align' in stages                                # the stage bar says it is listening to the take
     check = job['result']['check']
-    assert check == {'ok': True, 'poor': ['b004'], 'missing': None, 'problem': None}
+    assert check == {'ok': True, 'poor': [4], 'missing': [], 'problem': None}
     assert studio('/api/projects/Honey/narrator')[1]['check'] == check                  # and it is remembered
 
 
@@ -204,15 +211,15 @@ def test_a_recording_of_something_else_says_which_sentences_were_not_found(studi
     job = _wait(studio, studio('/api/projects/Honey/align', {})[1]['job'])
     assert job['state'] == 'done'                            # a take that does not fit is an answer, not a crash
     check = job['result']['check']
-    assert check['ok'] is False and check['missing'] == 'b005' and 'was not found' in check['problem']
+    assert check['ok'] is False and check['missing'] == [6] and 'was not found' in check['problem']     # b005's line
     assert 'Traceback' not in json.dumps(job)
     assert studio('/api/projects/Honey/narrator')[1]['check'] == check        # still shown when opened again
 
-    _fake_alignment(monkeypatch, project, match=.33, poor=('b002', 'b003'))
+    _fake_alignment(monkeypatch, project, match=.33, poor=(2, 3, 4))
     job = _wait(studio, studio('/api/projects/Honey/align', {})[1]['job'])
     check = job['result']['check']
-    assert check['ok'] is False and check['poor'] == ['b002', 'b003'] and 'does not sound like' in check['problem']
-    assert check['missing'] is None                                           # the earlier take's problem is gone
+    assert check['ok'] is False and check['poor'] == [2, 3, 4] and 'does not sound like' in check['problem']
+    assert check['missing'] == []                                             # the earlier take's problem is gone
 
 
 def test_a_failed_video_explains_itself_without_python_words(studio, monkeypatch):
@@ -222,3 +229,38 @@ def test_a_failed_video_explains_itself_without_python_words(studio, monkeypatch
     job = _wait(studio, studio('/api/projects/Honey/make', {})[1]['job'])
     assert job['state'] == 'failed'
     assert job['error'] == 'Your recording skips the part that says "Bees work hard". Read the whole script.'
+
+
+def test_an_edited_takeaway_is_shown_as_it_will_be_said_and_marked_changed(studio, tmp_path, monkeypatch):
+    """A takeaway note edited after recording changes what is narrated: the read-aloud page shows the new sentence,
+    the old check no longer counts, and the sentence is marked as changed since the recording until it is put back."""
+    project = studio.root / 'Honey'
+    _fake_alignment(monkeypatch, project)
+    studio('/api/projects/Honey/recording?filename=take.wav', raw=_sound(tmp_path, 'a.wav'))
+    _wait(studio, studio('/api/projects/Honey/align', {})[1]['job'])
+    before = studio('/api/projects/Honey/narrator')[1]
+    assert before['lines'][7]['text'] == 'Key takeaway: It never spoils.' and before['check']['ok']
+    assert before['changed'] == []
+
+    board = pipeline.storyboard(project)
+    take = next(b for b in board['beats'] if b['kind'] == 'take')
+    take['take']['headline'] = {'en': 'Honey keeps for thousands of years'}
+    assert studio('/api/projects/Honey/storyboard', board, method='PUT')[1]['ok']
+    info = studio('/api/projects/Honey/narrator')[1]
+    assert info['lines'][7] == {'beat': take['id'], 'text': 'Key takeaway: Honey keeps for thousands of years.'}
+    assert info['check'] is None and info['changed'] == [8]          # numbered from 1, as on the page
+
+    take['take']['headline'] = {'en': 'It never spoils.'}
+    studio('/api/projects/Honey/storyboard', board, method='PUT')
+    info = studio('/api/projects/Honey/narrator')[1]
+    assert info['changed'] == [] and info['check'] == before['check']
+
+
+def test_the_page_warns_before_making_a_video_from_sentences_that_dont_fit():
+    """Make video, from any tab, stops on the Narrator tab when sentences didn't match or changed since recording;
+    only Make the video anyway goes ahead."""
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    make = re.search(r'async function makeVideo\(name, anyway = false\) \{.*?\n\}', js, re.S).group(0)
+    assert make.index("didn’t match your recording") < make.index('/make`')
+    assert make.index('changed after you recorded') < make.index('/make`')
+    assert "addEventListener('click', () => makeVideo(name, true))" in js

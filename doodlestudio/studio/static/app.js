@@ -283,11 +283,13 @@ async function saveBoard() {
   try {
     const res = await api(`/api/projects/${encodeURIComponent(current)}/storyboard`, { method: 'PUT', body: JSON.stringify(board) });
     if (!res.ok) { toast(`Not saved: ${res.errors[0]}`, 7000); return false; }
-    dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved'; return true;
+    dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved';
+    loadNarrator(current, document.querySelector('input[name="n-pick"]:checked')?.value);   // an edited takeaway is read aloud
+    return true;
   } catch (e) { toast(e.message, 6000); return false; }
 }
 
-async function makeVideo(name) {
+async function makeVideo(name, anyway = false) {   // anyway: the user saw which sentences don't fit and goes ahead
   if (dirty && !(await saveBoard())) return;
   let narr = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
   const own = narr.narrator === 'own';
@@ -296,15 +298,26 @@ async function makeVideo(name) {
     toast('Upload your recording first, or choose the built-in voice.', 8000);
     return;
   }
+  const stop = (message) => { showTab('narrator'); renderNarrator(name, narr); toast(message, 10000); };
   try {
+    if (own && narr.changed.length && !anyway) {  // the script was edited after the recording was made
+      stop(`${sentences(narr.changed)} changed after you recorded. Record it again, or press Make the video anyway.`);
+      return;
+    }
+    let fresh = false;
     if (own && !narr.check) {                     // a new recording: check it against the script first
       narr = await watch((await api(`/api/projects/${encodeURIComponent(name)}/align`, { method: 'POST' })).job,
         'Listening to your recording', ['voice', 'align', 'timeline'], true);
       renderNarrator(name, narr);
+      fresh = true;
     }
     if (own && !narr.check.ok) {                  // a take that does not fit: fix it there first
-      showTab('narrator'); renderNarrator(name, narr);
-      toast('Your recording doesn’t match the script yet. Record it again, or choose the built-in voice.', 8000);
+      stop('Your recording doesn’t match the script yet. Record it again, or choose the built-in voice.');
+      return;
+    }
+    const unseen = narr.check?.poor.filter((n) => !anyway || fresh && !narr.changed.includes(n)) || [];
+    if (own && unseen.length) {                   // some sentences don't fit: say which before drawing anything
+      stop(`${sentences(unseen)} didn’t match your recording. Record it again, or press Make the video anyway.`);
       return;
     }
     const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/make`, { method: 'POST' })).job, 'Making your video', MAKE, own);
@@ -334,9 +347,6 @@ function renderVideo(p) {
 }
 
 // ---------------------------------------------------------------- narrator (your own voice)
-function sentenceNumbers(info, beats) {        // the numbers of the read-aloud lines that belong to these beats
-  return info.lines.map((l, i) => (beats.includes(l.beat) ? i + 1 : 0)).filter(Boolean);
-}
 function sentences(ns) {                       // [4, 5, 6, 9] -> "Sentences 4–6 and 9"
   const runs = [];
   for (const n of ns) { const r = runs[runs.length - 1]; if (r && r[1] === n - 1) r[1] = n; else runs.push([n, n]); }
@@ -348,20 +358,25 @@ function sentences(ns) {                       // [4, 5, 6, 9] -> "Sentences 4�
 async function loadNarrator(name, choice, problem) {
   try {
     const info = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
-    if (problem) info.check = { ok: false, poor: [], missing: null, problem };    // what just went wrong, in its words
+    if (problem) info.check = { ok: false, poor: [], missing: [], problem };    // what just went wrong, in its words
     renderNarrator(name, info, choice || info.narrator);
   }
   catch (e) { toast(e.message, 6000); }
 }
 
 function narratorResult(info) {
-  const check = info.check;
+  const check = info.check, changed = info.changed;
   if (!info.take) return '';
-  if (!check) return `<div class="result">Press <b>Use it for this video</b>: ${esc(STATE.product)} listens to your recording and times every drawing to your voice. It takes about a minute.</div>`;
-  const missing = check.missing ? sentenceNumbers(info, [check.missing]) : [];
-  const poor = sentenceNumbers(info, check.poor);
-  const detail = check.problem ? `<details><summary>More detail</summary>${esc(check.problem)}</details>` : '';
   const again = 'Record the whole script again, reading every numbered sentence below as written, then upload it.';
+  if (changed.length && check?.ok !== false) {
+    return `<div class="result warn"><p>${sentences(changed)} changed after you recorded (marked below), so your
+      recording says something else there. ${again}</p>
+      <p>Or make the video now: your voice will say the old words while the captions show the new ones.</p>
+      <button id="n-make" class="ghost">Make the video anyway</button></div>`;
+  }
+  if (!check) return `<div class="result">Press <b>Use it for this video</b>: ${esc(STATE.product)} listens to your recording and times every drawing to your voice. It takes about a minute.</div>`;
+  const { missing, poor } = check;
+  const detail = check.problem ? `<details><summary>More detail</summary>${esc(check.problem)}</details>` : '';
   if (check.ok && !poor.length) {
     return `<div class="result ok"><p>✓ All ${info.lines.length} sentences matched. Your video will be narrated in your own voice.</p>
       <button id="n-make" class="primary">Make video</button></div>`;
@@ -395,9 +410,10 @@ function renderNarrator(name, info, choice = info.narrator) {
   if (!own) {
     box.innerHTML = `${pick}<p class="muted">The built-in voice reads exactly what the storyboard says. Press <b>Make video</b> when you’re ready.</p>`;
   } else {
-    const lines = info.lines.map((l) => {
-      const mark = check?.missing === l.beat ? 'miss' : check?.poor.includes(l.beat) ? 'poor' : '';
-      const tag = { miss: 'not found', poor: 'didn’t match' }[mark];
+    const lines = info.lines.map((l, i) => {
+      const mark = check?.missing.includes(i + 1) ? 'miss' : info.changed.includes(i + 1) ? 'changed'
+        : check?.poor.includes(i + 1) ? 'poor' : '';
+      const tag = { miss: 'not found', changed: 'changed since you recorded', poor: 'didn’t match' }[mark];
       return `<li class="${mark}">${esc(l.text)}${tag ? ` <span class="tag">${tag}</span>` : ''}</li>`;
     }).join('');
     box.innerHTML = `${pick}
@@ -444,7 +460,7 @@ function renderNarrator(name, info, choice = info.narrator) {
       renderNarrator(name, await watch(job, 'Listening to your recording', ['voice', 'align', 'timeline'], true));
     } catch (e) { $('#progress').classList.add('hidden'); showProblem(e.message); }
   };
-  $('#n-make', box)?.addEventListener('click', () => makeVideo(name));
+  $('#n-make', box)?.addEventListener('click', () => makeVideo(name, true));
 }
 
 // ---------------------------------------------------------------- settings

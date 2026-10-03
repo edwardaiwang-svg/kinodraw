@@ -5,6 +5,7 @@ injects into the page, so other web pages on this computer cannot drive it.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import mimetypes
 import os
@@ -197,37 +198,62 @@ def _takes(path: Path) -> list[Path]:
     return sorted(path.glob('recording.*'))
 
 
+def _lines(path: Path) -> list[dict]:
+    """The script as the sentences that will be narrated (an edited takeaway note says its new words)."""
+    from .. import script
+    lang, board = pipeline.settings(path)['lang'], script.sync_takes(pipeline.storyboard(path))
+    return [{'beat': b['id'], 'text': s} for b in board['beats'] for s in script.sentences(b['spoken'][lang], lang)]
+
+
 def narrator(name: str) -> dict:
     """The Narrator tab: who narrates, the script as sentences to read aloud (exactly what the built-in voice says,
-    numbers written out), the project's recording, and how it matched the script when it was last used."""
-    from .. import script
+    numbers written out), the project's recording, how it matched each sentence when it was last used, and which
+    sentences changed after it was recorded. Sentences are numbered from 1, as on the page."""
     path = _project(name)
-    cfg, board = pipeline.settings(path), pipeline.storyboard(path)
-    lang = cfg['lang']
-    lines = [{'beat': b['id'], 'text': s} for b in board['beats'] for s in script.sentences(b['spoken'][lang], lang)]
+    cfg, lines = pipeline.settings(path), _lines(path)
     take = path / cfg['recording'] if cfg.get('recording') else next(iter(_takes(path)), None)
     take = take if take and take.is_file() else None
-    return {'narrator': 'own' if cfg.get('recording') else 'builtin', 'voice': cfg['voice'], 'lang': lang,
-            'take': take.name if take else None, 'lines': lines, 'check': _check(path, take, board)}
+    digest = sha(take) if take else None
+    return {'narrator': 'own' if cfg.get('recording') else 'builtin', 'voice': cfg['voice'], 'lang': cfg['lang'],
+            'take': take.name if take else None, 'lines': lines, 'check': _check(path, digest, lines),
+            'changed': _changed(path, digest, lines)}
 
 
-def _check(path: Path, take: Path | None, board: dict) -> dict | None:
-    """How ``take`` matched the script when it was last used (the alignment's report, or why it could not be cut), or
-    None if it has not been used since it was recorded or the sentences changed."""
-    if not take:
+def _check(path: Path, digest: str | None, lines: list[dict]) -> dict | None:
+    """How the take matched each sentence when it was last used (the alignment's report, or why it could not be cut),
+    or None if it has not been used since it was recorded or the sentences changed."""
+    if not digest:
         return None
-    digest, ids, check = sha(take), [b['id'] for b in board['beats']], None
+    said, check = [[line['beat'], line['text']] for line in lines], None
     report, problem = path / 'voice' / 'recording-align.json', path / 'voice' / 'recording-problem.json'
     if report.is_file():
         info = json.loads(report.read_text(encoding='utf-8'))
-        if info.get('sha256') == digest and [r['id'] for r in info['beats']] == ids:
-            check = {'ok': info['match'] >= voice.MATCH, 'poor': [r['id'] for r in info['beats'] if r['check']],
-                     'missing': None, 'problem': None}
+        rows = info.get('sentences') or []
+        if info.get('sha256') == digest and [[r['beat'], r['text']] for r in rows] == said:
+            check = {'ok': info['match'] >= voice.MATCH, 'poor': [n for n, r in enumerate(rows, 1) if r['check']],
+                     'missing': [], 'problem': None}
     if problem.is_file():
         info = json.loads(problem.read_text(encoding='utf-8'))
-        if info['sha256'] == digest and info['beats'] == ids:
-            check = {**(check or {'poor': []}), 'ok': False, 'missing': info['missing'], 'problem': info['problem']}
+        if info['sha256'] == digest and info.get('lines') == said:
+            check = {**(check or {'poor': []}), 'ok': False, 'problem': info['problem'],
+                     'missing': [n for n, line in enumerate(lines, 1) if line['beat'] == info['missing']]}
     return check
+
+
+def _changed(path: Path, digest: str | None, lines: list[dict]) -> list[int]:
+    """The sentences that say something else than when the take was added (an edited takeaway note, a re-planned
+    storyboard): the recording does not say them. A sentence taken out marks the one now in its place."""
+    snapshot = path / 'voice' / 'recording-script.json'
+    if not digest or not snapshot.is_file():
+        return []
+    info = json.loads(snapshot.read_text(encoding='utf-8'))
+    if info['sha256'] != digest:
+        return []
+    now, changed = [line['text'] for line in lines], set()
+    for tag, _, _, j1, j2 in difflib.SequenceMatcher(None, info['lines'], now, autojunk=False).get_opcodes():
+        if tag != 'equal':
+            changed.update(range(j1, j2) if j2 > j1 else [min(j1, len(now) - 1)])
+    return sorted(n + 1 for n in changed)
 
 
 def save_take(name: str, filename: str, stream, length: int) -> dict:
@@ -261,6 +287,10 @@ def save_take(name: str, filename: str, stream, length: int) -> dict:
         old.unlink()
     take = part.rename(path / f'recording{suffix}')
     pipeline.set_recording(path, take)
+    snapshot = path / 'voice' / 'recording-script.json'        # what it reads, so later edits can be pointed out
+    snapshot.parent.mkdir(exist_ok=True)
+    snapshot.write_text(json.dumps({'sha256': sha(take), 'lines': [line['text'] for line in _lines(path)]},
+                                 ensure_ascii=False), encoding='utf-8')
     return narrator(name)
 
 
@@ -292,9 +322,10 @@ def use_take(name: str) -> dict:
         try:
             clips = pipeline.narrate(path, progress)
         except ValueError as error:                # remembered, so the project shows it when opened again
-            take, board = path / pipeline.settings(path)['recording'], pipeline.storyboard(path)
+            take = path / pipeline.settings(path)['recording']
             problem.parent.mkdir(exist_ok=True)
-            problem.write_text(json.dumps({'sha256': sha(take), 'beats': [b['id'] for b in board['beats']],
+            problem.write_text(json.dumps({'sha256': sha(take), 'lines': [[line['beat'], line['text']]
+                                                                          for line in _lines(path)],
                                            'missing': getattr(error, 'beat', None), 'problem': str(error)},
                                           ensure_ascii=False), encoding='utf-8')
             return narrator(name)

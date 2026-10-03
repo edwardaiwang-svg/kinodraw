@@ -134,5 +134,5 @@ ol.read-aloud { font-size: 22px; line-height: 1.5; padding-left: 3.2em; margin: 
 ol.read-aloud li { padding: 6px 4px; border-bottom: 1px dashed var(--line); }
 ol.read-aloud li::marker { color: var(--soft); font-size: 16px; }
 ol.read-aloud li.miss { background: #fdecea; }
-ol.read-aloud li.poor { background: #fff8d6; }
+ol.read-aloud li.poor, ol.read-aloud li.changed { background: #fff8d6; }
 ol.read-aloud .tag { font-size: 13px; border: 1.5px solid var(--ink); border-radius: 99px; padding: 1px 8px; background: #fff; vertical-align: middle; white-space: nowrap; }
