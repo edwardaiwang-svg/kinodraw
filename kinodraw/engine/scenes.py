@@ -14,7 +14,7 @@ import numpy as np
 from . import ink
 from .board import COL, Element, Layout
 from .skin import WHITEBOARD
-from ..library import MISSING, resolve
+from ..library import MISSING, OWN, _missing_picture, own_path, resolve
 
 HERE = Path(__file__).resolve().parent
 PAPER_NOTE = (255, 241, 118)
@@ -78,6 +78,11 @@ class Ctx:
         return ink.wrap_words(s, self.lang, size, max_w, fonts=self.fonts)
 
     def doodle(self, did, box, **kw):
+        if did.startswith(OWN):
+            path = own_path(did, self.project_dir)
+            if not path.is_file():
+                raise ValueError(_missing_picture(path))
+            return ink.picture_drawing(path, box, **kw)
         return ink.svg_drawing(resolve(did, self.project_dir) or MISSING, box, **kw)
 
     def strokes(self, size, polylines, color=None, width=6, fills=None, **kw):

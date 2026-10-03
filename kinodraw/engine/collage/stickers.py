@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import resvg_py
-from PIL import Image
+from PIL import Image, ImageOps
 
 from ... import library
 from .. import motion
@@ -26,6 +26,11 @@ def sticker(doodle_id: str, height: int = 220, project_dir: str | None = None) -
     path = library.resolve(doodle_id, Path(project_dir) if project_dir else None)
     if path is None:
         return None
+    if path.suffix.lower() != '.svg':
+        with Image.open(path) as source:
+            image = ImageOps.exif_transpose(source).convert('RGBA')
+        image = image.resize((max(1, round(image.width * height / image.height)), height), Image.Resampling.LANCZOS)
+        return motion.die_cut(image, border=max(8, round(height * .06)))
     return motion.die_cut(_svg(str(path), height), border=max(8, round(height * .06)))
 
 

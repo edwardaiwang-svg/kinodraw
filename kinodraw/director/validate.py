@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from ..engine.storyboard import DIALS, KINDS
-from ..library import banned, resolve
+from ..library import OWN, _missing_picture, banned, own_path, resolve
 from .annotate import ROLES, SCENES, _words
 
 SLOT_TYPES = {'cluster', 'quote', 'glossary', 'stat'}
@@ -178,6 +178,14 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
                 if phrase and phrase not in (ref.get('spoken') or {}).get(lang, ''):
                     errors.append(f'{bid}/{vid} {where}: trigger {phrase!r} is not in the spoken text')
             for did in _doodles(v):
+                if did.startswith(OWN):
+                    try:
+                        path = own_path(did, project_dir)
+                        if not path.is_file():
+                            errors.append(f'{bid}/{vid}: {_missing_picture(path)}')
+                    except ValueError as error:
+                        errors.append(f'{bid}/{vid}: {error}')
+                    continue
                 if resolve(did, project_dir) is None:
                     errors.append(f'{bid}/{vid}: doodle {did!r} not found')
                 elif did in banned()['doodles']:
