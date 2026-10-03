@@ -19,7 +19,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import PRODUCT, ingest, script, styles, voice
+from . import PRODUCT, ingest, library, script, styles, voice
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
@@ -164,6 +164,9 @@ def build_audio(project_dir: Path, clips: dict) -> dict:
 
 def render(project_dir: Path, start: float = 0, duration: float | None = None, workers: int | None = None) -> Path:
     project_dir = Path(project_dir)
+    messages = library.missing_pictures(storyboard(project_dir), project_dir)
+    if messages:
+        raise ValueError('\n'.join(messages))
     cfg = settings(project_dir)
     aspect = validate_aspect(cfg.get('aspect', '16:9'), storyboard(project_dir).get('look'))
     build = project_dir / 'build'

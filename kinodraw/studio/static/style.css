@@ -106,6 +106,8 @@ video { width: 100%; border-radius: 14px; border: 2px solid var(--ink); backgrou
 .pick { border: 2px solid var(--line); border-radius: 12px; padding: 6px; text-align: center; cursor: pointer; background: #fff; font-size: 11px; }
 .pick:hover { border-color: var(--orange); }
 .pick img { width: 84px; height: 84px; object-fit: contain; }
+.picture-hint { font-size: 13px; margin: 8px 0 16px; }
+#own-pictures { margin-bottom: 18px; }
 .progress-box { width: min(460px, 90vw); text-align: center; }
 #prog-title { font-family: 'Playpen', sans-serif; font-size: 20px; margin-bottom: 12px; }
 .bar { height: 16px; border: 2px solid var(--ink); border-radius: 99px; overflow: hidden; background: #fff; }

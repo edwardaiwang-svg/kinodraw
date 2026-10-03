@@ -106,6 +106,10 @@ def cmd_voice(args):
 def cmd_render(args):
     from . import pipeline
     project = Path(args.project)
+    from .library import missing_pictures
+    messages = missing_pictures(pipeline.storyboard(project), project)
+    if messages:
+        sys.exit('\n' + '\n'.join(messages))
     if args.stills:
         from .engine import render as renderer
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
@@ -119,7 +123,10 @@ def cmd_render(args):
         print(f'  stills -> {out}')
         return
     t = _stage('render')
-    out = pipeline.render(project, args.start, args.duration, args.workers)
+    try:
+        out = pipeline.render(project, args.start, args.duration, args.workers)
+    except ValueError as error:
+        sys.exit(f'\n{error}')
     print(f'  done ({time.time() - t:.0f}s)')
     for w in json.loads((out.parent / 'render-warnings.json').read_text(encoding='utf-8')):
         if w.startswith('skipped'):

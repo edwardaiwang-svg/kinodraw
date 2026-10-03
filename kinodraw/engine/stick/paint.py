@@ -9,7 +9,7 @@ from pathlib import Path
 
 import resvg_py
 import svgelements
-from PIL import Image
+from PIL import Image, ImageOps
 
 from ...library import MISSING, resolve
 from . import palette
@@ -78,6 +78,17 @@ def render_svg(path: str, box_w: int, box_h: int, variant: int = 0) -> Image.Ima
     return img
 
 
+@lru_cache(maxsize=64)
+def render_picture(path: str, mtime_ns: int, box_w: int, box_h: int) -> Image.Image:
+    """A PNG or JPG of the user's own fitted inside box_w x box_h in its own colours (photos don't boil)."""
+    with Image.open(path) as source:
+        img = ImageOps.exif_transpose(source).convert('RGBA')
+    scale = min(box_w / img.width, box_h / img.height)
+    return img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
+
+
 def doodle(doodle_id: str, box: tuple, variant: int = 0, project_dir=None) -> Image.Image:
     path = resolve(doodle_id, project_dir) or MISSING
+    if path.suffix.lower() != '.svg':
+        return render_picture(str(path), path.stat().st_mtime_ns, int(box[0]), int(box[1]))
     return render_svg(str(path), int(box[0]), int(box[1]), int(variant) % 3)
