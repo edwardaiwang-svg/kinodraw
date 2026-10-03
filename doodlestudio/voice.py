@@ -405,7 +405,9 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         sound = a + np.flatnonzero(room[a:b])
         heard = _power(tl[a:b], tq)
         if b - a < PAUSE or not heard:
-            raise ValueError(f'{recording.name}: beat {bid} ("{text[:40]}…") was not found in the recording')
+            error = ValueError(f'{recording.name}: beat {bid} ("{text[:40]}…") was not found in the recording')
+            error.beat = bid                       # the Studio marks that beat's sentences
+            raise error
         start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
         audio = full[start * hop:end * hop]
         gain = np.sqrt(_power(gl[gs:ge + 1], gq) / heard)

@@ -43,10 +43,17 @@
       <label class="file">Choose file… <input id="file" type="file" accept=".md,.txt,.docx"></label>
       <span id="file-name" class="muted"></span>
     </div>
+    <div class="narrator-pick">
+      <span class="pick-label">Narrator</span>
+      <label class="seg"><input type="radio" name="narrator" value="builtin" checked><b>Built-in voice</b>
+        <small>A natural AI voice reads your script</small></label>
+      <label class="seg"><input type="radio" name="narrator" value="own"><b>My own voice</b>
+        <small>You read the script aloud; every drawing follows your voice</small></label>
+    </div>
     <div class="grid">
       <label>Title <input id="title" placeholder="from the script"></label>
       <label>Language <select id="lang"><option value="">Detect</option><option value="en">English</option><option value="zh">中文</option></select></label>
-      <label>Voice <select id="voice"></select></label>
+      <label id="voice-wrap">Voice <select id="voice"></select></label>
       <label>Director <select id="director"></select></label>
       <label>Style <select id="style"><option value="whiteboard/explain">Whiteboard explainer</option>
         <option value="collage/promo">Product promo (paper collage)</option></select></label>
@@ -78,11 +85,12 @@
         <button id="p-make" class="primary">Make video</button>
       </div>
     </header>
-    <div class="tabs"><button data-tab="board" class="on">Storyboard</button><button data-tab="video">Video</button></div>
+    <div class="tabs"><button data-tab="board" class="on">Storyboard</button><button data-tab="narrator">Narrator</button><button data-tab="video">Video</button></div>
     <div id="tab-board">
       <div class="board-bar"><span id="dirty" class="muted"></span><button id="p-save" class="primary small" disabled>Save changes</button></div>
       <div id="board"></div>
     </div>
+    <div id="tab-narrator" class="hidden"></div>
     <div id="tab-video" class="hidden"></div>
   </section>
 </template>
