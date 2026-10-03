@@ -42,6 +42,12 @@
   code { background: #fff; border: 1.5px solid #d8d4ca; border-radius: 8px; padding: 2px 6px; font-size: 15px; }
   pre { background: #1b1b1b; color: #f5f2ea; border-radius: 14px; padding: 16px; overflow-x: auto; font-size: 15px; }
   footer { padding: 36px 0 60px; color: var(--soft); font-size: 14px; }
+  .first-open { background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; padding: 18px 22px; box-shadow: 0 6px 0 var(--orange); }
+  .first-open h2 { font-size: 28px; margin-bottom: 6px; }
+  .first-open ol { padding-left: 24px; margin: 10px 0; }
+  .first-open li { margin: 0 0 12px; }
+  .first-open li::marker { font-family: 'Playpen', sans-serif; color: var(--orange); font-weight: 700; }
+  .shot.todo { border: 2px dashed var(--orange); border-radius: 12px; padding: 14px; margin-top: 8px; color: var(--orange); font-size: 14px; background: #fff; }
   @media (max-width: 760px) { header { grid-template-columns: 1fr; padding-top: 32px; } .narrator { max-width: 200px; } }
 </style>
 </head>
@@ -55,12 +61,40 @@
       <a class="btn primary" id="download" href="https://github.com/edwardaiwang-svg/doodle-studio/releases/latest">Download</a>
       <a class="btn" href="https://github.com/edwardaiwang-svg/doodle-studio">Source on GitHub</a>
       <p class="small"><a href="https://github.com/edwardaiwang-svg/doodle-studio/releases/latest">macOS (Apple silicon, M1 or newer) · Windows · Linux</a>. No account and no API key needed for the offline director.<br>
-        First launch on a Mac: System Settings → Privacy &amp; Security → <b>Open Anyway</b> (once; the app isn't notarized by Apple yet).
-        On Windows: <b>More info</b> → <b>Run anyway</b>.<br>
-        The first video downloads the voice (about 190 MB) and the doodle search (about 70 MB), once.</p>
+        <b>Opening it the first time takes one extra approval: <a href="#first-open">see how</a>.</b><br>
+        It opens on a finished example video. Your own first video downloads the voice (about 190 MB) and the doodle
+        search (about 70 MB), once, then takes about a minute.</p>
     </div>
     <img class="narrator" src="media/narrator_wave.svg" alt="The Doodle Studio narrator waving">
   </header>
+
+  <section id="first-open">
+    <div class="first-open">
+      <h2>First time opening on a Mac</h2>
+      <p>Doodle Studio isn't notarized by Apple yet, so the first time you open it, macOS stops it. You approve it once:</p>
+      <ol>
+        <li>Unzip the download, drag <b>Doodle Studio</b> to Applications and double-click it. macOS says it can't
+          check the app for malware. Close that message (don't move the app to the Trash).
+          <!-- TODO(J): replace the box below with a real screenshot of the blocked-app message, e.g.
+               <img src="media/mac-open-1.png" alt="..."> taken on your own Mac from a browser-downloaded copy. -->
+          <div class="shot todo">TODO (J): screenshot of the message macOS shows when you first open the app.</div></li>
+        <li>Choose Apple menu → <b>System Settings</b>, then click <b>Privacy &amp; Security</b> in the sidebar.
+          (You may need to scroll down.)</li>
+        <li>Go to <b>Security</b> and click <b>Open Anyway</b>. This button is available for about an hour after you
+          try to open the app; if it isn't there, double-click the app again first.
+          <!-- TODO(J): real screenshot of the Security section with the Open Anyway button (media/mac-open-3.png). -->
+          <div class="shot todo">TODO (J): screenshot of Privacy &amp; Security with the Open Anyway button.</div></li>
+        <li>Enter your login password, then click <b>OK</b>. From then on it opens with a double-click, like any app.</li>
+      </ol>
+      <p class="small">These are Apple's own steps (<a href="https://support.apple.com/guide/mac-help/mh40617/mac">Open an
+        app by overriding security settings</a>). Right-click → Open no longer skips this on macOS Sequoia and later.
+        If macOS says the app is damaged, run <code>xattr -dr com.apple.quarantine "/Applications/Doodle Studio.app"</code>
+        in Terminal once.</p>
+      <p class="small"><b>On Windows:</b> if "Windows protected your PC" appears, click <b>More info</b> →
+        <b>Run anyway</b>. On Windows 11 with Smart App Control turned on, Windows may block apps that aren't signed
+        yet, like this one, and there's no Run anyway button.</p>
+    </div>
+  </section>
 
   <section>
     <div class="demo">
