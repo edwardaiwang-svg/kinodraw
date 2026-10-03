@@ -16,9 +16,9 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE.parent))
-from doodlestudio import ingest, script                        # noqa: E402
-from doodlestudio.director import match, rules                  # noqa: E402
-from doodlestudio.engine import timeline as tl                  # noqa: E402
+from kinodraw import ingest, script                        # noqa: E402
+from kinodraw.director import match, rules                  # noqa: E402
+from kinodraw.engine import timeline as tl                  # noqa: E402
 
 FIXTURES = HERE.parent / 'tests' / 'fixtures'
 OUT = HERE / 'tests' / 'parity'

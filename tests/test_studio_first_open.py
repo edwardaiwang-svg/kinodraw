@@ -5,8 +5,8 @@ import urllib.request
 
 import pytest
 
-from doodlestudio.director.llm import cloud, providers
-from doodlestudio.studio import server
+from kinodraw.director.llm import cloud, providers
+from kinodraw.studio import server
 
 
 @pytest.fixture

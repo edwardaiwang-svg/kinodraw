@@ -1,7 +1,7 @@
 // The narrator's voice, in the browser: Kokoro-82M through HeadTTS (MIT; its own English G2P, no GPL eSpeak), run in a
 // worker by transformers.js on WebGPU when the computer has it, else on the bundled WASM ONNX Runtime.
 // Besides the audio, every character of the spoken text gets the time it is heard (captions and drawing triggers).
-// Same idea as doodlestudio/voice.py, one level finer: HeadTTS times each word, a word's letters share its sounding
+// Same idea as kinodraw/voice.py, one level finer: HeadTTS times each word, a word's letters share its sounding
 // time proportionally, and spaces and punctuation take the time of the character before them.
 import { CONFIG } from '../config.js';
 

@@ -5,7 +5,7 @@ commit `1ffb34c752ecf5d402f04cfb4b392c77f57c54bc`, MIT licence: see `LICENSE` (C
 
 ## What was modified
 
-Regenerate with `python -m doodlestudio.library.fluent SRC_DIR` (doodlestudio/library/fluent.py):
+Regenerate with `python -m kinodraw.library.fluent SRC_DIR` (kinodraw/library/fluent.py):
 - Default skin tone only; files renamed `fl_<snake_case_name>.svg`.
 - Transforms baked into absolute path data; art re-fitted to a 320x320 box with 16 px padding;
   rect/circle/ellipse converted to paths, arcs to cubic curves, coordinates rounded to 0.1 px.

@@ -1,17 +1,17 @@
-"""doodle: turn a script into a hand-drawn whiteboard video.
+"""kinodraw: turn a script into a hand-drawn whiteboard video.
 
-  doodle studio                               open the Studio window
-  doodle make script.md -o MyVideo            script -> finished MP4 (offline rules director)
-  doodle new script.md -o MyVideo             storyboard only (edit storyboard.json, then continue)
-  doodle direct MyVideo                       (re)add visuals to the storyboard
-  doodle voice MyVideo                        narration + timeline
-  doodle render MyVideo [--stills 5,30]       silent video (or preview stills)
-  doodle finish MyVideo                       music, mux, captions, chapters, QA
-  doodle setup [--lang en zh]                 download the voice models once
-  doodle doodles "rocket launch" [--lang en]  search the doodle library
-  doodle login you@example.com                Doodle Cloud (free plan: AI-directed videos, no API key needed)
-  doodle key set openai|anthropic|compat      store your own API key in the OS keychain
-  doodle key set command                      store a command to use as the director (Advanced)
+  kinodraw studio                               open the Studio window
+  kinodraw make script.md -o MyVideo            script -> finished MP4 (offline rules director)
+  kinodraw new script.md -o MyVideo             storyboard only (edit storyboard.json, then continue)
+  kinodraw direct MyVideo                       (re)add visuals to the storyboard
+  kinodraw voice MyVideo                        narration + timeline
+  kinodraw render MyVideo [--stills 5,30]       silent video (or preview stills)
+  kinodraw finish MyVideo                       music, mux, captions, chapters, QA
+  kinodraw setup [--lang en zh]                 download the voice models once
+  kinodraw doodles "rocket launch" [--lang en]  search the doodle library
+  kinodraw login you@example.com                Doodle Cloud (free plan: AI-directed videos, no API key needed)
+  kinodraw key set openai|anthropic|compat      store your own API key in the OS keychain
+  kinodraw key set command                      store a command to use as the director (Advanced)
 
 Directors: --director rules (offline, free) | cloud | openai | anthropic | compat (--base-url, --model)
            | command (runs your saved command; --model is passed to it)
@@ -119,7 +119,7 @@ def cmd_login(args):
     from .director.llm import cloud
     if not args.code:
         cloud.signup(args.email)
-        print(f'  a 6-digit code was sent to {args.email}; run: doodle login {args.email} --code 123456')
+        print(f'  a 6-digit code was sent to {args.email}; run: kinodraw login {args.email} --code 123456')
         return
     info = cloud.verify(args.email, args.code)
     left = info.get('remaining')
@@ -174,7 +174,7 @@ MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog='doodle', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog='kinodraw', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='command', required=True)
     for name, fn in (('make', cmd_make), ('new', cmd_new)):
         p = sub.add_parser(name)

@@ -85,7 +85,7 @@ class CloudProvider:
     def __init__(self):
         self.token = _token()
         if not self.token:
-            raise ProviderError('sign in to Doodle Cloud first (Studio > Doodle Cloud, or `doodle login`)')
+            raise ProviderError('sign in to Doodle Cloud first (Studio > Doodle Cloud, or `kinodraw login`)')
         self.video_id = None
 
     def open_video(self, sections: int, characters: int) -> dict:

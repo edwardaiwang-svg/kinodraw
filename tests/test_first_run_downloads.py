@@ -4,9 +4,9 @@ import hashlib
 import io
 from pathlib import Path
 
-from doodlestudio import cli, director, net, pipeline, voice
-from doodlestudio.director import match
-from doodlestudio.studio import server
+from kinodraw import cli, director, net, pipeline, voice
+from kinodraw.director import match
+from kinodraw.studio import server
 
 TINY = Path(__file__).parent / 'fixtures' / 'tiny.md'
 

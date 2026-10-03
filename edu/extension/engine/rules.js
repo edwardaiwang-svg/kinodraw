@@ -1,4 +1,4 @@
-// Offline director: add visuals to every beat with simple, predictable rules (port of doodlestudio/director/rules.py,
+// Offline director: add visuals to every beat with simple, predictable rules (port of kinodraw/director/rules.py,
 // English). Read the Python module's docstring for the rules themselves; this file follows it line for line so that
 // tests/rules.test.mjs can hold both to the same storyboards.
 import { normalize as normalizeNumbers } from './numbers.js';

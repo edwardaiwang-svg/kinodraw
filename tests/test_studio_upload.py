@@ -4,8 +4,8 @@ import zipfile
 
 import pytest
 
-from doodlestudio import ingest
-from doodlestudio.studio.server import docx_script
+from kinodraw import ingest
+from kinodraw.studio.server import docx_script
 
 W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 

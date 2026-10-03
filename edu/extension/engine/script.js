@@ -1,4 +1,4 @@
-// Document -> storyboard skeleton: chapters and beats with display and spoken text (port of doodlestudio/script.py).
+// Document -> storyboard skeleton: chapters and beats with display and spoken text (port of kinodraw/script.py).
 //
 // Structure: intro (title board) -> preamble board (if any) -> agenda -> numbered sections -> outro. Every word
 // written on the board is said while it is written: a section starts with its opener spoken ("Part 1: One machine,

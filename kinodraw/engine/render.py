@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Render one language of a video (silent) from a storyboard + timeline.
 
-  python -m doodlestudio.engine.render --project P --episode P/storyboard.json --lang en --timeline P/en/timeline.json --output P/en/silent.mp4
-  python -m doodlestudio.engine.render --project P --episode ... --lang en --synthetic --stills 12,40,95
-  python -m doodlestudio.engine.render ... --start 300 --duration 90 --output reel.mp4
+  python -m kinodraw.engine.render --project P --episode P/storyboard.json --lang en --timeline P/en/timeline.json --output P/en/silent.mp4
+  python -m kinodraw.engine.render --project P --episode ... --lang en --synthetic --stills 12,40,95
+  python -m kinodraw.engine.render ... --start 300 --duration 90 --output reel.mp4
 
 Frames stream to one ffmpeg (libx264, 2 threads). All inputs are hashed into
 ``<output>.json``. Narration/music are muxed later by the packager.
@@ -706,7 +706,7 @@ def render_segments(project, episode, lang, timeline, start, n, output, workers,
     seg_dir = output.parent / f'.{output.stem}.segments'
     seg_dir.mkdir(parents=True, exist_ok=True)
     worker = [sys.executable, '--render-worker'] if getattr(sys, 'frozen', False) else \
-        [sys.executable, '-m', 'doodlestudio.engine.render']       # a packaged app has no `python -m`
+        [sys.executable, '-m', 'kinodraw.engine.render']       # a packaged app has no `python -m`
     base = worker + ['--project', str(project), '--episode', str(episode), '--lang', lang, '--crf', str(crf)] + \
         (['--timeline', str(timeline)] if timeline else ['--synthetic'])
     segs = [seg_dir / f'{i:02d}.mp4' for i in range(workers)]

@@ -15,12 +15,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]                    # edu/
 sys.path.insert(0, str(HERE.parent))
-from doodlestudio.director.match import catalog_vectors       # noqa: E402
-from doodlestudio.engine import ink                            # noqa: E402
-from doodlestudio.library import ASSETS as DOODLES, banned, catalog, resolve   # noqa: E402
+from kinodraw.director.match import catalog_vectors       # noqa: E402
+from kinodraw.engine import ink                            # noqa: E402
+from kinodraw.library import ASSETS as DOODLES, banned, catalog, resolve   # noqa: E402
 
 OUT = HERE / 'extension' / 'assets'
-APP = DOODLES.parent                                           # doodlestudio/assets
+APP = DOODLES.parent                                           # kinodraw/assets
 MUSIC = ('fresh_focus', 'natural_vibes')                       # the two tracks the default mix uses
 
 

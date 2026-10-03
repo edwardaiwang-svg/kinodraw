@@ -1,7 +1,7 @@
 # Architecture
 
 ```
-doodlestudio/
+kinodraw/
   ingest.py        .txt / .md / .docx / pasted text → title, preamble, sections (headings)
   numbers.py       display → spoken text ("$3.8bn" → "three point eight billion dollars"; "30%" → "百分之三十"), with a position map
   script.py        document → storyboard skeleton: intro, agenda, sections (spoken opener, narration, spoken takeaway), outro; ~35-word beats
@@ -21,7 +21,7 @@ doodlestudio/
     timeline.py      places beats on the clock: chapter gaps, takeaway reading holds, transitions, captions, music windows
     render.py        modes (board, zoom, pull back, fly, agenda, stock, end card) → frames → ffmpeg; --workers N segments
   package.py       mux with chapters, encoded QA (decode, frame count, audio correlation, chapters), thumbnail, files
-  pipeline.py      project folder orchestration; cli.py (`doodle`); studio/ (local server + single-page app + window)
+  pipeline.py      project folder orchestration; cli.py (`kinodraw`); studio/ (local server + single-page app + window)
 ```
 
 ## Timing

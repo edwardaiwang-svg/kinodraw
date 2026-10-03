@@ -1,4 +1,4 @@
-// Render a storyboard + timeline into frames (port of doodlestudio/engine/render.py, board parts; no stock video).
+// Render a storyboard + timeline into frames (port of kinodraw/engine/render.py, board parts; no stock video).
 //   const prod = await Production.create(board, timing, env);   env = { svg: SvgLibrary, hand: Hand, paper }
 //   prod.drawFrame(g, t)        // g: a 1920×1080 2D context
 // Frames must be asked for in increasing time (drawings reveal incrementally).

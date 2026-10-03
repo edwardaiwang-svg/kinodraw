@@ -1,7 +1,7 @@
 import json
 
-from doodlestudio import net
-from doodlestudio.director.llm import cloud
+from kinodraw import net
+from kinodraw.director.llm import cloud
 
 
 def test_requests_carry_the_app_signature(monkeypatch):

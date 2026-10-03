@@ -1,5 +1,5 @@
 // Read a script (plain text, Markdown, .docx, or pasted text) into a title, a preamble and sections
-// (port of doodlestudio/ingest.py).
+// (port of kinodraw/ingest.py).
 //
 // Headings come from Markdown `#` lines, setext underlines, or .docx Title/Heading styles. The top heading
 // level that yields at least two sections becomes the sections; a single top-level heading at the start

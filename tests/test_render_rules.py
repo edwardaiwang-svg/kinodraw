@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from doodlestudio import ingest, script
-from doodlestudio.director.rules import RulesDirector
-from doodlestudio.engine import auto_scenes as auto
-from doodlestudio.engine import ink, render
-from doodlestudio.engine import timeline as tl
-from doodlestudio.engine.board import COL, STALE
+from kinodraw import ingest, script
+from kinodraw.director.rules import RulesDirector
+from kinodraw.engine import auto_scenes as auto
+from kinodraw.engine import ink, render
+from kinodraw.engine import timeline as tl
+from kinodraw.engine.board import COL, STALE
 
 FIX = Path(__file__).parent / 'fixtures'
 

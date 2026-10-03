@@ -1,4 +1,4 @@
-from doodlestudio import voice
+from kinodraw import voice
 
 
 def test_long_espeak_data_path_is_copied_somewhere_short(tmp_path, monkeypatch):

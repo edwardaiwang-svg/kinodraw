@@ -1,6 +1,6 @@
 # storyboard.json
 
-Each project folder holds a `storyboard.json`. You can edit it by hand or in Studio; `doodle voice`, `doodle render` and `doodle finish` pick up your edits. Each save is checked by `doodlestudio/director/validate.py`.
+Each project folder holds a `storyboard.json`. You can edit it by hand or in Studio; `kinodraw voice`, `kinodraw render` and `kinodraw finish` pick up your edits. Each save is checked by `kinodraw/director/validate.py`.
 
 ## Top level
 
@@ -63,12 +63,12 @@ A beat is one breath of narration: about 35 words, or 70 Chinese characters.
 
 ## Visuals
 
-Every visual has a unique `id` and a `type`. It can also have a `trigger`, `{"en": "<words from spoken>"}`: drawing starts when those words are heard, and the default is the start of the beat. If the hand is still busy 3 seconds after that, the visual is skipped rather than drawn late, and `doodle render` lists it in its warnings. Text fields are language maps (`{"en": "…"}`).
+Every visual has a unique `id` and a `type`. It can also have a `trigger`, `{"en": "<words from spoken>"}`: drawing starts when those words are heard, and the default is the start of the beat. If the hand is still busy 3 seconds after that, the visual is skipped rather than drawn late, and `kinodraw render` lists it in its warnings. Text fields are language maps (`{"en": "…"}`).
 
 Visuals that take one cell of the board (1–3 per screen):
 
 - `cluster`: `items: [{doodle, label?, trigger?}]` (1–3 doodles), `relation: none | arrow | plus | vs | equals`.
-- `stat`: `value`, `label`, optional `doodle`. A big handwritten number.
+- `stat`: `value`, `label`, optional `kinodraw`. A big handwritten number.
 - `quote`: `text`, `who`. A handwritten quote card (wide).
 - `glossary`: `term`, `text`. A yellow sticky note.
 
@@ -79,10 +79,10 @@ Visuals that take the whole board (the camera moves to a new page):
 - `lanes` (timeline): `title`, `lanes: [{label, events: [{pos 0–1, display, label, trigger}]}]`.
 - `flow`: `title`, `layout: chain | loop`, `nodes: [{id, label, doodle?, trigger}]`, `edges: [{from, to}]`.
 - `split`: `left` / `right`, each `{who, text, doodle?, trigger}`, plus an optional `verdict: {text}`.
-- `range`, `ladder`, `levels`, `zones`, `table`, `dial`, `calendar`, `coins`: see the builders in `doodlestudio/engine/pages_*.py`.
+- `range`, `ladder`, `levels`, `zones`, `table`, `dial`, `calendar`, `coins`: see the builders in `kinodraw/engine/pages_*.py`.
 
 `emphasis` circles, underlines or strikes part of an earlier visual: `target: "<visual id>[.<index>]"`, `kind: circle | underline | strike | highlight`.
 
 ## Your own doodles
 
-Put SVG files in the project's `doodles/` folder and reference them by file name (without `.svg`). They take precedence over the built-in library. For the drawing hand to trace them well, follow `doodlestudio/assets/doodles/STYLE.md`.
+Put SVG files in the project's `doodles/` folder and reference them by file name (without `.svg`). They take precedence over the built-in library. For the drawing hand to trace them well, follow `kinodraw/assets/doodles/STYLE.md`.

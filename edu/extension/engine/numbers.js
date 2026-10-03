@@ -1,4 +1,4 @@
-// Display text -> spoken text: numbers become words, nothing else changes (port of doodlestudio/numbers.py, English).
+// Display text -> spoken text: numbers become words, nothing else changes (port of kinodraw/numbers.py, English).
 //
 // Only number tokens are rewritten, so clause punctuation (which drives caption cues) is identical in both
 // strings. Every rewrite is recorded as a span so a position in the display text maps to the spoken text.

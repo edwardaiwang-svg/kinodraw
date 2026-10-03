@@ -1,12 +1,12 @@
 """Videos end with a short "Made with Doodle Studio" credit, on by default, with one switch to turn it off
-(Studio Settings, or `doodle make --no-credit`), remembered."""
+(Studio Settings, or `kinodraw make --no-credit`), remembered."""
 import json
 from pathlib import Path
 
-import doodlestudio
-from doodlestudio import cli, pipeline
-from doodlestudio.engine import timeline
-from doodlestudio.studio import server
+import kinodraw
+from kinodraw import cli, pipeline
+from kinodraw.engine import timeline
+from kinodraw.studio import server
 
 TINY = Path(__file__).parent / 'fixtures' / 'tiny.md'
 
@@ -43,7 +43,7 @@ def test_the_cli_switch_is_remembered_in_the_project(tmp_path, monkeypatch):
 def test_the_studio_switch_is_remembered_and_applies_to_the_next_video(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
     server._save_config({'projects': str(tmp_path / 'videos')})
-    assert server.state()['credit'] is True and server.state()['product'] == doodlestudio.PRODUCT['name']
+    assert server.state()['credit'] is True and server.state()['product'] == kinodraw.PRODUCT['name']
     httpd, url = server.serve(0)
     try:
         import urllib.request
@@ -71,7 +71,7 @@ def test_the_studio_switch_is_remembered_and_applies_to_the_next_video(tmp_path,
 
 
 def test_the_product_name_and_address_live_in_one_place():
-    assert set(doodlestudio.PRODUCT) == {'name', 'url'}
-    from doodlestudio.engine import auto_scenes
+    assert set(kinodraw.PRODUCT) == {'name', 'url'}
+    from kinodraw.engine import auto_scenes
     src = Path(auto_scenes.__file__).read_text(encoding='utf-8')
     assert 'Doodle Studio' not in src.split('def build_credit')[1].split('\ndef ')[0]   # the credit reads PRODUCT

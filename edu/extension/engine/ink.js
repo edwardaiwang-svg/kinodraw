@@ -1,4 +1,4 @@
-// Drawing primitives (port of doodlestudio/engine/ink.py) on 2D canvases.
+// Drawing primitives (port of kinodraw/engine/ink.py) on 2D canvases.
 //
 // Every drawable has `size` [w, h], `duration` and `state(elapsed) -> { img, pen, down }`: `img` is a canvas showing the
 // drawing as far as the hand has got (null before it starts), `pen` the nib position in the drawable's own pixels (or

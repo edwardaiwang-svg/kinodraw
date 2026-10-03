@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert Microsoft Fluent Emoji "Flat" SVGs (MIT) into Doodle Studio's outlined style.
 
-Usage: python -m doodlestudio.library.fluent SRC_DIR
+Usage: python -m kinodraw.library.fluent SRC_DIR
 
 SRC_DIR (e.g. ~/Library/Caches/DoodleStudio/src) must contain
   fluentui-emoji/                    sparse clone: LICENSE, assets/*/metadata.json, Flat SVGs
@@ -31,7 +31,7 @@ import svgelements as se
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-from doodlestudio.library.check import LIBRARY
+from kinodraw.library.check import LIBRARY
 
 OUT = LIBRARY / 'fluent'
 TAGS = LIBRARY / 'tags' / 'fluent.json'
@@ -384,7 +384,7 @@ def write_notice(src: Path, commit: str, converted: int, skipped: list[tuple[str
         f'Converted from Microsoft Fluent Emoji "Flat" SVGs ({UPSTREAM}),',
         f'commit `{commit}`, MIT licence: see `LICENSE` (Copyright (c) Microsoft Corporation).', '',
         '## What was modified', '',
-        'Regenerate with `python -m doodlestudio.library.fluent SRC_DIR` (doodlestudio/library/fluent.py):',
+        'Regenerate with `python -m kinodraw.library.fluent SRC_DIR` (kinodraw/library/fluent.py):',
         '- Default skin tone only; files renamed `fl_<snake_case_name>.svg`.',
         '- Transforms baked into absolute path data; art re-fitted to a 320x320 box with 16 px padding;',
         '  rect/circle/ellipse converted to paths, arcs to cubic curves, coordinates rounded to 0.1 px.',

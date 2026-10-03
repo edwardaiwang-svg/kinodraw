@@ -119,5 +119,5 @@ downloads the voice and picture models (about 400 MB with WebGPU, 160 MB without
 | `../.venv/bin/python tools/export_parity.py` | refresh the parity fixtures after changing the Python rules |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the layout and the module contracts. The Python app in
-`doodlestudio/` is the source of truth for the rules; change them there first, export the parity fixtures,
+`kinodraw/` is the source of truth for the rules; change them there first, export the parity fixtures,
 then make the JS port match (`tests/rules.test.mjs` fails until it does).

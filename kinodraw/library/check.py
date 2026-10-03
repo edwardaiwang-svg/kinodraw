@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate doodle SVGs against doodles/STYLE.md and render review sheets.
 
-Usage: python -m doodlestudio.library.check [ids...] [--set bespoke|fluent] [--sheet NAME]
+Usage: python -m kinodraw.library.check [ids...] [--set bespoke|fluent] [--sheet NAME]
 --set fluent (converted emoji): same rules minus the palette and the 5-element minimum.
 Writes PNG contact sheets to <user cache>/DoodleStudio/review/doodles/.
 Prints one JSON report; exit code 1 when any file fails.
@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 import platformdirs
 
-HERE = Path(__file__).resolve().parents[1]          # doodlestudio/
+HERE = Path(__file__).resolve().parents[1]          # kinodraw/
 LIBRARY = HERE / 'assets' / 'doodles'
 DOODLES = LIBRARY / 'bespoke'
 REVIEW = Path(platformdirs.user_cache_dir('DoodleStudio')) / 'review' / 'doodles'

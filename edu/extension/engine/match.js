@@ -1,4 +1,4 @@
-// Find doodles for a piece of text: literal keyword hits first, then meaning (port of doodlestudio/director/match.py).
+// Find doodles for a piece of text: literal keyword hits first, then meaning (port of kinodraw/director/match.py).
 //
 // The catalog, its vectors and the embedding model come from engine/assets.js (the same files the Python app ships
 // and the same bge-small model), so both find the same doodles.

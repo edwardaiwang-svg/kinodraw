@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from doodlestudio import ingest, script
-from doodlestudio.director.rules import RulesDirector
-from doodlestudio.director.validate import validate
+from kinodraw import ingest, script
+from kinodraw.director.rules import RulesDirector
+from kinodraw.director.validate import validate
 
 FIX = Path(__file__).parent / 'fixtures'
 
@@ -151,7 +151,7 @@ def test_an_emoji_with_a_longer_name_needs_its_whole_name():
 
 
 def test_banned_pictures_and_words_are_never_drawn():
-    from doodlestudio.library import banned, catalog
+    from kinodraw.library import banned, catalog
     assert not banned()['doodles'] & set(catalog())
     for name in ('printing_press.md', 'bicycle.md', 'sky_blue.md', 'photosynthesis.txt'):
         _, picks = _picks(name)

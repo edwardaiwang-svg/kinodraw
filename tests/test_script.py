@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from doodlestudio import ingest, script
-from doodlestudio.engine import timeline
+from kinodraw import ingest, script
+from kinodraw.engine import timeline
 
 FIX = Path(__file__).parent / 'fixtures'
 EN_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’)])|—')

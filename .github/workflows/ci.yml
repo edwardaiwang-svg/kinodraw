@@ -33,8 +33,8 @@ jobs:
         env:
           DOODLE_MODELS: ~/.cache/doodle-models
         run: |
-          doodle setup --lang en
-          doodle make tests/fixtures/tiny.md -o smoke --workers 1
+          kinodraw setup --lang en
+          kinodraw make tests/fixtures/tiny.md -o smoke --workers 1
       - name: Signing smoke (a throwaway identity signs a stub app, so the release signing step keeps working)
         if: runner.os == 'macOS'
         run: |
@@ -43,7 +43,7 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -sha256 -days 2 -nodes -config cs.cnf -keyout k.pem -out c.pem
           openssl pkcs12 -export -inkey k.pem -in c.pem -out s.p12 -passout pass:smoke -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1
           mkdir -p Stub.app/Contents/MacOS && cp /bin/echo Stub.app/Contents/MacOS/Stub
-          printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>io.github.doodlestudio.smoke</string><key>CFBundleExecutable</key><string>Stub</string></dict></plist>\n' > Stub.app/Contents/Info.plist
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>io.github.kinodraw.smoke</string><key>CFBundleExecutable</key><string>Stub</string></dict></plist>\n' > Stub.app/Contents/Info.plist
           MACOS_SIGN_P12="$(base64 -i s.p12)" MACOS_SIGN_P12_PASSWORD=smoke "$GITHUB_WORKSPACE/packaging/sign-macos.sh" Stub.app
       - uses: actions/upload-artifact@v4
         if: always()
@@ -101,7 +101,7 @@ jobs:
       - name: Build
         run: |
           pip install -e . pyinstaller
-          pyinstaller packaging/doodle.spec --noconfirm
+          pyinstaller packaging/kinodraw.spec --noconfirm
       - name: Sign the Mac app (stable identity from the repository secrets)
         if: runner.os == 'macOS'
         env:

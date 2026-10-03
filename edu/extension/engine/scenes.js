@@ -1,4 +1,4 @@
-// Visual builders (port of doodlestudio/engine/scenes.py): turn storyboard visuals into scheduled board Elements.
+// Visual builders (port of kinodraw/engine/scenes.py): turn storyboard visuals into scheduled board Elements.
 // Each builder receives the visual `v`, the beat, a world `box` [x, y, w, h] and the build context `ctx`.
 import { Element } from './board.js';
 import { INK, NEUTRAL, TextDrawing, fitText, strokeDrawing } from './ink.js';

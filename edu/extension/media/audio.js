@@ -1,4 +1,4 @@
-// Narration master and light music bed (port of doodlestudio/audio/mix.py).
+// Narration master and light music bed (port of kinodraw/audio/mix.py).
 // assembleNarration(): place every beat's clip on the timeline and normalize it to -18 LUFS (peaks limited).
 // mixMusic(): lay the bundled music under the timeline's music windows (title, agenda, section transitions, outro and
 // end card), ducked under speech, fading at every edge.

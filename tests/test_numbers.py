@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from doodlestudio.numbers import normalize
+from kinodraw.numbers import normalize
 
 EN = [
     ('By 1500, twenty million books existed.', 'By fifteen hundred, twenty million books existed.'),

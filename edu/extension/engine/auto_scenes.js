@@ -1,4 +1,4 @@
-// Automatic scenes (port of doodlestudio/engine/auto_scenes.py): title board, agenda board, section opener,
+// Automatic scenes (port of kinodraw/engine/auto_scenes.py): title board, agenda board, section opener,
 // takeaway note, end card and the transition marks.
 import { INK, SECTION_COLORS, StaticDrawing, TextDrawing, canvas, circlePoints, fitText } from './ink.js';
 import { SOFT_INK, mix, sticky } from './scenes.js';

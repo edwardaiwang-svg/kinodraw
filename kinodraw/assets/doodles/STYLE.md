@@ -5,7 +5,7 @@ cartoon drawings with thick black outlines and saturated flat colour, readable a
 150 px tall on a phone. Each doodle illustrates ONE specific idea from the script.
 Everything is original vector work (no traced logos, no copied artwork).
 
-## File rules (enforced by `python -m doodlestudio.library.check`)
+## File rules (enforced by `python -m kinodraw.library.check`)
 - One file per doodle: `assets/doodles/bespoke/<id>.svg`, root
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 W H" width="W" height="H">`,
   W and H between 200 and 600, drawing fills the box with ≥ 12 px padding.

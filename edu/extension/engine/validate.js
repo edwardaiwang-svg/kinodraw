@@ -1,5 +1,5 @@
 // Check a storyboard before voice and render: structure, spoken/display parity, triggers, doodles
-// (port of doodlestudio/director/validate.py, English). Errors make it unusable; warnings are quality notes.
+// (port of kinodraw/director/validate.py, English). Errors make it unusable; warnings are quality notes.
 import { KINDS } from './storyboard.js';
 
 const SLOT_TYPES = new Set(['cluster', 'quote', 'glossary', 'stat']);

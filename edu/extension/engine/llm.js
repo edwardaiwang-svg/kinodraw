@@ -1,5 +1,5 @@
 // AI director: the rules director drafts, GPT-6 Luna (through Doodle Cloud) improves one section at a time, and code
-// decides (port of doodlestudio/director/llm/director.py). Every answer is checked before it is used: doodles must
+// decides (port of kinodraw/director/llm/director.py). Every answer is checked before it is used: doodles must
 // come from the beat's candidates (or the narrator poses), triggers must be words of the beat, numbers/dates/quotes
 // must appear in the section text, and texts must fit. A beat whose answer fails keeps its rules draft; a section
 // whose call fails keeps all of its rules visuals. The model may re-pick a sentence's pictures, but never leaves a

@@ -1,4 +1,4 @@
-# PyInstaller spec for Doodle Studio:  pyinstaller packaging/doodle.spec --noconfirm
+# PyInstaller spec for Doodle Studio:  pyinstaller packaging/kinodraw.spec --noconfirm
 # Output: dist/Doodle Studio.app (macOS) or dist/Doodle Studio/ (Windows, Linux).
 # Voice models (~190 MB per language) download on first use, checksum-verified.
 import sys
@@ -14,8 +14,8 @@ for package in ('kokoro_onnx', 'misaki', 'espeakng_loader', 'phonemizer', 'jieba
     datas += d
     binaries += b
     hidden += h
-datas += [(str(ROOT / 'doodlestudio' / 'assets'), 'doodlestudio/assets'),
-          (str(ROOT / 'doodlestudio' / 'studio' / 'static'), 'doodlestudio/studio/static'),
+datas += [(str(ROOT / 'kinodraw' / 'assets'), 'kinodraw/assets'),
+          (str(ROOT / 'kinodraw' / 'studio' / 'static'), 'kinodraw/studio/static'),
           (str(ROOT / 'LICENSE'), '.'), (str(ROOT / 'THIRD_PARTY_NOTICES.md'), '.'), (str(ROOT / 'LICENSES'), 'LICENSES')]
 icon = {'darwin': 'icon.icns', 'win32': 'icon.ico'}.get(sys.platform)
 
@@ -27,5 +27,5 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='Doodle Studio', conso
 coll = COLLECT(exe, a.binaries, a.datas, name='Doodle Studio')
 if sys.platform == 'darwin':
     app = BUNDLE(coll, name='Doodle Studio.app', icon=str(ROOT / 'packaging' / 'icon.icns'),
-                 bundle_identifier='io.github.doodlestudio', version='0.1.6',
+                 bundle_identifier='io.github.kinodraw', version='0.1.6',
                  info_plist={'NSHighResolutionCapable': True, 'LSMinimumSystemVersion': '11.0'})

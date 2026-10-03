@@ -24,8 +24,8 @@ The app isn't notarized by Apple or signed for Windows yet, so the first launch 
 
 ```bash
 uv tool install git+https://github.com/edwardaiwang-svg/doodle-studio     # or: pipx install git+https://…
-doodle studio                                                    # opens the app window
-doodle make my-script.md -o "My Video"                           # or straight to an MP4
+kinodraw studio                                                  # opens the app window
+kinodraw make my-script.md -o "My Video"                         # or straight to an MP4
 ```
 
 ## Write a script

@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from doodlestudio import ingest, script
-from doodlestudio.director.llm.director import LLMDirector
-from doodlestudio.director.llm.providers import ProviderError, Usage
-from doodlestudio.director.validate import validate
+from kinodraw import ingest, script
+from kinodraw.director.llm.director import LLMDirector
+from kinodraw.director.llm.providers import ProviderError, Usage
+from kinodraw.director.validate import validate
 
 FIX = Path(__file__).parent / 'fixtures'
 
@@ -116,8 +116,8 @@ def test_payload_offers_candidates_and_budget(board):
 def test_command_provider_pipes_json_both_ways(tmp_path):
     import json
     import sys
-    from doodlestudio.director.llm.providers import CommandProvider
-    from doodlestudio.director.llm.schema import SECTION_SCHEMA
+    from kinodraw.director.llm.providers import CommandProvider
+    from kinodraw.director.llm.schema import SECTION_SCHEMA
     tool = tmp_path / 'tool.py'
     tool.write_text("import json, sys\n"
                     "req = json.load(sys.stdin)\n"
@@ -139,8 +139,8 @@ def test_opening_the_app_never_reads_the_keychain(tmp_path, monkeypatch):
     """macOS asks before an app reads a keychain entry it did not create (every unsigned update counts as a
     new app), so the Studio's startup state must list saved keys from names alone."""
     import keyring
-    from doodlestudio.director.llm import providers
-    from doodlestudio.studio import server
+    from kinodraw.director.llm import providers
+    from kinodraw.studio import server
     monkeypatch.setattr(providers, 'SAVED', tmp_path / 'saved-keys.json')
     monkeypatch.setattr(keyring, 'set_password', lambda *a: None)
     providers.save_key('openai', 'sk-test')
@@ -162,7 +162,7 @@ def test_an_ai_takeaway_is_what_the_narrator_says(board):
 
 
 def test_banned_pictures_are_never_offered_or_kept(board):
-    from doodlestudio.library import banned
+    from kinodraw.library import banned
     rec = Recorded({})
     LLMDirector(rec, 'en').direct(board)
     offered = {c['id'] for p in rec.payloads for b in p['beats'] for c in b['candidates']}

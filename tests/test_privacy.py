@@ -8,7 +8,7 @@ def test_onnxruntime_is_told_not_to_report_usage():
     """onnxruntime (the voice, the doodle search) sends Microsoft usage events with a device id unless
     ORT_DISABLE_TELEMETRY is set before it loads; "no analytics and no tracking" means the app sets it first."""
     env = {k: v for k, v in os.environ.items() if k != 'ORT_DISABLE_TELEMETRY'}
-    run = subprocess.run([sys.executable, '-c', 'import os, doodlestudio; print(os.environ.get("ORT_DISABLE_TELEMETRY"))'],
+    run = subprocess.run([sys.executable, '-c', 'import os, kinodraw; print(os.environ.get("ORT_DISABLE_TELEMETRY"))'],
                          env=env, capture_output=True, text=True, check=True)
     assert run.stdout.strip() == '1'
 
@@ -25,7 +25,7 @@ def test_the_privacy_page_says_where_your_own_key_sends_your_sentences():
     """Settings > Advanced directors send each section straight to the user's own AI provider (or program);
     v0.1.6's page described only the offline director and Doodle Cloud."""
     import re
-    from doodlestudio.studio import server
+    from kinodraw.studio import server
     labels = re.findall(r"\['\w+', '([^']+)'\]", re.search(r'const ADVANCED = \[(.*?)\];', (server.STATIC / 'app.js')
                                                               .read_text(encoding='utf-8'), re.S).group(1))
     page = _page()
@@ -35,8 +35,8 @@ def test_the_privacy_page_says_where_your_own_key_sends_your_sentences():
 
 def test_the_privacy_page_names_every_host_the_app_downloads_from():
     from urllib.parse import urlparse
-    from doodlestudio import voice
-    from doodlestudio.director import match
+    from kinodraw import voice
+    from kinodraw.director import match
     names = {'github.com': 'GitHub', 'huggingface.co': 'Hugging Face'}
     hosts = {urlparse(url).hostname for url, *_ in voice.FILES.values()} | {urlparse(match.HF).hostname}
     page = _page()

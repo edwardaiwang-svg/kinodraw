@@ -86,6 +86,6 @@ def schema_json() -> str:
     return json.dumps(SECTION_SCHEMA, indent=1)
 
 
-if __name__ == '__main__':                            # the server's copy: python -m doodlestudio.director.llm.schema
+if __name__ == '__main__':                            # the server's copy: python -m kinodraw.director.llm.schema
     print(json.dumps({'version': 1, 'system': SYSTEM, 'schema': SECTION_SCHEMA, 'limits': LIMITS,
                       'max_visuals_per_beat': MAX_VISUALS_PER_BEAT}, ensure_ascii=False, indent=1))

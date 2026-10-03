@@ -1,4 +1,4 @@
-// Board model (port of doodlestudio/engine/board.py): elements on a continuous world strip, layout, one-hand
+// Board model (port of kinodraw/engine/board.py): elements on a continuous world strip, layout, one-hand
 // scheduling, camera. World x grows along one long strip; y is screen y. The screen shows 3 columns of 640 px; the
 // camera's left edge is a column boundary at rest, so no item is ever cut by the frame edge.
 //

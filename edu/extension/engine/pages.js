@@ -1,4 +1,4 @@
-// Full-board chart pages (port of doodlestudio/engine/pages_time.py lanes, pages_quant.py bars + grid100, and
+// Full-board chart pages (port of kinodraw/engine/pages_time.py lanes, pages_quant.py bars + grid100, and
 // pages_logic.py flow + split). Everything is drawn by the hand: outlines first, tints pop after, text glyph-traced.
 // Only display strings from the visual are written; no numbers are computed.
 import { INK, TextDrawing, circlePoints, fontMetrics, textWidth, wrapWords } from './ink.js';

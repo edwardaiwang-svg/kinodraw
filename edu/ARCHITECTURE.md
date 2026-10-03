@@ -5,7 +5,7 @@ Google Classroom classes, clicks **Make a video**, gives a script (file or paste
 extension makes the hand-drawn video **inside Chrome** and posts it to that class's Classwork.
 Only teachers can use it. The only AI model it calls is GPT-6 Luna, through Doodle Cloud.
 
-The Python app (`doodlestudio/`) stays the source of truth for the rules. `extension/engine/` is
+The Python app (`kinodraw/`) stays the source of truth for the rules. `extension/engine/` is
 a faithful English-only port, and `tests/` hold it to the Python output (parity fixtures).
 
 ```
@@ -15,7 +15,7 @@ classroom.google.com ── content/classroom.js (a "Make a video" button, shown
 sw.js (service worker) ── teacher-status checks, opens the studio tab
         ▼
 studio/studio.html (extension tab: sign-in, teacher gate, script, progress, preview, posting)
-   ├── engine/      script → storyboard (rules + Luna) → timeline → pacing → frames      (port of doodlestudio/)
+   ├── engine/      script → storyboard (rules + Luna) → timeline → pacing → frames      (port of kinodraw/)
    ├── media/       HeadTTS/Kokoro voice (worker) · narration + music mix · WebCodecs → MP4 (Mediabunny)
    └── google/      OAuth (launchWebAuthFlow) · Classroom API · Drive resumable upload · Doodle Cloud client
 Doodle Cloud (Cloudflare Worker, ~/test/doodle-cloud): POST /v1/edu/session (Google token → teacher check →
@@ -67,7 +67,7 @@ voice.synthesize(spoken)   // → Promise<{ pcm: Float32Array (mono), sampleRate
                            //   character i of `spoken` is heard; non-decreasing; length === spoken.length
 voice.close()
 ```
-`spoken` never contains digits (numbers are already words). Same alignment idea as `doodlestudio/voice.py`:
+`spoken` never contains digits (numbers are already words). Same alignment idea as `kinodraw/voice.py`:
 clause marks anchor clauses, letters inside a word share its timing proportionally.
 
 ### media/audio.js
@@ -79,7 +79,7 @@ export function assembleNarration(board, timeline, clips)  // clips[beatId] = { 
   //   normalized to -18 LUFS integrated (BS.1770 K-weighting + gating), true peaks ≤ -1.5 dBFS (a look-ahead
   //   limiter turns down only the louder peaks, as loudnorm does in Python; -15 LUFS once on both channels)
 export async function mixMusic(board, timeline, narration, { loadTrack })
-  // → { left, right } Float32Array @ SR: port of doodlestudio/audio/mix.py mix() (music windows, ducking
+  // → { left, right } Float32Array @ SR: port of kinodraw/audio/mix.py mix() (music windows, ducking
   //   -31 LUFS under speech / -25 open, 1 s loop crossfades, 1.5 s fades, primary/secondary tracks)
   //   loadTrack(slug) → Promise<{ channels: [Float32Array, Float32Array], sampleRate }>
 ```
