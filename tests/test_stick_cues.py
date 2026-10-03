@@ -31,7 +31,8 @@ def test_words_that_only_look_negative_still_fall(text):
 
 @pytest.mark.parametrize('text', ['In the fall of 1989, the wall came down.', 'Last fall the shop opened.',
                                   'The meeting ended at noon.', 'He removed his hat.', 'Prices fall when supply rises.',
-                                  'Not a single person was killed.', 'None of them died.'])
+                                  'Not a single person was killed.', 'None of them died.',
+                                  'Not one person was killed.'])
 def test_seasons_prices_endings_and_wider_english_negations_are_not_falls(text):
     assert cues.pose_for(text, 'en')[0] != 'fall'
 

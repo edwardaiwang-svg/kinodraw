@@ -94,7 +94,7 @@ MOOD = {'fall': 'sad', 'sad': 'sad', 'angry': 'upset', 'cheer': 'happy', 'run': 
 
 WEAK = ('talk', 'hold', 'point')
 NEGATION = {'en': re.compile(r"(?:\b(?:not|never|no|nor|without|nobody|none|neither|no one)|n['’]t)"
-                          r"(?:\s+(?:a\s+single\s+\w+|of\s+(?:them|us|the\s+\w+)|\w+))?"
+                          r"(?:\s+(?:(?:a\s+single|one|a|any)\s+\w+|of\s+(?:them|us|the\s+\w+)|\w+))?"
                           r"(?:\s+(?:was|were|is|are|be|been|had|has|have|got|ever))*\s+$", I),
             'zh': re.compile(r'不|没|未|别|无人|从未|并非')}
 # A Chinese negation can stand a few characters before its verb (没有人被杀, 他不会死), so it counts anywhere in the
