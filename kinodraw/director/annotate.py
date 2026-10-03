@@ -162,7 +162,7 @@ CTA = re.compile(r'\bfree\b|^(?:(?:so|and|now|just)\s+)?(?:try|start|get|downloa
                  r'create\s+your\s+first)\b', re.I)
 DOMAIN = re.compile(r'\b(?:https?://)?(?:www\.)?([A-Za-z0-9][A-Za-z0-9-]*)(?:\.[A-Za-z0-9-]+)*'
                     r'\.(?!(?:js|py|md|txt|pdf|html?|css|jpe?g|png|gif|svg|mp[34]|zip|exe)\b)[a-z]{2,}\b(?:/[\w./-]*)?')
-INTRO = re.compile(r'^(?:meet|introducing|say hello to|presenting)\s+([A-Z][\w-]*(?:\s+[A-Z][\w-]*)?)')
+INTRO = re.compile(r'^(?i:meet|introducing|say hello to|presenting)\s+([A-Z][\w-]*(?:\s+[A-Z][\w-]*)?)')
 LIST_WORD = r"\b(?!(?:and|or|but|in|on|at|of|to|for|with|from|by|is|are|was|were|we|you|they|it|he|she|i)\b)[A-Za-z][\w'’-]*"
 LIST_ITEM = rf'(?:(?:a|an|the|some|their|his|her|its|our|your|my)\s+)?{LIST_WORD}(?:\s+{LIST_WORD})?'
 LIST_RUN = re.compile(rf'{LIST_ITEM}(?:,\s+{LIST_ITEM}){{1,4}},?\s+(?:and|or)\s+{LIST_ITEM}')
@@ -389,10 +389,12 @@ def _brand(board, texts, lang):
         return {'name': given['name'], 'url': given.get('url') or ''}
     if lang != 'en' or not texts:
         return None
+    whole = ' '.join(texts)
+    domain = DOMAIN.search(whole)
     for text in texts:
         m = INTRO.match(text)
-        if m:
-            return {'name': m.group(1), 'url': ''}
+        if m:                                         # "Meet Khan Academy.", not khanacademy.org's "khanacademy"
+            return {'name': m.group(1), 'url': domain.group(0) if domain else ''}
     counts: dict = {}
     initial: dict = {}
     for text in texts:
@@ -401,8 +403,6 @@ def _brand(board, texts, lang):
             if word[0].isupper() and word.lower() not in FUNCTION:
                 counts[word] = counts.get(word, 0) + 1
                 initial[word] = initial.get(word, 0) + (k == 0)
-    whole = ' '.join(texts)
-    domain = DOMAIN.search(whole)
     if domain:                                        # friendr.nl -> "Friendr", as the script writes it
         return {'name': next((w for w in counts if w.lower() == domain.group(1).lower()), domain.group(1)),
                 'url': domain.group(0)}

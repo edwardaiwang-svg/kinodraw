@@ -69,3 +69,23 @@ def test_the_command_line_can_name_the_brand(tmp_path, monkeypatch):
     assert json.loads((tmp_path / 'p' / 'storyboard.json').read_text())['brand'] == \
         {'name': 'Khan Academy', 'url': 'khanacademy.org', 'cta': 'Start learning'}
     assert 'brand' not in json.loads((tmp_path / 'q' / 'storyboard.json').read_text())     # left to the script
+
+
+def test_a_revealed_name_of_several_words_wins_over_the_website(tmp_path):
+    """"Meet Khan Academy." never matched the reveal (it only knew "meet"), so with khanacademy.org in the script the
+    brand became "khanacademy": the reveal showed the title and the sign-off fell into the use-case stage."""
+    from kinodraw.director.annotate import annotate
+    for k, (reveal, site, name) in enumerate([('Meet Khan Academy.', 'khanacademy.org', 'Khan Academy'),
+                                              ('Introducing Google Docs.', 'docs.google.com', 'Google Docs')]):
+        text = (f'# Learn anything\n\nStuck on a problem at eleven at night? Nobody is awake to help.\n\nThere\'s a '
+                f'better way. {reveal}\n\nPick a topic. Watch a short video. Practice until it clicks.\n\nMath, science, '
+                f'history and coding. All in one place.\n\n{name}. Learn at your own pace. It\'s free for everyone. '
+                f'Visit {site}.\n')
+        board = pipeline.new_project(text, tmp_path / str(k), direction={'look': 'collage', 'story': 'promo'})
+        assert annotate(board)['brand'] == {'name': name, 'url': site}
+        prod = renderer.make_production(board, timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en')), 'en',
+                                        tmp_path / str(k))
+        assert prod.brand['name'] == name and any(s.role == 'brand' and s.text == reveal for s in prod.said)
+        end = [s.text for s in prod.stages[-1].sentences]
+        assert prod.stages[-1].kind == 'end' and end == [f'{name}.', 'Learn at your own pace.', "It's free for everyone.",
+                                                         f'Visit {site}.']
