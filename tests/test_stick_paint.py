@@ -33,3 +33,15 @@ def test_every_doodle_renders_in_paint_style(chunk):
 def test_unknown_doodle_falls_back_to_missing():
     img = paint.doodle('no_such_doodle_here', (120, 120))
     assert np.asarray(img)[..., 3].any()
+
+
+@pytest.mark.parametrize('name, fmt', [('logo.png', 'PNG'), ('photo.jpg', 'JPEG')])
+def test_own_raster_picture_is_fitted_in_its_own_colours(tmp_path, name, fmt):
+    from PIL import Image
+    (tmp_path / 'pictures').mkdir()
+    Image.new('RGB', (400, 200), (12, 200, 90)).save(tmp_path / 'pictures' / name, fmt)
+    for variant in range(3):
+        img = paint.doodle(f'own:{name}', (200, 200), variant, tmp_path)
+        assert img.mode == 'RGBA' and img.size == (200, 100)
+        r, g, b, a = img.getpixel((100, 50))
+        assert a == 255 and abs(g - 200) < 8 and r < 30
