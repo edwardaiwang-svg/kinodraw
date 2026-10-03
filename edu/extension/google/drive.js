@@ -1,6 +1,6 @@
 // Google Drive: save the finished video to the teacher's Drive with a resumable upload, so a school Wi-Fi
-// hiccup costs one piece of the video, not the whole upload. The drive.file permission only lets Doodle
-// Studio see the files it made.
+// hiccup costs one piece of the video, not the whole upload. The drive.file permission only lets KinoDraw see
+// the files it made.
 import { googleFetch } from './auth.js';
 
 const START = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,webViewLink';
