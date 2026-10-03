@@ -16,7 +16,7 @@
    "stories": ["explain", "story"],
    "motion": {"min": "calm", "max": "lively", "default": "lively"},
    "length_s": [120, 1200],
-   "aspect": ["16:9"],
+   "aspect": ["16:9", "9:16"],
    "fit": {"topic": ["any"], "audience": ["teachers", "students", "creators"], "tone": ["any"],
            "structure": ["explain", "list", "narrative"]}
   },
@@ -35,7 +35,7 @@
    "stories": ["explain", "story"],
    "motion": {"min": "calm", "max": "lively", "default": "lively"},
    "length_s": [180, 900],
-   "aspect": ["16:9"],
+   "aspect": ["16:9", "9:16"],
    "fit": {"topic": ["school", "math", "history", "science"], "audience": ["students", "teachers"],
            "tone": ["instructional", "neutral"], "structure": ["explain", "list"]}
   },
@@ -53,7 +53,7 @@
    "stories": ["explain", "story"],
    "motion": {"min": "calm", "max": "lively", "default": "lively"},
    "length_s": [120, 600],
-   "aspect": ["16:9"],
+   "aspect": ["16:9", "9:16"],
    "fit": {"topic": ["school", "language", "science"], "audience": ["students"], "tone": ["instructional", "neutral"],
            "structure": ["explain", "list"]}
   },
@@ -67,7 +67,7 @@
    "stories": ["promo", "showcase"],
    "motion": {"min": "calm", "max": "showreel", "default": "lively"},
    "length_s": [45, 120],
-   "aspect": ["16:9"],
+   "aspect": ["16:9", "9:16"],
    "fit": {"topic": ["product"], "audience": ["customers"], "tone": ["playful", "neutral"], "structure": ["promo"]}
   },
   {

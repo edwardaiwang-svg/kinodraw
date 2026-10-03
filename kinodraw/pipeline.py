@@ -24,6 +24,17 @@ from .engine import render as renderer
 from .engine.storyboard import drawable
 from .package import clock, contact_sheet, encoded_qa, mux, publish, sha
 
+ASPECTS = ('16:9', '9:16')
+
+
+def validate_aspect(aspect: str, look: str | None = None) -> str:
+    if aspect not in ASPECTS:
+        raise ValueError('aspect must be 16:9 or 9:16')
+    entry = styles.get(look or 'whiteboard')
+    if entry and aspect not in entry['aspect']:
+        raise ValueError(f'{look or "whiteboard"} does not support {aspect}')
+    return aspect
+
 
 def _load(path: Path):
     return json.loads(path.read_text(encoding='utf-8'))
@@ -39,6 +50,7 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
     ``direction`` sets the storyboard's dials: look, story, motion and brand (see docs/storyboard.md)."""
     if (direction or {}).get('look'):
         drawable(direction['look'])
+    settings['aspect'] = validate_aspect(settings.get('aspect', '16:9'), (direction or {}).get('look'))
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
     src = Path(source) if isinstance(source, Path) or (len(str(source)) < 1024 and '\n' not in str(source)) else None
@@ -149,6 +161,7 @@ def build_audio(project_dir: Path, clips: dict) -> dict:
 def render(project_dir: Path, start: float = 0, duration: float | None = None, workers: int | None = None) -> Path:
     project_dir = Path(project_dir)
     cfg = settings(project_dir)
+    aspect = validate_aspect(cfg.get('aspect', '16:9'), storyboard(project_dir).get('look'))
     build = project_dir / 'build'
     tl = _load(build / 'timeline.json')
     out = build / 'silent.mp4'
@@ -156,15 +169,15 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
     workers = workers or cfg.get('workers', 1)
     if workers > 1:
         warnings = renderer.render_segments(project_dir, project_dir / 'storyboard.json', cfg['lang'],
-                                            build / 'timeline.json', start, n, out, workers)
+                                            build / 'timeline.json', start, n, out, workers, aspect=aspect)
     else:
-        prod = renderer.make_production(storyboard(project_dir), tl, cfg['lang'], project_dir)
+        prod = renderer.make_production(storyboard(project_dir), tl, cfg['lang'], project_dir, aspect=aspect)
         renderer.encode(prod, start, n, out, 20)
         warnings = prod.warnings
     board = storyboard(project_dir)
     if styles.renderer(board.get('look')) != 'whiteboard':   # sound effects follow the scheduled animation
         if workers > 1:
-            prod = renderer.make_production(board, tl, cfg['lang'], project_dir)
+            prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect)
         _save(build / 'cues.json', {'cues': prod.cues()})
     _save(build / 'render-warnings.json', warnings)
     return out
@@ -175,18 +188,21 @@ def finish(project_dir: Path) -> dict:
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang, build = cfg['lang'], project_dir / 'build'
+    aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
+    size = (1080, 1920) if aspect == '9:16' else (1920, 1080)
     tl = _load(build / 'timeline.json')
     mixed = audio.mix(board, tl, build)
     stem = re.sub(r'[\\/:*?"<>|¿¡]+', '', board['title'][lang]).strip()[:80] or 'video'
     video = project_dir / f'{stem}.mp4'
     mux(tl, build / 'silent.mp4', mixed, video, lang, board['title'][lang], build)
-    qa = encoded_qa(tl, video, mixed)
+    qa = encoded_qa(tl, video, mixed, size=size)
     if board.get('look') == 'collage':                # words written over other words never pass
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
-    publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')))
-    contact_sheet(tl, video, build / 'contact-sheet.jpg')
+    publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
+            size=(720, 1280) if aspect == '9:16' else (1280, 720))
+    contact_sheet(tl, video, build / 'contact-sheet.jpg', size=size)
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
     _save(build / 'qa.json', qa)
     return qa

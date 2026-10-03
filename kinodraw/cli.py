@@ -99,7 +99,9 @@ def cmd_render(args):
     if args.stills:
         from .engine import render as renderer
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
-        prod = renderer.make_production(pipeline.storyboard(project), tl, pipeline.settings(project)['lang'], project)
+        cfg, board = pipeline.settings(project), pipeline.storyboard(project)
+        aspect = pipeline.validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
+        prod = renderer.make_production(board, tl, cfg['lang'], project, aspect=aspect)
         out = project / 'build' / 'stills'
         out.mkdir(parents=True, exist_ok=True)
         for s in args.stills.split(','):
@@ -196,7 +198,7 @@ def cmd_doodles(args):
 
 def _settings(args):
     out = {}
-    for key in ('voice', 'speed', 'workers'):
+    for key in ('voice', 'speed', 'workers', 'aspect'):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
     if getattr(args, 'no_credit', False):
@@ -216,6 +218,7 @@ MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
 
 def main(argv=None):
     from . import paths
+    from .pipeline import ASPECTS
     from .engine.storyboard import DIALS, LOOKS
     paths.migrate()                                   # once: Doodle Studio's folders become KinoDraw's
     if paths.left_behind:
@@ -231,6 +234,8 @@ def main(argv=None):
         p.add_argument('--voice')
         p.add_argument('--speed', type=float)
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
+        p.add_argument('--aspect', choices=ASPECTS, default='16:9',
+                       help='16:9 for YouTube (default) or 9:16 for Shorts, TikTok and Reels')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
         p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')

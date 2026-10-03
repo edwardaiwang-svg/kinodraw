@@ -69,15 +69,15 @@ def _probe(video: Path) -> dict:
             'chapters': re.findall(r'Chapter #\d+:\d+: start [\d.]+, end [\d.]+\s+Metadata:\s+title\s+:\s*(.*)', head)}
 
 
-def encoded_qa(tl: dict, video: Path, mix: Path) -> dict:
+def encoded_qa(tl: dict, video: Path, mix: Path, size=(1920, 1080)) -> dict:
     info = _probe(video)
     expected = round(tl['duration'] * FPS)
-    size = info['size'].groups() if info['size'] else None
+    actual_size = info['size'].groups() if info['size'] else None
     problems = []
     if info['frames'] != expected:
         problems.append(f"frames {info['frames']} != {expected}")
-    if size != ('1920', '1080') or not info['audio']:
-        problems.append(f'streams: video {size}, aac audio {info["audio"]}')
+    if actual_size != tuple(str(v) for v in size) or not info['audio']:
+        problems.append(f'streams: video {actual_size}, aac audio {info["audio"]}')
     if info['errors']:
         problems.append(f"decode errors: {info['errors'][:3]}")
     if [c.strip() for c in info['chapters']] != [c['title'] for c in tl['chapters']]:
@@ -100,11 +100,12 @@ def encoded_qa(tl: dict, video: Path, mix: Path) -> dict:
             'video_sha256': sha(video), 'duration': tl['duration']}
 
 
-def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0):
+def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0, size=(1920, 1080)):
     """One image with a frame every ``every`` seconds plus each chapter start (for review)."""
     times = sorted({*np.arange(0, tl['duration'] - .1, every).round(2), *(round(c['start'] + 1, 2) for c in tl['chapters'])})
     times = [t for t in times if t < tl['duration'] - .05][:60]
-    cols, w, h = 6, 320, 180
+    cols = 6
+    w, h = (180, 320) if size[1] > size[0] else (320, 180)
     sheet = Image.new('RGB', (cols * w, ((len(times) + cols - 1) // cols) * (h + 26)), 'white')
     d = ImageDraw.Draw(sheet)
     label = ink.font('ui', 18)
@@ -118,9 +119,11 @@ def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0):
     sheet.save(path, quality=88)
 
 
-def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
+def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path, size=(1280, 720)):
     """1280x720: the title in big handwriting, section colours, and the video's own actor: the narrator giving a
     thumbs-up in the video's skin, or in the collage look the paper puppet cheering on cream paper."""
+    if size == (720, 1280):
+        return _portrait_thumbnail(storyboard, lang, path, project_dir)
     collage = storyboard.get('look') == 'collage'
     skin = skins.for_look(storyboard.get('look'))
     if collage:
@@ -165,8 +168,50 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
     img.convert('RGB').save(path)
 
 
+def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
+    from .engine import motion
+
+    collage = storyboard.get('look') == 'collage'
+    skin = skins.for_look(storyboard.get('look'))
+    img = motion.paper_texture((720, 1280), 'cream').convert('RGBA') if collage else skin.background(720, 1280).copy()
+    d = ImageDraw.Draw(img)
+    storyboard = normalize(storyboard)
+    title = storyboard['title'][lang]
+    lines, size = ink.fit_text(title, lang, 620, 4, 112, min_size=32, fonts=skin.fonts)
+    while size > 1 and (len(lines) > 4 or max(ink.text_width(line, lang, size, skin.fonts) for line in lines) > 620):
+        size -= 2                              # long words and titles must also stay inside the phone's margins
+        lines, size = ink.fit_text(title, lang, 620, 4, size, min_size=size, fonts=skin.fonts)
+    y = 60
+    for line in lines:
+        x = 50
+        for part, pf in ink.font_runs(line, lang, size, skin.fonts):
+            d.text((x, y), part, font=pf, fill=skin.color((27, 27, 27)), stroke_width=3, stroke_fill=skin.caption_edge)
+            x += pf.getlength(part)
+        y += int(size * 1.15)
+    colors = [skin.color(ink.SECTION_COLORS[c['color']]) for c in storyboard['chapters']
+              if c['kind'] == 'section' and c.get('color')]
+    for i, col in enumerate(colors[:6]):
+        d.rounded_rectangle((50 + i * 70, y + 30, 100 + i * 70, y + 58), 10, fill=col)
+    if collage:
+        from .engine.collage import puppet
+        look = storyboard.get('puppet') or {}
+        cut = motion.die_cut(puppet.raster('cheer', 'happy', 0, look.get('preset', 'sunny'),
+                                         tuple(sorted((look.get('colors') or {}).items())), height=600), border=12)
+        x, y = (720 - cut.width) // 2, 1280 - cut.height - 40
+        shadow = motion.shadow_only(cut, blur=10, opacity=.3)
+        img.alpha_composite(shadow, (x + 8 - (shadow.width - cut.width) // 2, y + 10 - (shadow.height - cut.height) // 2))
+        img.alpha_composite(cut, (x, y))
+    else:
+        pose = auto_scenes.narrator(storyboard, 'thumbs')
+        art = resolve(pose, project_dir) if pose else None
+        if art:
+            dr = skin.dress(ink.svg_drawing(art, (580, 600)))
+            img.alpha_composite(dr.color, ((720 - dr.color.width) // 2, 1280 - dr.color.height - 40))
+    img.convert('RGB').save(path)
+
+
 def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, stem: str, project_dir: Path,
-            own_voice: bool = False):
+            own_voice: bool = False, size=(1280, 720)):
     """Captions, chapters, transcript, description text and thumbnail next to the video (``own_voice``: narrated
     with the creator's own recording)."""
     for ext in ('srt', 'vtt'):
@@ -191,4 +236,4 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
         head = 'Capítulos'
     (folder / f'{stem}-description.txt').write_text(
         f"{storyboard['title'][lang]}\n\n{head}\n" + '\n'.join(chapters) + f'\n\n{credit}\n', encoding='utf-8')
-    thumbnail(storyboard, lang, folder / f'{stem}-thumbnail.png', project_dir)
+    thumbnail(storyboard, lang, folder / f'{stem}-thumbnail.png', project_dir, size=size)

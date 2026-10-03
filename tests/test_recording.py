@@ -325,9 +325,9 @@ def test_a_video_in_your_own_voice_does_not_credit_the_ai_voice(tmp_path, monkey
     (build / 'timeline.json').write_text(json.dumps(tl), encoding='utf-8')
     monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
     for name in ('mux', 'contact_sheet'):
-        monkeypatch.setattr(pipeline, name, lambda *a: None)
-    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a: {'ok': True, 'problems': []})
-    monkeypatch.setattr(package, 'thumbnail', lambda *a: None)
+        monkeypatch.setattr(pipeline, name, lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a, **k: {'ok': True, 'problems': []})
+    monkeypatch.setattr(package, 'thumbnail', lambda *a, **k: None)
 
     def description():
         pipeline.finish(project)

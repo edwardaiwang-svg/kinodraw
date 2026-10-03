@@ -139,6 +139,7 @@ def create_project(body: dict) -> dict:
     path = projects_root() / name
     mode = body.get('director') or 'rules'
     settings = {k: body[k] for k in ('voice', 'workers') if body.get(k)}
+    settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
 
     def job(progress):
         progress('storyboard', 0, 1)
@@ -151,6 +152,14 @@ def create_project(body: dict) -> dict:
         return {'project': name, 'notes': report.get('notes', [])[:20],
                 'cost': None if not usage else usage.cost_usd, 'calls': 0 if not usage else usage.calls}
     return {'job': JOBS.start('create', name, job), 'project': name}
+
+
+def set_format(name: str, body: dict) -> dict:
+    path = _project(name)
+    cfg = pipeline.settings(path)
+    cfg['aspect'] = pipeline.validate_aspect(body.get('aspect'), pipeline.storyboard(path).get('look'))
+    pipeline._save(path / 'project.json', cfg)
+    return cfg
 
 
 def docx_script(name: str, data: bytes) -> str:
@@ -405,6 +414,8 @@ def state() -> dict:
             'advanced': bool(_config().get('advanced')),
             'credit': _config().get('credit', True), 'product': PRODUCT['name'],
             'models': SUGGESTED,
+            'formats': [{'value': '16:9', 'label': 'Landscape 16:9 (YouTube)'},
+                        {'value': '9:16', 'label': 'Vertical 9:16 (Shorts, TikTok, Reels)'}],
             'styles': [{'value': f"{e['id']}/{e['stories'][0]}", 'label': e['name']['en']}   # the registry's looks
                        for e in styles.looks(ready=True)],                               # that render now
             'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
@@ -540,6 +551,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(save_storyboard(name, self._body()))
             if p[2:] == ['direct'] and method == 'POST':
                 return self._json(redirect(name, self._body()))
+            if p[2:] == ['format'] and method == 'POST':
+                return self._json(set_format(name, self._body()))
             if p[2:] == ['make'] and method == 'POST':
                 return self._json(make_video(name))
             if p[2:] == ['narrator']:
