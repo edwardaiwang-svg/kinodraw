@@ -8,6 +8,7 @@ from __future__ import annotations
 import bisect
 import copy
 import hashlib
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,6 +18,7 @@ from PIL import Image
 from .. import captions as cap
 from .. import ink, motion
 from . import plan, product, promo, puppet
+from .elements import Ink, Typed
 
 W, H = 1920, 1080
 FPS = 30
@@ -26,6 +28,7 @@ SHOWPIECES = {'calm': 0, 'lively': 2, 'showreel': 5}
 PUSH = {'calm': 0., 'lively': .02, 'showreel': .04}
 PUNCH = {'calm': 0., 'lively': .045, 'showreel': .07}
 BUILDERS = {**promo.BUILDERS, **product.BUILDERS}
+EDGE = 6                            # px of a text piece's paper edge and tilt that may touch another's
 
 
 class CollageProduction:
@@ -105,7 +108,21 @@ class CollageProduction:
         if name:
             img = promo._hero(self, name, size=54)
             els.append(promo.Piece(img, 40 + img.width / 2, 34 + img.height / 2, stage.start + .25,
-                                   ident=f'tag.{self._current}', cue=None, jitter=False))
+                                   ident=f'tag.{self._current}', cue=None, jitter=False, words=name))
+
+    def crowded(self):
+        """Text written over other text: (when, words, other words) for every two pieces of text in a stage that are
+        on screen together and overlap. Finish never passes a video with any."""
+        out = []
+        for st, els in zip(self.stages, self.stage_els):
+            texts = [(e, _text_boxes(e)) for e in els if e.words]
+            for k, (a, boxes) in enumerate(texts):
+                for b, others in texts[k + 1:]:
+                    t0 = max(a.start, b.start)
+                    t1 = min([st.end] + [e.until for e in (a, b) if e.until is not None])   # leaving: no longer counts
+                    if t0 < t1 and any(_overlap(p, q) for p in boxes for q in others):
+                        out.append((round(t0, 2), a.words, b.words))
+        return out
 
     # ------------------------------------------------------------ frames
     def frame(self, t):
@@ -219,6 +236,31 @@ class CollageProduction:
     def cues(self):
         out = [c for e in self.els for c in e.cues()] + self._cues
         return sorted(out, key=lambda c: (c['t'], c['id']))
+
+
+def _text_boxes(e):
+    """Where an element's words sit once in place: [(x0, y0, x1, y1)], less EDGE all round."""
+    if isinstance(e, Ink):
+        return [_box(None, x, y, size=d.size) for d, x, y, _ in e.items]
+    if isinstance(e, Typed):
+        return [_box(e.render(len(e.text)), e.x, e.y)]
+    return [_box(e.sprite.img, e.x, e.y, e.scale, e.tilt)]
+
+
+def _box(img, x, y, scale=1., tilt=0., size=None):
+    """The visible part of a picture centred on (x, y), scaled and turned ``tilt`` degrees."""
+    if size is not None:
+        (w, h), dx, dy = size, 0, 0
+    else:
+        l, t, r, b = img.getchannel('A').getbbox() or (0, 0, 0, 0)
+        w, h, dx, dy = (r - l) * scale, (b - t) * scale, (l + r - img.width) / 2 * scale, (t + b - img.height) / 2 * scale
+    c, s = abs(math.cos(math.radians(tilt))), abs(math.sin(math.radians(tilt)))
+    w, h = w * c + h * s, w * s + h * c
+    return x + dx - w / 2 + EDGE, y + dy - h / 2 + EDGE, x + dx + w / 2 - EDGE, y + dy + h / 2 - EDGE
+
+
+def _overlap(p, q):
+    return p[0] < q[2] and q[0] < p[2] and p[1] < q[3] and q[1] < p[3]
 
 
 def _torn_profile(seed_key):

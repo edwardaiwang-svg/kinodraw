@@ -178,12 +178,13 @@ def brand(prod, stage):
         from .elements import Ink
         from .product import hand
         written = ink.TextDrawing([name], prod.lang, 150, color='#EF7B3A', pace=1.3, max_dur=1.2)
-        els.append(Ink([(written, 960, 470, t_name - .05)], hand(), hit.beat, 'brand.written', then=_hero(prod, name)))
+        els.append(Ink([(written, 960, 470, t_name - .05)], hand(), hit.beat, 'brand.written', then=_hero(prod, name),
+                       words=name))
         prod.pose(stage, [(stage.start, 'look_up', 'wonder'), (t_name, 'wave', 'happy')])
         t_name += written.duration - .05
     else:
         els.append(Piece(_hero(prod, name), 960, 470, t_name, hit.beat, 'brand.name',
-                         enter=_energy_enter(max(2, hit.energy)), energy=3, cue='slam'))
+                         enter=_energy_enter(max(2, hit.energy)), energy=3, cue='slam', words=name))
     els.append(Burst(960, 470, t_name + .08, r0=520, r1=580, n=12, ident='brand.burst'))
     for k, s in enumerate(stage.sentences):
         if s.scene == 'feature_chips':
@@ -201,7 +202,7 @@ def feature_chip(prod, s, k, column=None):
     img = ui.raster(ui.label(text, prod.lang, hand=False, size=40))
     x, y = (1700, 330 + 150 * column) if column is not None else (760 + 400 * (k % 3), 880)
     return [Piece(img, x, y, s.start + .05, s.beat, f'chip.{s.beat}.{s.i}', tilt=(-4, 3, -2)[k % 3],
-                  enter=_energy_enter(s.energy), energy=s.energy, cue='tape')]
+                  enter=_energy_enter(s.energy), energy=s.energy, cue='tape', words=text)]
 
 
 def how(prod, stage):
@@ -242,7 +243,8 @@ def _step(prod, s, n, uses, stage):
 
         def render(k, core=core, value=value, label=label):
             return ui.raster(ui.form_card(core, [(label, value[:k], k < len(value))], prod.lang, w=640))
-        card = Typed(render, value, STAGE_X, 470, s.start + .6, s.beat, f'step.{n}', enter_at=s.start, until=until)
+        card = Typed(render, value, STAGE_X, 470, s.start + .6, s.beat, f'step.{n}', enter_at=s.start, until=until,
+                     words=core)
         els += [card, _number(n, STAGE_X - 330, 330, s.start + .1, s.beat, f'num.{n}', until)]
         m = TIME.search(s.text)
         if m:
@@ -251,12 +253,13 @@ def _step(prod, s, n, uses, stage):
             note = ui.raster(ui.label(f'{m.group(1)} {unit}!', prod.lang, size=40, color='#EF7B3A', paper='#FFF7E0'))
             t = prod.word_time(s, m.group(0))
             els += [Piece(clock, STAGE_X + 420, 300, t, s.beat, f'clock.{n}', energy=2, until=until),
-                    Piece(note, STAGE_X + 430, 440, t + .2, s.beat, f'clocknote.{n}', tilt=-5, cue='tape', until=until)]
+                    Piece(note, STAGE_X + 430, 440, t + .2, s.beat, f'clocknote.{n}', tilt=-5, cue='tape', until=until,
+                          words=f'{m.group(1)} {unit}!')]
     else:
         text = prod.brand.get('url') or (s.emphasis or core)
         chip = ui.raster(ui.link_chip(text, prod.lang))
         els += [Piece(chip, STAGE_X, 230, s.start + .1, s.beat, f'link.{n}', enter=_energy_enter(s.energy),
-                      energy=s.energy, until=until),
+                      energy=s.energy, until=until, words=text),
                 _number(n, STAGE_X - chip.width / 2 - 30, 200, s.start, s.beat, f'num.{n}', until)]
     return els
 
@@ -272,7 +275,7 @@ def _channels(prod, s):
             els.append(Piece(img, x, 420, s.start + .15 + .25 * j, s.beat, f'chan.{s.beat}.{j}', tilt=(-6, 4, -3)[j % 3]))
         clean = re.sub(r'^(?:the|a|an|in|on|by|via)\s+', '', item, flags=re.I)
         els.append(Piece(ui.raster(ui.label(clean, prod.lang, size=30)), x, 535, s.start + .3 + .25 * j, s.beat,
-                         f'chanlabel.{s.beat}.{j}', cue='tape'))
+                         f'chanlabel.{s.beat}.{j}', cue='tape', words=clean))
     return els
 
 
@@ -329,7 +332,7 @@ def threshold(prod, stage):
     els.append(Swap([(t, ui.raster(ui.traffic_light(c), .95)) for t, c in light], 1730, 500, first.beat, 'thr.light'))
     t_on = light[-1][0] + .15
     els.append(Piece(ui.raster(ui.stamp(lab['on'], prod.lang), 1.25), 1360, 250, t_on, k_high.beat, 'thr.stamp', tilt=-8,
-                     enter='slam', energy=3, cue='stamp'))
+                     enter='slam', energy=3, cue='stamp', words=lab['on']))
     if prod.allow_showpiece(t_on):
         els.append(Confetti((1180, 200), t_on + .05, ident='thr.confetti'))
     prod.pose(stage, [(stage.start, 'point', 'smile'), (low_t, 'worried', 'worried'), (t_on, 'cheer', 'happy')])
@@ -338,7 +341,7 @@ def threshold(prod, stage):
 
 
 def uses(prod, stage):
-    els, chips = [], []
+    els, chips, lines = [], [], []
     k_item = 0
     for k, s in enumerate(stage.sentences):
         if s.role == 'feature' or s.scene == 'feature_chips':
@@ -348,6 +351,7 @@ def uses(prod, stage):
         if len(items) >= 2:
             n = len(items)
             per_row = n if n <= 4 else (n + 1) // 2
+            size = _fit(items, prod.lang, 40, 330)          # every label fits its column (they are 350 px apart)
             for j, item in enumerate(items):
                 found = stickers.find(item, prod.lang)
                 col, row = j % per_row, j // per_row
@@ -357,8 +361,9 @@ def uses(prod, stage):
                 t = prod.word_time(s, item)
                 if found and (img := stickers.sticker(found[0], 250)) is not None:
                     els.append(Piece(img, x, y, t, s.beat, f'use.{k}.{j}', tilt=(-5, 4, -3, 6)[j % 4], energy=2))
-                els.append(Piece(ui.raster(ui.label(item, prod.lang, size=40, color='#2F8F9D', paper='#FBF7EE')), x,
-                                 y + 175, t + .15, s.beat, f'uselabel.{k}.{j}', tilt=(-3, 2)[j % 2], cue='tape'))
+                els.append(Piece(ui.raster(ui.label(item, prod.lang, size=size, color='#2F8F9D', paper='#FBF7EE')), x,
+                                 y + 175, t + .15, s.beat, f'uselabel.{k}.{j}', tilt=(-3, 2)[j % 2], cue='tape',
+                                 words=item))
                 k_item += 1
             heart = stickers.sticker(stickers.HEART, 80) if s.role == 'use_cases' else None
             if heart is not None:
@@ -367,7 +372,9 @@ def uses(prod, stage):
                     els.append(Piece(heart, x, 330 if n <= 4 else 470, s.end - .6 + .12 * j, s.beat, f'heart.{k}.{j}',
                                      tilt=(-10, 8, -6)[j]))
             continue
-        els += _handline(prod, s, 960, 930)
+        lines.append(s)
+    for s, nxt in zip(lines, lines[1:] + [None]):     # one line at a time under the stickers, each making way for the next
+        els += _handline(prod, s, 960, 930, until=None if nxt is None else nxt.start - .25)
     els += _chip_rows(prod, chips, 1110, 800)
     prod.pose(stage, [(stage.start, 'cheer', 'happy')])
     return els
@@ -387,23 +394,32 @@ def _chip_rows(prod, chips, cx, y, width=1180):
         x = cx - (sum(i.width for _, i in row) + 30 * (len(row) - 1)) / 2
         for s, img in row:
             els.append(Piece(img, x + img.width / 2, y + 110 * r, s.start + .05, s.beat, f'chip.{s.beat}.{s.i}',
-                             tilt=(-3, 2, -2)[(s.i + r) % 3], enter=_energy_enter(s.energy), energy=s.energy, cue='tape'))
+                             tilt=(-3, 2, -2)[(s.i + r) % 3], enter=_energy_enter(s.energy), energy=s.energy, cue='tape',
+                             words=s.text.strip()))
             x += img.width + 30
     return els
 
 
-def _handline(prod, s, x, y):
+def _fit(texts, lang, size, width):
+    """The label size at which the widest of ``texts`` fits ``width`` (a label adds 48 px of paper)."""
+    fam = ui._family(lang, hand=True)
+    widest = max(ui.text_width(text, fam, size) for text in texts)
+    return size if widest + 48 <= width else int(size * (width - 48) / widest)
+
+
+def _handline(prod, s, x, y, until=None):
     text = s.text.strip()
     if prod.brand.get('reveal') == 'hand':           # the drawing hand writes it
         from .elements import Ink
         from .product import hand
         written = ink.TextDrawing([text], prod.lang, 56, pace=1.6, max_dur=max(.8, min(2.2, s.end - s.start - .4)))
-        return [Ink([(written, x, y, s.start + .1)], hand(), s.beat, f'line.{s.beat}.{s.i}')]
+        return [Ink([(written, x, y, s.start + .1)], hand(), s.beat, f'line.{s.beat}.{s.i}', until=until, words=text)]
     fam = ui._family(prod.lang, hand=True)
 
     def render(k, text=text):
         return ui.raster(ui._doc(ui.text_width(text, fam, 48) + 40, 76, ui._text(20, 56, text[:k], fam, 48)))
-    return [Typed(render, text, x, y, s.start + .05, s.beat, f'line.{s.beat}.{s.i}', cps=26, enter_at=s.start)]
+    return [Typed(render, text, x, y, s.start + .05, s.beat, f'line.{s.beat}.{s.i}', cps=26, enter_at=s.start,
+                  until=until)]
 
 
 def end(prod, stage):
@@ -412,7 +428,7 @@ def end(prod, stage):
     name = prod.brand.get('name') or prod.ep['title'][prod.lang]
     t0 = stage.start + .15
     els.append(Piece(_hero(prod, name, size=170, fit=1640), 960, 230, t0, stage.sentences[0].beat, 'end.name', enter='slam',
-                     energy=3, cue='slam'))
+                     energy=3, cue='slam', words=name))
     els.append(Burst(960, 230, t0 + .08, r0=330, r1=390, n=16, ident='end.burst'))
     cta = cta_sentence(stage.sentences)
     name_only = (prod.brand.get('name') or '').lower()
@@ -426,7 +442,7 @@ def end(prod, stage):
         last = j == len(chips) - 1
         cx = x + img.width / 2
         els.append(Piece(img, cx, 460, s.start + .05, s.beat, f'end.chip.{j}', tilt=(-3, 2, -2)[j % 3],
-                         enter='slam' if last else 'pop', energy=2 if last else 1, cue='tape'))
+                         enter='slam' if last else 'pop', energy=2 if last else 1, cue='tape', words=s.text.strip()))
         if last:
             els.append(Stroke([(cx + img.width / 2 - 6, 450), (cx + img.width / 2 + 16, 472),
                                (cx + img.width / 2 + 58, 412)], s.start + .3, dur=.3, color=(63, 163, 107),
@@ -435,17 +451,18 @@ def end(prod, stage):
     cta_text = prod.brand.get('cta') or cta.text.rstrip('.!')
     button = ui.raster(ui.button(f'{cta_text} →', prod.lang), 1.5)
     t_cta = cta.start + .05
-    els.append(Piece(button, 960, 630, t_cta, cta.beat, 'end.cta', enter='pop', energy=2))
+    els.append(Piece(button, 960, 630, t_cta, cta.beat, 'end.cta', enter='pop', energy=2, words=cta_text))
     if re.search(r'\bfree\b|免费', cta.text, re.I):
         free = ui.raster(ui._doc(120, 120, '<circle cx="60" cy="60" r="52" fill="#F2C14E" stroke="#1B1B1B" '
                                  'stroke-width="4"/>' + ui._text(60, 72, lab['free'], ui.SANS, 26, anchor='middle')))
-        els.append(Piece(free, 960 + button.width / 2 + 60, 585, t_cta + .25, cta.beat, 'end.free', tilt=12, energy=2))
+        els.append(Piece(free, 960 + button.width / 2 + 60, 585, t_cta + .25, cta.beat, 'end.free', tilt=12, energy=2,
+                         words=lab['free']))
     url = prod.brand.get('url')
     if url:
         t_url = prod.word_time(cta, url.split('.')[0]) if url.split('.')[0].lower() in cta.text.lower() else t_cta + .6
         size = 52 if ui.text_width(url, ui.SANS, 52) < 860 else 44
         u_img = ui.raster(ui._doc(ui.text_width(url, ui.SANS, size) + 20, 80, ui._text(10, 58, url, ui.SANS, size)))
-        els.append(Piece(u_img, 1010, 830, t_url, cta.beat, 'end.url', shadow=False))
+        els.append(Piece(u_img, 1010, 830, t_url, cta.beat, 'end.url', shadow=False, words=url))
         els.append(Stroke([(1010 - u_img.width / 2 + 10 + k * (u_img.width - 20) / 20, 878 + (3 if k % 2 else 0))
                            for k in range(21)], t_url + .2, dur=.45, color=(239, 123, 58), width=7, ident='end.underline'))
         hand = stickers.sticker(stickers.TAP_HAND, 150)
@@ -464,9 +481,10 @@ def credit(prod, t):
     by ``t`` and held to the end, whatever that stage shows."""
     from ... import PRODUCT
     from ..auto_scenes import CREDIT_LINE
-    img = ui.raster(ui.credit_slip(CREDIT_LINE[prod.lang].format(**PRODUCT), PRODUCT['url'], prod.lang))
+    line = CREDIT_LINE[prod.lang].format(**PRODUCT)
+    img = ui.raster(ui.credit_slip(line, PRODUCT['url'], prod.lang))
     return [Piece(img, 960, 1080 - 56 - img.height / 2, t - .3, ident='credit', tilt=-1.5, energy=0, cue='paper',
-                  layer=3)]
+                  layer=3, words=line)]
 
 
 def sticker_row(prod, s, k):
@@ -485,7 +503,7 @@ def sticker_row(prod, s, k):
                          enter=_energy_enter(s.energy), energy=s.energy, tilt=(-4, 5, -2)[j % 3]))
     if s.emphasis:
         els.append(Piece(ui.raster(ui.label(s.emphasis, prod.lang, size=44)), STAGE_X, 700, s.start + .35, s.beat,
-                         f'rowlabel.{s.beat}.{s.i}', tilt=-2, cue='tape'))
+                         f'rowlabel.{s.beat}.{s.i}', tilt=-2, cue='tape', words=s.emphasis))
     return els
 
 

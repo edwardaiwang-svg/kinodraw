@@ -128,3 +128,64 @@ def test_a_collage_thumbnail_shows_the_paper_puppet_not_the_whiteboard_narrator(
     assert share(collage, sunny) > .04 and share(white, sunny) < .005          # the puppet's hat, coat and trousers
     corner = np.asarray(collage.convert('RGB'))[650:, :300].reshape(-1, 3).mean(0)
     assert corner[0] - corner[2] > 12                                         # cream paper, not the grey board
+
+
+LINES = ('# Learn anything\n\nStuck on a math problem at eleven at night? Your teacher is asleep and the textbook makes '
+         'no sense.\n\nThere\'s a better way. Meet Khan Academy.\n\nPick a topic. Watch a short video. Practice until it '
+         'clicks.\n\nMath, science, history and coding. All in one place. Any time you like. Wherever you are.\n\n'
+         'Visit khanacademy.org.\n')
+SIGN_OFF = ('# Learn anything\n\nStuck on a math problem at eleven at night? Your teacher is asleep and the textbook makes '
+            'no sense.\n\nThere\'s a better way. Meet Khan Academy.\n\nPick a topic. Watch a short video. Practice until '
+            'it clicks, with hints at every step.\n\nMath, science, history and coding. All in one place.\n\nKhan Academy. '
+            'Learn at your own pace. It\'s free for everyone. Visit khanacademy.org.\n')
+
+
+def _annotated(source, folder, story='promo'):
+    from kinodraw import pipeline
+    from kinodraw.director.annotate import annotate
+    board = pipeline.new_project(source, folder, direction={'look': 'collage', 'story': story})
+    annotate(board)
+    tl = timeline.layout(board, board['lang'], timeline.synthetic_clips(board, board['lang']))
+    return renderer.make_production(board, tl, board['lang'], folder)
+
+
+def test_lines_said_after_the_use_cases_are_written_one_at_a_time(tmp_path):
+    """Every extra line of the use-case stage was typed at the same spot over the lines before it: unreadable."""
+    prod = _annotated(LINES, tmp_path / 'p')
+    k = next(k for k, st in enumerate(prod.stages) if st.kind == 'uses')
+    lines = [e for e in prod.stage_els[k] if e.ident.startswith('line.')]
+    assert [e.words for e in lines] == ['All in one place.', 'Any time you like.', 'Wherever you are.']
+    for e, nxt in zip(lines, lines[1:]):
+        assert e.until is not None and e.until + .25 <= nxt.start + 1e-9        # gone before the next comes in
+    assert lines[-1].until is None and prod.crowded() == []
+
+
+def test_no_sample_video_writes_text_over_text(tmp_path):
+    """A two-word name plus a website put the whole sign-off over one spot; Chinese use-case labels, wider than
+    their columns, covered each other's words."""
+    for k, (source, story) in enumerate([(SIGN_OFF, 'promo'), (FIX / 'sleep_zh.md', 'promo'),
+                                         (FIX / 'sleep_zh.md', 'showcase'), (FIX / 'promo_friendr.md', 'promo'),
+                                         (FIX / 'promo_tiny.md', 'promo'), (FIX / 'water_cycle.md', 'explain')]):
+        assert _annotated(source, tmp_path / str(k), story).crowded() == [], (source, story)
+
+
+def test_text_written_over_text_fails_the_finish(tmp_path, monkeypatch):
+    import json
+    from kinodraw import pipeline
+    from kinodraw.engine.collage import promo
+    prod = _annotated(LINES, tmp_path / 'p')
+    k = next(k for k, st in enumerate(prod.stages) if st.kind == 'uses')
+    said = prod.stages[k].sentences
+    prod.stage_els[k] = promo._handline(prod, said[1], 960, 930) + promo._handline(prod, said[2], 960, 930)
+    assert [(a, b) for _, a, b in prod.crowded()] == [('All in one place.', 'Any time you like.')]
+    (tmp_path / 'p' / 'build').mkdir()
+    (tmp_path / 'p' / 'build' / 'timeline.json').write_text(json.dumps(prod.tl), encoding='utf-8')
+    monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
+    for name in ('mux', 'publish', 'contact_sheet'):
+        monkeypatch.setattr(pipeline, name, lambda *a: None)
+    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a: {'ok': True, 'problems': []})
+    monkeypatch.setattr(pipeline.renderer, 'make_production', lambda *a: prod)
+    qa = pipeline.finish(tmp_path / 'p')
+    t = prod.crowded()[0][0]
+    assert not qa['ok'] and qa['problems'] == [f'At {pipeline.clock(t)} "All in one place." and "Any time you like." '
+                                               'are written on top of each other.']

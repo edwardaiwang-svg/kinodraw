@@ -157,6 +157,10 @@ def finish(project_dir: Path) -> dict:
     video = project_dir / f'{stem}.mp4'
     mux(tl, build / 'silent.mp4', mixed, video, lang, board['title'][lang], build)
     qa = encoded_qa(tl, video, mixed)
+    if board.get('look') == 'collage':                # words written over other words never pass
+        crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
+        qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
+        qa['ok'] = not qa['problems']
     publish(board, tl, lang, build, project_dir, stem, project_dir)
     contact_sheet(tl, video, build / 'contact-sheet.jpg')
     qa.update({'video': str(video), 'length': clock(tl['duration'])})

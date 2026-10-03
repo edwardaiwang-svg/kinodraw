@@ -111,7 +111,7 @@ def _around(prod, s, items):
         if img is not None:
             els.append(Piece(img, x, y, t, s.beat, f'around.{j}', tilt=(-6, 5, -4, 6)[j], energy=2))
         els.append(Piece(ui.raster(ui.label(item, prod.lang, size=34, color='#2F8F9D', paper='#FBF7EE')), x, y + 140,
-                         t + .12, s.beat, f'aroundlabel.{j}', tilt=(-3, 2, -2, 3)[j], cue='tape'))
+                         t + .12, s.beat, f'aroundlabel.{j}', tilt=(-3, 2, -2, 3)[j], cue='tape', words=item))
     return els
 
 
@@ -129,7 +129,7 @@ def _pile(prod, s, items, k):
             els.append(Piece(img, x, y, t, s.beat, f'pile.{k}.{j}', enter='slam', tilt=rng.uniform(-12, 12), energy=2,
                              cue='slam'))
         els.append(Piece(ui.raster(ui.label(item, prod.lang, size=36)), x + rng.uniform(-30, 30), y + 150, t + .1,
-                         s.beat, f'pilelabel.{k}.{j}', tilt=rng.uniform(-5, 5), cue='tape'))
+                         s.beat, f'pilelabel.{k}.{j}', tilt=rng.uniform(-5, 5), cue='tape', words=item))
     t_end = max(s.start + .4, s.end - .9)
     for j, doodle in enumerate(TROUBLE):
         img = stickers.sticker(doodle, 210)

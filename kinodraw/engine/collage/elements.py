@@ -19,6 +19,7 @@ SHADOW = (6, 9)                     # resting shadow offset; it grows while a pi
 
 class Element:
     layer = 1
+    words = ''                      # the words it shows, if it is text (the layout check keeps text off other text)
 
     def __init__(self, t0: float, beat: str | None = None, ident: str = '', until: float | None = None):
         self.start, self.end, self.beat, self.ident, self.until = t0, t0 + .3, beat, ident, until
@@ -41,10 +42,10 @@ class Piece(Element):
     """A sticker, card or label that enters at ``t0`` (pop, slam, slide, drop or fade) and stays until ``until``."""
 
     def __init__(self, img, x, y, t0, beat=None, ident='', enter='pop', energy=1, tilt=0., scale=1., jitter=True,
-                 until=None, cue='pop', shadow=True, layer=1):
+                 until=None, cue='pop', shadow=True, layer=1, words=''):
         super().__init__(t0, beat, ident, until)
         self.x, self.y, self.enter, self.energy, self.tilt, self.scale = x, y, enter, energy, tilt, scale
-        self.jitter, self.cue, self.layer = jitter, cue, layer
+        self.jitter, self.cue, self.layer, self.words = jitter, cue, layer, words
         self.sprite = motion.Sprite(img)
         self.shadow = motion.Sprite(motion.shadow_only(img, blur=9, opacity=.3)) if shadow else None
         self.end = t0 + {'slam': .2, 'slide': .45, 'drop': .5}.get(enter, .3)
@@ -130,10 +131,11 @@ class Swap(Element):
 class Typed(Element):
     """A card whose text types itself: ``render(n)`` returns the card showing the first ``n`` characters."""
 
-    def __init__(self, render, text, x, y, t0, beat=None, ident='', cps=22., enter_at=None, until=None):
+    def __init__(self, render, text, x, y, t0, beat=None, ident='', cps=22., enter_at=None, until=None, words=None):
         start = enter_at if enter_at is not None else t0 - .35
         super().__init__(start, beat, ident, until)
         self.render, self.text, self.x, self.y, self.t0, self.cps = render, text, x, y, t0, cps
+        self.words = text if words is None else words
         self.cache: dict = {}
         self.end = t0 + len(text) / cps
         self.card = Piece(render(0), x, y, start, beat, ident + '.card', enter='pop', cue='paper', until=until)
@@ -290,9 +292,9 @@ class Ink(Element):
     ``then`` (an image) pops in over the last drawing once it is done: a written name becoming a paper sticker."""
     layer = 2
 
-    def __init__(self, items, hand, beat=None, ident='', until=None, then=None):
+    def __init__(self, items, hand, beat=None, ident='', until=None, then=None, words=''):
         super().__init__(items[0][3], beat, ident, until)
-        self.items, self.hand = items, hand
+        self.items, self.hand, self.words = items, hand, words
         self.end = max(t0 + d.duration for d, _, _, t0 in items)
         last = items[-1]
         self.then = None if then is None else Piece(then, last[1], last[2], last[3] + last[0].duration, beat,
