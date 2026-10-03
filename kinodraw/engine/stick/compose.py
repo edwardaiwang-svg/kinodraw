@@ -28,6 +28,7 @@ W, H = 1920, 1080
 GROUND_Y = 900
 STAGE_TOP = 130
 MIN_SHOT, MAX_SHOT = 2.2, 8.0
+ACTION = ('walk', 'run', 'fall', 'sit')      # whole-body actions: a close-up crops at the chest and hides them
 POP = 1 / DRAW_FPS                         # a card is drawn 8% larger for one drawing frame when it appears
 FIG_H = 600.
 SHOCKED, WORRIED, SERIOUS = ('wide', 'raised', 'o'), ('open', 'worried', 'frown'), ('open', 'flat', 'flat')
@@ -964,7 +965,7 @@ class Composer:
         elif not main:
             if crowd:
                 layout = 'crowd'
-            elif pose in ('walk', 'run', 'fall'):
+            elif pose in ACTION:
                 layout = 'solo'
             else:
                 layout = 'close' if self.last_layout == 'solo' else 'solo'
@@ -974,7 +975,7 @@ class Composer:
         elif crowd and len(main) == 1:
             layout = 'crowd'
         elif len(main) == 1 and main[0].kind in ('number', 'quote', 'term', 'title') and self.last_layout != 'close' \
-                and pose not in ('walk', 'run', 'fall'):
+                and pose not in ACTION:
             layout = 'close'
         else:
             self.side = -self.side
@@ -982,11 +983,11 @@ class Composer:
         if layout == self.last_layout == 'crowd' and not main:   # a second crowd in a row shows a picture instead
             main = self.fill(ch, beats, a, b, words)
             doodles = [c for c in main if c.kind == 'doodle']
-            layout = 'close' if not main else layout
+            layout = ('solo' if pose in ACTION else 'close') if not main else layout
         if layout == self.last_layout and layout in ('crowd', 'close') and main:
             self.side = -self.side
             layout = 'left' if self.side > 0 else 'right'
-        if layout == self.last_layout == 'solo':
+        if layout == self.last_layout == 'solo' and pose not in ACTION:   # an action stays in a full shot
             layout = 'close'
         self.last_layout = layout
         shot = self.base(a, b, layout, ch, beats, words=words)

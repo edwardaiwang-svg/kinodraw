@@ -281,3 +281,19 @@ def test_a_beat_starting_off_the_millisecond_keeps_its_sentence_cuts():
         t = next(t for t, _, sent in c.sentence_times(beat) if sent.startswith(opening))
         assert round(t, 3) in starts, (bid, t, sorted(starts))
 
+
+@pytest.mark.parametrize('lang, md, said', [
+    ('en', '# The Bench\n\nAt 30, she sat down on the bench.\n\nShe opened a shop of her own.\n',
+     'At 30, she sat down on the bench.'),
+    ('zh', '# 长椅\n\n玛丽亚在面包店工作了十二年。\n\n她在30岁那年坐在长椅上。\n\n她开了一家自己的店。\n',
+     '她在30岁那年坐在长椅上。'),
+])
+def test_a_sentence_about_sitting_shows_the_figure_sitting(tmp_path, lang, md, said):
+    """A sitting cue is acted out in a full-body shot: a close-up crops at the chest, where sitting cannot show, so
+    the shot must not be a close-up that swaps the sitting for talking."""
+    assert cues.pose_for(said, lang)[0] == 'sit'
+    (tmp_path / 'sit.md').write_text(md, encoding='utf-8')
+    shots = [s for s in build(tmp_path / 'sit.md').shots if s.words.strip() == said]
+    assert shots
+    for s in shots:
+        assert s.layout in ('solo', 'left', 'right') and s.pose == 'sit', (s.layout, s.pose)
