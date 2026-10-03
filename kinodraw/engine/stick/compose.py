@@ -891,7 +891,10 @@ class Composer:
         for t, c in cards:
             if c.kind == 'timeline' and c.data['events']:
                 last = max(e['t'] for e in c.data['events'])
-                holds.append((min(t, min(e['t'] for e in c.data['events'])) - .05, min(b, last + 2.5)))
+                h0 = min(t, min(e['t'] for e in c.data['events'])) - .05
+                if h0 - a < MIN_SHOT:                          # too soon after the section start for a shot of its own
+                    h0 = min(h0, a - .01)
+                holds.append((h0, min(b, last + 2.5)))
         bounds = sorted({round(t, 3) for t, _, _ in cuts if not any(h0 < t < h1 for h0, h1 in holds)}
                         | {round(max(a, h0), 3) for h0, _ in holds} | {round(h1, 3) for _, h1 in holds if h1 < b})
         bounds = [x for x in bounds if round(a, 3) <= x < b] or [a]   # a cut at a may have rounded below it

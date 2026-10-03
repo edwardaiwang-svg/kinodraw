@@ -297,3 +297,15 @@ def test_a_sentence_about_sitting_shows_the_figure_sitting(tmp_path, lang, md, s
     assert shots
     for s in shots:
         assert s.layout in ('solo', 'left', 'right') and s.pose == 'sit', (s.layout, s.pose)
+
+def test_a_section_opening_just_before_a_timeline_rides_with_it():
+    """A section whose timeline starts within a moment of the section shows the timeline from the first word,
+    instead of flashing a sub-second picture shot before it."""
+    p = built('bicycle.md')
+    c = p.composer
+    a = c.bt['b011']['start']
+    shot = next(s for s in p.shots if s.start <= a < s.end)
+    assert shot.layout == 'timeline' and shot.words.startswith('In the 1860s'), (shot.start, shot.layout, shot.words)
+    for s, n in zip(p.shots, p.shots[1:]):
+        if n.layout == 'timeline':
+            assert s.end - s.start >= compose.MIN_SHOT, (s.start, s.end, s.words)
