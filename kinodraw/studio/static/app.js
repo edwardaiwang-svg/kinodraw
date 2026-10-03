@@ -135,6 +135,7 @@ function showNew() {
       $('#file-name').textContent = f.name; fillVoices();
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
+  $('#style').innerHTML = STATE.styles.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('');
   $('#style').onchange = () => {            // a promo names its product; the whiteboard ignores Motion
     const collage = $('#style').value === 'collage/promo';
     $('#brand').classList.toggle('hidden', !collage);

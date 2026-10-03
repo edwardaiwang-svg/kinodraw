@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .. import PRODUCT, director, paths, pipeline, voice
+from .. import PRODUCT, director, paths, pipeline, styles, voice
 from ..director.validate import validate
 from ..library import resolve
 from ..package import sha
@@ -405,6 +405,8 @@ def state() -> dict:
             'advanced': bool(_config().get('advanced')),
             'credit': _config().get('credit', True), 'product': PRODUCT['name'],
             'models': SUGGESTED,
+            'styles': [{'value': f"{e['id']}/{e['stories'][0]}", 'label': e['name']['en']}   # the registry's looks
+                       for e in styles.looks(ready=True)],                               # that render now
             'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
                        'zh': ['zf_001', 'zf_002', 'zm_010', 'zm_020']},
             'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')},

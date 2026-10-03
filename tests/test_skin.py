@@ -197,9 +197,9 @@ def test_the_cli_and_the_studio_make_chalkboard_and_notebook_videos(tmp_path, mo
     cli.main(['new', str(FIX / 'tiny.md'), '-o', str(tmp_path / 'cli'), '--look', 'chalkboard'])
     assert pipeline.storyboard(tmp_path / 'cli')['look'] == 'chalkboard'
 
-    page = (Path(server.__file__).parent / 'static' / 'index.html').read_text()
+    offered = [s['value'] for s in server.state()['styles']]
     for look in SKINS:
-        assert f'<option value="{look}/explain">' in page
+        assert f'{look}/explain' in offered
     monkeypatch.setattr(server, 'projects_root', lambda: tmp_path)
     jid = server.create_project({'text': (FIX / 'tiny.md').read_text(), 'title': 'Notes', 'look': 'notebook',
                                  'story': 'explain'})['job']
@@ -247,3 +247,16 @@ def test_an_english_key_phrase_is_highlighted_as_a_word_not_inside_another_word(
     assert x0 > td.size[0] * .6                                         # the word "sun", not the "Sun" of Sunday
     (w0, _, _, _, _), = skins.phrase_boxes(ink.TextDrawing(['It warms up'], 'en', 60), 'warm')
     assert w0 > 0                                                       # a word's start still matches its stem
+
+
+def test_the_studio_offers_its_styles_from_the_registry(monkeypatch):
+    from kinodraw.studio import server
+    static = Path(server.__file__).parent / 'static'
+    assert '<option value="chalkboard' not in (static / 'index.html').read_text()   # no second list in the page
+    assert 'STATE.styles' in (static / 'app.js').read_text()
+    styles_offered = server.state()['styles']
+    assert [s['value'].split('/')[0] for s in styles_offered] == styles.ids(ready=True)
+    assert {'value': 'collage/promo', 'label': styles.get('collage')['name']['en']} in styles_offered
+    entries = [dict(e, render_ready=False) if e['id'] == 'chalkboard' else e for e in styles.looks()]
+    monkeypatch.setattr(styles, '_looks', lambda: tuple(entries))
+    assert 'chalkboard' not in [s['value'].split('/')[0] for s in server.state()['styles']]
