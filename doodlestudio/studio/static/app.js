@@ -44,15 +44,20 @@ function closeModal() { $('#modal').classList.add('hidden'); }
 async function watch(job, title) {
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
   const STAGES = { storyboard: 'Reading the script', director: 'Planning the visuals', voice: 'Recording the narration',
-    timeline: 'Timing captions and music', render: 'Drawing the video (the longest step)', finish: 'Adding music, captions and chapters' };
+    timeline: 'Timing captions and music', render: 'Drawing the video (the longest step)', finish: 'Adding music, captions and chapters',
+    'download-search': 'Downloading the doodle search (first video only)', 'download-voice': 'Downloading the voice (first video only)' };
+  const SLOT = { 'download-search': 'storyboard', 'download-voice': 'voice' };   // first-run downloads fill their step's share
+  const MB = (n) => Math.round(n / 1e6);
   for (;;) {
     await new Promise((r) => setTimeout(r, 800));
     const j = await api(`/api/jobs/${job}`);
     const frac = j.total ? j.done / j.total : 0;
     const order = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
-    const k = Math.max(0, order.indexOf(j.stage));
+    const k = Math.max(0, order.indexOf(SLOT[j.stage] || j.stage));
     $('#prog-fill').style.width = `${Math.min(99, ((k + frac) / order.length) * 100)}%`;
-    $('#prog-stage').textContent = `${STAGES[j.stage] || 'Starting'}${j.total > 1 ? ` · ${j.done}/${j.total}` : ''}`;
+    const count = j.stage in SLOT ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
+      : j.total > 1 ? ` · ${j.done}/${j.total}` : '';
+    $('#prog-stage').textContent = `${STAGES[j.stage] || 'Starting'}${count}`;
     if (j.state === 'done' || j.state === 'failed') {
       $('#progress').classList.add('hidden');
       if (j.state === 'failed') throw new Error(j.error);

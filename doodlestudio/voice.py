@@ -19,20 +19,21 @@ from pathlib import Path
 import numpy as np
 import platformdirs
 
-from .net import urlopen
+from .net import download
 
 MODEL_DIR = Path(os.environ.get('DOODLE_MODELS') or Path(platformdirs.user_data_dir('DoodleStudio')) / 'models').expanduser()
 RELEASE = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/'
-FILES = {       # name: (url, sha256)
+FILES = {       # name: (url, sha256, bytes)
     'kokoro-v1.0.fp16.onnx': (RELEASE + 'kokoro-v1.0.fp16.onnx',
-                              'f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96'),
-    'voices-v1.0.bin': (RELEASE + 'voices-v1.0.bin', 'bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d'),
+                              'f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96', 163_527_961),
+    'voices-v1.0.bin': (RELEASE + 'voices-v1.0.bin', 'bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d',
+                        28_214_398),
     'kokoro-v1.1-zh.fp16.onnx': (RELEASE + 'kokoro-v1.1-zh.fp16.onnx',
-                                 'a628ea5d6fbde96d1a85f691a6a00847829937f9e488021ba2c5359bc6ea08b5'),
+                                 'a628ea5d6fbde96d1a85f691a6a00847829937f9e488021ba2c5359bc6ea08b5', 163_528_759),
     'voices-v1.1-zh.bin': (RELEASE + 'voices-v1.1-zh.bin',
-                           '14cb6186c99e4f6016871405f62046c5df863ae27465cbdc4ee08be7dd703acd'),
+                           '14cb6186c99e4f6016871405f62046c5df863ae27465cbdc4ee08be7dd703acd', 53_815_880),
     'config-v1.1-zh.json': ('https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh/resolve/main/config.json',
-                            'bc333efa5ce4ceff433c8c8e5d027a1eca0166001e4e4a62bea2d26ff7a46890'),
+                            'bc333efa5ce4ceff433c8c8e5d027a1eca0166001e4e4a62bea2d26ff7a46890', 3_228),
 }
 LANGS = {
     'en': {'model': 'kokoro-v1.0.fp16.onnx', 'voices': 'voices-v1.0.bin', 'config': None, 'voice': 'af_heart'},
@@ -61,25 +62,8 @@ def missing_files(lang: str) -> list[str]:
 
 
 def ensure_models(lang: str, progress=None):
-    """Download and checksum-verify the model files for ``lang`` (first run only)."""
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    for name in missing_files(lang):
-        url, digest = FILES[name]
-        part = MODEL_DIR / f'{name}.part'
-        h = hashlib.sha256()
-        with urlopen(url) as response, open(part, 'wb') as out:
-            total = int(response.headers.get('Content-Length') or 0)
-            done = 0
-            while chunk := response.read(1 << 20):
-                out.write(chunk)
-                h.update(chunk)
-                done += len(chunk)
-                if progress:
-                    progress(name, done, total)
-        if h.hexdigest() != digest:
-            part.unlink()
-            raise RuntimeError(f'{name}: checksum mismatch; download again')
-        part.rename(MODEL_DIR / name)
+    """Download and checksum-verify the model files for ``lang`` (first run only); ``progress(done, total)`` in bytes."""
+    download([(FILES[name][0], MODEL_DIR / name, *FILES[name][1:]) for name in missing_files(lang)], progress)
 
 
 def _espeak_config():

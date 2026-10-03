@@ -71,6 +71,7 @@ def narrate(project_dir: Path, progress=None) -> dict:
     script.sync_takes(board)
     if json.dumps(board, ensure_ascii=False, sort_keys=True) != before:
         _save(project_dir / 'storyboard.json', board)
+    voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
         clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'], cfg['speed'])

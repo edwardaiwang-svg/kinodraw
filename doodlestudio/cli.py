@@ -26,7 +26,12 @@ from pathlib import Path
 
 
 def _progress(stage, done, total):
-    print(f'\r{stage}: {done}/{total}', end='\n' if done == total else '', flush=True)
+    if stage.startswith('download'):                  # first run only: bytes of the voice or the doodle search
+        text = f"downloading the {'voice' if stage == 'download-voice' else 'doodle search'}: " \
+               f'{done / 1e6:.0f}/{total / 1e6:.0f} MB ({done * 100 // max(total, 1)}%)'
+    else:
+        text = f'{stage}: {done}/{total}'
+    print(f'\r{text}', end='\n' if done == total else '', flush=True)
 
 
 def _stage(name):
@@ -140,9 +145,8 @@ def cmd_studio(args):
 def cmd_setup(args):
     from . import voice
     for lang in args.lang:
-        voice.ensure_models(lang, lambda name, done, total: print(
-            f'\r{name}: {done / 1e6:.0f}/{total / 1e6:.0f} MB', end='', flush=True))
-        print(f'\n{lang}: ready')
+        voice.ensure_models(lang, lambda done, total: _progress('download-voice', done, total))
+        print(f'{lang}: ready')
 
 
 def cmd_doodles(args):

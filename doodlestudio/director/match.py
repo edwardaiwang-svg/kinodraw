@@ -18,6 +18,21 @@ from ..library import ASSETS, catalog
 EMBED_MODELS = {'en': 'BAAI/bge-small-en-v1.5', 'zh': 'BAAI/bge-small-zh-v1.5'}
 CACHE = (Path(os.environ['DOODLE_MODELS']).expanduser() / 'embed' if os.environ.get('DOODLE_MODELS')
          else Path(platformdirs.user_cache_dir('DoodleStudio')) / 'embed')
+HF = 'https://huggingface.co/'
+EMBED_FILES = {   # lang: (Hugging Face repo at a fixed revision, {file: (sha256, bytes)}), what fastembed loads
+    'en': ('Qdrant/bge-small-en-v1.5-onnx-Q/resolve/aa8f8b060edb00e03bfdd08813a2949946c8ba55/', {
+        'model_optimized.onnx': ('51f1bd0addd6e859e42c2c8021a5e5461385bb676a649f4b269aa445449f2431', 66_465_124),
+        'tokenizer.json': ('d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66', 711_396),
+        'config.json': ('13582bcf2effc85b7bf3d3f5532e686bc1c9ce86bb009d10f0ec33cbe92299dd', 706),
+        'tokenizer_config.json': ('0b29c7bfc889e53b36d9dd3e686dd4300f6525110eaa98c76a5dafceb2029f53', 1_242),
+        'special_tokens_map.json': ('5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a', 695)}),
+    'zh': ('Qdrant/bge-small-zh-v1.5/resolve/46fbe35fd4374a00fee7de77dfddaeb6dd6a2c59/', {
+        'model_optimized.onnx': ('1294ea4b6331115a353d81f96b85e8c8d7fdcc284453d5b2fab5b016230aad38', 94_781_076),
+        'tokenizer.json': ('48cea5d44424912a6fd1ea647bf4fe50b55ab8b1e5879c3275f80e339e8fae26', 439_125),
+        'config.json': ('9088751d39abbf86ec3d19ffca92ad62ad19075f7e59712e6c71217fa125d1d3', 739),
+        'tokenizer_config.json': ('e6f3b96db926a37d4039995fbf5ad17de158dfb8f6343d607e4dbaad18d75f5a', 367),
+        'special_tokens_map.json': ('b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3', 125)}),
+}
 _LOCK = threading.Lock()
 EN_STOP = set('''a an the and or but if then so of to in on at by for with from as is are was were be been being it its
 this that these those there here they them their we our you your he she his her i me my mine us not no yes do does did
@@ -178,10 +193,21 @@ def _normalize(v: np.ndarray) -> np.ndarray:
     return v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-9)
 
 
+def ensure_model(lang: str, progress=None) -> Path:
+    """The doodle-search model for ``lang``, downloaded once from Hugging Face and checksum-verified;
+    ``progress(done, total)`` in bytes. (fastembed's own download shows no byte progress and, for Chinese,
+    falls back to a second host.)"""
+    from ..net import download
+    repo, files = EMBED_FILES[lang]
+    folder = CACHE / f"{repo.split('/')[1]}-{repo.split('/')[3][:8]}"
+    download([(HF + repo + name, folder / name, digest, size) for name, (digest, size) in files.items()], progress)
+    return folder
+
+
 @lru_cache(maxsize=2)
 def _model(lang: str):
     from fastembed import TextEmbedding
-    return TextEmbedding(EMBED_MODELS[lang], cache_dir=str(CACHE))
+    return TextEmbedding(EMBED_MODELS[lang], cache_dir=str(CACHE), specific_model_path=str(ensure_model(lang)))
 
 
 if __name__ == '__main__':

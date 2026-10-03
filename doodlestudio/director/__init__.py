@@ -17,6 +17,8 @@ def direct(project_dir: Path, mode: str = 'rules', model: str | None = None, bas
     project_dir = Path(project_dir)
     path = project_dir / 'storyboard.json'
     board = json.loads(path.read_text(encoding='utf-8'))
+    from .match import ensure_model                  # every director searches the doodles; first run downloads it
+    ensure_model(board['lang'], progress and (lambda done, total: progress('download-search', done, total)))
     if mode == 'rules':
         from .rules import RulesDirector
         RulesDirector(board['lang']).direct(board)

@@ -21,7 +21,7 @@ The packaged apps on the Releases page also contain GPL components (FFmpeg built
 | Component | Licence |
 |---|---|
 | Kokoro-82M voice models, v1.0 and v1.1-zh (hexgrad), ONNX exports by thewh1teagle | Apache-2.0 |
-| BAAI bge-small-en-v1.5 and bge-small-zh-v1.5 (doodle search), as the ONNX exports Qdrant/bge-small-en-v1.5-onnx-Q and Qdrant/bge-small-zh-v1.5, via fastembed | MIT |
+| BAAI bge-small-en-v1.5 and bge-small-zh-v1.5 (doodle search), as the ONNX exports Qdrant/bge-small-en-v1.5-onnx-Q and Qdrant/bge-small-zh-v1.5 (from Hugging Face, checksum-verified), run with fastembed | MIT |
 
 ## Python libraries
 

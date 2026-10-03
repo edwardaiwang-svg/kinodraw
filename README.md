@@ -14,7 +14,7 @@ Paste a script and Doodle Studio produces a finished MP4. A drawing hand sketche
 
 ## Install
 
-**App:** download *Doodle Studio* for macOS (Apple silicon, M1 or newer), Windows or Linux from [Releases](../../releases) and open it. The first video downloads the voice model (about 190 MB per language, checksum-verified) and the doodle search model (about 70 MB), once.
+**App:** download *Doodle Studio* for macOS (Apple silicon, M1 or newer), Windows or Linux from [Releases](../../releases) and open it. The first video downloads the voice model (about 190 MB per language) and the doodle search model (about 70 MB), once, checksum-verified, showing megabytes and percent as it goes.
 
 The app isn't notarized by Apple or signed for Windows yet, so the first launch needs one approval:
 - **macOS:** unzip, drag *Doodle Studio* to Applications and open it. When macOS blocks it, go to System Settings → Privacy & Security and click **Open Anyway**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine "/Applications/Doodle Studio.app"` once.
