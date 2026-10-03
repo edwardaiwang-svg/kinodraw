@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from scipy.signal import butter, resample_poly, sosfilt
 
-from kinodraw import cli, pipeline, voice
+from kinodraw import cli, pipeline, script, voice
 
 needs_models = pytest.mark.skipif(bool(voice.missing_files('en')),
                                   reason='Kokoro models not downloaded (kinodraw setup --lang en)')
@@ -124,6 +124,48 @@ def test_a_take_in_another_voice_is_cut_in_its_pauses_and_timed_to_its_words(tak
     errors = np.abs(errors)
     assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
     assert not any(row['check'] or row['missing'] for row in report['beats']) and report['match'] > voice.MATCH
+    assert [row['text'] for row in report['sentences']] == [s for _, text in BEATS for s in script.sentences(text, 'en')]
+    assert not any(row['check'] for row in report['sentences'])
+
+
+def _sentence_take(path, replace=None, skip=()):
+    """The script read sentence by sentence by another voice (am_michael at 0.85), with short pauses inside a beat and
+    longer ones between beats; ``replace`` reads other words instead of some sentences, ``skip`` leaves some out
+    (numbered from 1, as the Studio shows them)."""
+    rng = np.random.default_rng(0)
+    parts, n = [np.zeros(round(.4 * voice.SR), np.float32)], 0
+    for _, text in BEATS:
+        for sentence in script.sentences(text, 'en'):
+            n += 1
+            if n not in skip:
+                clip = voice.synthesize((replace or {}).get(n, sentence), 'en', path.parent / 'take', 'am_michael', .85)
+                parts += [voice._read_wav(clip.wav), np.zeros(round(rng.uniform(.25, .45) * voice.SR), np.float32)]
+        parts.append(np.zeros(round(rng.uniform(.3, .8) * voice.SR), np.float32))
+    x = np.concatenate(parts)
+    voice._write_wav(path, x + rng.normal(0, NOISE, len(x)).astype(np.float32))
+    return path
+
+
+@needs_models
+def test_one_wrong_sentence_is_marked_and_its_beat_mates_are_not(tmp_path):
+    """Sentence 2 of a three-sentence beat read as other words: only sentence 2 is marked (a beat-by-beat check passes
+    this beat, and would mark sentences 1 and 3 with it if it did not)."""
+    take = _sentence_take(tmp_path / 'take.wav', replace={2: 'The council met on Tuesday.'})
+    voice.from_recording(take, BEATS, 'en', tmp_path / 'voice')
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    assert [n for n, row in enumerate(report['sentences'], 1) if row['check']] == [2]
+
+
+@needs_models
+def test_a_skipped_sentence_is_marked_itself_not_the_next_beat(tmp_path):
+    """Sentence 7 left out: it is marked, and no sentence of another beat is. The sentence just before it is
+    sometimes marked too (the alignment lends it some of the missing sentence's time; Kokoro's guide varies a little
+    from run to run, so that one is allowed either way)."""
+    take = _sentence_take(tmp_path / 'take.wav', skip=(7,))
+    voice.from_recording(take, BEATS, 'en', tmp_path / 'voice')
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    marked = {n for n, row in enumerate(report['sentences'], 1) if row['check']}
+    assert 7 in marked and marked <= {6, 7, 8}, marked             # 6 to 8 are beat b003
 
 
 @needs_models
@@ -249,7 +291,7 @@ def test_the_studio_shows_a_recording_problem_as_a_plain_sentence(monkeypatch):
     def bug(progress):
         raise KeyError('beats')
     assert wait(wrong_take) == plain
-    assert wait(bug) == "KeyError: 'beats'"            # anything else keeps its type, for a bug report
+    assert "KeyError: 'beats'" in wait(bug)            # anything else keeps its type, for a bug report
 
 
 def test_a_recording_problem_names_the_way_back_to_the_ai_voice(tmp_path, monkeypatch):
@@ -329,3 +371,44 @@ def test_your_own_voice_works_where_text_files_are_not_utf8_by_default(tmp_path)
     assert 'your recording: match' in kinodraw('voice', project)                     # again, from the cache
     report = json.loads((project / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
     assert report['recording'] == str(project / 'recording.wav')
+
+
+ZH = [('b001', '人的一生大约有三分之一的时间在睡觉。很多人觉得睡觉是在浪费时间，但科学家发现，睡眠其实是大脑和身体最忙碌的维修时间。'),
+      ('b002', '白天，大脑工作时会产生很多代谢废物。研究发现，人在深度睡眠时，脑细胞之间的空隙会变大。'),
+      ('b003', '实验显示，学完新内容后睡一觉的人，第二天的考试成绩往往比熬夜复习的人更好。'),
+      ('b004', '今晚早点睡，就是对明天的自己最好的投资。')]
+
+
+@pytest.mark.skipif(bool(voice.missing_files('zh')), reason='Kokoro zh models not downloaded (kinodraw setup --lang zh)')
+def test_a_chinese_take_is_cut_and_timed_as_well_as_an_english_one(tmp_path):
+    """Own voice is offered for Chinese scripts too: a take in another voice (zm_010, slower) is cut in its pauses
+    and every character is drawn when it is said."""
+    rng = np.random.default_rng(0)
+    highpass = butter(2, 80, 'highpass', fs=voice.SR, output='sos')
+    parts, truth, t = [np.zeros(round(.4 * voice.SR), np.float32)], [], .4
+    for _, text in ZH:
+        clip = voice.synthesize(text, 'zh', tmp_path / 'take', 'zm_010', .85)
+        audio = voice._read_wav(clip.wav)
+        n = len(audio) // 240
+        level = 10 * np.log10((sosfilt(highpass, audio)[:n * 240].reshape(n, 240) ** 2).mean(1) + 1e-10)
+        heard = np.flatnonzero(level > 20 * np.log10(NOISE) + 6)
+        truth.append({'start': t + heard[0] / 100, 'end': t + (heard[-1] + 1) / 100, 'chars': [t + c for c in clip.char_times]})
+        gap = round(rng.uniform(.3, 1.2) * voice.SR)
+        parts += [audio, np.zeros(gap, np.float32)]
+        t += (len(audio) + gap) / voice.SR
+    x = np.concatenate(parts)
+    path = tmp_path / 'take.wav'
+    voice._write_wav(path, x + rng.normal(0, NOISE, len(x)).astype(np.float32))
+    clips = voice.from_recording(path, ZH, 'zh', tmp_path / 'voice')
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    errors = []
+    for k, ((bid, text), row) in enumerate(zip(ZH, report['beats'])):
+        before = truth[k - 1]['end'] if k else 0.
+        after = truth[k + 1]['start'] if k + 1 < len(ZH) else np.inf
+        assert before <= row['start'] <= truth[k]['start'] and truth[k]['end'] <= row['end'] <= after, (row, truth[k])
+        errors += [row['start'] + clips[bid].char_times[i] - truth[k]['chars'][i]
+                   for i, ch in enumerate(text) if re.match('[一-鿿]', ch)]
+    errors = np.abs(errors)
+    assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
+    assert not any(row['check'] for row in report['beats']) and report['match'] > voice.MATCH
+    assert len(report['sentences']) == 6 and not any(row['check'] for row in report['sentences'])

@@ -106,3 +106,33 @@ video { width: 100%; border-radius: 14px; border: 2px solid var(--ink); backgrou
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; z-index: 20; max-width: 80vw; }
 .settings section { margin-bottom: 18px; }
 .settings h3 { margin: 0 0 6px; }
+
+/* narrator: built-in voice or your own */
+.narrator-pick { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin: 12px 0; }
+.narrator-pick .pick-label { align-self: center; font-family: 'Playpen', sans-serif; font-size: 16px; color: var(--ink); min-width: 80px; }
+label.seg { flex: 1; min-width: 220px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 10px 14px;
+  border: 2px solid var(--ink); border-radius: 12px; background: #fff; cursor: pointer; color: var(--ink); }
+label.seg input { width: auto; margin: 0; accent-color: var(--orange); }
+label.seg b { font-size: 16px; }
+label.seg small { flex-basis: 100%; padding-left: 24px; color: var(--soft); font-size: 13px; }
+label.seg:has(input:checked) { background: #fff3e0; box-shadow: 0 3px 0 var(--ink); }
+#tab-narrator { background: var(--card); border: 2px solid var(--ink); border-radius: 0 14px 14px 14px; padding: 16px 20px 24px; }
+#tab-narrator .how { margin: 6px 0 14px; padding-left: 22px; font-size: 15px; }
+.take-row { flex-wrap: wrap; margin-bottom: 10px; }
+label.file.upload { border-style: solid; background: #fff; font-size: 16px; padding: 10px 18px; box-shadow: 0 3px 0 var(--ink); }
+#tab-narrator audio { display: block; width: min(460px, 100%); margin: 0 0 12px; }
+#n-use { font-size: 17px; padding: 10px 20px; }
+.result { margin: 14px 0; padding: 12px 16px; border: 2px solid var(--ink); border-radius: 12px; background: #fff; }
+.result p { margin: 0 0 8px; }
+.result p:last-child { margin: 0; }
+.result.ok { background: #e7f6ec; }
+.result.warn { background: #fff8d6; }
+.result.bad { background: #fdecea; }
+.result details { font-size: 13px; color: var(--soft); }
+.tip { background: #fff8d6; border: 2px solid var(--ink); border-radius: 10px; padding: 10px 14px; margin: 18px 0 10px; }
+ol.read-aloud { font-size: 22px; line-height: 1.5; padding-left: 3.2em; margin: 0; }
+ol.read-aloud li { padding: 6px 4px; border-bottom: 1px dashed var(--line); }
+ol.read-aloud li::marker { color: var(--soft); font-size: 16px; }
+ol.read-aloud li.miss { background: #fdecea; }
+ol.read-aloud li.poor, ol.read-aloud li.changed { background: #fff8d6; }
+ol.read-aloud .tag { font-size: 13px; border: 1.5px solid var(--ink); border-radius: 99px; padding: 1px 8px; background: #fff; vertical-align: middle; white-space: nowrap; }

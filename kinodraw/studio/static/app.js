@@ -26,7 +26,8 @@ function wholeVideoOffline(res) {          // KinoDraw Cloud refused the video (
 let STATE = null, current = null, board = null, dirty = false, cloudEmail = '';   // the sign-in address, kept between openings
 
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
+  const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, ...type, ...(opts.headers || {}) } });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
@@ -41,21 +42,23 @@ function toast(msg, ms = 3500) {
 function modal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.remove('hidden'); return $('#modal-body'); }
 function closeModal() { $('#modal').classList.add('hidden'); }
 
-async function watch(job, title) {
+const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
+async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
   const STAGES = { storyboard: 'Reading the script', director: 'Planning the visuals', voice: 'Recording the narration',
     timeline: 'Timing captions and music', render: 'Drawing the video (the longest step)', finish: 'Adding music, captions and chapters',
-    'download-search': 'Downloading the doodle search (first video only)', 'download-voice': 'Downloading the voice (first video only)' };
-  const SLOT = { 'download-search': 'storyboard', 'download-voice': 'voice' };   // first-run downloads fill their step's share
+    'download-search': 'Downloading the doodle search (first video only)', 'download-voice': 'Downloading the voice (first video only)',
+    ...(own ? { voice: 'Getting ready to listen to your recording', align: 'Matching your recording to each sentence',
+      timeline: 'Timing every drawing to your voice' } : {}) };
+  const SLOT = { 'download-search': 'storyboard', 'download-voice': 'voice', align: 'voice' };   // these fill their step's share
   const MB = (n) => Math.round(n / 1e6);
   for (;;) {
     await new Promise((r) => setTimeout(r, 800));
     const j = await api(`/api/jobs/${job}`);
     const frac = j.total ? j.done / j.total : 0;
-    const order = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
-    const k = Math.max(0, order.indexOf(SLOT[j.stage] || j.stage));
+    const k = Math.max(0, order.includes(j.stage) ? order.indexOf(j.stage) : order.indexOf(SLOT[j.stage]));
     $('#prog-fill').style.width = `${Math.min(99, ((k + frac) / order.length) * 100)}%`;
-    const count = j.stage in SLOT ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
+    const count = j.stage.startsWith('download') ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
       : j.total > 1 ? ` · ${j.done}/${j.total}` : '';
     $('#prog-stage').textContent = `${STAGES[j.stage] || 'Starting'}${count}`;
     if (j.state === 'done' || j.state === 'failed') {
@@ -93,6 +96,8 @@ function showNew() {
   };
   langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
   fillVoices();
+  const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
+  document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
   dirSel.innerHTML = directorOptions(STATE.default_director);
   const note = () => {
     const d = dirSel.value;
@@ -148,19 +153,19 @@ function showNew() {
       const whole = wholeVideoOffline(res);
       if (whole) toast(whole, 8000);
       else if (res?.notes?.length) toast(`${res.notes.length} AI suggestions were replaced by the offline plan`);
-      await openProject(project);
+      await openProject(project, ownVoice() ? 'narrator' : null);
     } catch (e) { $('#progress').classList.add('hidden'); toast(e.message, 6000); }
   };
 }
 
 // ---------------------------------------------------------------- project
-async function openProject(name) {
+async function openProject(name, tab = null) {
   current = name; dirty = false; loadProjects();
   const p = await api(`/api/projects/${encodeURIComponent(name)}`);
   board = p.storyboard;
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
-  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · voice ${p.settings.voice}`;
+  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${p.settings.voice}`}`;
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (needsCloudSignIn($('#p-director').value)) return;
@@ -176,14 +181,16 @@ async function openProject(name) {
   $('#p-reveal').onclick = () => api(`/api/projects/${encodeURIComponent(name)}/reveal`, { method: 'POST' });
   $('#p-make').onclick = () => makeVideo(name);
   $('#p-save').onclick = saveBoard;
-  document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => {
-    document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
-    $('#tab-board').classList.toggle('hidden', b.dataset.tab !== 'board');
-    $('#tab-video').classList.toggle('hidden', b.dataset.tab !== 'video');
-  }));
+  document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
   renderBoard();
   renderVideo(p);
-  if (p.videos?.length) document.querySelector('.tabs button[data-tab="video"]').click();
+  loadNarrator(name, tab === 'narrator' ? 'own' : undefined);     // opened from New video with My own voice chosen
+  if (tab || p.videos?.length) showTab(tab || 'video');
+}
+
+function showTab(tab) {
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.tab === tab));
+  for (const t of ['board', 'narrator', 'video']) $(`#tab-${t}`).classList.toggle('hidden', t !== tab);
 }
 
 function markDirty() { dirty = true; $('#p-save').disabled = false; $('#dirty').textContent = 'Unsaved changes'; }
@@ -280,18 +287,51 @@ async function saveBoard() {
   try {
     const res = await api(`/api/projects/${encodeURIComponent(current)}/storyboard`, { method: 'PUT', body: JSON.stringify(board) });
     if (!res.ok) { toast(`Not saved: ${res.errors[0]}`, 7000); return false; }
-    dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved'; return true;
+    dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved';
+    loadNarrator(current, document.querySelector('input[name="n-pick"]:checked')?.value);   // an edited takeaway is read aloud
+    return true;
   } catch (e) { toast(e.message, 6000); return false; }
 }
 
-async function makeVideo(name) {
+async function makeVideo(name, anyway = false) {   // anyway: the user saw which sentences don't fit and goes ahead
   if (dirty && !(await saveBoard())) return;
+  let narr = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
+  const own = narr.narrator === 'own';
+  if (!own && document.querySelector('input[name="n-pick"]:checked')?.value === 'own') {   // chosen, nothing recorded yet
+    showTab('narrator');
+    toast('Upload your recording first, or choose the built-in voice.', 8000);
+    return;
+  }
+  const stop = (message) => { showTab('narrator'); renderNarrator(name, narr); toast(message, 10000); };
   try {
-    const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/make`, { method: 'POST' })).job, 'Making your video');
+    if (own && narr.changed.length && !anyway) {  // the script was edited after the recording was made
+      stop(`${sentences(narr.changed)} changed after you recorded. Record it again, or press Make the video anyway.`);
+      return;
+    }
+    let fresh = false;
+    if (own && !narr.check) {                     // a new recording: check it against the script first
+      narr = await watch((await api(`/api/projects/${encodeURIComponent(name)}/align`, { method: 'POST' })).job,
+        'Listening to your recording', ['voice', 'align', 'timeline'], true);
+      renderNarrator(name, narr);
+      fresh = true;
+    }
+    if (own && !narr.check.ok) {                  // a take that does not fit: fix it there first
+      stop('Your recording doesn’t match the script yet. Record it again, or choose the built-in voice.');
+      return;
+    }
+    const unseen = narr.check?.poor.filter((n) => !anyway || fresh && !narr.changed.includes(n)) || [];
+    if (own && unseen.length) {                   // some sentences don't fit: say which before drawing anything
+      stop(`${sentences(unseen)} didn’t match your recording. Record it again, or press Make the video anyway.`);
+      return;
+    }
+    const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/make`, { method: 'POST' })).job, 'Making your video', MAKE, own);
     toast(res.ok ? `Video ready (${res.length})` : `Video made, with warnings: ${res.problems[0]}`, 6000);
     await openProject(name);
     document.querySelector('.tabs button[data-tab="video"]').click();
-  } catch (e) { $('#progress').classList.add('hidden'); toast(e.message, 8000); }
+  } catch (e) {
+    $('#progress').classList.add('hidden'); toast(e.message, 10000);
+    if (own) { showTab('narrator'); loadNarrator(name, undefined, e.message); }
+  }
 }
 
 function renderVideo(p) {
@@ -308,6 +348,123 @@ function renderVideo(p) {
   box.innerHTML = `<video controls preload="metadata" poster="${fileSrc(`${stem}-thumbnail.png`)}" src="${fileSrc(video)}"></video>${qa}
     <div class="files">${files.map(([f, l]) => `<a href="${fileSrc(f)}" target="_blank">${l}</a>`).join('')}</div>
     <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). ${p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
+}
+
+// ---------------------------------------------------------------- narrator (your own voice)
+function sentences(ns) {                       // [4, 5, 6, 9] -> "Sentences 4–6 and 9"
+  const runs = [];
+  for (const n of ns) { const r = runs[runs.length - 1]; if (r && r[1] === n - 1) r[1] = n; else runs.push([n, n]); }
+  const parts = runs.map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`));
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+  return `${ns.length === 1 ? 'Sentence' : 'Sentences'} ${list}`;
+}
+
+async function loadNarrator(name, choice, problem) {
+  try {
+    const info = await api(`/api/projects/${encodeURIComponent(name)}/narrator`);
+    if (problem) info.check = { ok: false, poor: [], missing: [], problem };    // what just went wrong, in its words
+    renderNarrator(name, info, choice || info.narrator);
+  }
+  catch (e) { toast(e.message, 6000); }
+}
+
+function narratorResult(info) {
+  const check = info.check, changed = info.changed;
+  if (!info.take) return '';
+  const again = 'Record the whole script again, reading every numbered sentence below as written, then upload it.';
+  if (changed.length && check?.ok !== false) {
+    return `<div class="result warn"><p>${sentences(changed)} changed after you recorded (marked below), so your
+      recording says something else there. ${again}</p>
+      <p>Or make the video now: your voice will say the old words while the captions show the new ones.</p>
+      <button id="n-make" class="ghost">Make the video anyway</button></div>`;
+  }
+  if (!check) return `<div class="result">Press <b>Use it for this video</b>: ${esc(STATE.product)} listens to your recording and times every drawing to your voice. It takes about a minute.</div>`;
+  const { missing, poor } = check;
+  const detail = check.problem ? `<details><summary>More detail</summary>${esc(check.problem)}</details>` : '';
+  if (check.ok && !poor.length) {
+    return `<div class="result ok"><p>✓ All ${info.lines.length} sentences matched. Your video will be narrated in your own voice.</p>
+      <button id="n-make" class="primary">Make video</button></div>`;
+  }
+  if (check.ok) {
+    return `<div class="result warn"><p>${sentences(poor)} didn’t match your recording: ${poor.length === 1 ? 'it' : 'they'}
+      may have been skipped or read differently (marked below). ${again}</p>
+      <p>Or make the video now: the drawings for ${poor.length === 1 ? 'that sentence' : 'those sentences'} may not line up.</p>
+      <button id="n-make" class="ghost">Make the video anyway</button></div>`;
+  }
+  if (missing.length) {
+    return `<div class="result bad"><p>Your recording doesn’t follow the script: ${sentences(missing).toLowerCase()}
+      ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in it (marked below). ${again}</p>${detail}</div>`;
+  }
+  if (poor.length) {
+    return `<div class="result bad"><p>Your recording doesn’t sound like this script. ${again}</p>${detail}</div>`;
+  }
+  return `<div class="result bad"><p>${esc(check.problem || 'Your recording doesn’t match this script.')}</p></div>`;
+}
+
+function renderNarrator(name, info, choice = info.narrator) {
+  const box = $('#tab-narrator');
+  if (!box || current !== name) return;
+  const own = choice === 'own', check = info.check;
+  const pick = `<div class="narrator-pick">
+    <span class="pick-label">Narrator</span>
+    <label class="seg"><input type="radio" name="n-pick" value="builtin"${own ? '' : ' checked'}><b>Built-in voice</b>
+      <small>A natural AI voice (${esc(info.voice)}) reads your script</small></label>
+    <label class="seg"><input type="radio" name="n-pick" value="own"${own ? ' checked' : ''}><b>My own voice</b>
+      <small>You read the script aloud; every drawing follows your voice</small></label></div>`;
+  if (!own) {
+    box.innerHTML = `${pick}<p class="muted">The built-in voice reads exactly what the storyboard says. Press <b>Make video</b> when you’re ready.</p>`;
+  } else {
+    const lines = info.lines.map((l, i) => {
+      const mark = check?.missing.includes(i + 1) ? 'miss' : info.changed.includes(i + 1) ? 'changed'
+        : check?.poor.includes(i + 1) ? 'poor' : '';
+      const tag = { miss: 'not found', changed: 'changed since you recorded', poor: 'didn’t match' }[mark];
+      return `<li class="${mark}">${esc(l.text)}${tag ? ` <span class="tag">${tag}</span>` : ''}</li>`;
+    }).join('');
+    box.innerHTML = `${pick}
+      <ol class="how"><li>Read the script below aloud and record it, on your phone or any recorder.</li>
+        <li>Upload the recording here.</li><li>Press <b>Use it for this video</b>.</li></ol>
+      <div class="row take-row">
+        <label class="file upload">Upload a recording <input id="n-file" type="file"></label>
+        <span id="n-take" class="muted">${info.take ? `Your recording: ${esc(info.take)}` : 'No recording yet'}</span>
+      </div>
+      ${info.take ? `<audio controls preload="none" src="${fileSrc(info.take)}"></audio>` : ''}
+      <button id="n-use" class="${check?.ok ? 'ghost' : 'primary'}"${info.take ? '' : ' disabled'}>Use it for this video</button>
+      <div id="n-result">${narratorResult(info)}</div>
+      <p class="tip"><b>Read it naturally</b>, at your usual pace, and pause for a moment between sentences. Record it in
+        one go, start to finish, somewhere quiet. A phone’s voice memo app works well: send the recording to this
+        computer, then upload it.</p>
+      <ol class="read-aloud" lang="${esc(info.lang)}">${lines}</ol>`;
+  }
+  box.querySelectorAll('input[name="n-pick"]').forEach((r) => (r.onchange = async () => {
+    try {
+      if (r.value === 'builtin' && info.narrator === 'own' || r.value === 'own' && info.take) {
+        const next = await api(`/api/projects/${encodeURIComponent(name)}/narrator`, { method: 'POST', body: JSON.stringify({ narrator: r.value }) });
+        toast(r.value === 'own' ? 'Your video will be narrated in your own voice' : 'Your video will use the built-in voice');
+        renderNarrator(name, next);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : `voice ${next.voice}`}`);
+      } else renderNarrator(name, info, r.value);
+    } catch (e) { toast(e.message, 6000); }
+  }));
+  if (!own) return;
+  const showProblem = (msg) => { $('#n-result', box).innerHTML = `<div class="result bad"><p>${esc(msg)}</p></div>`; };
+  $('#n-file', box).onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    $('#n-take', box).textContent = `Adding ${f.name}…`;
+    try {
+      renderNarrator(name, await api(`/api/projects/${encodeURIComponent(name)}/recording?filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: f }));
+      $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ' narrated in your own voice');
+    } catch (err) {
+      $('#n-take', box).textContent = info.take ? `Your recording: ${info.take}` : 'No recording yet';
+      showProblem(err.message);
+    } finally { e.target.value = ''; }
+  };
+  $('#n-use', box).onclick = async () => {
+    try {
+      const job = (await api(`/api/projects/${encodeURIComponent(name)}/align`, { method: 'POST' })).job;
+      renderNarrator(name, await watch(job, 'Listening to your recording', ['voice', 'align', 'timeline'], true));
+    } catch (e) { $('#progress').classList.add('hidden'); showProblem(e.message); }
+  };
+  $('#n-make', box)?.addEventListener('click', () => makeVideo(name, true));
 }
 
 // ---------------------------------------------------------------- settings

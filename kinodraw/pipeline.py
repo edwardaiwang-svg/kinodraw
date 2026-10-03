@@ -103,6 +103,8 @@ def narrate(project_dir: Path, progress=None) -> dict:
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
+        if progress:
+            progress('align', 0, 1)
         beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
         try:
             clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',

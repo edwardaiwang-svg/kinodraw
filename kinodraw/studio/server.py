@@ -5,6 +5,7 @@ injects into the page, so other web pages on this computer cannot drive it.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import mimetypes
 import re
@@ -74,8 +75,7 @@ class Jobs:
                     job['result'] = fn(progress)
                     job['state'] = 'done'
                 except Exception as error:  # noqa: BLE001 - shown to the user
-                    job.update(state='failed', error=str(error) if isinstance(error, voice.RecordingError)
-                               else f'{type(error).__name__}: {error}')
+                    job.update(state='failed', error=_plain(error))
                     traceback.print_exc()
         threading.Thread(target=run, daemon=True).start()
         return jid
@@ -85,6 +85,14 @@ class Jobs:
 
 
 JOBS = Jobs()
+
+
+def _plain(error: Exception) -> str:
+    """What a failed job tells the user: a ValueError's message is written for them; anything else is a bug, named
+    so it can be reported."""
+    if isinstance(error, ValueError):
+        return str(error)
+    return f'Something went wrong ({type(error).__name__}: {error}). Please tell us using "Feedback or a problem?".'
 
 
 def _project(name: str) -> Path:
@@ -177,6 +185,151 @@ def make_video(name: str) -> dict:
         qa = pipeline.finish(path)
         return {'video': Path(qa['video']).name, 'ok': qa['ok'], 'problems': qa['problems'], 'length': qa['length']}
     return {'job': JOBS.start('make', name, job)}
+
+
+# ------------------------------------------------------------------ your own voice
+TAKE_MAX = 2 << 30          # bytes; an hour of uncompressed stereo WAV is about 600 MB
+
+
+def _takes(path: Path) -> list[Path]:
+    return sorted(path.glob('recording.*'))
+
+
+def _lines(path: Path) -> list[dict]:
+    """The script as the sentences that will be narrated (an edited takeaway note says its new words)."""
+    from .. import script
+    lang, board = pipeline.settings(path)['lang'], script.sync_takes(pipeline.storyboard(path))
+    return [{'beat': b['id'], 'text': s} for b in board['beats'] for s in script.sentences(b['spoken'][lang], lang)]
+
+
+def narrator(name: str) -> dict:
+    """The Narrator tab: who narrates, the script as sentences to read aloud (exactly what the built-in voice says,
+    numbers written out), the project's recording, how it matched each sentence when it was last used, and which
+    sentences changed after it was recorded. Sentences are numbered from 1, as on the page."""
+    path = _project(name)
+    cfg, lines = pipeline.settings(path), _lines(path)
+    take = path / cfg['recording'] if cfg.get('recording') else next(iter(_takes(path)), None)
+    take = take if take and take.is_file() else None
+    digest = sha(take) if take else None
+    return {'narrator': 'own' if cfg.get('recording') else 'builtin', 'voice': cfg['voice'], 'lang': cfg['lang'],
+            'take': take.name if take else None, 'lines': lines, 'check': _check(path, digest, lines),
+            'changed': _changed(path, digest, lines)}
+
+
+def _check(path: Path, digest: str | None, lines: list[dict]) -> dict | None:
+    """How the take matched each sentence when it was last used (the alignment's report, or why it could not be cut),
+    or None if it has not been used since it was recorded or the sentences changed."""
+    if not digest:
+        return None
+    said, check = [[line['beat'], line['text']] for line in lines], None
+    report, problem = path / 'voice' / 'recording-align.json', path / 'voice' / 'recording-problem.json'
+    if report.is_file():
+        info = json.loads(report.read_text(encoding='utf-8'))
+        rows = info.get('sentences') or []
+        if info.get('sha256') == digest and [[r['beat'], r['text']] for r in rows] == said:
+            check = {'ok': info['match'] >= voice.MATCH, 'poor': [n for n, r in enumerate(rows, 1) if r['check']],
+                     'missing': [], 'problem': None}
+    if problem.is_file():
+        info = json.loads(problem.read_text(encoding='utf-8'))
+        if info['sha256'] == digest and info.get('lines') == said:
+            check = {**(check or {'poor': []}), 'ok': False, 'problem': info['problem'],
+                     'missing': [n for n, line in enumerate(lines, 1) if line['beat'] == info['missing']]}
+    return check
+
+
+def _changed(path: Path, digest: str | None, lines: list[dict]) -> list[int]:
+    """The sentences that say something else than when the take was added (an edited takeaway note, a re-planned
+    storyboard): the recording does not say them. A sentence taken out marks the one now in its place."""
+    snapshot = path / 'voice' / 'recording-script.json'
+    if not digest or not snapshot.is_file():
+        return []
+    info = json.loads(snapshot.read_text(encoding='utf-8'))
+    if info['sha256'] != digest:
+        return []
+    now, changed = [line['text'] for line in lines], set()
+    for tag, _, _, j1, j2 in difflib.SequenceMatcher(None, info['lines'], now, autojunk=False).get_opcodes():
+        if tag != 'equal':
+            changed.update(range(j1, j2) if j2 > j1 else [min(j1, len(now) - 1)])
+    return sorted(n + 1 for n in changed)
+
+
+def save_take(name: str, filename: str, stream, length: int) -> dict:
+    """Keep an uploaded (or recorded) reading of the script as the project's narration, as it is: anything the
+    bundled ffmpeg can play is fine (phone voice memos, mp3, wav, ogg, webm, 3gp, amr...)."""
+    path = _project(name)
+    if not length:
+        raise ValueError(f'“{filename}” is empty. Choose your recording again.')
+    if length > TAKE_MAX:
+        raise ValueError(f'“{filename}” is too big (over 2 GB). Save it as .m4a or .mp3 and try again.')
+    suffix = Path(filename).suffix.lower()
+    suffix = suffix if re.fullmatch(r'\.[a-z0-9]{1,5}', suffix) else '.audio'
+    part = path / f'.upload{suffix}'
+    try:
+        with part.open('wb') as f:
+            left = length
+            while left and (chunk := stream.read(min(left, 1 << 20))):
+                f.write(chunk)
+                left -= len(chunk)
+        if left:
+            raise ValueError(f'The upload of “{filename}” stopped part-way. Try again.')
+        try:
+            voice._decode(part)
+        except ValueError:
+            raise ValueError(f'“{filename}” isn’t a recording we can play. Voice memos (.m4a), .mp3 and .wav files '
+                             'all work: save or export your recording as one of those and try again.') from None
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
+    for old in _takes(path):
+        old.unlink()
+    take = part.rename(path / f'recording{suffix}')
+    pipeline.set_recording(path, take)
+    snapshot = path / 'voice' / 'recording-script.json'        # what it reads, so later edits can be pointed out
+    snapshot.parent.mkdir(exist_ok=True)
+    snapshot.write_text(json.dumps({'sha256': sha(take), 'lines': [line['text'] for line in _lines(path)]},
+                                 ensure_ascii=False), encoding='utf-8')
+    return narrator(name)
+
+
+def set_narrator(name: str, body: dict) -> dict:
+    """Narrate with the built-in voice (your recording stays in the project) or with your own recording again."""
+    path = _project(name)
+    if body.get('narrator') == 'builtin':
+        pipeline.set_recording(path, None)
+    elif body.get('narrator') == 'own':
+        takes = _takes(path)
+        if not takes:
+            raise ValueError('Upload or record your reading of the script first.')
+        pipeline.set_recording(path, takes[0])
+    else:
+        raise ValueError('narrator must be "builtin" or "own"')
+    return narrator(name)
+
+
+def use_take(name: str) -> dict:
+    """Cut the recording into the script's sentences and time every drawing to it. A take that does not fit the
+    script is an answer, not a failure: the result says what did not match, in the words the alignment used."""
+    path = _project(name)
+    if not pipeline.settings(path).get('recording'):
+        raise ValueError('Upload or record your reading of the script first.')
+
+    def job(progress):
+        problem = path / 'voice' / 'recording-problem.json'
+        problem.unlink(missing_ok=True)
+        try:
+            clips = pipeline.narrate(path, progress)
+        except ValueError as error:                # remembered, so the project shows it when opened again
+            take = path / pipeline.settings(path)['recording']
+            problem.parent.mkdir(exist_ok=True)
+            problem.write_text(json.dumps({'sha256': sha(take), 'lines': [[line['beat'], line['text']]
+                                                                          for line in _lines(path)],
+                                           'missing': getattr(error, 'beat', None), 'problem': str(error)},
+                                          ensure_ascii=False), encoding='utf-8')
+            return narrator(name)
+        progress('timeline', 0, 1)
+        pipeline.build_audio(path, clips)
+        return narrator(name)
+    return {'job': JOBS.start('align', name, job)}
 
 
 def redirect(name: str, body: dict) -> dict:
@@ -391,6 +544,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(redirect(name, self._body()))
             if p[2:] == ['make'] and method == 'POST':
                 return self._json(make_video(name))
+            if p[2:] == ['narrator']:
+                return self._json(set_narrator(name, self._body()) if method == 'POST' else narrator(name))
+            if p[2:] == ['recording'] and method == 'POST':      # the file itself is the body (it can be large)
+                return self._json(save_take(name, q.get('filename') or 'recording', self.rfile,
+                                            int(self.headers.get('Content-Length') or 0)))
+            if p[2:] == ['align'] and method == 'POST':
+                return self._json(use_take(name))
             if p[2:] == ['still'] and method == 'GET':
                 return self._send(200, still(name, q.get('beat'), float(q.get('offset', 0)), float(q.get('t', 0))), 'image/jpeg')
             if p[2:] == ['reveal'] and method == 'POST':
