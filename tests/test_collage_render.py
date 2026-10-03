@@ -66,9 +66,9 @@ def test_the_calm_dial_has_no_showpieces(tmp_path):
 def test_a_software_promo_has_a_page_an_app_window_and_the_drawing_hand(tmp_path):
     from kinodraw.director.annotate import annotate
     from kinodraw.engine.collage import promo
-    board = script.build(ingest.read(FIX / 'promo_doodle.md'), 'promo')
+    board = script.build(ingest.read(FIX / 'promo_kinodraw.md'), 'promo')
     board.update({'look': 'collage', 'story': 'promo', 'motion': 'lively',
-                  'brand': {'name': 'Doodle Studio', 'url': 'example.org', 'reveal': 'hand'}})
+                  'brand': {'name': 'KinoDraw', 'url': 'example.org', 'reveal': 'hand'}})
     annotate(board)
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     a = renderer.make_production(board, tl, 'en', tmp_path)

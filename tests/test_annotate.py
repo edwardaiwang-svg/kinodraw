@@ -311,7 +311,7 @@ def test_normalize_fills_the_dials_and_nothing_else():
 
 
 def test_a_software_promo_shows_the_page_the_window_and_the_hand():
-    board = _board('promo_doodle.md', look='collage', story='promo')
+    board = _board('promo_kinodraw.md', look='collage', story='promo')
     annotate(board)
     said = {s: (e['role'], e['scene']) for s, e in _said(board)}
     assert said['You wrote something worth explaining.'] == ('hook', 'script_page')

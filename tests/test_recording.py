@@ -12,10 +12,10 @@ from scipy.signal import butter, resample_poly, sosfilt
 from kinodraw import cli, pipeline, voice
 
 needs_models = pytest.mark.skipif(bool(voice.missing_files('en')),
-                                  reason='Kokoro models not downloaded (doodle setup --lang en)')
+                                  reason='Kokoro models not downloaded (kinodraw setup --lang en)')
 BEATS = [('b001', 'You wrote something worth explaining. A lesson, a story, a big idea. But turning it into a video '
                   'takes days of drawing, recording and editing.'),
-         ('b002', "There's a much easier way. Meet Doodle Studio."),
+         ('b002', "There's a much easier way. Meet KinoDraw."),
          ('b003', 'Paste your script. Press Make video. A hand draws every idea while the voice reads it.'),
          ('b004', 'Captions, chapters and a thumbnail come with it. No editing. No account. It all runs on your own '
                   'computer.')]
@@ -203,7 +203,7 @@ def test_a_take_that_skips_sentences_says_what_to_do_instead_of_a_traceback(tmp_
     assert 'Traceback' not in message and 'ValueError' not in message
     assert 'Your recording skips or changes the part that says "And finally: Bees work hard." (b004)' in message
     assert 'Read the whole script once through' in message
-    assert f'doodle voice "{project}" --recording none' in message
+    assert f'kinodraw voice "{project}" --recording none' in message
     cli.main(['voice', str(project), '--recording', 'none'])
     assert 'captions' in capsys.readouterr().out
 
@@ -242,5 +242,5 @@ def test_a_recording_problem_names_the_way_back_to_the_ai_voice(tmp_path, monkey
         raise voice.RecordingError('Your recording has 3 s of speech, but this script takes about 30 s to read.')
     monkeypatch.setattr(voice, 'from_recording', refuse)
     with pytest.raises(voice.RecordingError, match=r'30 s to read\. To narrate with the AI voice instead, run: '
-                                                   r'doodle voice ".*video" --recording none'):
+                                                   r'kinodraw voice ".*video" --recording none'):
         pipeline.narrate(project)

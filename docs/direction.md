@@ -1,6 +1,6 @@
 # Direction: looks, story shapes and motion
 
-Doodle Studio's first style is the whiteboard: a drawing hand sketches every picture. The Direction system adds
+KinoDraw's first style is the whiteboard: a drawing hand sketches every picture. The Direction system adds
 two more looks and lets the same script be told in different ways, at different energy, by rules. A language
 model may pick among the options the rules offer, but it never invents what is drawn or when.
 
@@ -12,7 +12,7 @@ model may pick among the options the rules offer, but it never invents what is d
 | `story` | `explain` (sections, agenda, takeaways), `promo` (problem → brand → steps → proof → call to action), `story` (question → journey → twist → end line), `showcase` (one idea per beat, a signature end card) | `explain` |
 | `motion` | `calm` (no big moves), `lively`, `showreel` (beat-synced, many showpieces) | `lively` |
 
-`brand` (optional) is `{name, url, cta, reveal}` for promos; `reveal: "hand"` has the drawing hand write the name (and a closing line) instead of slamming it in. Set the dials with `doodle make --look collage --story promo`.
+`brand` (optional) is `{name, url, cta, reveal}` for promos; `reveal: "hand"` has the drawing hand write the name (and a closing line) instead of slamming it in. Set the dials with `kinodraw make --look collage --story promo`.
 
 ## Who decides what
 
@@ -21,7 +21,7 @@ model may pick among the options the rules offer, but it never invents what is d
    reveal, tagline, cta, end_line, none), a baseline *energy* 0–3, two or three eligible *scene* templates (its own
    pick first) and up to four *emphasis* candidates, each a phrase of the sentence. It always produces a complete
    plan, so the app works offline.
-2. **The AI director** (GPT-6 Luna through Doodle Cloud, optional) answers with indices only: which offered scene,
+2. **The AI director** (GPT-6 Luna through KinoDraw Cloud, optional) answers with indices only: which offered scene,
    which offered emphasis, which role, and an energy that code clamps to the baseline ±1. It cannot add text,
    pictures or times. Anything invalid keeps the rules pick.
 3. **The user** can override a sentence's scene or energy in the Studio; that always wins.

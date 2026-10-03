@@ -5,7 +5,7 @@ Generated from `tags/*.json` (do not edit by hand). Use these ids in `storyboard
 - 288 bespoke doodles (`bespoke/`, CC BY 4.0, original to this project)
 - 1460 Microsoft Fluent Emoji in the same outlined style (`fluent/`, ids start with `fl_`, MIT; see `fluent/NOTICE.md`)
 
-Search from the command line: `doodle doodles "rocket launch"`.
+Search from the command line: `kinodraw doodles "rocket launch"`.
 
 Pictures listed in `banned.json` are left out of this catalog: no director draws them.
 

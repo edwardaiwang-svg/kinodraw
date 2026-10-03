@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from kinodraw import PRODUCT  # noqa: E402
 from kinodraw.engine import ink, motion as m  # noqa: E402
 
 W, H = 640, 360
@@ -116,7 +117,7 @@ def assemble_ring():
     colors = list(ink.SECTION_COLORS.values())
     for k, (x, y) in enumerate(m.assemble(src, dst, .6, seed_key='glyph')):
         d.ellipse((x - 2.2, y - 2.2, x + 2.2, y + 2.2), fill=colors[k % len(colors)] + (255,))
-    for ch, x, y, a in m.ring_layout('MOTION KIT • DOODLE STUDIO • ', center, 145, .8, 25):
+    for ch, x, y, a in m.ring_layout(f"MOTION KIT • {PRODUCT['name'].upper()} • ", center, 145, .8, 25):
         m.Sprite(word(ch, 24)).draw(cell, x, y, rotation=a)
     return label(cell, 'assemble into a glyph + ring_layout')
 
