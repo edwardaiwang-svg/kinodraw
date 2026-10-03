@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://edwardaiwang-svg.github.io/kinodraw/sitemap.xml

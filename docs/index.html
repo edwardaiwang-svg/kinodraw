@@ -3,9 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Doodle Studio</title>
-<meta name="description" content="Turn any script into a hand-drawn whiteboard explainer video, on your own computer. Free and open source.">
+<title>KinoDraw: free whiteboard animation and explainer video maker, open source</title>
+<meta name="description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<link rel="canonical" href="https://edwardaiwang-svg.github.io/kinodraw/">
 <link rel="icon" href="media/icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="KinoDraw">
+<meta property="og:url" content="https://edwardaiwang-svg.github.io/kinodraw/">
+<meta property="og:title" content="KinoDraw: free whiteboard explainer video maker">
+<meta property="og:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta property="og:image" content="https://edwardaiwang-svg.github.io/kinodraw/media/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A drawing hand sketches a rainbow beside a cartoon narrator and the sun, in a science video made with KinoDraw">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="KinoDraw: free whiteboard explainer video maker">
+<meta name="twitter:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta name="twitter:image" content="https://edwardaiwang-svg.github.io/kinodraw/media/og.png">
+<meta name="twitter:image:alt" content="A drawing hand sketches a rainbow beside a cartoon narrator and the sun, in a science video made with KinoDraw">
 <style>
   @font-face { font-family: 'Playpen'; src: url('media/PlaypenSans-Bold.ttf'); font-weight: 700; font-display: swap; }
   :root { --paper: #eceae4; --ink: #1b1b1b; --soft: #55606a; --orange: #f57c00; --blue: #1e6fd9; --green: #2e9d4f; --card: #fbfaf6; }
@@ -43,6 +58,7 @@
   pre { background: #1b1b1b; color: #f5f2ea; border-radius: 14px; padding: 16px; overflow-x: auto; font-size: 15px; }
   footer { padding: 36px 0 60px; color: var(--soft); font-size: 14px; }
   .first-open { background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; padding: 18px 22px; box-shadow: 0 6px 0 var(--orange); }
+  .first-open + .first-open { margin-top: 18px; }
   .first-open h2 { font-size: 28px; margin-bottom: 6px; }
   .first-open ol { padding-left: 24px; margin: 10px 0; }
   .first-open li { margin: 0 0 12px; }
@@ -55,25 +71,38 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>Doodle <span>Studio</span></h1>
+      <h1>Kino<span>Draw</span></h1>
       <p class="lead">Turn any script into a hand-drawn whiteboard explainer video, on your own computer.
-        Free, open source, in English and 中文.</p>
-      <a class="btn primary" id="download" href="https://github.com/edwardaiwang-svg/doodle-studio/releases/latest">Download</a>
-      <a class="btn" href="https://github.com/edwardaiwang-svg/doodle-studio">Source on GitHub</a>
-      <p class="small"><a href="https://github.com/edwardaiwang-svg/doodle-studio/releases/latest">macOS (Apple silicon, M1 or newer) · Windows · Linux</a>. No account and no API key needed for the offline director.<br>
+        Free and open source, no watermark, works offline. In English and 中文.</p>
+      <a class="btn primary" id="download" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Download</a>
+      <a class="btn" href="https://github.com/edwardaiwang-svg/kinodraw">Source on GitHub</a>
+      <p class="small"><span id="also">For</span> <span id="platforms"><a data-os="windows" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Windows</a><span> · </span><a data-os="macos" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">macOS (Apple silicon, M1 or newer)</a><span> · </span><a data-os="linux" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Linux</a></span>.
+        No account and no API key needed for the offline director.<br>
         <b>Opening it the first time takes one extra approval: <a href="#first-open">see how</a>.</b><br>
         It opens on a finished example video. Your own first video downloads the voice (about 190 MB) and the doodle
-        search (about 70 MB), once, then takes about a minute.</p>
+        search (about 70 MB), once, then takes about a minute. The 2-second "Made with KinoDraw" end credit can be
+        switched off.<br>
+        KinoDraw was called Doodle Studio before version 0.2.0. It moves your Doodle Studio projects, settings and
+        voice over the first time it opens.</p>
     </div>
-    <img class="narrator" src="media/narrator_wave.svg" alt="The Doodle Studio narrator waving">
+    <img class="narrator" src="media/narrator_wave.svg" alt="The KinoDraw narrator waving">
   </header>
 
   <section id="first-open">
-    <div class="first-open">
-      <h2>First time opening on a Mac</h2>
-      <p>Doodle Studio isn't notarized by Apple yet, so the first time you open it, macOS stops it. You approve it once:</p>
+    <div class="first-open" data-os="windows">
+      <h2>First time opening on Windows</h2>
       <ol>
-        <li>Unzip the download, drag <b>Doodle Studio</b> to Applications and double-click it. macOS says it can't
+        <li>Unzip the download, open the <b>KinoDraw</b> folder and double-click <b>KinoDraw.exe</b>.</li>
+        <li>If "Windows protected your PC" appears, click <b>More info</b> → <b>Run anyway</b>.</li>
+      </ol>
+      <p class="small">On Windows 11 with Smart App Control turned on, Windows may block apps that aren't signed
+        yet, like this one, and there's no Run anyway button.</p>
+    </div>
+    <div class="first-open" data-os="macos">
+      <h2>First time opening on a Mac</h2>
+      <p>KinoDraw isn't notarized by Apple yet, so the first time you open it, macOS stops it. You approve it once:</p>
+      <ol>
+        <li>Unzip the download, drag <b>KinoDraw</b> to Applications and double-click it. macOS says it can't
           check the app for malware. Close that message (don't move the app to the Trash).
           <!-- TODO(J): replace the box below with a real screenshot of the blocked-app message, e.g.
                <img src="media/mac-open-1.png" alt="..."> taken on your own Mac from a browser-downloaded copy. -->
@@ -88,12 +117,10 @@
       </ol>
       <p class="small">These are Apple's own steps (<a href="https://support.apple.com/guide/mac-help/mh40617/mac">Open an
         app by overriding security settings</a>). Right-click → Open no longer skips this on macOS Sequoia and later.
-        If macOS says the app is damaged, run <code>xattr -dr com.apple.quarantine "/Applications/Doodle Studio.app"</code>
+        If macOS says the app is damaged, run <code>xattr -dr com.apple.quarantine "/Applications/KinoDraw.app"</code>
         in Terminal once.</p>
-      <p class="small"><b>On Windows:</b> if "Windows protected your PC" appears, click <b>More info</b> →
-        <b>Run anyway</b>. On Windows 11 with Smart App Control turned on, Windows may block apps that aren't signed
-        yet, like this one, and there's no Run anyway button.</p>
     </div>
+    <p class="small" data-os="linux"><b>On Linux:</b> unpack the download and run <code>KinoDraw/KinoDraw</code>.</p>
   </section>
 
   <section>
@@ -105,14 +132,14 @@
   </section>
 
   <section>
-    <div class="card"><h3>For teachers: Doodle Studio for Classroom</h3>
+    <div class="card"><h3>For teachers: KinoDraw for Classroom</h3>
       <p>A Chrome extension that turns your lesson script into a hand-drawn video and posts it to your Google
         Classroom class. <a href="classroom/">See how it works</a>.</p></div>
   </section>
 
   <section>
     <h2>Free and premium AI directors</h2>
-    <p>The video above was planned by the offline director: free, private, no account. Here is the same script planned by Doodle Cloud's AI directors, with the same voice and drawing hand.</p>
+    <p>The video above was planned by the offline director: free, private, no account. Here is the same script planned by KinoDraw Cloud's AI directors, with the same voice and drawing hand.</p>
     <div class="demos">
       <div class="demo"><video controls preload="metadata" poster="media/compare-luna.png" src="media/compare-luna.mp4"></video>
         <h3>GPT-6 Luna</h3><p class="small">Free plan: 5 videos a month. Sign in with your email in the app.</p></div>
@@ -155,7 +182,7 @@
     <table>
       <tr><th>Director</th><th>Cost</th><th></th></tr>
       <tr><td>Offline</td><td>Free</td><td>Matches each sentence to the doodle library. Nothing leaves your computer.</td></tr>
-      <tr><td>Doodle Cloud</td><td>Free: 5 videos a month</td><td>GPT-6 Luna plans each section. No key needed; sign in with an email code. Paid plans with more videos and Claude Opus 5.5 come later.</td></tr>
+      <tr><td>KinoDraw Cloud</td><td>Free: 5 videos a month</td><td>GPT-6 Luna plans each section. No key needed; sign in with an email code. Paid plans with more videos and Claude Opus 5.5 come later.</td></tr>
       <tr><td>Your own key</td><td>≈ $0.02 per 15-min video with GPT-6 Luna</td><td>OpenAI, Anthropic, or any OpenAI-compatible server, including a local model.</td></tr>
     </table>
     <p class="small">AI suggestions are checked by code before use: doodles must exist, drawings must start on words that are really spoken, and numbers and quotes must appear in your script.</p>
@@ -163,7 +190,7 @@
 
   <section>
     <h2>For the command line</h2>
-<pre>uv tool install git+https://github.com/edwardaiwang-svg/doodle-studio
+<pre>uv tool install git+https://github.com/edwardaiwang-svg/kinodraw
 kinodraw make my-script.md -o "My Video"
 kinodraw studio          # the app window</pre>
   </section>
@@ -172,24 +199,32 @@ kinodraw studio          # the app window</pre>
     Code: MIT. Original doodles, narrator and drawing hand: CC BY 4.0. Fluent Emoji: MIT © Microsoft.
     Fonts: SIL OFL (Playpen Sans, LXGW WenKai, Arimo, Noto Sans SC). Music: FreePD (CC0). Voice: Kokoro (Apache-2.0).
     Made by Edward Ai.
-    <a href="https://github.com/edwardaiwang-svg/doodle-studio/issues/new/choose">Feedback or a problem</a> · <a href="privacy.html">Privacy</a>
+    <a href="https://github.com/edwardaiwang-svg/kinodraw/issues/new/choose">Feedback or a problem</a> · <a href="privacy.html">Privacy</a>
   </footer>
 </div>
 <script>
-// Download starts this computer's installer from the latest release; the Releases page stays the fallback.
+// The visitor's own computer comes first: the Download button starts its installer from the latest release, and the
+// other platforms stay one click away. Without JavaScript (or on a phone) every link opens the Releases page.
 (async () => {
   const ua = navigator.userAgent;
   const ipad = /Mac/.test(ua) && navigator.maxTouchPoints > 1;
   const os = /Android|iPhone|iPad/.test(ua) || ipad ? null
-    : /Mac/.test(ua) ? 'macOS' : /Win/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : null;
+    : /Win/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null;
   if (!os) return;
+  const key = os.toLowerCase();
+  const mine = document.querySelector(`#platforms a[data-os="${key}"]`);
+  (mine.previousElementSibling || mine.nextElementSibling)?.remove();         // its " · " separator
+  mine.remove();
+  document.getElementById('also').textContent = 'Also for';
+  const box = document.querySelector(`#first-open [data-os="${key}"]`);
+  box.parentNode.insertBefore(box, box.parentNode.firstElementChild);           // its first-open steps first
+  const btn = document.getElementById('download');
   try {
-    const r = await fetch('https://api.github.com/repos/edwardaiwang-svg/doodle-studio/releases/latest');
-    const asset = (await r.json()).assets.find(a => a.name.includes('-' + os.toLowerCase() + '.'));
-    if (!asset) return;
-    const btn = document.getElementById('download');
-    btn.href = asset.browser_download_url;
-    btn.textContent = 'Download for ' + os;
+    const r = await fetch('https://api.github.com/repos/edwardaiwang-svg/kinodraw/releases/latest');
+    const assets = (await r.json()).assets;
+    const pick = (k) => assets.find(a => a.name.includes('-' + k + '.'));          // KinoDraw-v0.2.0-windows.zip ...
+    if (pick(key)) [btn.href, btn.textContent] = [pick(key).browser_download_url, 'Download for ' + os];
+    document.querySelectorAll('#platforms a').forEach(a => { if (pick(a.dataset.os)) a.href = pick(a.dataset.os).browser_download_url; });
   } catch (e) {}
 })();
 </script>
