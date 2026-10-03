@@ -250,8 +250,7 @@ def _sample(path: svgelements.Path, scale: float, ox: float, oy: float, step=3.0
 def _svg_layers(svg_path: str, box_w: int, box_h: int):
     text = Path(svg_path).read_text(encoding='utf-8')
     doc = svgelements.SVG.parse(io.StringIO(text), reify=True)
-    vb = doc.viewbox
-    vw, vh = (vb.width, vb.height) if vb is not None else (float(doc.width), float(doc.height))
+    vw, vh = float(doc.width), float(doc.height)    # svgelements already maps the viewBox onto width x height
     scale = min(box_w / vw, box_h / vh)
     out_w, out_h = max(1, round(vw * scale)), max(1, round(vh * scale))
     color = Image.open(io.BytesIO(resvg_py.svg_to_bytes(svg_string=text, width=out_w, height=out_h))).convert('RGBA')

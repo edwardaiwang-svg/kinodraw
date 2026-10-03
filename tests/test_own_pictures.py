@@ -287,3 +287,15 @@ def test_search_never_offers_own_pictures():
     if not all((folder / name).is_file() for name in files):
         pytest.skip('doodle-search model is not installed')
     assert not any(item['id'].startswith('own:') for item in server.search_doodles('cat', 'en'))
+
+
+def test_svg_sized_unlike_its_viewbox_traces_inside_the_picture(project):
+    path, _, _ = project
+    file = path / 'pictures/scaled.svg'
+    file.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 100 50">'
+                    '<path d="M5 5 H95 V45 H5 Z" fill="none" stroke="black" stroke-width="4"/></svg>', encoding='utf-8')
+    drawing = ink.picture_drawing(file, (200, 100))
+    points = np.concatenate(drawing.polys)
+    assert drawing.color.size == (200, 100)
+    assert points[:, 0].max() <= 200 and points[:, 1].max() <= 100
+    assert points[:, 0].max() > 150 and points[:, 1].max() > 75
