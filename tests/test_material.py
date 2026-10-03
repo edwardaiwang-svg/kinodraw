@@ -261,3 +261,14 @@ def test_material_chapter_coloured_headings_get_an_ink_outline_that_writes_with_
     before = np.asarray(dark.ink).copy()
     skin.dress(dark, 0, 0)
     assert np.array_equal(before, np.asarray(dark.ink)), 'ink-coloured text keeps its letters unchanged'
+
+
+@pytest.mark.parametrize('look', MATERIALS)
+def test_material_source_labels_and_footers_keep_symbols_the_look_font_lacks(look):
+    skin = skins.for_look(look)
+    text = 'CO₂ emissions → 2050'
+    for ch, font in skins.glyph_runs(text, 'en_caption', 40, skin.fonts):
+        assert ch.isspace() or ord(ch) in ink._cmap(font.path, font.index), (look, ch)
+    # the look font has neither symbol: drawn without a fallback, both come out as the same missing-glyph box
+    sub, arrow = (np.asarray(renderer.ui_text(ch, 34, (0, 0, 0), skin.fonts)) for ch in '₂→')
+    assert sub.shape != arrow.shape or not np.array_equal(sub, arrow), look

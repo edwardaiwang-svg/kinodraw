@@ -651,11 +651,21 @@ def faded(img, alpha):
 def ui_text(text, size, color, fonts=ink.FONTS):
     key = (text, size, tuple(color), fonts)
     if key not in _txt_cache:
-        f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size, fonts)
-        w = int(f.getlength(text)) + 6
-        img = Image.new('RGBA', (w, size + 12), (0, 0, 0, 0))
         from PIL import ImageDraw
-        ImageDraw.Draw(img).text((2, 2), text, font=f, fill=tuple(color) + (255,))
+        kind = 'ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption'
+        f = ink.font(kind, size, fonts)
+        cmap = ink._cmap(*getattr(fonts, kind))
+        if all(c.isspace() or ord(c) in cmap for c in text):
+            w = int(f.getlength(text)) + 6
+            img = Image.new('RGBA', (w, size + 12), (0, 0, 0, 0))
+            ImageDraw.Draw(img).text((2, 2), text, font=f, fill=tuple(color) + (255,))
+        else:       # symbols the look font lacks (₂, →) come from fallback fonts on the primary font's baseline
+            runs = ink.ui_runs(text, kind, size, fonts)
+            img = Image.new('RGBA', (int(sum(rf.getlength(c) for c, rf in runs)) + 6, size + 12), (0, 0, 0, 0))
+            d, x, base = ImageDraw.Draw(img), 2, 2 + f.getmetrics()[0]
+            for c, rf in runs:
+                d.text((x, base), c, font=rf, fill=tuple(color) + (255,), anchor='ls')
+                x += rf.getlength(c)
         _txt_cache[key] = img
     return _txt_cache[key]
 

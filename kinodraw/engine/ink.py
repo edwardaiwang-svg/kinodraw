@@ -81,6 +81,14 @@ def font_runs(text: str, lang: str, size: int, fonts: Fonts = FONTS):
     return [(t, font(k, size, fonts)) for t, k in runs]
 
 
+def ui_runs(text: str, kind: str, size: int, fonts: Fonts = FONTS):
+    """Per-character (char, font): a glyph the look's font lacks comes from the whiteboard UI font, then Noto Sans SC."""
+    chain = [(fonts, kind), (FONTS, 'ui'), (fonts, 'zh_caption')]
+    return [(ch, font(k, size, fs)) for ch in text
+            for fs, k in [next(((fs, k) for fs, k in chain if ch.isspace() or ord(ch) in _cmap(*getattr(fs, k))),
+                               chain[-1])]]
+
+
 def text_width(text: str, lang: str, size: int, fonts: Fonts = FONTS) -> float:
     return sum(f.getlength(t) for t, f in font_runs(text, lang, size, fonts))
 

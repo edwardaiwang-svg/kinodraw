@@ -725,9 +725,8 @@ def cursor_image():
 
 
 def glyph_runs(text, kind, size, fonts):
-    """Per-character UI runs: absent primary cmap glyphs use Noto Sans SC captions."""
-    cmap = ink._cmap(*getattr(fonts, kind))
-    return [(ch, ink.font(kind if ord(ch) in cmap or ch.isspace() else 'zh_caption', size, fonts)) for ch in text]
+    """Per-character UI runs: glyphs the look font lacks come from Arimo, then Noto Sans SC."""
+    return ink.ui_runs(text, kind, size, fonts)
 
 
 def _run_width(text, kind, size, fonts):
