@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 import wave
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import imageio_ffmpeg
 import numpy as np
@@ -102,7 +102,7 @@ def assemble(storyboard: dict, lang: str, clips: dict, out_dir: Path, pauses: di
     premaster.unlink()
     if len(read_wav(master)[0]) != total:
         raise RuntimeError('loudness normalization changed the narration length')
-    tl['audio'] = str(master)
+    tl['audio'] = master.name                       # next to timeline.json: a moved project still finishes
     write_captions(tl['captions'], out_dir)
     (out_dir / 'timeline.json').write_text(json.dumps(tl, ensure_ascii=False))
     return tl
@@ -127,10 +127,18 @@ def envelope(speech: np.ndarray, window=.05) -> np.ndarray:
     return np.repeat(out, n)[:len(speech)]
 
 
+def narration(tl: dict, out_dir: Path) -> Path:
+    """The timeline's narration, which sits next to it in out_dir. Doodle Studio stored its absolute path, which points
+    nowhere once the project folder has moved (Doodle Studio's projects folder became KinoDraw's): then the file of
+    that name in out_dir is used (PureWindowsPath reads both / and \\ paths)."""
+    path = Path(out_dir) / tl['audio']                 # an absolute path replaces out_dir
+    return path if path.exists() else Path(out_dir) / PureWindowsPath(tl['audio']).name
+
+
 def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
     """Write mix.wav (48 kHz stereo): the narration plus the music bed (or narration only when music is off)."""
     out_dir = Path(out_dir)
-    speech = read_wav(tl['audio'])[0][:, 0]
+    speech = read_wav(narration(tl, out_dir))[0][:, 0]
     total = len(speech)
     music = np.zeros((total, 2), np.float32)
     setting = storyboard.get('music', True)

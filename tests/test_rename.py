@@ -260,3 +260,31 @@ def test_a_projects_folder_inside_doodle_studios_follows_it(tmp_path, monkeypatc
     assert json.loads((new / 'studio.json').read_text()) == {'projects': str(videos / 'KinoDraw' / 'Class')}
     assert (videos / 'KinoDraw' / 'Class' / 'Lesson 1' / 'project.json').exists()
 
+
+
+def test_a_video_made_in_doodle_studio_still_finishes_after_its_folder_moved(tmp_path):
+    """build/timeline.json named the narration by its absolute path, so `kinodraw finish` failed once the projects
+    folder had moved. It is now stored next to the timeline, and an old absolute path falls back to the same file
+    in the project's build folder."""
+    import numpy as np
+    from kinodraw import pipeline, voice
+    from kinodraw.audio import mix
+    old = tmp_path / 'Videos' / 'Doodle Studio' / 'Honey'
+    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', old)
+    board['music'] = False
+    (old / 'voice').mkdir(exist_ok=True)
+    clips = {}
+    for beat in board['beats']:
+        wav = old / 'voice' / f"{beat['id']}.wav"
+        mix.write_wav(wav, .1 * np.sin(np.linspace(0, 400 * np.pi, 12000, dtype=np.float32)), 24000)
+        clips[beat['id']] = voice.Clip(wav, .5, [0.0] * len(beat['spoken']['en']))
+    mix.assemble(board, 'en', clips, old / 'build')
+    new = tmp_path / 'Videos' / 'KinoDraw' / 'Honey'
+    new.parent.mkdir(parents=True)
+    old.rename(new)                                            # the projects folder moved
+    tl = json.loads((new / 'build' / 'timeline.json').read_text(encoding='utf-8'))
+    assert mix.mix(board, tl, new / 'build').exists()
+    tl['audio'] = str(old / 'build' / 'narration.wav')         # as Doodle Studio 0.1.x wrote it
+    assert mix.mix(board, tl, new / 'build').exists()
+    tl['audio'] = 'C:\\Users\\Ann\\Videos\\Doodle Studio\\Honey\\build\\narration.wav'   # made on Windows
+    assert mix.mix(board, tl, new / 'build').exists()
