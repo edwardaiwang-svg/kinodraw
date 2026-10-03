@@ -951,7 +951,7 @@ class Composer:
         if not (main or timeline or grid or crowd):
             main = self.fill(ch, beats, a, b, words)
         doodles = [c for c in main if c.kind == 'doodle']
-        if doodles and ch is not None:
+        if doodles and ch is not None and not doodles[0].data.get('kept'):
             self.in_play = (ch['id'], doodles[0])
         if timeline:
             layout = 'timeline'
@@ -1032,7 +1032,8 @@ class Composer:
 
     def fill(self, ch, beats, a, b, words):
         """Something to show when the storyboard gave this shot nothing (fill.py): a name the sentence gives, a
-        number it says, a picture for its words, else the picture still in play in this section."""
+        number it says, a picture for its words, else the picture still in play in this section, the section's
+        first picture, or the last picture of the video so far."""
         lang = self.lang
         vid = f"{beats[0]['id'] if beats else ''}@{a:.2f}"
         name = fill.term(words, lang)
@@ -1051,7 +1052,24 @@ class Composer:
             return [Card('doodle', a, {'doodle': found[0], 'label': found[1]}, vid + 'p')]
         if self.in_play and self.in_play[0] == ch['id']:
             return [Card('doodle', a, {'doodle': self.in_play[1].data['doodle'], 'label': '', 'kept': True}, vid + 'k')]
+        ahead = self.section_picture(ch['id'])
+        if ahead:
+            return [Card('doodle', a, {'doodle': ahead, 'label': ''}, vid + 'a')]
+        if self.in_play:
+            return [Card('doodle', a, {'doodle': self.in_play[1].data['doodle'], 'label': '', 'kept': True}, vid + 'k')]
         return []
+
+    def section_picture(self, chapter_id):
+        """The first picture the storyboard gives anywhere in this section (narrator poses are not pictures)."""
+        for beat in self.beats:
+            if beat['chapter'] != chapter_id:
+                continue
+            for v in beat.get('visuals', []):
+                if v.get('type') == 'cluster' and v.get('size') != 'margin':
+                    for it in v.get('items', []):
+                        if it.get('doodle') and not it['doodle'].startswith('narrator'):
+                            return it['doodle']
+        return None
 
     def said_at(self, beats, phrase, a, b):
         """When ``phrase`` is said within [a, b) (the shot start when it cannot be found)."""

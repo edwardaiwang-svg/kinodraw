@@ -118,7 +118,9 @@ list (pose, framing, ground colour), never invent new ones.
   compliments); a picture for its own words found with the rules director's own meaning rules, where an emoji
   may also stand for the very thing it is named after ("a world with lions"), tried clause by clause when the
   whole sentence finds nothing; else the picture still in play in the same section, without its label and never
-  circled (`engine/stick/fill.py`). Only a short question shot with its "?" marks is left as a figure alone.
+  circled; else the section's own first picture, shown early (the first shot of a section); else the last
+  picture of the video so far (a closing section with no pictures of its own) (`engine/stick/fill.py`). A figure
+  is left alone only when no picture has been or will be shown in or before its section.
 - **Narrator pictures** (think, wave, explain...) in the storyboard become poses of our figure, not doodles.
 - **Library people become our figures** (`engine/stick/cast.py`): a library picture of a person or a group is
   redrawn as stick figures in the same line and palette (a pilot or police officer in a cap, a prince in a crown,

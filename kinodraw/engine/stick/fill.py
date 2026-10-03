@@ -14,7 +14,9 @@ order:
    lion); a long sentence is tried clause by clause when the whole finds nothing ("..., but missing a lion cost
    everything");
 4. the picture still in play: the last picture of the same section, without its label (its words are no
-   longer being said; the composer keeps it).
+   longer being said; the composer keeps it);
+5. the section's own first picture, without its label (a section's first shot, before its pictures are said);
+6. the last picture of the video so far, without its label (a closing section with no pictures of its own).
 
 Everything is a fixed rule over the words, so the same script always gets the same shots. Step 3 needs the
 director's local doodle-search model; when it is not on this computer the step is skipped (a render never

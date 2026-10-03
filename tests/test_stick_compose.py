@@ -215,7 +215,7 @@ def figure_only_share(p):
     return bare / total
 
 
-@pytest.mark.parametrize('name', ['stick_hijack.md', 'stick_bias.md'])
+@pytest.mark.parametrize('name', ['stick_hijack.md', 'stick_bias.md', 'stick_wall.md', 'stick_wall_zh.md'])
 def test_a_figure_is_rarely_alone_on_white(name):
     """The Paint grammar is a figure plus a prop: a sentence the storyboard left bare gets the name it gives, a
     number it says, a picture for its words or the picture still in play."""
