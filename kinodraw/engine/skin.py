@@ -5,7 +5,7 @@ notes). Every drawing passes through ``Skin.dress`` once, when it is added to th
 palette to its own: line colours, then line grain, then fills. The whiteboard skin changes nothing, so its frames
 are the renderer's own. The skin of a look comes from its registry entry (kinodraw/styles/registry.json).
 
-Looks (all drawn in code, no image models; the hand is J's photo, restyled):
+Looks (all drawn in code, no image models; the hand is a photographed drawing hand, restyled):
   chalkboard  slate-green board with eraser smudges and chalk dust, chalk-white letters, pastel chalk colours,
               pictures as chalk lines over pastel chalk rubbed in at about 80%, a white chalk marker in the hand
   notebook    lined paper with a red margin, graphite pencil with grain, colour-pencil fills, a yellow

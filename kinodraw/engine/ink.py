@@ -577,8 +577,8 @@ def circle_points(cx, cy, rx, ry, start=-math.pi / 2, turns=1.0, n=90, wobble=0.
 
 # ------------------------------------------------------------------------ hand
 class Hand:
-    """J's drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no forearm)
-    into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
+    """A photographed drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no
+    forearm) into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
     'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil."""
 
     def __init__(self, tool='marker'):

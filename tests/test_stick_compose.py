@@ -267,3 +267,45 @@ def test_a_timeline_holds_until_its_last_event():
     assert events
     for t in events:
         assert any(s.layout == 'timeline' and s.start - .1 <= t < s.end for s in p.shots), t
+
+
+def test_a_beat_starting_off_the_millisecond_keeps_its_sentence_cuts():
+    """A beat whose start is not a whole millisecond still cuts at its second sentence (rounding the first cut
+    below the beat start once dropped it, and the beat start then replaced the second sentence's cut)."""
+    p = built('printing_press.md')
+    c = p.composer
+    starts = {round(s.start, 3) for s in p.shots}
+    for bid, opening in (('b002', 'A single Bible'), ('b007', 'He cast small metal')):
+        beat = next(b for b in c.beats if b['id'] == bid)
+        assert round(c.bt[bid]['start'], 3) != c.bt[bid]['start']          # the case: not on a millisecond
+        t = next(t for t, _, sent in c.sentence_times(beat) if sent.startswith(opening))
+        assert round(t, 3) in starts, (bid, t, sorted(starts))
+
+
+@pytest.mark.parametrize('lang, md, said', [
+    ('en', '# The Bench\n\nAt 30, she sat down on the bench.\n\nShe opened a shop of her own.\n',
+     'At 30, she sat down on the bench.'),
+    ('zh', '# 长椅\n\n玛丽亚在面包店工作了十二年。\n\n她在30岁那年坐在长椅上。\n\n她开了一家自己的店。\n',
+     '她在30岁那年坐在长椅上。'),
+])
+def test_a_sentence_about_sitting_shows_the_figure_sitting(tmp_path, lang, md, said):
+    """A sitting cue is acted out in a full-body shot: a close-up crops at the chest, where sitting cannot show, so
+    the shot must not be a close-up that swaps the sitting for talking."""
+    assert cues.pose_for(said, lang)[0] == 'sit'
+    (tmp_path / 'sit.md').write_text(md, encoding='utf-8')
+    shots = [s for s in build(tmp_path / 'sit.md').shots if s.words.strip() == said]
+    assert shots
+    for s in shots:
+        assert s.layout in ('solo', 'left', 'right') and s.pose == 'sit', (s.layout, s.pose)
+
+def test_a_section_opening_just_before_a_timeline_rides_with_it():
+    """A section whose timeline starts within a moment of the section shows the timeline from the first word,
+    instead of flashing a sub-second picture shot before it."""
+    p = built('bicycle.md')
+    c = p.composer
+    a = c.bt['b011']['start']
+    shot = next(s for s in p.shots if s.start <= a < s.end)
+    assert shot.layout == 'timeline' and shot.words.startswith('In the 1860s'), (shot.start, shot.layout, shot.words)
+    for s, n in zip(p.shots, p.shots[1:]):
+        if n.layout == 'timeline':
+            assert s.end - s.start >= compose.MIN_SHOT, (s.start, s.end, s.words)
