@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Doodle Studio for Classroom",
-  "short_name": "Doodle Studio",
+  "name": "KinoDraw for Classroom",
+  "short_name": "KinoDraw",
   "version": "0.1.0",
   "description": "Turn your lesson script into a hand-drawn video for your class, made in Chrome and posted to Google Classroom.",
   "minimum_chrome_version": "124",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlwNzW4/gO6anwX/WCWnh6Pz5EogYKiiIpP0S5dEAcYqIBN7UCvKkq2uMz5weanu54EkVq3P/Uvul38X1a548b1QOZpfjUU3qqEqenLAxZ/PvFGNu87Sk7DeBaRGCTaOI+7xITBftLPZhxD9q5pwcZHxZ+yjSO29kjycOV0tLHqrw7ddPY2L+OdbG2OUnLJPo71S8FRQHrle1HSX3k6Ope1wENw2vjV4qm+zovS5ZxN0iFrWeHxf5Agho2RNsyYUZ5+5ODTgyh8bvIIYKUl74EeJiP4w99jhFwLGqjEXVbAknbqGPJlk1mbrxxSKLSTRBwMk3OWl1kkxCsu+SvcMP2QIDAQAB",
   "icons": { "128": "icons/icon128.png", "48": "icons/icon48.png", "16": "icons/icon16.png" },
-  "action": { "default_title": "Doodle Studio for Classroom" },
+  "action": { "default_title": "KinoDraw for Classroom" },
   "permissions": ["identity", "storage", "unlimitedStorage"],
   "host_permissions": [
     "https://classroom.googleapis.com/*",

@@ -1,6 +1,6 @@
 // Script to finished MP4, entirely in the browser (the studio page drives it and shows the progress).
 //
-//   plan (storyboard + GPT-6 Luna director through Doodle Cloud, rules as the draft and the fallback)
+//   plan (storyboard + GPT-6 Luna director through KinoDraw Cloud, rules as the draft and the fallback)
 //   → voice (Kokoro, one clip per beat) → pacing → timeline → narration + music → frames → H.264/AAC MP4
 import { CONFIG } from '../config.js';
 import { GAP, assembleNarration, mixMusic } from '../media/audio.js';
@@ -54,12 +54,12 @@ export async function readScript({ text = '', file = null, title = '' }) {
   const words = [doc.preamble, ...doc.sections.map((s) => s.paragraphs)].flat().join(' ').split(/\s+/).filter(Boolean).length;
   if (words < 20) throw new Error('The script is very short. Write at least a few sentences (about 20 words or more).');
   if (words > 3000) throw new Error('The script is long for one video. Keep it under about 3,000 words (about 15 minutes).');
-  if (doc.lang !== 'en') throw new Error('Doodle Studio for Classroom makes videos in English for now.');
+  if (doc.lang !== 'en') throw new Error('KinoDraw for Classroom makes videos in English for now.');
   return build(doc);
 }
 
 /**
- * Make the video. `cloud` is { openVideo, directSection } bound to a Doodle Cloud session (GPT-6 Luna only), or null.
+ * Make the video. `cloud` is { openVideo, directSection } bound to a KinoDraw Cloud session (GPT-6 Luna only), or null.
  * onProgress({ stage, done, total, note }) with stage in: load, plan, voice, pace, audio, draw.
  * Returns { blob, board, timeline, codecs, notes }.
  */

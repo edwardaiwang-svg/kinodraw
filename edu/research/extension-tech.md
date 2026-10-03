@@ -1,4 +1,4 @@
-# Doodle Studio for Classroom: MV3 extension technical feasibility
+# KinoDraw for Classroom: MV3 extension technical feasibility
 
 Research date: 2026-09-26. Method: native WebSearch/WebFetch only. Primary sources were preferred: developer.chrome.com, developers.google.com, Google help centers, Chromium source, and GitHub READMEs and source. Third-party data is labeled **(3rd-party)**. Engineering inferences that no document states are labeled **(inference)**.
 
@@ -330,7 +330,7 @@ Manifest sketch:
 ```json
 {
   "manifest_version": 3,
-  "name": "Doodle Studio for Classroom",
+  "name": "KinoDraw for Classroom",
   "version": "0.1.0",
   "minimum_chrome_version": "124",
   "key": "<single-line public key from CWS dashboard → Package → View public key>",

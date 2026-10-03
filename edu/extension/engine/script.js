@@ -156,7 +156,7 @@ export function sentenceOf(text) {
 }
 
 export function build(doc) {
-  if (doc.lang !== 'en') throw new Error('Doodle Studio for Classroom makes English videos for now');
+  if (doc.lang !== 'en') throw new Error('KinoDraw for Classroom makes English videos for now');
   let sections = doc.sections.filter((s) => s.paragraphs.length).map((s) => ({ ...s }));
   let preamble = [...doc.preamble];
   if (sections.length < 2) {                           // no usable headings: split the text evenly

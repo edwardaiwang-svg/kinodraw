@@ -1,5 +1,5 @@
 // Stand-ins for everything the Classroom side of the extension talks to: the Classroom web page, the
-// Classroom API, Drive's resumable uploads and Doodle Cloud. tests/e2e/google.mjs answers every web
+// Classroom API, Drive's resumable uploads and KinoDraw Cloud. tests/e2e/google.mjs answers every web
 // request of the browser with handle(); `log` records what each stand-in was asked.
 import { createHash } from 'node:crypto';
 
@@ -20,7 +20,7 @@ export function fakes() {
     pieces: [],                       // { range, length } of each PUT to the upload session
     uploadProblems: [],               // anything the upload did that Google would refuse
     uploadSha: '',                    // SHA-256 of the bytes Google kept, once the upload is complete
-    cloud: [],                        // { path, token, body } of each Doodle Cloud call
+    cloud: [],                        // { path, token, body } of each KinoDraw Cloud call
     unexpected: [],                   // requests no stand-in answers (they are aborted)
   };
   // The upload misbehaves on purpose: Google keeps only half of the first piece, then the next one fails.
@@ -97,7 +97,7 @@ export function fakes() {
     if (url.pathname === '/v1/edu/session') {
       return body.google_token === 'teacher-token'
         ? json(route, { token: 'cloud-token', plan: 'edu', remaining: 30, opus_remaining: 0, allowance_used: 0, period_end: 0 })
-        : json(route, { error: 'Doodle Studio for Classroom is for teachers' }, 403);
+        : json(route, { error: 'KinoDraw for Classroom is for teachers' }, 403);
     }
     if (token !== 'cloud-token') return json(route, { error: 'sign in again' }, 401);
     if (url.pathname === '/v1/videos') return json(route, { video_id: 'video-1', model: 'gpt-6-luna', plan: 'edu', remaining: 29 });
@@ -110,7 +110,7 @@ export function fakes() {
   return { log, handle };
 }
 
-// Doodle Cloud sends no CORS headers, and neither do these: the extension's host permissions make them unnecessary.
+// KinoDraw Cloud sends no CORS headers, and neither do these: the extension's host permissions make them unnecessary.
 const json = (route, data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
 
 const classroomPage = (email) => `<!doctype html>

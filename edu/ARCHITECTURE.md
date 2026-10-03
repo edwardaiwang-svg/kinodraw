@@ -1,9 +1,9 @@
-# Doodle Studio for Classroom: architecture and module contracts
+# KinoDraw for Classroom: architecture and module contracts
 
 A Manifest V3 Chrome extension for elementary-school teachers. A teacher opens one of their
 Google Classroom classes, clicks **Make a video**, gives a script (file or pasted text), and the
 extension makes the hand-drawn video **inside Chrome** and posts it to that class's Classwork.
-Only teachers can use it. The only AI model it calls is GPT-6 Luna, through Doodle Cloud.
+Only teachers can use it. The only AI model it calls is GPT-6 Luna, through KinoDraw Cloud.
 
 The Python app (`kinodraw/`) stays the source of truth for the rules. `extension/engine/` is
 a faithful English-only port, and `tests/` hold it to the Python output (parity fixtures).
@@ -17,9 +17,9 @@ sw.js (service worker) ── teacher-status checks, opens the studio tab
 studio/studio.html (extension tab: sign-in, teacher gate, script, progress, preview, posting)
    ├── engine/      script → storyboard (rules + Luna) → timeline → pacing → frames      (port of kinodraw/)
    ├── media/       HeadTTS/Kokoro voice (worker) · narration + music mix · WebCodecs → MP4 (Mediabunny)
-   └── google/      OAuth (launchWebAuthFlow) · Classroom API · Drive resumable upload · Doodle Cloud client
-Doodle Cloud (Cloudflare Worker, ~/test/doodle-cloud): POST /v1/edu/session (Google token → teacher check →
-   Doodle Cloud token on the Luna-only "edu" plan), then the usual /v1/videos and /v1/direct.
+   └── google/      OAuth (launchWebAuthFlow) · Classroom API · Drive resumable upload · KinoDraw Cloud client
+KinoDraw Cloud (Cloudflare Worker, ~/test/doodle-cloud): POST /v1/edu/session (Google token → teacher check →
+   KinoDraw Cloud token on the Luna-only "edu" plan), then the usual /v1/videos and /v1/direct.
 ```
 
 ## Layout
@@ -113,7 +113,7 @@ export async function postMaterial(token, courseId, { title, description, driveF
 ```js
 export async function uploadVideo(token, blob, { name, onProgress })   // resumable → { id, name, webViewLink }
 ```
-### google/cloud.js (Doodle Cloud, GPT-6 Luna only)
+### google/cloud.js (KinoDraw Cloud, GPT-6 Luna only)
 ```js
 export async function eduSession(googleToken)   // POST /v1/edu/session → { token, plan: 'edu', remaining, ... }
 export async function openVideo(cloudToken, { sections, characters })   // → { video_id, model: 'gpt-6-luna' }
@@ -133,7 +133,7 @@ export async function readScript({ text, file, title })   // .docx/.md/.txt or p
                                                           // throws a teacher-readable Error (too short, too long, not English)
 export async function makeVideo(board, { cloud, voice, quality: '1080p' | '720p', onProgress, signal })
   // → { blob (video/mp4), board, timeline, codecs, notes }
-  // plan (rules draft, then GPT-6 Luna per section when `cloud` is given; rules alone if Doodle Cloud fails)
+  // plan (rules draft, then GPT-6 Luna per section when `cloud` is given; rules alone if KinoDraw Cloud fails)
   // → voice → pacing → timeline → narration + music → frames → encode.
   // onProgress({ stage: 'load'|'plan'|'voice'|'pace'|'audio'|'draw', done, total })
 ```

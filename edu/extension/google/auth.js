@@ -1,4 +1,4 @@
-// Google sign-in for Doodle Studio for Classroom, and calls to Google APIs with the teacher's token.
+// Google sign-in for KinoDraw for Classroom, and calls to Google APIs with the teacher's token.
 //
 // chrome.identity.launchWebAuthFlow works in Chrome and Edge with any Google account and takes a
 // login_hint, so the teacher signs in with the account Classroom is showing (getAuthToken is
@@ -14,10 +14,10 @@ const SAVED = 'googleAuth';      // chrome.storage.session: { accounts: { [email
 const RENEW_MS = 60_000;         // renew a token a minute before Google says it expires
 const SILENT_MS = 10_000;        // a silent sign-in gives up after this (Google's pages redirect with JavaScript)
 
-const SIGN_IN = 'Sign in with Google to use Doodle Studio.';
+const SIGN_IN = 'Sign in with Google to use KinoDraw.';
 const CLOSED = 'Sign-in was closed before it finished. If Google showed an error, your school\'s IT team may need '
-  + 'to allow Doodle Studio for Classroom first.';
-const ALL_BOXES = 'Doodle Studio needs every permission on the Google screen: seeing your classes, posting to '
+  + 'to allow KinoDraw for Classroom first.';
+const ALL_BOXES = 'KinoDraw needs every permission on the Google screen: seeing your classes, posting to '
   + 'Classwork and saving videos to your Drive. Please sign in again and leave every box checked.';
 const OFFLINE = 'Can\'t reach Google. Check your internet connection and try again.';
 
@@ -46,7 +46,7 @@ export async function getToken({ interactive = false, loginHint } = {}) {
   return oneAtATime(() => (CONFIG.dev ? devToken() : token(interactive, loginHint?.trim().toLowerCase() || '')));
 }
 
-/** Forget the teacher's tokens and withdraw Doodle Studio's access in their Google account, so a later
+/** Forget the teacher's tokens and withdraw KinoDraw's access in their Google account, so a later
  *  silent sign-in can't quietly bring the session back. */
 export async function signOut() {
   return oneAtATime(async () => {
@@ -148,11 +148,11 @@ function oauthError(error) {
     return new AuthError('signed-out', SIGN_IN);
   }
   if (error === 'admin_policy_enforced') {
-    return new AuthError('denied', 'Your school\'s Google admin hasn\'t allowed Doodle Studio for Classroom yet. Ask your '
+    return new AuthError('denied', 'Your school\'s Google admin hasn\'t allowed KinoDraw for Classroom yet. Ask your '
       + 'IT team to allow it (Google Admin console > Security > Access and data control > API controls).');
   }
   if (error === 'access_denied') {
-    return new AuthError('denied', 'Google sign-in was cancelled. To use Doodle Studio, sign in again and choose Allow.');
+    return new AuthError('denied', 'Google sign-in was cancelled. To use KinoDraw, sign in again and choose Allow.');
   }
   return new AuthError('failed', `Google sign-in didn't work (${error}). Please try again later.`);
 }
@@ -172,8 +172,8 @@ async function googleError(response) {
   if (reason === 'ACCESS_TOKEN_SCOPE_INSUFFICIENT' || reason === 'insufficientPermissions') return say(ALL_BOXES);
   if (reason === 'storageQuotaExceeded') return say('Your Google Drive is full. Make some room in Drive and try again.');
   if (reason === 'SERVICE_DISABLED' || reason === 'accessNotConfigured') {
-    return say('Doodle Studio can\'t use Google Classroom or Drive right now (a setup problem on our side). '
-      + 'Please let the Doodle Studio team know.');
+    return say('KinoDraw can\'t use Google Classroom or Drive right now (a setup problem on our side). '
+      + 'Please let the KinoDraw team know.');
   }
   if (response.status === 429 || /rateLimitExceeded/.test(reason)) return say('Google is busy right now. Wait a minute and try again.');
   if (response.status >= 500) return say('Google isn\'t answering right now. Try again in a few minutes.');

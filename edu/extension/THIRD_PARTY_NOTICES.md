@@ -1,6 +1,6 @@
 # Third-party notices
 
-Doodle Studio for Classroom is part of Doodle Studio (https://github.com/edwardaiwang-svg/doodle-studio). Its own
+KinoDraw for Classroom is part of KinoDraw (https://github.com/edwardaiwang-svg/kinodraw). Its own
 code is MIT-licensed; its original doodles (`assets/doodles/`, those not starting with `fl_`), narrator character and
 drawing hand are CC BY 4.0. The components below keep their own licences.
 

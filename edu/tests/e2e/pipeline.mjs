@@ -1,4 +1,4 @@
-// The whole teacher flow in the real extension (headless Chromium), with Google and Doodle Cloud mocked:
+// The whole teacher flow in the real extension (headless Chromium), with Google and KinoDraw Cloud mocked:
 // studio tab → signed in (dev token) → teacher check → script → GPT-6 Luna (mock) → voice → drawing → MP4 →
 // Drive resumable upload (mock) → Classroom material (mock). Verifies the MP4 with ffprobe and the requests sent.
 //   node tests/e2e/pipeline.mjs [fixture=water_cycle] [--draft] [--no-cloud] [--720p] [--shots]

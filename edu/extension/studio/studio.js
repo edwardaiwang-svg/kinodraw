@@ -36,7 +36,7 @@ function fail(error) {
 
 function friendly(error) {
   if (error?.name === 'AbortError') return 'You stopped the video. Nothing was posted.';
-  return error?.message || String(error);           // Google and Doodle Cloud errors already say what to do
+  return error?.message || String(error);           // Google and KinoDraw Cloud errors already say what to do
 }
 
 // ------------------------------------------------------------------ sign-in and the teacher check
@@ -69,7 +69,7 @@ async function signedIn({ token, email }) {
 }
 
 async function cloudFor(token) {
-  // GPT-6 Luna through Doodle Cloud: Doodle Cloud checks for itself that this account teaches a class.
+  // GPT-6 Luna through KinoDraw Cloud: KinoDraw Cloud checks for itself that this account teaches a class.
   if (!session.cloud) {
     try {
       const { token: cloudToken } = await eduSession(token);
@@ -78,7 +78,7 @@ async function cloudFor(token) {
         directSection: (videoId, payload) => directSection(cloudToken, videoId, payload),
       };
     } catch (error) {
-      console.warn('Doodle Cloud unavailable:', error);
+      console.warn('KinoDraw Cloud unavailable:', error);
       return null;
     }
   }
@@ -180,7 +180,7 @@ $('make').onclick = async () => {
     const file = await uploadVideo(token, made.blob, { name: `${title}.mp4`, onProgress: (done, total) => progress('upload', done, total) });
     progress('post');
     const material = await postMaterial(token, course.id, { title, state, driveFileId: file.id,
-      description: 'A hand-drawn video made with Doodle Studio for Classroom.' });
+      description: 'A hand-drawn video made with KinoDraw for Classroom.' });
     finished({ made, course, file, material, state });
   } catch (error) {
     fail(error);

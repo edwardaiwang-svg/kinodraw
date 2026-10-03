@@ -1,4 +1,4 @@
-// Doodle Studio for Classroom service worker: answers the Classroom page's "is this person a teacher of
+// KinoDraw for Classroom service worker: answers the Classroom page's "is this person a teacher of
 // this class?" and opens the studio tab. Chrome stops it whenever it is idle, so what it remembers lives
 // in chrome.storage.session. Google is only called from here and from extension pages, never from the
 // content script (that runs with Classroom's origin, where CORS applies).

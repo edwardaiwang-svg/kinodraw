@@ -1,8 +1,8 @@
 {
-  "name": "doodle-studio-classroom",
+  "name": "kinodraw-classroom",
   "private": true,
   "version": "0.1.0",
-  "description": "Doodle Studio for Classroom: a Chrome extension that turns a teacher's script into a hand-drawn video and posts it to Google Classroom.",
+  "description": "KinoDraw for Classroom: a Chrome extension that turns a teacher's script into a hand-drawn video and posts it to Google Classroom.",
   "type": "module",
   "license": "MIT",
   "scripts": {

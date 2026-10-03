@@ -1,10 +1,10 @@
-// Doodle Studio for Classroom: settings shared by every page of the extension.
+// KinoDraw for Classroom: settings shared by every page of the extension.
 // The Google OAuth client is a "Web application" client whose authorized redirect URI is
 // https://<extension id>.chromiumapp.org/ (see edu/README.md, "Google sign-in").
 export const CONFIG = {
   version: '0.1.0',
   dev: false,                                   // tests turn this on in a throwaway copy; never in a release
-  cloudUrl: 'https://api.doodlecloud.org',      // Doodle Cloud: GPT-6 Luna director + server-side teacher check
+  cloudUrl: 'https://api.doodlecloud.org',      // KinoDraw Cloud: GPT-6 Luna director + server-side teacher check
   googleClientId: '292748984382-7uf3qe28fadngtjln2p6e77jgmmf87qi.apps.googleusercontent.com',
   scopes: [
     'https://www.googleapis.com/auth/classroom.courses.readonly',        // which classes you teach (the teacher check)

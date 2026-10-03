@@ -1,4 +1,4 @@
-// AI director: the rules director drafts, GPT-6 Luna (through Doodle Cloud) improves one section at a time, and code
+// AI director: the rules director drafts, GPT-6 Luna (through KinoDraw Cloud) improves one section at a time, and code
 // decides (port of kinodraw/director/llm/director.py). Every answer is checked before it is used: doodles must
 // come from the beat's candidates (or the narrator poses), triggers must be words of the beat, numbers/dates/quotes
 // must appear in the section text, and texts must fit. A beat whose answer fails keeps its rules draft; a section
@@ -58,7 +58,7 @@ export class LLMDirector {
       .filter(([, beats]) => beats.length);
     const video = await this.cloud.openVideo({ sections: groups.length,
       characters: groups.reduce((n, [, beats]) => n + beats.reduce((m, b) => m + b.display.en.length, 0), 0) });
-    if (video.model !== LUNA) throw new Error(`Doodle Cloud offered ${video.model}; this version only uses ${LUNA}`);
+    if (video.model !== LUNA) throw new Error(`KinoDraw Cloud offered ${video.model}; this version only uses ${LUNA}`);
     for (let i = 0; i < groups.length; i++) {
       const [chapter, beats] = groups[i];
       onProgress?.(i, groups.length);

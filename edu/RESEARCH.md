@@ -31,7 +31,7 @@ Canvas for Elementary) third, for large districts.
 
 | Finding | Design |
 |---|---|
-| Classroom API: `courses.list?teacherId=me` lists the classes an account teaches; "can create classes" is not proof (admins may let students create classes); `verifiedTeacher` is false outside Workspace for Education | Teacher gate = at least one active class taught, and the open class must be one of them. Doodle Cloud repeats the check on its server before any AI call |
+| Classroom API: `courses.list?teacherId=me` lists the classes an account teaches; "can create classes" is not proof (admins may let students create classes); `verifiedTeacher` is false outside Workspace for Education | Teacher gate = at least one active class taught, and the open class must be one of them. KinoDraw Cloud repeats the check on its server before any AI call |
 | Posting: `courseWorkMaterials.create` with a Drive file, `shareMode: VIEW` | Video → the teacher's Drive (`drive.file` scope, resumable upload) → a Classwork material, published or draft |
 | All Classroom scopes are "sensitive": Google must verify the app before public launch (100-user cap until then; "Testing" mode tokens expire after 7 days) | Minimal scopes; privacy policy in [PRIVACY.md](PRIVACY.md); verification is a launch step |
 | K-12 domains treat anyone not marked 18+ as under 18, and under-18 accounts can't use unconfigured apps (since Oct 2023) | District IT may need to allow the OAuth client for staff (see README) |

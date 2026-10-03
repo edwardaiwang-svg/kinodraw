@@ -1,9 +1,9 @@
-// Doodle Studio for Classroom on classroom.google.com: a "Make a doodle video" button for the teachers of
-// the class on screen, a small sign-in chip when Doodle Studio isn't signed in yet, and nothing at all
+// KinoDraw for Classroom on classroom.google.com: a "Make a doodle video" button for the teachers of
+// the class on screen, a small sign-in chip when KinoDraw isn't signed in yet, and nothing at all
 // for anyone else. It lives in a closed shadow root, so Classroom's styles can't reach it, and it never
 // calls Google itself: this script runs with Classroom's origin, so the service worker does the asking.
 (() => {
-  const TAG = 'doodle-studio-for-classroom';   // placed on the page by classroom.css
+  const TAG = 'kinodraw-for-classroom';   // placed on the page by classroom.css
   // A class's pages: /c/<code> (Stream), /w/<code>/t/all (Classwork), /r/<code>/… (People); /u/<n>/ picks the account.
   const CLASS_PAGE = /^\/(?:u\/\d+\/)?[cwr]\/([A-Za-z0-9_=-]+)/;
   const SVG = 'http://www.w3.org/2000/svg';
@@ -64,7 +64,7 @@
     }
     root.replaceChildren(answer.status === 'teacher'
       ? button('', 'Make a doodle video', `Make a hand-drawn video and post it to ${answer.course?.name || 'this class'}`, open)
-      : button('chip', 'Doodle Studio · Sign in', 'Sign in with Google to make doodle videos for this class', () => {
+      : button('chip', 'KinoDraw · Sign in', 'Sign in with Google to make doodle videos for this class', () => {
         signingIn = true;
         open();
       }));

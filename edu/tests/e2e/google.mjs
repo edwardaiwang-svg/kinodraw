@@ -1,5 +1,5 @@
-// End-to-end checks of the Classroom side of Doodle Studio for Classroom: the real extension in Playwright's
-// Chromium (headless), with every Google and Doodle Cloud address answered by the stand-ins in
+// End-to-end checks of the Classroom side of KinoDraw for Classroom: the real extension in Playwright's
+// Chromium (headless), with every Google and KinoDraw Cloud address answered by the stand-ins in
 // google-fakes.mjs. Nothing can reach the internet: the browser's DNS answers "not found" for every name.
 //   cd edu && node tools/build.mjs && node tests/e2e/google.mjs
 import { chromium } from 'playwright';
@@ -14,7 +14,7 @@ const OUT = join(EDU, 'tests', 'out');
 const EXT = join(OUT, 'ext-google');   // its own copy: other e2e runs (tests/out/ext-dev) may be going at the same time
 const STUDIO = `chrome-extension://${ID}/studio/studio.html`;
 const BUTTON = 'Make a doodle video';
-const CHIP = 'Doodle Studio · Sign in';
+const CHIP = 'KinoDraw · Sign in';
 const HOUR = 3_600_000;
 let failures = 0;
 const check = (name, ok, detail = '') => {
@@ -30,7 +30,7 @@ const config = readFileSync(join(EXT, 'config.js'), 'utf8');
 if (!config.includes('dev: false')) throw new Error('extension/config.js no longer says "dev: false"');
 writeFileSync(join(EXT, 'config.js'), config.replace('dev: false', 'dev: true'));
 // The real studio page downloads AI models; these checks only need a live extension tab at its address.
-writeFileSync(join(EXT, 'studio', 'studio.html'), '<!doctype html><title>Studio stand-in</title><p>Doodle Studio</p>');
+writeFileSync(join(EXT, 'studio', 'studio.html'), '<!doctype html><title>Studio stand-in</title><p>KinoDraw</p>');
 
 const fake = fakes();
 const context = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'doodle-classroom-')), {
@@ -82,10 +82,10 @@ try {
   const signIn = (devToken) => ext.evaluate((t) => (t ? chrome.storage.session.set({ devToken: t }) : chrome.storage.session.remove('devToken')), devToken);
   const teacher = { token: 'teacher-token', email: 'frizzle@school.test', expiresAt: Date.now() + HOUR };
 
-  // (c) Not signed in to Doodle Studio yet: a small sign-in chip, which opens the studio tab for this class.
+  // (c) Not signed in to KinoDraw yet: a small sign-in chip, which opens the studio tab for this class.
   const classroom = await openClassroom(`/c/${CODE}`);
   const chip = await findButton(classroom, CHIP);
-  check('signed out: a small "Doodle Studio · Sign in" chip on the class page', !!chip, JSON.stringify(await buttons(classroom)));
+  check('signed out: a small "KinoDraw · Sign in" chip on the class page', !!chip, JSON.stringify(await buttons(classroom)));
   await classroom.screenshot({ path: join(OUT, 'google-signed-out.png') });
   const [studio] = await Promise.all([context.waitForEvent('page'), click(chip)]);
   await studio.waitForLoadState();
@@ -148,11 +148,11 @@ try {
     await page.waitForTimeout(1000);   // the page asked first; give its answer time to land
     check(`${who}: the service worker says "${verdict}" and the page shows nothing (no button, no chip, no element)`,
       answer?.status === verdict && (await buttons(page)).length === 0
-      && await page.evaluate(() => !document.querySelector('doodle-studio-for-classroom')), JSON.stringify({ answer, buttons: await buttons(page) }));
+      && await page.evaluate(() => !document.querySelector('kinodraw-for-classroom')), JSON.stringify({ answer, buttons: await buttons(page) }));
     await page.close();
   }
 
-  // (e) The google/ modules on an extension page, against the Drive, Classroom and Doodle Cloud stand-ins.
+  // (e) The google/ modules on an extension page, against the Drive, Classroom and KinoDraw Cloud stand-ins.
   const SIZE = 8 * 1024 * 1024 + 300 * 1024;   // more than one 8 MiB piece
   const upload = await ext.evaluate(async (size) => {
     const { uploadVideo } = await import('/google/drive.js');
@@ -210,11 +210,11 @@ try {
     const refused = await eduSession('student-token').then(() => 'no error', (e) => e.message);
     return { session, video, section, refused };
   });
-  check('Doodle Cloud: the Google sign-in becomes an edu token, and Luna directs the video', cloud.session.plan === 'edu'
+  check('KinoDraw Cloud: the Google sign-in becomes an edu token, and Luna directs the video', cloud.session.plan === 'edu'
     && cloud.video.model === 'gpt-6-luna' && cloud.section.section_title === 'Volcanoes'
     && fake.log.cloud.filter((c) => c.path !== '/v1/edu/session').every((c) => c.token === 'cloud-token')
     && fake.log.cloud[0].body.google_token === 'teacher-token', JSON.stringify({ cloud, calls: fake.log.cloud }));
-  check('Doodle Cloud\'s refusal reads as a sentence', cloud.refused === 'Doodle Studio for Classroom is for teachers.', cloud.refused);
+  check('KinoDraw Cloud\'s refusal reads as a sentence', cloud.refused === 'KinoDraw for Classroom is for teachers.', cloud.refused);
 
   // The toolbar button's path: open (then focus) the studio without a class.
   const [plain] = await Promise.all([context.waitForEvent('page'), ext.evaluate(() => chrome.runtime.sendMessage({ type: 'open-studio' }))]);

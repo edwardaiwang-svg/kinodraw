@@ -1,4 +1,4 @@
-// Unit tests for the Google side of Doodle Studio for Classroom (google/*.js) with a fake chrome.* and a
+// Unit tests for the Google side of KinoDraw for Classroom (google/*.js) with a fake chrome.* and a
 // fake fetch: no network, no browser. tests/e2e/google.mjs runs the real extension in Chromium.
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
@@ -272,8 +272,8 @@ describe('drive: resumable upload (the multi-piece path runs in tests/e2e/google
   });
 });
 
-describe('cloud: Doodle Cloud client', () => {
-  test('eduSession trades the Google token for a Doodle Cloud token', async () => {
+describe('cloud: KinoDraw Cloud client', () => {
+  test('eduSession trades the Google token for a KinoDraw Cloud token', async () => {
     const calls = fakeFetch(() => json({ token: 'dc-1', plan: 'edu', remaining: 30 }));
     assert.deepEqual(await eduSession('tok-1'), { token: 'dc-1', plan: 'edu', remaining: 30 });
     assert.equal(calls[0].url, `${CONFIG.cloudUrl}/v1/edu/session`);
@@ -281,7 +281,7 @@ describe('cloud: Doodle Cloud client', () => {
     assert.equal(calls[0].headers.Authorization, undefined);
   });
 
-  test('openVideo and directSection send the Doodle Cloud token; directSection returns the section', async () => {
+  test('openVideo and directSection send the KinoDraw Cloud token; directSection returns the section', async () => {
     const section = { section_title: 'Volcanoes', beats: [] };
     const calls = fakeFetch(({ url }) => json(url.endsWith('/v1/videos') ? { video_id: 'v1', model: 'gpt-6-luna' } : { section, usage: {} }));
     assert.deepEqual(await openVideo('dc-1', { sections: 3, characters: 900 }), { video_id: 'v1', model: 'gpt-6-luna' });
@@ -291,13 +291,13 @@ describe('cloud: Doodle Cloud client', () => {
     assert.ok(calls.every((c) => c.headers.Authorization === 'Bearer dc-1'));
   });
 
-  test('Doodle Cloud\'s {error} messages become readable sentences', async () => {
-    fakeFetch(() => json({ error: 'Doodle Studio for Classroom is for teachers' }, 403));
+  test('KinoDraw Cloud\'s {error} messages become readable sentences', async () => {
+    fakeFetch(() => json({ error: 'KinoDraw for Classroom is for teachers' }, 403));
     await assert.rejects(eduSession('tok-student'),
-      (e) => e instanceof CloudError && e.status === 403 && e.message === 'Doodle Studio for Classroom is for teachers.');
+      (e) => e instanceof CloudError && e.status === 403 && e.message === 'KinoDraw for Classroom is for teachers.');
     fakeFetch(() => new Response('error code: 1010', { status: 403 }));
     await assert.rejects(eduSession('tok-1'), (e) => e.status === 403 && /isn't answering right now \(error 403\)/.test(e.message));
     globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
-    await assert.rejects(openVideo('dc-1', { sections: 1, characters: 10 }), (e) => e.status === 0 && /Can't reach Doodle Cloud/.test(e.message));
+    await assert.rejects(openVideo('dc-1', { sections: 1, characters: 10 }), (e) => e.status === 0 && /Can't reach KinoDraw Cloud/.test(e.message));
   });
 });

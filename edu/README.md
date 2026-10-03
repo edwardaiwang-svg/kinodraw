@@ -1,4 +1,4 @@
-# Doodle Studio for Classroom
+# KinoDraw for Classroom
 
 A Chrome extension for elementary-school teachers. Open one of your Google Classroom classes, click
 **Make a doodle video**, give it a short script, and it makes a hand-drawn whiteboard video (a drawing
@@ -9,9 +9,9 @@ Classwork. Kids watch it in Classroom like any other material.
   extension, on the teacher's computer.
 - **For teachers only.** The button appears only on classes the signed-in Google account teaches, and the
   AI helper checks again on its server. Students never see it.
-- **Built on Doodle Studio's rules.** The same director as the desktop app decides what to draw and when
+- **Built on KinoDraw's rules.** The same director as the desktop app decides what to draw and when
   (every word written on the board is said as it is written; lists draw every item; no religious
-  imagery or scientist figures). GPT-6 Luna, through Doodle Cloud, suggests pictures on top of those
+  imagery or scientist figures). GPT-6 Luna, through KinoDraw Cloud, suggests pictures on top of those
   rules; it is the only AI model the classroom version uses.
 
 Why Google Classroom: it is the most-used learning platform in US K–12 and where grades 3–5 teachers
@@ -25,7 +25,7 @@ Chrome** (or their school's IT installs it for them), and a welcome page shows t
 [STORE.md](STORE.md).
 
 1. Install the extension, open **classroom.google.com**, and open a class you teach.
-2. Click **Make a doodle video** (bottom right). The Doodle Studio tab opens with that class chosen.
+2. Click **Make a doodle video** (bottom right). The KinoDraw tab opens with that class chosen.
 3. Sign in with Google (the account you teach with) the first time.
 4. Choose a Word (.docx), text or Markdown file, or paste the script. Headings (`#`, `##` or Word's
    Heading styles) split the video into parts; each part ends with its key idea on a sticky note.
@@ -47,7 +47,7 @@ node tools/build.mjs          # vendors the JS/WASM libraries and exports the do
 Load `edu/extension` in `chrome://extensions` (Developer mode → Load unpacked). The manifest's `key` pins
 the extension id to `hoddalijnehhimlamfchabikgmjfgeoe` so the Google sign-in redirect below stays valid.
 `node tools/build.mjs --zip` writes the Chrome Web Store zip to `edu/dist/` (without the `key`: the store assigns
-its own id). CI builds the same zip on every push (the **doodle-studio-classroom** artifact).
+its own id). CI builds the same zip on every push (the **kinodraw-classroom** artifact).
 
 ### 2. Google sign-in (Google Cloud console)
 
@@ -62,13 +62,13 @@ its own id). CI builds the same zip on every push (the **doodle-studio-classroom
 5. **Clients** → Create client → **Web application**, with the authorized redirect URI exactly
    `https://hoddalijnehhimlamfchabikgmjfgeoe.chromiumapp.org/` (trailing slash included). No JavaScript origins;
    the client secret is never used. Add one more `https://<id>.chromiumapp.org/` for each store listing's id.
-6. Put the client id (public, not a secret) in `extension/config.js` (`googleClientId`) and in Doodle Cloud's
+6. Put the client id (public, not a secret) in `extension/config.js` (`googleClientId`) and in KinoDraw Cloud's
    `wrangler.toml` (`GOOGLE_CLIENT_ID`).
 7. Before a public launch, Google has to verify the app (the Classroom scopes are sensitive): brand verification,
    then a reason for each scope and a video of the sign-in. Until then teachers see an "unverified app" screen and
    at most 100 can sign in.
 
-### 3. Doodle Cloud (GPT-6 Luna)
+### 3. KinoDraw Cloud (GPT-6 Luna)
 
 The `/v1/edu/session` endpoint and the Luna-only `edu` plan are in `~/test/doodle-cloud` (no database migration,
 no new secrets). With `GOOGLE_CLIENT_ID` set in `wrangler.toml`:
@@ -81,7 +81,7 @@ curl -s -X POST https://api.doodlecloud.org/v1/edu/session -H 'content-type: app
 ```
 
 The last line should answer `{"error":"sign in with Google again"}`; a 503 means the client id is still empty.
-Until Doodle Cloud answers, the extension still makes videos: the built-in rules plan the pictures on their own.
+Until KinoDraw Cloud answers, the extension still makes videos: the built-in rules plan the pictures on their own.
 
 ## For school IT admins
 
@@ -100,11 +100,11 @@ downloads the voice and picture models (about 400 MB with WebGPU, 160 MB without
 
 ## Privacy
 
-- The video is made on the teacher's computer. The script's sentences are sent to Doodle Cloud, which
-  asks GPT-6 Luna (OpenAI's API) to suggest pictures; Doodle Cloud does not store script text (only
+- The video is made on the teacher's computer. The script's sentences are sent to KinoDraw Cloud, which
+  asks GPT-6 Luna (OpenAI's API) to suggest pictures; KinoDraw Cloud does not store script text (only
   counts and costs). No student data is read: the extension only lists the classes the teacher teaches.
 - Google permissions: `classroom.courses.readonly` (which classes you teach), `classroom.courseworkmaterials`
-  (post the video), `drive.file` (save the video; Doodle Studio can only see files it made), and your email.
+  (post the video), `drive.file` (save the video; KinoDraw can only see files it made), and your email.
 
 ## Developing
 
@@ -112,7 +112,7 @@ downloads the voice and picture models (about 400 MB with WebGPU, 160 MB without
 |---|---|
 | `npm test` | unit and parity tests: the JS port against the Python app's output, media, Google side |
 | `node tests/e2e/google.mjs` | the Classroom button, teacher check, Drive upload and posting, all mocked, in headless Chromium |
-| `node tests/e2e/pipeline.mjs` | the whole teacher flow in the real extension, Google and Doodle Cloud mocked |
+| `node tests/e2e/pipeline.mjs` | the whole teacher flow in the real extension, Google and KinoDraw Cloud mocked |
 | `node tests/e2e/media.mjs` | the voice (WebGPU, and the Chromebook path: WASM voice and AAC), mixing and MP4 encoding in headless Chromium |
 | `node tests/e2e/rules.mjs` | the render rules checked on the JS engine in headless Chromium |
 | `node tests/e2e/render.mjs printing_press 10,30,60` | stills from the JS renderer, for comparing with the desktop app |
