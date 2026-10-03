@@ -24,26 +24,30 @@
 <div class="wrap">
   <p class="small"><a href="./">Doodle Studio</a></p>
   <h1>Privacy policy</h1>
-  <p class="small">Last updated September 27, 2026. This covers the Doodle Studio app and its Doodle Cloud AI director.
+  <p class="small">Last updated October 2, 2026. This covers the Doodle Studio app and its Doodle Cloud AI director.
     The Chrome extension for teachers has <a href="classroom/privacy.html">its own policy</a>.</p>
   <p>Doodle Studio turns a script you write into a hand-drawn video on your own computer. The app, the site and Doodle
     Cloud have no ads, no analytics and no tracking, and nothing about you is ever sold.</p>
 
   <h2>The offline director: nothing leaves your computer</h2>
   <p>With the offline director you need no account. Your scripts, projects, narration and videos stay on your
-    computer. The app only downloads its voice model (from GitHub) and doodle-search model (from Hugging Face) the
-    first time they are needed; those downloads carry nothing about you.</p>
+    computer. The app only downloads its voice model (from GitHub; the Chinese voice also needs a small settings file
+    from Hugging Face) and its doodle-search model (from Hugging Face) the first time they are needed. Those downloads
+    send nothing about you beyond what any download does: GitHub and Hugging Face see your IP address. (Before version
+    0.1.7, if Hugging Face could not be reached, the Chinese doodle-search model came from Google Cloud Storage
+    instead.)</p>
 
   <h2>Doodle Cloud, the AI director (optional)</h2>
   <p>If you sign in with your email and choose "Doodle Cloud AI", this is what is sent, and to whom:</p>
   <table>
     <tr><th>Where</th><th>What</th><th>Why</th></tr>
     <tr><td>Doodle Cloud (api.doodlecloud.org, run by Doodle Studio)</td><td>your email, a random ID for this
-      installation of the app, then each section's sentences, its title and the names of candidate doodles</td><td>to
+      installation of the app, then each section's sentences, the video and section titles, the language, short
+      phrases the offline draft picked from the sentences, and the names of candidate doodles</td><td>to
       sign you in, count your free videos, and ask GPT-6 Luna for picture suggestions</td></tr>
     <tr><td>Resend (email delivery)</td><td>your email address and a 6-digit sign-in code</td><td>to email you the
       code</td></tr>
-    <tr><td>OpenAI (GPT-6 Luna), through Doodle Cloud</td><td>the same sentences, title and doodle names</td><td>to
+    <tr><td>OpenAI (GPT-6 Luna), through Doodle Cloud</td><td>the same sentences, titles, language and doodle names</td><td>to
       suggest pictures; OpenAI's API terms apply</td></tr>
     <tr><td>Cloudflare (hosting)</td><td>ordinary request data, such as your IP address; the service's request logs
       keep it for 3 days</td><td>to run the service, fix errors and limit abuse</td></tr>
@@ -55,6 +59,20 @@
   <p>Sign-in codes are deleted when used, or within about two days after they expire. Rate-limit records, which contain
     an IP address or email, are deleted within about four days. On your computer, the sign-in token is kept in your
     system's keychain.</p>
+
+  <h2>Your own AI key or program (Advanced, optional)</h2>
+  <p>If you turn on Settings &gt; Advanced directors and choose "My OpenAI key", "My Anthropic key" or
+    "OpenAI-compatible server", the app sends the same section request (sentences, titles, language, picked phrases
+    and candidate doodle names) straight from your computer to that provider with your key: OpenAI, Anthropic, or the
+    server address you entered. Doodle Cloud is not involved, and that provider's own terms and privacy policy apply.
+    With "My own command", the app hands the request to the program you chose on your computer; where it goes from
+    there is up to that program. Your keys and command are kept in your system's keychain, never in project
+    files.</p>
+
+  <h2>This website</h2>
+  <p>This site is hosted on GitHub Pages, so GitHub sees your IP address when you visit. Its Download button asks
+    GitHub's API for the latest release so it can offer the file for your computer. The site has no other scripts and
+    no cookies of its own.</p>
 
   <h2>Deleting your account</h2>
   <p>To delete your Doodle Cloud account and its usage counts, email
