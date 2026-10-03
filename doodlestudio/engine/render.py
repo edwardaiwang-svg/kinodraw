@@ -223,6 +223,10 @@ class Production:
         n0 = len(ctx.elements)
         auto.build_end_card(ctx, col * COL, end['start'] + PAN_SECONDS)
         self._tag(n0, 'endcard', essential=True, deadline=end['end'] - .5)
+        if self.tl.get('credit'):                      # "Made with ...", written under it while it is read
+            n0 = len(ctx.elements)
+            auto.build_credit(ctx, col * COL, self.tl['credit']['start'] - .8)
+            self._tag(n0, 'credit', essential=True, deadline=self.tl['credit']['end'] - .3)
         self._transitions()
 
     def _take_page(self, beat, bt, ch):

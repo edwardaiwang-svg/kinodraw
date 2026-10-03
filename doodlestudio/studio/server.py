@@ -22,7 +22,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import platformdirs
 
-from .. import director, pipeline, voice
+from .. import PRODUCT, director, pipeline, voice
 from ..director.validate import validate
 from ..library import resolve
 from ..package import sha
@@ -165,6 +165,9 @@ def make_video(name: str) -> dict:
     path = _project(name)
 
     def job(progress):
+        cfg = pipeline.settings(path)
+        cfg['credit'] = _config().get('credit', True)  # the Settings switch applies to every video made from now on
+        (path / 'project.json').write_text(json.dumps(cfg, indent=1))
         clips = pipeline.narrate(path, progress)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)
@@ -252,6 +255,7 @@ def state() -> dict:
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
+            'credit': _config().get('credit', True), 'product': PRODUCT['name'],
             'models': SUGGESTED,
             'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
                        'zh': ['zf_001', 'zf_002', 'zm_010', 'zm_020']},
@@ -424,6 +428,8 @@ class Handler(BaseHTTPRequestHandler):
                 cfg['projects'] = str(Path(b['projects']).expanduser())
             if 'advanced' in b:
                 cfg['advanced'] = bool(b['advanced'])
+            if 'credit' in b:
+                cfg['credit'] = bool(b['credit'])
             _save_config(cfg)
             return self._json({'ok': True, 'projects_root': str(projects_root())})
         return self._json({'error': 'not found'}, 404)

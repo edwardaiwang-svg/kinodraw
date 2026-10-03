@@ -2,7 +2,7 @@
 
 Given each beat's measured clip length and per-character speech times, place
 beats on the master clock, insert chapter gaps, take reading holds and gem
-transition time, then derive captions, chapters, music intervals and the end card.
+transition time, then derive captions, chapters, music intervals, the end card and the credit.
 
 ``pauses`` (beat id -> seconds, from render.pacing) add silence after a beat so the
 narration waits for the drawing hand instead of rushing or skipping pictures. A takeaway
@@ -20,6 +20,7 @@ FPS = 30
 CHAPTER_GAP = .6
 TRANSITION = 2.8          # pull back 0.35 + fly/pin 0.9 + check 0.7 + circle 0.8 (+ slack)
 END_CARD = 5.0            # pan to the closing page, write it, and let it be read
+CREDIT = 2.0              # then "Made with ..." under it (the project's credit setting can turn it off)
 ZH_DWELL = .5             # extra reading pause per Mandarin paragraph (9/19 precedent)
 ZOOM_IN = .9              # first part of each section: zoom into its agenda card
 AGENDA_CARD = 2.6         # hand time per agenda card: the agenda holds until every card is drawn
@@ -33,7 +34,7 @@ def take_hold(beat, lang):
     return max(3.0, len(re.findall(r'[一-鿿A-Za-z0-9]', head)) / 6.0)
 
 
-def layout(episode, lang, clips, pauses=None):
+def layout(episode, lang, clips, pauses=None, credit=True):
     """clips[beat_id] = {'speech': seconds of speech incl. trailing clip gap, 'char_times': [...]};
     pauses[beat_id] = seconds of silence after that beat (pacing)."""
     pauses = pauses or {}
@@ -80,7 +81,8 @@ def layout(episode, lang, clips, pauses=None):
                                            clip['speech'] - .15):
             capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text})
         cursor = end
-    duration = cursor + END_CARD
+    tail = END_CARD + (CREDIT if credit else 0.)
+    duration = cursor + tail
     duration = round(-(-duration * FPS // 1) / FPS, 6)
     chaps = []
     for c in episode['chapters']:
@@ -98,7 +100,7 @@ def layout(episode, lang, clips, pauses=None):
             music.append([info['start'], info['end']])
     for tr in transitions:
         music.append([tr['hold_end'], tr['end']])
-    music.append([duration - END_CARD, duration])
+    music.append([duration - tail, duration])
     music.sort()
     merged = []
     for a, b in music:
@@ -110,7 +112,8 @@ def layout(episode, lang, clips, pauses=None):
             'pauses': {k: round(float(v), 3) for k, v in pauses.items() if v},
             'captions': capts, 'chapters': chaps, 'transitions': transitions,
             'music': [{'start': round(a, 4), 'end': round(b, 4)} for a, b in merged],
-            'end_card': {'start': round(duration - END_CARD, 4), 'end': duration}}
+            'end_card': {'start': round(duration - tail, 4), 'end': duration},
+            'credit': {'start': round(duration - CREDIT, 4), 'end': duration} if credit else None}
 
 
 def synthetic_clips(episode, lang):

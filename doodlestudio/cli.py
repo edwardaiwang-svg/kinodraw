@@ -165,6 +165,8 @@ def _settings(args):
     for key in ('voice', 'speed', 'workers'):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
+    if getattr(args, 'no_credit', False):
+        out['credit'] = False
     return out
 
 
@@ -183,6 +185,7 @@ def main(argv=None):
         p.add_argument('--voice')
         p.add_argument('--speed', type=float)
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
+        p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
         p.add_argument('--model')
         p.add_argument('--base-url')

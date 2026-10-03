@@ -245,6 +245,19 @@ def build_end_card(ctx, x0, t):
     return els
 
 
+CREDIT_LINE = {'en': 'Made with {name}', 'zh': '由 {name} 制作'}
+
+
+def build_credit(ctx, x0, t):
+    """The end credit, small and soft at the foot of the closing page: the app's name, then where to get it."""
+    from .. import PRODUCT
+    made = ink.TextDrawing([CREDIT_LINE[ctx.lang].format(**PRODUCT)], ctx.lang, 40, color=SOFT_INK, pace=1.6, max_dur=1.)
+    url = ink.TextDrawing([PRODUCT['url']], 'en', 30, color=SOFT_INK, pace=2.5, max_dur=.6)
+    y = 1080 - 70 - made.size[1] - url.size[1]
+    return [ctx.add(made, x0 + (1920 - made.size[0]) / 2, y, t),
+            ctx.add(url, x0 + (1920 - url.size[0]) / 2, y + made.size[1], t + made.duration)]
+
+
 def check_spot(box, obstacles, sizes=(150, 120, 96, 72), pad=12):
     """Where a check mark fits inside a card without touching anything written there: (size, (x, y))."""
     x, y, w, h = box

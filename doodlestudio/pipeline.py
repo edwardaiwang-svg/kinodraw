@@ -1,7 +1,7 @@
 """End to end in a project folder: script -> storyboard -> voice -> timeline -> render -> mix -> package.
 
 Project folder:
-  project.json        settings (language, voice, speed, director, workers)
+  project.json        settings (language, voice, speed, director, workers, credit)
   script.<ext>        the source script
   storyboard.json     chapters + beats + visuals (editable; re-running keeps your edits)
   doodles/ photos/    optional: your own SVG doodles and photos
@@ -86,7 +86,7 @@ def build_audio(project_dir: Path, clips: dict) -> dict:
     cfg, board = settings(project_dir), storyboard(project_dir)
     build = project_dir / 'build'
     pauses = renderer.pacing(board, cfg['lang'], audio.timing(clips), project_dir)
-    tl = audio.assemble(board, cfg['lang'], clips, build, pauses)
+    tl = audio.assemble(board, cfg['lang'], clips, build, pauses, credit=cfg.get('credit', True))
     tl['storyboard_sha256'] = sha(project_dir / 'storyboard.json')
     _save(build / 'timeline.json', tl)
     return tl

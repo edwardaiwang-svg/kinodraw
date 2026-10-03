@@ -76,12 +76,13 @@ def timing(clips: dict) -> dict:
     return {bid: {'speech': c.duration + voice.GAP, 'char_times': c.char_times} for bid, c in clips.items()}
 
 
-def assemble(storyboard: dict, lang: str, clips: dict, out_dir: Path, pauses: dict | None = None) -> dict:
+def assemble(storyboard: dict, lang: str, clips: dict, out_dir: Path, pauses: dict | None = None,
+             credit: bool = True) -> dict:
     """clips[beat_id] = voice.Clip; pauses[beat_id] = silence after a beat (pacing). Writes narration.wav,
     timeline.json and captions; returns the timeline."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    tl = timeline.layout(storyboard, lang, timing(clips), pauses)
+    tl = timeline.layout(storyboard, lang, timing(clips), pauses, credit)
     total = round(tl['duration'] * SR)
     pcm = np.zeros(total, np.float32)
     for beat in storyboard['beats']:
