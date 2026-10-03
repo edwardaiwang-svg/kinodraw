@@ -162,7 +162,7 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
     cache_dir = Path(cache_dir)
     wav, meta = cache_dir / f'{key}.wav', cache_dir / f'{key}.json'
     if wav.exists() and meta.exists():
-        info = json.loads(meta.read_text())
+        info = json.loads(meta.read_text(encoding='utf-8'))
         return Clip(wav, info['duration'], info['char_times'])
     audio, sr, timings = _engine(lang).create_timed(phonemes(spoken, lang), voice, speed=speed, is_phonemes=True)
     char_times = align(spoken, timings, lang)
@@ -174,7 +174,7 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
         w.writeframes((np.clip(audio, -1, 1) * 32767).astype('<i2').tobytes())
     duration = round(len(audio) / sr, 3)
     meta.write_text(json.dumps({'duration': duration, 'char_times': char_times, 'voice': voice, 'speed': speed,
-                                'text': spoken}, ensure_ascii=False))
+                                'text': spoken}, ensure_ascii=False), encoding='utf-8')
     return Clip(wav, duration, char_times)
 
 
@@ -380,8 +380,8 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     out, report = cache_dir / 'recording', cache_dir / 'recording-align.json'
     meta = out / f'{key}.json'
     if meta.exists():
-        info = json.loads(meta.read_text())
-        report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1))
+        info = json.loads(meta.read_text(encoding='utf-8'))
+        report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1), encoding='utf-8')
         return {c['id']: Clip(out / c['wav'], c['duration'], c['char_times']) for c in info['clips']}
 
     guides = [synthesize(text, lang, cache_dir, voice, speed) for _, text in beats]
@@ -451,7 +451,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
                 f'{MATCH} are marked check. speech: the speech heard in the beat\'s cut over what its text predicts, '
                 f'at the take\'s usual pace (1 is usual); under {SHORT} (or {SHORTISH} with a weak match) the beat '
                 f'is missing from the take', 'beats': rows}}
-    report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1))
+    report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1), encoding='utf-8')
     if info['report']['match'] < MATCH:
         raise RecordingError(f"Your recording does not sound like a reading of this script (match "
                              f"{info['report']['match']:.2f}, under {MATCH}). Record this script, as written, and "
@@ -465,5 +465,5 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     out.mkdir(parents=True, exist_ok=True)
     for c, audio in zip(clips, sounds):
         _write_wav(out / c['wav'], audio, TAKE_SR)
-    meta.write_text(json.dumps(info, ensure_ascii=False))
+    meta.write_text(json.dumps(info, ensure_ascii=False), encoding='utf-8')
     return {c['id']: Clip(out / c['wav'], c['duration'], c['char_times']) for c in info['clips']}

@@ -70,7 +70,7 @@ def migrate(moves: list[tuple[Path, Path]] | None = None, settings: Path | None 
     moves = legacy_moves() if moves is None else moves
     marker = config_dir() / PENDING
     try:
-        pending = json.loads(marker.read_text())
+        pending = json.loads(marker.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         pending = []
     done, merged, failed = [], [], []
@@ -99,7 +99,7 @@ def migrate(moves: list[tuple[Path, Path]] | None = None, settings: Path | None 
     with contextlib.suppress(OSError):
         if failed:
             marker.parent.mkdir(parents=True, exist_ok=True)
-            marker.write_text(json.dumps([str(f) for f in failed]))
+            marker.write_text(json.dumps([str(f) for f in failed]), encoding='utf-8')
         else:
             marker.unlink(missing_ok=True)
     keys = config_dir() / KEYS
@@ -108,16 +108,16 @@ def migrate(moves: list[tuple[Path, Path]] | None = None, settings: Path | None 
             keys.unlink(missing_ok=True)
     settings = settings or config_dir() / 'studio.json'
     with contextlib.suppress(OSError, ValueError, AttributeError, TypeError):
-        cfg = before = json.loads(settings.read_text())
+        cfg = before = json.loads(settings.read_text(encoding='utf-8'))
         for old, new in merged:                     # Doodle Studio's settings fill in what KinoDraw's lack
             if settings.is_relative_to(new) and (theirs := old / settings.relative_to(new)).is_file():
-                cfg = {**json.loads(theirs.read_text()), **cfg}
+                cfg = {**json.loads(theirs.read_text(encoding='utf-8')), **cfg}
         root = Path(cfg.get('projects') or '')
         for old, new in moves:                      # the projects folder, or a folder inside it, moved
             if root.is_relative_to(old) and not root.exists() and (new / root.relative_to(old)).is_dir():
                 cfg = {**cfg, 'projects': str(new / root.relative_to(old))}
         if cfg != before:
-            settings.write_text(json.dumps(cfg, indent=1))
+            settings.write_text(json.dumps(cfg, indent=1), encoding='utf-8')
     return done
 
 

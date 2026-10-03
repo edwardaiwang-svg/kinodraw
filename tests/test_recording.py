@@ -296,3 +296,36 @@ def test_a_video_in_your_own_voice_does_not_credit_the_ai_voice(tmp_path, monkey
     assert 'Kokoro' not in text and "Narration: the creator's own voice." in text
     js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
     assert "p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'" in js
+
+
+@needs_models
+def test_your_own_voice_works_where_text_files_are_not_utf8_by_default(tmp_path):
+    """On Windows a text file is written in the computer's code page unless the app says UTF-8: recording-align.json
+    and the recording cache were, then read back as UTF-8, so a project folder named in another language stopped the
+    voice step. Here the text-file default is Latin-1 (macOS) or the Windows code page."""
+    import os
+    import shutil
+    import subprocess
+    import sys
+    env = {**os.environ, 'PYTHONUTF8': '0', 'PYTHONCOERCECLOCALE': '0', 'PYTHONIOENCODING': 'utf-8',
+           'LC_ALL': 'en_US.ISO8859-1', 'LANG': 'en_US.ISO8859-1'}
+    probe = subprocess.run([sys.executable, '-c', 'import locale, sys; print(locale.getpreferredencoding(False), '
+                            'sys.getfilesystemencoding())'], env=env, capture_output=True, text=True).stdout.split()
+    if probe[0].lower().replace('-', '') == 'utf8' or probe[1].lower().replace('-', '') != 'utf8':
+        pytest.skip(f'no non-UTF-8 text default with UTF-8 file names here: {probe}')
+    project, script = tmp_path / 'Vidéo 我的', tmp_path / 'honey.md'
+    script.write_text('# Honey\n\nHoney is one of the oldest foods people still eat.\n\nBees visit about two million '
+                      'flowers to make one jar.\n', encoding='utf-8')
+
+    def kinodraw(*args):
+        done = subprocess.run([sys.executable, '-m', 'kinodraw.cli', *map(str, args)], env=env, capture_output=True,
+                              text=True, encoding='utf-8')
+        assert done.returncode == 0, done.stderr[-2000:]
+        return done.stdout
+    kinodraw('new', script, '-o', project)
+    kinodraw('voice', project)
+    shutil.copyfile(project / 'build' / 'narration.wav', tmp_path / 'take.wav')
+    assert 'your recording: match' in kinodraw('voice', project, '--recording', tmp_path / 'take.wav')
+    assert 'your recording: match' in kinodraw('voice', project)                     # again, from the cache
+    report = json.loads((project / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
+    assert report['recording'] == str(project / 'recording.wav')

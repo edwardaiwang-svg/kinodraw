@@ -177,7 +177,7 @@ def photo_credit(project_dir, photo, lang):
     meta = Path(project_dir) / Path(photo).with_suffix('.json') if photo and project_dir else None
     if not meta or not meta.exists():
         return ''
-    line = json.loads(meta.read_text()).get('credit_line', '')
+    line = json.loads(meta.read_text(encoding='utf-8')).get('credit_line', '')
     if lang == 'zh' and line.startswith('Still: '):
         return '画面：' + line[len('Still: '):]
     return line

@@ -23,8 +23,8 @@ INSTALL_ID = paths.data_dir() / 'install-id'
 def install_id() -> str:
     if not INSTALL_ID.exists():
         INSTALL_ID.parent.mkdir(parents=True, exist_ok=True)
-        INSTALL_ID.write_text(uuid.uuid4().hex)
-    return INSTALL_ID.read_text().strip()
+        INSTALL_ID.write_text(uuid.uuid4().hex, encoding='utf-8')
+    return INSTALL_ID.read_text(encoding='utf-8').strip()
 
 
 def _token() -> str | None:

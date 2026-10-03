@@ -153,7 +153,7 @@ def raster(shape: dict, scale: float, size: int) -> np.ndarray:
 # ------------------------------------------------------------------ conversion
 def load(svg_file: Path) -> list[dict]:
     """Shapes in document order with transforms baked in, fitted to the output box."""
-    text = svg_file.read_text()
+    text = svg_file.read_text(encoding='utf-8')
     if 'url(#' in text:
         raise Skip('look relies on gradients/clipPath/mask/filter')
     shapes = []
@@ -352,7 +352,7 @@ def load_zh(src: Path) -> dict:
     table = {}
     for name, key in (('cldr_zh_annotations_derived.json', 'annotationsDerived'),
                       ('cldr_zh_annotations.json', 'annotations')):   # base file wins
-        data = json.loads((src / name).read_text())[key]['annotations']
+        data = json.loads((src / name).read_text(encoding='utf-8'))[key]['annotations']
         table.update({k.replace(VS16, ''): v for k, v in data.items()})
     return table
 
@@ -378,7 +378,7 @@ def skip_reason(name: str, meta: dict) -> str | None:
 
 
 def write_notice(src: Path, commit: str, converted: int, skipped: list[tuple[str, str]]) -> None:
-    cldr = json.loads((src / 'cldr_annotations_package.json').read_text())
+    cldr = json.loads((src / 'cldr_annotations_package.json').read_text(encoding='utf-8'))
     lines = [
         '# Fluent emoji doodles: source and licence', '',
         f'Converted from Microsoft Fluent Emoji "Flat" SVGs ({UPSTREAM}),',
@@ -400,7 +400,7 @@ def write_notice(src: Path, commit: str, converted: int, skipped: list[tuple[str
         '`desc`, `category` and `en` come from the Fluent metadata (MIT). `zh` comes from the',
         f'Unicode CLDR annotations (cldr-json {cldr["version"]}, CLDR {cldr["cldrVersion"]}),',
         'https://github.com/unicode-org/cldr-json, used under the Unicode License v3:', '',
-        '```', (src / 'cldr_LICENSE.txt').read_text().strip(), '```', '',
+        '```', (src / 'cldr_LICENSE.txt').read_text(encoding='utf-8').strip(), '```', '',
         f'## Not converted ({len(skipped)}; {converted} converted)', '',
         'The denylist is the requested list (weapons, drugs, injury, funeral, sexual innuendo)',
         'plus similar items: alcoholic drinks, headstone, briefs, biting lip, tongue, sweat',
@@ -410,7 +410,7 @@ def write_notice(src: Path, commit: str, converted: int, skipped: list[tuple[str
     for reason in sorted({r for _, r in skipped}):
         names = sorted(n for n, r in skipped if r == reason)
         lines.append(f'- **{reason}** ({len(names)}): ' + ', '.join(names))
-    (OUT / 'NOTICE.md').write_text('\n'.join(lines) + '\n')
+    (OUT / 'NOTICE.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
 def main() -> None:
@@ -426,7 +426,7 @@ def main() -> None:
         old.unlink()
     tags, skipped = {}, []
     for meta_file in sorted((repo / 'assets').glob('*/metadata.json')):
-        folder, meta = meta_file.parent, json.loads(meta_file.read_text())
+        folder, meta = meta_file.parent, json.loads(meta_file.read_text(encoding='utf-8'))
         svg_file = next(folder.glob('Flat/*.svg'), None) or next(folder.glob('Default/Flat/*.svg'), None)
         try:
             reason = skip_reason(folder.name, meta) or ('no Flat SVG' if svg_file is None else None)
@@ -437,10 +437,10 @@ def main() -> None:
             skipped.append((folder.name, str(why)))
             continue
         ident = 'fl_' + snake(folder.name)
-        (OUT / f'{ident}.svg').write_text(text)
+        (OUT / f'{ident}.svg').write_text(text, encoding='utf-8')
         tags[ident] = tags_for(meta, zh)
     TAGS.parent.mkdir(parents=True, exist_ok=True)
-    TAGS.write_text(json.dumps(tags, ensure_ascii=False, indent=1, sort_keys=True) + '\n')
+    TAGS.write_text(json.dumps(tags, ensure_ascii=False, indent=1, sort_keys=True) + '\n', encoding='utf-8')
     shutil.copyfile(repo / 'LICENSE', OUT / 'LICENSE')
     write_notice(src, commit, len(tags), skipped)
     print(json.dumps({'converted': len(tags), 'skipped': len(skipped), 'out': str(OUT)}))

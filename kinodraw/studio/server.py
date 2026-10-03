@@ -38,14 +38,14 @@ def projects_root() -> Path:
 
 def _config() -> dict:
     try:
-        return json.loads(CONFIG.read_text())
+        return json.loads(CONFIG.read_text(encoding='utf-8'))
     except Exception:  # noqa: BLE001 - first run
         return {}
 
 
 def _save_config(cfg: dict):
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, indent=1))
+    CONFIG.write_text(json.dumps(cfg, indent=1), encoding='utf-8')
 
 
 # ------------------------------------------------------------------ jobs
@@ -167,7 +167,7 @@ def make_video(name: str) -> dict:
     def job(progress):
         cfg = pipeline.settings(path)
         cfg['credit'] = _config().get('credit', True)  # the Settings switch applies to every video made from now on
-        (path / 'project.json').write_text(json.dumps(cfg, indent=1))
+        (path / 'project.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
         clips = pipeline.narrate(path, progress)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)
@@ -187,7 +187,7 @@ def redirect(name: str, body: dict) -> dict:
         report = director.direct(path, mode, body.get('model') or None, body.get('base_url') or None, progress)
         cfg = pipeline.settings(path)
         cfg['director'] = mode
-        (path / 'project.json').write_text(json.dumps(cfg, indent=1))
+        (path / 'project.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
         usage = report.get('usage')
         return {'notes': report.get('notes', [])[:20], 'cost': None if not usage else usage.cost_usd}
     return {'job': JOBS.start('direct', name, job)}
@@ -232,8 +232,8 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     tl_path = path / 'build' / 'timeline.json'
     board = pipeline.storyboard(path)
     lang = board['lang']
-    if tl_path.exists() and json.loads(tl_path.read_text()).get('storyboard_sha256') == sha(path / 'storyboard.json'):
-        tl = json.loads(tl_path.read_text())
+    if tl_path.exists() and json.loads(tl_path.read_text(encoding='utf-8')).get('storyboard_sha256') == sha(path / 'storyboard.json'):
+        tl = json.loads(tl_path.read_text(encoding='utf-8'))
     else:                                             # no narration yet (or edited): estimated timing
         from ..engine import timeline
         tl = timeline.layout(board, lang, timeline.synthetic_clips(board, lang))
@@ -384,7 +384,7 @@ class Handler(BaseHTTPRequestHandler):
                 path = _project(name)
                 return self._json({**_summary(path), 'storyboard': pipeline.storyboard(path),
                                    'settings': pipeline.settings(path),
-                                   'qa': json.loads((path / 'build/qa.json').read_text()) if (path / 'build/qa.json').exists() else None})
+                                   'qa': json.loads((path / 'build/qa.json').read_text(encoding='utf-8')) if (path / 'build/qa.json').exists() else None})
             if p[2:] == ['storyboard'] and method == 'PUT':
                 return self._json(save_storyboard(name, self._body()))
             if p[2:] == ['direct'] and method == 'POST':

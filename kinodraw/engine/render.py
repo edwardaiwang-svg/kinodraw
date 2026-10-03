@@ -425,7 +425,7 @@ class Production:
 
     def stock_frame(self, t, a, clip):
         path = self.project_dir / 'stock/MANIFEST.json'
-        clips = playlist(json.loads(path.read_text()), clip) if path.exists() else []
+        clips = playlist(json.loads(path.read_text(encoding='utf-8')), clip) if path.exists() else []
         if not clips:
             return ink.paper().copy()
         key = (clip, a)
@@ -681,11 +681,11 @@ def source_line(ch, lang):
 
 
 def load(args):
-    episode = json.loads(Path(args.episode).read_text())
+    episode = json.loads(Path(args.episode).read_text(encoding='utf-8'))
     if args.synthetic:
         tline = tl.layout(episode, args.lang, tl.synthetic_clips(episode, args.lang))
     else:
-        tline = json.loads(Path(args.timeline).read_text())
+        tline = json.loads(Path(args.timeline).read_text(encoding='utf-8'))
     return episode, tline
 
 
@@ -729,10 +729,10 @@ def render_segments(project, episode, lang, timeline, start, n, output, workers,
     if any([p.wait() != 0 for p in procs]):
         raise RuntimeError('segment render failed')
     listing = seg_dir / 'list.txt'
-    listing.write_text(''.join(f"file '{seg.name}'\n" for seg in segs))
+    listing.write_text(''.join(f"file '{seg.name}'\n" for seg in segs), encoding='utf-8')
     subprocess.run([FFMPEG, '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing), '-c', 'copy',
                     '-movflags', '+faststart', str(output)], check=True)
-    warnings = json.loads(Path(f'{segs[0]}.json').read_text())['warnings']
+    warnings = json.loads(Path(f'{segs[0]}.json').read_text(encoding='utf-8'))['warnings']
     shutil.rmtree(seg_dir)
     return warnings
 
@@ -787,7 +787,7 @@ def main(argv=None):
                 'duration': n / FPS, 'language': args.lang, 'synthetic_timing': bool(args.synthetic),
                 'workers': args.workers, 'inputs': inputs, 'warnings': warnings,
                 'render_seconds': round(time.time() - t1, 1)}
-    Path(str(output) + '.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
+    Path(str(output) + '.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'wrote {output} ({n} frames) in {time.time() - t1:.0f}s')
 
 

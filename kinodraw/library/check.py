@@ -42,7 +42,7 @@ SHAPES = ALLOWED - {'svg', 'g'}
 
 def check(path: Path, fluent: bool = False) -> dict:
     problems, warnings = [], []
-    text = path.read_text()
+    text = path.read_text(encoding='utf-8')
     try:
         root = ET.fromstring(text)
     except ET.ParseError as error:
@@ -129,7 +129,7 @@ def check(path: Path, fluent: bool = False) -> dict:
 
 
 def render(path: Path, box: int, outline_only=False) -> Image.Image:
-    text = path.read_text()
+    text = path.read_text(encoding='utf-8')
     if outline_only:
         text = re.sub(r'fill="(?!none)[^"]*"', 'fill="none"', text)
     png = resvg_py.svg_to_bytes(svg_string=text, width=None, height=None, zoom=None)

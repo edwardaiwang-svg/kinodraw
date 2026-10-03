@@ -237,7 +237,7 @@ def _sample(path: svgelements.Path, scale: float, ox: float, oy: float, step=3.0
 
 @lru_cache(maxsize=256)
 def _svg_layers(svg_path: str, box_w: int, box_h: int):
-    text = Path(svg_path).read_text()
+    text = Path(svg_path).read_text(encoding='utf-8')
     doc = svgelements.SVG.parse(io.StringIO(text), reify=True)
     vb = doc.viewbox
     vw, vh = (vb.width, vb.height) if vb is not None else (float(doc.width), float(doc.height))
@@ -569,7 +569,7 @@ class Hand:
         import json
         base = ASSETS / 'hand'
         self.img = Image.open(base / 'hand.png').convert('RGBA')
-        anchor = json.loads((base / 'hand.json').read_text())
+        anchor = json.loads((base / 'hand.json').read_text(encoding='utf-8'))
         self.tip = (anchor['tip_x'], anchor['tip_y'])
         shadow = Image.new('RGBA', self.img.size, (0, 0, 0, 0))
         shadow.putalpha(self.img.getchannel('A').point(lambda v: int(v * .18)).filter(ImageFilter.GaussianBlur(9)))

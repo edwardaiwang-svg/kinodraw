@@ -111,7 +111,7 @@ def assemble(storyboard: dict, lang: str, clips: dict, out_dir: Path, pauses: di
         raise RuntimeError('loudness normalization changed the narration length')
     tl['audio'] = master.name                       # next to timeline.json: a moved project still finishes
     write_captions(tl['captions'], out_dir)
-    (out_dir / 'timeline.json').write_text(json.dumps(tl, ensure_ascii=False))
+    (out_dir / 'timeline.json').write_text(json.dumps(tl, ensure_ascii=False), encoding='utf-8')
     return tl
 
 
