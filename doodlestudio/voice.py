@@ -191,13 +191,18 @@ MATCH = .4               # a reading of the script matches its guide at .45 or m
 SCALES = (.7, .75, .8, .85, .9, .95, 1., 1.05, 1.1, 1.15, 1.2)    # the take's formants against the guide's
 
 
+class RecordingError(ValueError):
+    """Your recording cannot narrate this script; the message says what is wrong and what to do (no traceback)."""
+
+
 def _decode(path: Path, rate: int = SR) -> np.ndarray:
     """Any audio file as mono float32 at ``rate``, high-passed at 80 Hz."""
     run = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-i', str(path), '-af', 'highpass=f=80',
                           '-ac', '1', '-ar', str(rate), '-f', 'f32le', '-'], capture_output=True)
     if run.returncode or not run.stdout:
         why = run.stderr.decode(errors='replace').strip()[-300:]
-        raise ValueError(f'{path.name} could not be read as audio: {why}')
+        raise RecordingError(f'Your recording ({path.name}) could not be read as audio: {why}. '
+                             'Save it as WAV, M4A or MP3 and try again.')
     return np.frombuffer(run.stdout, np.float32).copy()
 
 
@@ -350,6 +355,15 @@ def _pause_between(pauses, level, a, b):
     return k, k
 
 
+def _quote(text: str, n: int = 50) -> str:
+    """The first words of a beat, cut at a word (en) or a character (zh)."""
+    text = ' '.join(text.split())
+    if len(text) <= n:
+        return text
+    cut = text[:n].rsplit(' ', 1)[0] if ' ' in text[:n] else text[:n]
+    return cut.rstrip(',.;:，。；：') + '…'
+
+
 def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | None = None,
                    speed: float = 1.0) -> dict:
     """Clips like synthesize()'s, cut from one continuous reading of the script; ``beats`` is [(beat id, spoken
@@ -377,8 +391,8 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     (_, gq), (tr, tq) = _quiet(gl), _quiet(tl)
     said, script = (tl > tq).sum() / 100, (gl > gq).sum() / 100
     if not script / 2 <= said <= script * 2:
-        raise ValueError(f'{recording.name} has {said:.0f} s of speech, but this script takes about {script:.0f} s '
-                         'to read: record the whole script, once through')
+        raise RecordingError(f'Your recording has {said:.0f} s of speech, but this script takes about {script:.0f} s '
+                             'to read. Record the whole script, once through, and try again.')
     G = _features(gl, _cepstra(gp), gq)
     path, R, scale = _warp(G, tl, tp, tq)
     _, at = np.unique(path[:, 0], return_index=True)
@@ -405,7 +419,8 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         sound = a + np.flatnonzero(room[a:b])
         heard = _power(tl[a:b], tq)
         if b - a < PAUSE or not heard:
-            raise ValueError(f'{recording.name}: beat {bid} ("{text[:40]}…") was not found in the recording')
+            raise RecordingError(f'Your recording skips or changes the part that says "{_quote(text)}" ({bid}). '
+                                 'Read the whole script once through, every sentence as written, and try again.')
         start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
         audio = full[start * hop:end * hop]
         gain = np.sqrt(_power(gl[gs:ge + 1], gq) / heard)
@@ -428,8 +443,9 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
                 f'{MATCH} are marked check', 'beats': rows}}
     report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1))
     if info['report']['match'] < MATCH:
-        raise ValueError(f"{recording.name} does not sound like a reading of this script (match "
-                         f"{info['report']['match']:.2f}, under {MATCH}); see {report}")
+        raise RecordingError(f"Your recording does not sound like a reading of this script (match "
+                             f"{info['report']['match']:.2f}, under {MATCH}). Record this script, as written, and "
+                             f"try again; where each part was heard: {report}")
     out.mkdir(parents=True, exist_ok=True)
     for c, audio in zip(clips, sounds):
         _write_wav(out / c['wav'], audio, TAKE_SR)

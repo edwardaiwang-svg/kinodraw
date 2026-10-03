@@ -77,7 +77,8 @@ class Jobs:
                     job['result'] = fn(progress)
                     job['state'] = 'done'
                 except Exception as error:  # noqa: BLE001 - shown to the user
-                    job.update(state='failed', error=f'{type(error).__name__}: {error}')
+                    job.update(state='failed', error=str(error) if isinstance(error, voice.RecordingError)
+                               else f'{type(error).__name__}: {error}')
                     traceback.print_exc()
         threading.Thread(target=run, daemon=True).start()
         return jid

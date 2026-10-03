@@ -101,8 +101,12 @@ def narrate(project_dir: Path, progress=None) -> dict:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
         beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
-        clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice', cfg['voice'],
-                                     cfg['speed'])
+        try:
+            clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
+                                         cfg['voice'], cfg['speed'])
+        except voice.RecordingError as error:
+            raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: '
+                                       f'doodle voice "{project_dir}" --recording none') from None
     return clips
 
 

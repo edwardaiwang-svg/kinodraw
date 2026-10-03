@@ -134,7 +134,7 @@ def test_a_second_run_reuses_the_cut(take, aligned, monkeypatch):
 @needs_models
 def test_a_reading_of_another_script_is_refused(take, aligned):
     other = [(bid, text) for (bid, _), text in zip(BEATS, OTHER)]
-    with pytest.raises(ValueError, match='does not sound like a reading of this script'):
+    with pytest.raises(voice.RecordingError, match='does not sound like a reading of this script'):
         voice.from_recording(take[0], other, 'en', aligned[2])
 
 
@@ -147,7 +147,7 @@ def test_a_take_of_part_of_the_script_is_refused(take, aligned, tmp_path):
     with wave.open(str(part), 'wb') as w:
         w.setparams(params)
         w.writeframes(head)
-    with pytest.raises(ValueError, match='record the whole script'):
+    with pytest.raises(voice.RecordingError, match='Record the whole script'):
         voice.from_recording(part, BEATS, 'en', aligned[2])
 
 
@@ -169,3 +169,78 @@ def test_the_cut_keeps_the_top_of_a_real_voice(take, tmp_path):
     spectrum, hz = np.abs(np.fft.rfft(y * np.hanning(len(y)))), np.fft.rfftfreq(len(y), 1 / rate)
     assert hz[-1] > 15000, f'the clip stops at {hz[-1]:.0f} Hz'
     assert spectrum[np.abs(hz - 15000) < 20].max() > 30 * np.median(spectrum[(hz > 13000) & (hz < 17000)])
+
+
+def _skipping_take(tmp_path, beats, skip):
+    """``beats`` read by another voice with the beats at ``skip`` left out, as a mono wav."""
+    parts = [np.zeros(9600, np.float32)]
+    for k, (_, text) in enumerate(beats):
+        if k not in skip:
+            clip = voice.synthesize(text, 'en', tmp_path / 'reader', 'am_michael', .9)
+            parts += [voice._read_wav(clip.wav), np.zeros(14400, np.float32)]
+    x = np.concatenate(parts)
+    x = x + np.random.default_rng(0).normal(0, NOISE, len(x)).astype(np.float32)
+    path = tmp_path / 'take.wav'
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(voice.SR)
+        w.writeframes((np.clip(x, -1, 1) * 32767).astype('<i2').tobytes())
+    return path
+
+
+@needs_models
+def test_a_take_that_skips_sentences_says_what_to_do_instead_of_a_traceback(tmp_path, capsys):
+    """Two sentences left out of the reading: the CLI ends with a plain message (the part, re-record, or go back
+    to the AI voice), not a Python traceback, and the project keeps working with --recording none."""
+    project = tmp_path / 'video'
+    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    beats = [(beat['id'], beat['spoken']['en']) for beat in board['beats']]
+    take = _skipping_take(tmp_path, beats, {2, 3})
+    with pytest.raises(SystemExit) as end:
+        cli.main(['voice', str(project), '--recording', str(take)])
+    message = str(end.value.code)
+    assert 'Traceback' not in message and 'ValueError' not in message
+    assert 'Your recording skips or changes the part that says "And finally: Bees work hard." (b004)' in message
+    assert 'Read the whole script once through' in message
+    assert f'doodle voice "{project}" --recording none' in message
+    cli.main(['voice', str(project), '--recording', 'none'])
+    assert 'captions' in capsys.readouterr().out
+
+
+def test_the_studio_shows_a_recording_problem_as_a_plain_sentence(monkeypatch):
+    from doodlestudio.studio import server
+    monkeypatch.setattr(server.traceback, 'print_exc', lambda: None)
+    jobs = server.Jobs()
+
+    def wait(fn):
+        jid = jobs.start('voice', 'P', fn)
+        for _ in range(200):
+            if jobs.get(jid)['state'] == 'failed':
+                return jobs.get(jid)['error']
+            import time
+            time.sleep(.01)
+    plain = 'Your recording skips or changes the part that says "Hi" (b002). Read the whole script once through.'
+
+    def wrong_take(progress):
+        raise voice.RecordingError(plain)
+
+    def bug(progress):
+        raise KeyError('beats')
+    assert wait(wrong_take) == plain
+    assert wait(bug) == "KeyError: 'beats'"            # anything else keeps its type, for a bug report
+
+
+def test_a_recording_problem_names_the_way_back_to_the_ai_voice(tmp_path, monkeypatch):
+    project = tmp_path / 'video'
+    pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    pipeline.set_recording(project, Path(__file__))
+    monkeypatch.setattr(voice, 'ensure_models', lambda *a: None)
+    monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('guide.wav'), 1., [0.] * len(text)))
+
+    def refuse(*args):
+        raise voice.RecordingError('Your recording has 3 s of speech, but this script takes about 30 s to read.')
+    monkeypatch.setattr(voice, 'from_recording', refuse)
+    with pytest.raises(voice.RecordingError, match=r'30 s to read\. To narrate with the AI voice instead, run: '
+                                                   r'doodle voice ".*video" --recording none'):
+        pipeline.narrate(project)

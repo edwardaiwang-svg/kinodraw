@@ -60,7 +60,10 @@ def cmd_voice(args):
     if recording:
         pipeline.set_recording(project, None if recording.lower() == 'none' else recording)
     t = _stage('voice')
-    clips = pipeline.narrate(project, _progress)
+    try:
+        clips = pipeline.narrate(project, _progress)
+    except pipeline.voice.RecordingError as error:      # a take that does not fit the script: say what to do
+        sys.exit(f'\n{error}')
     tl = pipeline.build_audio(project, clips)
     print(f"  {tl['duration']:.0f}s of narration, {len(tl['captions'])} captions ({time.time() - t:.0f}s)")
     if pipeline.settings(project).get('recording'):
