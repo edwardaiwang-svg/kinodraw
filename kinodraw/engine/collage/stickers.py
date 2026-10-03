@@ -17,7 +17,11 @@ TAP_HAND, CLOCK, HEART, SPARKLE = 'fl_backhand_index_pointing_up', 'fl_alarm_clo
 @lru_cache(maxsize=256)
 def _svg(path: str, height: int) -> Image.Image:
     png = resvg_py.svg_to_bytes(svg_path=path, height=height)
-    return Image.open(io.BytesIO(png)).convert('RGBA')
+    image = Image.open(io.BytesIO(png)).convert('RGBA')
+    if image.width > height:                    # a wide picture fits its square spot instead of running off the row
+        png = resvg_py.svg_to_bytes(svg_path=path, width=height)
+        image = Image.open(io.BytesIO(png)).convert('RGBA')
+    return image
 
 
 @lru_cache(maxsize=256)
@@ -29,7 +33,9 @@ def sticker(doodle_id: str, height: int = 220, project_dir: str | None = None) -
     if path.suffix.lower() != '.svg':
         with Image.open(path) as source:
             image = ImageOps.exif_transpose(source).convert('RGBA')
-        image = image.resize((max(1, round(image.width * height / image.height)), height), Image.Resampling.LANCZOS)
+        scale = height / max(image.width, image.height)
+        image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+                             Image.Resampling.LANCZOS)
         return motion.die_cut(image, border=max(8, round(height * .06)))
     return motion.die_cut(_svg(str(path), height), border=max(8, round(height * .06)))
 

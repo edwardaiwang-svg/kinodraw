@@ -299,3 +299,17 @@ def test_svg_sized_unlike_its_viewbox_traces_inside_the_picture(project):
     assert drawing.color.size == (200, 100)
     assert points[:, 0].max() <= 200 and points[:, 1].max() <= 100
     assert points[:, 0].max() > 150 and points[:, 1].max() > 75
+
+
+@pytest.mark.parametrize('name', ['wide.png', 'wide.svg'])
+def test_wide_own_picture_sticker_fits_its_spot(project, name):
+    path, _, _ = project
+    file = path / 'pictures' / name
+    if name.endswith('.png'):
+        file.write_bytes(picture_bytes(size=(1000, 100)))
+    else:
+        file.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="100">'
+                        '<rect width="1000" height="100" fill="#3a7"/></svg>', encoding='utf-8')
+    img = sticker('own:' + name, 230, str(path))
+    border = max(8, round(230 * .06)) + 2      # die_cut grows the canvas by border + 2 on every side
+    assert img.width <= 230 + 2 * border and img.height <= 230 + 2 * border
