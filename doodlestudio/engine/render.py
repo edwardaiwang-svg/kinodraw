@@ -70,6 +70,8 @@ class Production:
         self.warnings = []
         self.hand = ink.Hand(self.skin.hand)
         self._build()
+        if self.skin.emphasis == 'highlighter':              # each sentence's key phrase, where it is written
+            skins.highlight_phrases(self.ep, self.tl, self.ctx.elements)
         self._schedule()
         self._pin_notes()
         self._index()
