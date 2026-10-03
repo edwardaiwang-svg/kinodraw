@@ -172,3 +172,35 @@ def test_pictures_are_there_at_the_cut(prod):
             continue
         late = [(i.kind, round(i.t0 - s.start, 2)) for i in s.items if i.kind != 'mark' and i.t0 > s.start + 1e-6]
         assert not late, f'{s.layout} shot at {s.start:.1f}s: {late}'
+
+
+def figure_only_share(p):
+    """Share of narration time that shows the figure and nothing else (no picture, number or words)."""
+    total = bare = 0
+    for t in np.arange(0, p.tl['duration'], .1):
+        _, s = p.shot_at(t)
+        if s.layout not in ('left', 'right', 'solo', 'close', 'crowd', 'grid', 'timeline'):
+            continue
+        total += 1
+        bare += not any(i.visible(t) and i.kind not in ('ground', 'tab', 'mark', 'figure') for i in s.items)
+    return bare / total
+
+
+@pytest.mark.parametrize('name', ['stick_hijack.md', 'stick_bias.md'])
+def test_a_figure_is_rarely_alone_on_white(name):
+    """The Paint grammar is a figure plus a prop: a sentence the storyboard left bare gets the name it gives, a
+    number it says, a picture for its words or the picture still in play."""
+    assert figure_only_share(build(name)) <= .1
+
+
+def test_what_fills_a_bare_sentence():
+    from doodlestudio.engine.stick import fill
+    assert fill.term('Psychologists call this the negativity bias.', 'en') == 'Negativity bias'
+    assert fill.term('Finally, a general named Odoacer removed the boy emperor.', 'en') == 'Odoacer'
+    assert fill.term('They called it a day.', 'en') is None
+    assert fill.term('这叫做散射。', 'zh') == '散射'
+    assert fill.number_word('Imagine you get ten compliments and one insult today.', 'en')[1:] == ('10', 'compliments')
+    assert fill.number_word('Two of them left.', 'en') is None
+    p = build('stick_bias.md')
+    ch = next(c['id'] for c in p.board['chapters'] if c['kind'] == 'section')
+    assert p.composer.pictures.find('They are just tuned for a world with lions.', ch)[0] == 'fl_lion'

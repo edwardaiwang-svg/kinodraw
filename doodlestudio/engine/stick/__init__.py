@@ -7,6 +7,7 @@ red emphasis drawn with a pencil cursor, plain sans text and hard cuts (design n
   text      plain sans labels, big numbers, captions (en + zh)
   marks     red emphasis: circle, arrow, underline, cross-out, "?" and "!", the pencil cursor
   cues      word rules: pose, face, crowd, costume, ground, emphasis (en + zh)
+  fill      what a sentence the storyboard left bare shows: a name, a number, a picture, the picture in play
   compose   storyboard + timeline -> shots (hard cuts) of placed items
   render    frames from shots (boil, motion on twos), video encode
   preview   python -m doodlestudio.engine.stick.preview <project> -o out.mp4

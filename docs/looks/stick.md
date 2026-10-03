@@ -106,6 +106,14 @@ list (pose, framing, ground colour), never invent new ones.
   FBI); emperor, king, queen -> crown; worker, farmer -> straw hat; otherwise none.
 - **Framing** alternates so two shots in a row never share a layout: figure left with props right, figure right
   with props left, close-up with big text, crowd, text card.
+- **No bare figure**: the reference channels almost never leave a figure alone on white, so a sentence the
+  storyboard gave nothing to show (the director budgets one picture per nine words; this look cuts at every
+  sentence) gets, in order: the name it gives as a term card ("psychologists call this the negativity bias",
+  "这叫做散射"); a number it says, in digits or as a number word with its noun ("ten compliments" -> 10
+  compliments); a picture for its own words found with the rules director's own meaning rules, where an emoji
+  may also stand for the very thing it is named after ("a world with lions"), tried clause by clause when the
+  whole sentence finds nothing; else the picture still in play in the same section, without its label and never
+  circled (`engine/stick/fill.py`). Only a short question shot with its "?" marks is left as a figure alone.
 - **Narrator pictures** (think, wave, explain...) in the storyboard become poses of our figure, not doodles.
 - **Numbers** are big plain text with a red underline drawn as they are said ("between 235 and 284" ->
   235–284, "the 270s" -> 270s). A shot with nothing else to show puts the number its narrator says on screen

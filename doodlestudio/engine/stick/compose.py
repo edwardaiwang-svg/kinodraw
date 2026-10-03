@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw
 
 from ... import numbers, script
 from .. import ink
-from . import cues, marks, paint, palette, rig, text
+from . import cues, fill, marks, paint, palette, rig, text
 from .rig import DRAW_FPS
 
 W, H = 1920, 1080
@@ -478,6 +478,8 @@ class Composer:
         self.side = 1
         self.solo_toggle = 0
         self.hero = self._hero()
+        self.pictures = fill.Pictures(board, lang)
+        self.in_play = None                       # (chapter id, the last doodle card shown in it)
 
     # ---- helpers
     def T(self, pair, default=''):
@@ -923,9 +925,10 @@ class Composer:
         emph = [c for c in cards if c.kind == 'emphasis']
         crowd = cues.crowd(words, lang)
         if not (main or timeline or grid or crowd):
-            num = self.spoken_number(beats, a, b)
-            main = [num] if num else []
+            main = self.fill(ch, beats, a, b, words)
         doodles = [c for c in main if c.kind == 'doodle']
+        if doodles and ch is not None:
+            self.in_play = (ch['id'], doodles[0])
         if timeline:
             layout = 'timeline'
         elif grid:
@@ -991,7 +994,8 @@ class Composer:
                     shot.items += self.marks_at(head, 'exclaim', t_shock, seed)
         strong = cues.strong(words, lang)
         targets = getattr(shot, 'targets', {})
-        if strong >= 0 and doodles and doodles[0].vid in targets and not any(c.kind == 'emphasis' for c in emph):
+        if strong >= 0 and doodles and doodles[0].vid in targets and not doodles[0].data.get('kept') \
+                and not any(c.kind == 'emphasis' for c in emph):
             r = targets[doodles[0].vid]
             shot.items.append(mark_item(marks.Mark('circle', r, max(doodles[0].t + .45, a + .4), seed=seed % 97)))
         for c in emph:
@@ -1001,6 +1005,39 @@ class Composer:
                         'strike': 'cross'}.get(c.data.get('kind'), 'circle')
                 shot.items.append(mark_item(marks.Mark(kind, targets[vid], max(c.t, a + .3), seed=seed % 89)))
         return shot
+
+    def fill(self, ch, beats, a, b, words):
+        """Something to show when the storyboard gave this shot nothing (fill.py): a name the sentence gives, a
+        number it says, a picture for its words, else the picture still in play in this section."""
+        lang = self.lang
+        vid = f"{beats[0]['id'] if beats else ''}@{a:.2f}"
+        name = fill.term(words, lang)
+        if name:
+            return [Card('term', self.said_at(beats, name, a, b), {'term': name, 'text': ''}, vid + 't')]
+        num = self.spoken_number(beats, a, b)
+        if num:
+            return [num]
+        nw = fill.number_word(words, lang)
+        if nw:
+            return [Card('number', a, {'value': nw[1], 'label': nw[2]}, vid + 'n')]
+        if ch is None:
+            return []
+        found = self.pictures.find(words, ch['id'])
+        if found:
+            return [Card('doodle', a, {'doodle': found[0], 'label': found[1]}, vid + 'p')]
+        if self.in_play and self.in_play[0] == ch['id']:
+            return [Card('doodle', a, {'doodle': self.in_play[1].data['doodle'], 'label': '', 'kept': True}, vid + 'k')]
+        return []
+
+    def said_at(self, beats, phrase, a, b):
+        """When ``phrase`` is said within [a, b) (the shot start when it cannot be found)."""
+        for beat in beats:
+            pos = beat['display'][self.lang].lower().find(phrase.lower())
+            if pos >= 0:
+                t = self.time_at(beat, pos)
+                if a <= t < b:
+                    return t
+        return a
 
     def spoken_number(self, beats, a, b):
         """A number the narrator says in [a, b) as a big plain-text card (a year, a count, a percentage), so a
