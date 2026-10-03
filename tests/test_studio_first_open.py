@@ -1,4 +1,4 @@
-"""The Studio as a new user first opens it: no projects yet, not signed in to Doodle Cloud."""
+"""The Studio as a new user first opens it: no projects yet, not signed in to KinoDraw Cloud."""
 import json
 import re
 import urllib.request
@@ -14,7 +14,7 @@ def studio(tmp_path, monkeypatch):
     """The real local server, with its own settings file and an empty projects folder."""
     monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
     server._save_config({'projects': str(tmp_path / 'videos')})
-    monkeypatch.setattr(cloud, 'URL', 'https://api.example.org')     # Doodle Cloud is offered on every install
+    monkeypatch.setattr(cloud, 'URL', 'https://api.example.org')     # KinoDraw Cloud is offered on every install
     monkeypatch.delenv('KINODRAW_CLOUD_TOKEN', raising=False)
     monkeypatch.delenv('DOODLE_CLOUD_TOKEN', raising=False)
     monkeypatch.setattr(providers, 'saved', lambda: set())           # nobody signed in

@@ -1,4 +1,4 @@
-"""HTTPS for the model downloads and Doodle Cloud: the system's certificates plus certifi's.
+"""HTTPS for the model downloads and KinoDraw Cloud: the system's certificates plus certifi's.
 
 The packaged Mac app's OpenSSL looks for certificates in a folder only the build machine has,
 so without certifi's bundle every HTTPS call there failed with CERTIFICATE_VERIFY_FAILED.

@@ -23,15 +23,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/doodle-models
+            ~/.cache/kinodraw-models
           key: models-v1-${{ runner.os }}
       - name: Unit tests
         env:
-          DOODLE_MODELS: ~/.cache/doodle-models
+          KINODRAW_MODELS: ~/.cache/kinodraw-models
         run: pytest -q
       - name: Smoke video (a 20-second script, offline director)
         env:
-          DOODLE_MODELS: ~/.cache/doodle-models
+          KINODRAW_MODELS: ~/.cache/kinodraw-models
         run: |
           kinodraw setup --lang en
           kinodraw make tests/fixtures/tiny.md -o smoke --workers 1
@@ -80,7 +80,7 @@ jobs:
         run: npm test
       - uses: actions/upload-artifact@v4
         with:
-          name: doodle-studio-classroom
+          name: kinodraw-classroom
           path: edu/dist/*.zip
 
   installers:
@@ -107,24 +107,24 @@ jobs:
         env:
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
           MACOS_SIGN_P12_PASSWORD: ${{ secrets.MACOS_SIGN_P12_PASSWORD }}
-        run: packaging/sign-macos.sh "dist/Doodle Studio.app"
+        run: packaging/sign-macos.sh "dist/KinoDraw.app"
       - name: Archive
         shell: bash
         run: |
           cd dist
-          if [ "$RUNNER_OS" = "Windows" ]; then 7z a "../DoodleStudio-${{ github.ref_name }}-windows.zip" "Doodle Studio"; \
-          elif [ "$RUNNER_OS" = "macOS" ]; then ditto -c -k --keepParent "Doodle Studio.app" "../DoodleStudio-${{ github.ref_name }}-macos.zip"; \
-          else tar czf "../DoodleStudio-${{ github.ref_name }}-linux.tar.gz" "Doodle Studio"; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then 7z a "../KinoDraw-${{ github.ref_name }}-windows.zip" "KinoDraw"; \
+          elif [ "$RUNNER_OS" = "macOS" ]; then ditto -c -k --keepParent "KinoDraw.app" "../KinoDraw-${{ github.ref_name }}-macos.zip"; \
+          else tar czf "../KinoDraw-${{ github.ref_name }}-linux.tar.gz" "KinoDraw"; fi
       - name: Smoke test the app the way a fresh computer runs it (no system certificates, no voice yet)
         if: runner.os != 'Windows'
         shell: bash
         env:
           SSL_CERT_FILE: /nonexistent          # v0.1.4's Mac app failed every download and sign-in here
           SSL_CERT_DIR: /nonexistent
-          DOODLE_MODELS: ${{ runner.temp }}/models
+          KINODRAW_MODELS: ${{ runner.temp }}/models
         run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then app="dist/Doodle Studio.app/Contents/MacOS/Doodle Studio"; else app="dist/Doodle Studio/Doodle Studio"; fi
+          if [ "$RUNNER_OS" = "macOS" ]; then app="dist/KinoDraw.app/Contents/MacOS/KinoDraw"; else app="dist/KinoDraw/KinoDraw"; fi
           "$app" setup --lang en
       - uses: softprops/action-gh-release@v2
         with:
-          files: DoodleStudio-*
+          files: KinoDraw-*

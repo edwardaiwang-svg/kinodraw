@@ -1,6 +1,6 @@
 """Directors add visuals to storyboard.json: ``rules`` works offline; LLM modes are optional.
 
-Modes: rules (offline, free) · cloud (Doodle Cloud plans) · openai · anthropic · compat
+Modes: rules (offline, free) · cloud (KinoDraw Cloud plans) · openai · anthropic · compat
 (any OpenAI-compatible endpoint; needs base_url and model) · command (a program you choose).
 """
 from __future__ import annotations

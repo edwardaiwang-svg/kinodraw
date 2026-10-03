@@ -1,5 +1,5 @@
-# PyInstaller spec for Doodle Studio:  pyinstaller packaging/kinodraw.spec --noconfirm
-# Output: dist/Doodle Studio.app (macOS) or dist/Doodle Studio/ (Windows, Linux).
+# PyInstaller spec for KinoDraw:  pyinstaller packaging/kinodraw.spec --noconfirm
+# Output: dist/KinoDraw.app (macOS) or dist/KinoDraw/ (Windows, Linux).
 # Voice models (~190 MB per language) download on first use, checksum-verified.
 import sys
 from pathlib import Path
@@ -22,10 +22,10 @@ icon = {'darwin': 'icon.icns', 'win32': 'icon.ico'}.get(sys.platform)
 a = Analysis([str(ROOT / 'packaging' / 'launch.py')], pathex=[str(ROOT)], datas=datas, binaries=binaries,
              hiddenimports=hidden, excludes=['tkinter', 'torch', 'matplotlib', 'IPython', 'pytest'])
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='Doodle Studio', console=False,
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='KinoDraw', console=False,
           icon=str(ROOT / 'packaging' / icon) if icon else None)
-coll = COLLECT(exe, a.binaries, a.datas, name='Doodle Studio')
+coll = COLLECT(exe, a.binaries, a.datas, name='KinoDraw')
 if sys.platform == 'darwin':
-    app = BUNDLE(coll, name='Doodle Studio.app', icon=str(ROOT / 'packaging' / 'icon.icns'),
-                 bundle_identifier='io.github.kinodraw', version='0.1.6',
+    app = BUNDLE(coll, name='KinoDraw.app', icon=str(ROOT / 'packaging' / 'icon.icns'),
+                 bundle_identifier='io.github.kinodraw', version='0.2.0',
                  info_plist={'NSHighResolutionCapable': True, 'LSMinimumSystemVersion': '11.0'})

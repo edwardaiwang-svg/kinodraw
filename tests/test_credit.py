@@ -1,4 +1,4 @@
-"""Videos end with a short "Made with Doodle Studio" credit, on by default, with one switch to turn it off
+"""Videos end with a short "Made with KinoDraw" credit, on by default, with one switch to turn it off
 (Studio Settings, or `kinodraw make --no-credit`), remembered."""
 import json
 from pathlib import Path
@@ -71,7 +71,9 @@ def test_the_studio_switch_is_remembered_and_applies_to_the_next_video(tmp_path,
 
 
 def test_the_product_name_and_address_live_in_one_place():
-    assert set(kinodraw.PRODUCT) == {'name', 'url'}
+    assert kinodraw.PRODUCT == {'name': 'KinoDraw', 'url': 'edwardaiwang-svg.github.io/kinodraw'}
+    from kinodraw import package
     from kinodraw.engine import auto_scenes
     src = Path(auto_scenes.__file__).read_text(encoding='utf-8')
-    assert 'Doodle Studio' not in src.split('def build_credit')[1].split('\ndef ')[0]   # the credit reads PRODUCT
+    assert 'KinoDraw' not in src.split('def build_credit')[1].split('\ndef ')[0]        # the credit reads PRODUCT
+    assert 'KinoDraw' not in Path(package.__file__).read_text(encoding='utf-8')         # so do the metadata and description

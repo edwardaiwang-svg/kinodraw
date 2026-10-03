@@ -1,9 +1,9 @@
 #!/bin/bash
-# Sign the Mac app with Doodle Studio's own self-signed identity (the same recipe as a local signing certificate),
+# Sign the Mac app with KinoDraw's own self-signed identity (the same recipe as a local signing certificate),
 # so every release keeps the same code-signing requirement and macOS keeps saved sign-ins across updates without
 # asking again. It is not Apple notarization: a first-time user still clicks Open Anyway once.
 #
-#   MACOS_SIGN_P12=<base64 of the .p12> MACOS_SIGN_P12_PASSWORD=... packaging/sign-macos.sh "dist/Doodle Studio.app"
+#   MACOS_SIGN_P12=<base64 of the .p12> MACOS_SIGN_P12_PASSWORD=... packaging/sign-macos.sh "dist/KinoDraw.app"
 #
 # CI takes both values from repository secrets; the private key never enters git. It runs on a throwaway runner:
 # codesign only uses a trusted identity, so the certificate is trusted for code signing there (needs sudo).

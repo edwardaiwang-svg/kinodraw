@@ -12,6 +12,7 @@ import imageio_ffmpeg
 import numpy as np
 from PIL import Image, ImageDraw
 
+from . import PRODUCT
 from .audio.mix import SR, read_wav
 from .engine import auto_scenes, ink
 from .engine.storyboard import normalize
@@ -43,7 +44,7 @@ def _esc(text) -> str:
 
 
 def mux(tl: dict, silent: Path, mix: Path, output: Path, lang: str, title: str, build: Path):
-    lines = [';FFMETADATA1', f'title={_esc(title)}', 'encoder=Doodle Studio', f'language={"eng" if lang == "en" else "zho"}']
+    lines = [';FFMETADATA1', f'title={_esc(title)}', f'encoder={PRODUCT["name"]}', f'language={"eng" if lang == "en" else "zho"}']
     for c in tl['chapters']:
         lines += ['[CHAPTER]', 'TIMEBASE=1/1000', f"START={round(c['start'] * 1000)}", f"END={round(c['end'] * 1000)}",
                   f"title={_esc(c['title'])}"]
@@ -156,8 +157,8 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
             parts.append(f"## {tc['title']}")
         parts += [b['display'][lang] for b in storyboard['beats'] if b['chapter'] == c['id']]
     (folder / f'{stem}-transcript.md').write_text('\n\n'.join(parts) + '\n', encoding='utf-8')
-    credit = ('Made with Doodle Studio. Narration: Kokoro AI voice. Music: FreePD (CC0).' if lang == 'en' else
-              '由 Doodle Studio 制作。旁白：Kokoro AI 语音。音乐：FreePD（CC0）。')
+    credit = (f'Made with {PRODUCT["name"]}. Narration: Kokoro AI voice. Music: FreePD (CC0).' if lang == 'en' else
+              f'由 {PRODUCT["name"]} 制作。旁白：Kokoro AI 语音。音乐：FreePD（CC0）。')
     head = 'Chapters' if lang == 'en' else '章节'
     (folder / f'{stem}-description.txt').write_text(
         f"{storyboard['title'][lang]}\n\n{head}\n" + '\n'.join(chapters) + f'\n\n{credit}\n', encoding='utf-8')

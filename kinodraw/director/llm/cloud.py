@@ -39,7 +39,7 @@ def _token() -> str | None:
 
 def _call(path: str, body: dict | None = None, token: str | None = None) -> dict:
     if not URL:
-        raise ProviderError('Doodle Cloud is not available in this build yet; use offline mode or your own key')
+        raise ProviderError('KinoDraw Cloud is not available in this build yet; use offline mode or your own key')
     req = urllib.request.Request(URL.rstrip('/') + path, method='POST' if body is not None else 'GET',
                                  data=json.dumps(body).encode() if body is not None else None,
                                  headers={'Content-Type': 'application/json', 'User-Agent': USER_AGENT,
@@ -52,9 +52,9 @@ def _call(path: str, body: dict | None = None, token: str | None = None) -> dict
             detail = json.loads(error.read()).get('error', '')
         except Exception:  # noqa: BLE001
             detail = ''
-        raise ProviderError(f'Doodle Cloud {error.code}: {detail or error.reason}') from error
+        raise ProviderError(f'KinoDraw Cloud {error.code}: {detail or error.reason}') from error
     except urllib.error.URLError as error:
-        raise ProviderError(f'Doodle Cloud unreachable: {error.reason}') from error
+        raise ProviderError(f'KinoDraw Cloud unreachable: {error.reason}') from error
 
 
 def signup(email: str) -> dict:
@@ -82,7 +82,7 @@ class CloudProvider:
     def __init__(self):
         self.token = _token()
         if not self.token:
-            raise ProviderError('sign in to Doodle Cloud first (Studio > Doodle Cloud, or `kinodraw login`)')
+            raise ProviderError('sign in to KinoDraw Cloud first (Studio > KinoDraw Cloud, or `kinodraw login`)')
         self.video_id = None
 
     def open_video(self, sections: int, characters: int) -> dict:

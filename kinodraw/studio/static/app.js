@@ -1,26 +1,26 @@
-// Doodle Studio front end: plain JavaScript talking to the local server (see studio/server.py).
+// KinoDraw front end: plain JavaScript talking to the local server (see studio/server.py).
 const T = window.STUDIO_TOKEN;
 const $ = (sel, root = document) => root.querySelector(sel);
 const COLORS = { orange: '#f57c00', blue: '#1e6fd9', green: '#2e9d4f', purple: '#8e24aa', red: '#d32f2f', teal: '#00897b' };
 const CYCLE = Object.keys(COLORS);
-// The AI director is Doodle Cloud: the user's plan decides the model. Directors that use the user's own
+// The AI director is KinoDraw Cloud: the user's plan decides the model. Directors that use the user's own
 // API key or program appear only when Settings -> Advanced directors is on.
-const DIRECTORS = [['rules', 'Offline (free, private)'], ['cloud', 'Doodle Cloud AI (your plan)']];
+const DIRECTORS = [['rules', 'Offline (free, private)'], ['cloud', 'KinoDraw Cloud AI (your plan)']];
 const ADVANCED = [['openai', 'My OpenAI key'], ['anthropic', 'My Anthropic key'], ['compat', 'OpenAI-compatible server'],
   ['command', 'My own command']];
 function directorOptions(selected) {
   return [...DIRECTORS, ...(STATE.advanced ? ADVANCED : [])].map(([k, v]) => {
     const soon = k === 'cloud' && !STATE.cloud_available;
-    return `<option value="${k}"${soon ? ' disabled' : ''}${k === selected ? ' selected' : ''}>${soon ? 'Doodle Cloud AI (coming soon)' : v}</option>`;
+    return `<option value="${k}"${soon ? ' disabled' : ''}${k === selected ? ' selected' : ''}>${soon ? 'KinoDraw Cloud AI (coming soon)' : v}</option>`;
   }).join('');
 }
-function needsCloudSignIn(director) {     // Doodle Cloud picked but nobody signed in: open the sign-in instead of failing
+function needsCloudSignIn(director) {     // KinoDraw Cloud picked but nobody signed in: open the sign-in instead of failing
   if (director !== 'cloud' || STATE.cloud_signed_in) return false;
-  toast('Sign in to Doodle Cloud first (free: 5 AI videos a month), or choose Offline.', 6000);
+  toast('Sign in to KinoDraw Cloud first (free: 5 AI videos a month), or choose Offline.', 6000);
   showSettings();
   return true;
 }
-function wholeVideoOffline(res) {          // Doodle Cloud refused the video (quota, budget, network): say so plainly
+function wholeVideoOffline(res) {          // KinoDraw Cloud refused the video (quota, budget, network): say so plainly
   return res?.notes?.find((n) => n.startsWith('The offline director planned this video')) || null;
 }
 let STATE = null, current = null, board = null, dirty = false, cloudEmail = '';   // the sign-in address, kept between openings
@@ -101,7 +101,7 @@ function showNew() {
     $('#model').placeholder = (STATE.models[d] || [])[0] || 'model name';
     $('#director-note').textContent = {
       rules: 'Offline: free and private. Visuals are chosen by matching words to 1,700+ doodles on your computer.',
-      cloud: STATE.cloud ? `Doodle Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'Doodle Cloud: signed in.' : 'Doodle Cloud AI (GPT-6 Luna) plans each section: 5 free videos a month, no API key. You sign in with an email code first; Offline needs no account.',
+      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : 'KinoDraw Cloud AI (GPT-6 Luna) plans each section: 5 free videos a month, no API key. You sign in with an email code first; Offline needs no account.',
       openai: STATE.keys.openai ? 'Uses your OpenAI key (about $0.02 per 15-minute video with GPT-6 Luna).' : 'Add your OpenAI key under Settings first.',
       anthropic: STATE.keys.anthropic ? 'Uses your Anthropic key (about $1 per 15-minute video with Opus).' : 'Add your Anthropic key under Settings first.',
       compat: 'Any OpenAI-compatible server (OpenRouter, Groq, a local Ollama…): set the base URL and model.',
@@ -304,14 +304,14 @@ function renderVideo(p) {
 
 // ---------------------------------------------------------------- settings
 function showSettings() {
-  const cloud = STATE.cloud_available ? `<section><h3>Doodle Cloud</h3>
+  const cloud = STATE.cloud_available ? `<section><h3>KinoDraw Cloud</h3>
       <p class="muted">${STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : '5 free AI-directed videos a month. No API key needed.'}
-        <a href="https://edwardaiwang-svg.github.io/doodle-studio/privacy.html" target="_blank">What is sent (privacy)</a></p>
+        <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><input id="c-email" placeholder="you@example.com" value="${esc(cloudEmail)}"><button id="c-send" class="small">Email me a code</button></div>
       <div class="row" style="margin-top:6px"><input id="c-code" placeholder="6-digit code"><button id="c-verify" class="small">Sign in</button></div></section>` : '';
   const body = modal(`<div class="settings"><h2>Settings</h2>${cloud}
     <section><h3>Advanced directors</h3><label class="row"><input id="s-adv" type="checkbox" style="width:auto"${STATE.advanced ? ' checked' : ''}>
-      <span>Show directors that use your own API key or program (billed by that provider, not by Doodle Cloud)</span></label>
+      <span>Show directors that use your own API key or program (billed by that provider, not by KinoDraw Cloud)</span></label>
       ${STATE.advanced ? `<p class="muted">Stored in your system keychain, never in project files. A command gets each request as JSON on stdin and prints the plan as JSON.</p>
       <div class="row"><select id="k-prov" style="width:auto"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="compat">OpenAI-compatible</option><option value="command">Command</option></select>
       <input id="k-key" type="password" placeholder="sk-…"><button id="k-save" class="small">Save</button></div>

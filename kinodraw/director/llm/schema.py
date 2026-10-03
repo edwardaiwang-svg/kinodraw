@@ -1,4 +1,4 @@
-"""The contract between the app and any LLM (also used by the Doodle Cloud server).
+"""The contract between the app and any LLM (also used by the KinoDraw Cloud server).
 
 One request per section. The model sees the section's beats (display text), a rules draft,
 and candidate doodles per beat; it answers with SECTION_SCHEMA. Everything is checked
