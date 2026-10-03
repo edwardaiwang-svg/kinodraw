@@ -34,13 +34,13 @@ POSE_TABLE = {
     'talk': {'arm_f': (40., 62.), 'arm_b': (-14., 10.)},
     'think': {'arm_f': (62., 146.), 'arm_b': (30., 84.), 'tilt': -6., 'frontal': False},
     'shrug': {'arm_f': (52., 72.), 'arm_b': (-52., -72.), 'tilt': 8.},
-    'wave': {'arm_f': (128., 30.), 'arm_b': (-12., 6.)},
+    'wave': {'arm_f': (110., 40.), 'arm_b': (-12., 6.)},
     'sit': {'arm_f': (38., 42.), 'arm_b': (30., 48.), 'leg_f': (86., -84.), 'leg_b': (80., -80.), 'lift': -.165,
             'seat': True, 'lean': -4.},
-    'fall': {'rot': 80., 'arm_f': (165., 25.), 'arm_b': (140., -25.), 'leg_f': (30., -12.), 'leg_b': (6., 0.)},
-    'cheer': {'arm_f': (124., 26.), 'arm_b': (-124., -26.)},
+    'fall': {'rot': 80., 'arm_f': (95., 15.), 'arm_b': (20., 5.), 'leg_f': (30., -12.), 'leg_b': (6., 0.)},
+    'cheer': {'arm_f': (112., 38.), 'arm_b': (-112., -38.)},
     'sad': {'lean': 7., 'tilt': 9., 'arm_f': (4., 2.), 'arm_b': (-4., -2.), 'leg_f': (3., 0.), 'leg_b': (-3., 0.)},
-    'angry': {'lean': 6., 'arm_f': (118., 48.), 'arm_b': (-24., -36.), 'leg_f': (14., -4.), 'leg_b': (-14., 4.),
+    'angry': {'lean': 6., 'arm_f': (80., 64.), 'arm_b': (-24., -36.), 'leg_f': (14., -4.), 'leg_b': (-14., 4.),
               'frontal': False},
     'walk': {'frontal': False},
     'run': {'frontal': False, 'lean': 14.},
@@ -116,7 +116,7 @@ def pose_at(pose: str, k: int) -> dict:
         p['arm_b'] = (48 * math.sin(phi), 86.)
         p['lift'] = .035 * abs(math.sin(phi))
     elif pose == 'wave':
-        p['arm_f'] = (128., 30 + 26 * math.sin(phi))
+        p['arm_f'] = (110., 40 + 22 * math.sin(phi))
     elif pose == 'talk':
         a, b = p['arm_f']
         p['arm_f'] = (a + 8 * math.sin(phi), b + 16 * math.sin(phi))

@@ -54,3 +54,17 @@ def test_crowds_of_three_to_seven(n):
     first = pixels(rig.draw_crowd(crowd, 1, 2)).copy()
     rig._draw_cached.cache_clear()
     assert np.array_equal(first, pixels(rig.draw_crowd(crowd, 1, 2)))
+
+
+@pytest.mark.parametrize('pose', sorted(set(rig.POSE_TABLE) - {'think'}))   # think: the hand rests on the chin
+def test_no_arm_hides_behind_the_head(pose):
+    """The head is drawn over the arms, so a raised arm must clear it or the gesture disappears (angry, fall and
+    wave once showed only a stub or an 'antenna' line)."""
+    for k in range(rig.cycle_len(pose)):
+        j = rig.skeleton(rig.pose_at(pose, k))
+        for side in 'fb':
+            pts = np.vstack([np.linspace(j['shoulder'], j[f'elbow_{side}'], 20),
+                             np.linspace(j[f'elbow_{side}'], j[f'hand_{side}'], 20)])
+            hidden = (np.hypot(*(pts - j['head']).T) < rig.HEAD_R * 1.08).mean()
+            assert hidden <= .05, f'{pose} frame {k}: {hidden:.0%} of the {side} arm is behind the head'
+            assert np.hypot(*(j[f'hand_{side}'] - j['head'])) > rig.HEAD_R * 1.3, f'{pose} frame {k}: {side} hand'
