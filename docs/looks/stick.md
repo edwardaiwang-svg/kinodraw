@@ -40,6 +40,8 @@ emphasis, hard cuts) and differs in every element a viewer would recognise:
   frame, never under 2.2 px, up to 5.5 px in close-ups),
   oval eyes with pupils that look at what matters, separate brows, and a mouth set (smile, grin, flat, o, frown,
   shout, wavy, teeth). Heads are always white, so the figure is everyone.
+- **Library cast**: people become our stick figures only when they carry the picture's whole meaning;
+  special activities, costumes and faces we cannot show keep their library drawing.
 - **One accent colour per part**, from our 16-colour palette, on the header square, shirts and number underlines:
   each part of a long video has its own colour without becoming a rainbow.
 - **A ground strip** along the bottom of every shot, in one colour per video picked by topic (tan for history,

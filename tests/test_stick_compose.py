@@ -181,6 +181,15 @@ def test_pictures_are_there_at_the_cut(prod):
         assert not late, f'{s.layout} shot at {s.start:.1f}s: {late}'
 
 
+def test_list_and_takeaway_are_there_at_the_cut(prod):
+    """The figure points at the agenda's first row and at the takeaway's words from the first frame."""
+    for s in prod.shots:
+        if s.layout == 'agenda':
+            assert min(i.t0 for i in s.items if i.kind in ('panel', 'label')) <= s.start + 1e-6
+        if s.layout == 'take':
+            assert all(i.t0 <= s.start + 1e-6 for i in s.items if i.kind == 'text'), f'take at {s.start:.1f}s'
+
+
 def figure_only_share(p):
     """Share of narration time that shows the figure and nothing else (no picture, number or words)."""
     total = bare = 0

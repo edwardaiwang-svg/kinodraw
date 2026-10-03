@@ -8,7 +8,9 @@ shrugs; an emoji face becomes a figure wearing that feeling. A picture of a grou
 two grown-ups and two children). The parachute emoji, the one object picture with a person in it, becomes our
 figure hanging under a striped canopy.
 
-Only a picture the figure says all of is redrawn. One whose point is a thing we cannot draw on a stick figure (a
+``kind()`` returns None unless the stick figure carries everything the picture says. A face is redrawn only
+when it maps to a feeling the figure can wear; neutral and expressionless faces wear a straight face.
+One whose point is a thing we cannot draw on a stick figure (a
 wheelchair, a bike, a bed, an astronaut's suit, a vampire, red arrow signs, a medical mask, a money mouth, a
 sleeping face) keeps its library drawing, since a plain smiling figure in its place would say something else.
 
@@ -41,8 +43,8 @@ POSES = [('run', r'running'), ('walk', r'walking'), ('shrug', r'shrugging'), ('w
                  r'unamused|pleading|tears|facepalming'),
          ('think', r'thinking|monocle|raised eyebrow|diagonal|confused|peeking'),
          ('cheer', r'grinning|smiling|beaming|joy|laugh|partying|star-struck|heart|halo|kiss|savoring|tongue|zany|'
-                   r'winking|hugging|dancing|cartwheeling')]
-SHOCK = re.compile(r'fear|scream|anxious|astonished|hushed|flushed|open mouth|shaking|grimacing|spiral', re.I)
+                   r'winking|hugging|dancing')]
+SHOCK = re.compile(r'fear|scream|anxious|astonished|hushed|flushed|open mouth|shaking|grimacing', re.I)
 CAP = re.compile(r'\b(pilots?|police|officers?|guards?|detectives?|cops?|captains?|security|mechanics?)\b', re.I)
 CROWN = re.compile(r'\b(princes?|princess(?:es)?|royal|crown)\b', re.I)
 FAMILY = re.compile(r'\b(family|parents|children|kids)\b', re.I)
@@ -50,7 +52,7 @@ STRAIGHT = re.compile(r'\b(neutral|expressionless)\b', re.I)
 SERIOUS = ('open', 'flat', 'flat')                       # compose.SERIOUS: a straight face
 # What a stick figure cannot show: the thing, place or costume a picture is about. These keep the library drawing.
 KEEP = re.compile(r'bik|wheelchair|cane|\bbed\b|bath|surf|swim|rowing|polo|golf|ski|snowboard|climb|ball|fencing|'
-                  r'haircut|massage|feeding|lotus|steamy|levitat|bowing|kneeling|tipping|gesturing ok|juggl|weights|'
+                  r'haircut|massage|feeding|lotus|steamy|levitat|bowing|kneeling|tipping|gesturing ok|juggl|weights|cartwheel|'
                   r'astronaut|firefight|\bcook|judge|claus|elf|fairy|genie|mage|vampire|zombie|troll|ninja|mer(?:man|'
                   r'maid|person|people)|super(?:hero|villain)|pregnant|turban|veil|headscarf|skullcap|tuxedo|angel|'
                   r'bunny|wrestl|sign|connected', re.I)
@@ -60,7 +62,7 @@ SHIRTS = ('blue', 'orange', 'green', 'purple', 'yellow', 'sky', 'brown', 'pink')
 
 @lru_cache(maxsize=4096)
 def kind(doodle_id: str) -> str | None:
-    """'person', 'group', 'parachute' or None (a picture that shows no one)."""
+    """'person', 'group', 'parachute' or None (keep the library picture's meaning)."""
     if doodle_id in PROPS:
         return PROPS[doodle_id]
     e = catalog().get(doodle_id)

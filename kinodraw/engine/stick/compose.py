@@ -683,8 +683,8 @@ class Composer:
         ch = self.chapters[beats[0]['chapter']]
         shot = self.base(a, b, 'agenda', ch, beats, tab=False, words=' '.join(x['display'][self.lang] for x in beats))
         sections = [c for c in self.board['chapters'] if c['kind'] == 'section']
-        times = [self.bt[beats[min(i, len(beats) - 1)]['id']]['start'] + (.9 if i == 0 else .15)
-                 for i in range(len(sections))]
+        times = [a if i == 0 else self.bt[beats[min(i, len(beats) - 1)]['id']]['start'] + .15   # the figure points
+                 for i in range(len(sections))]                                             # at a row from the cut
         fig = rig.Figure(pose='point', height=470, facing=1, face=self.calm_face(), seed=rig.seed_of(self.seed, 'agenda'))
         fig, feet = fit_figure(fig, (60, 260, 600, GROUND_Y))
         shot.items.append(figure_item(fig, feet, a))
@@ -729,8 +729,8 @@ class Composer:
         prefix = script.take_text('', self.lang)
         t_head = self.time_at(beat, len(prefix)) if spoken.startswith(prefix) else info['start']
         img = text.block(head, self.lang, 80, max_w=1240, max_lines=3, min_size=44)
-        hi = image_item('text', lambda v: img, 1110 - img.width / 2, 250 + (420 - img.height) / 2, t_head,
-                        group='take')
+        hi = image_item('text', lambda v: img, 1110 - img.width / 2, 250 + (420 - img.height) / 2, prep,
+                        group='take')            # there from the cut, so the figure never points at empty space
         shot.items.append(hi)
         x0, y0, x1, y1 = hi.rect
         shot.items.append(mark_item(marks.Mark('underline', (x0 + 10, y0, x1 - 10, y1 - 14), t_head + 1.2, seed=9,
