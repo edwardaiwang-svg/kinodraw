@@ -184,45 +184,77 @@ def normalize_en(display: str) -> Normalized:
 # ============================================================== Spanish
 ES_CUR = {'US$': ('dólar', 'dólares'), '$': ('dólar', 'dólares'), '€': ('euro', 'euros'),
           '£': ('libra', 'libras'), '¥': ('yen', 'yenes'), '₹': ('rupia', 'rupias')}
+ES_CENTS = {'US$': ('centavo', 'centavos'), '$': ('centavo', 'centavos'),
+            '€': ('céntimo', 'céntimos'), '£': ('penique', 'peniques')}
+ES_UNITS = {'km/h': ('kilómetro por hora', 'kilómetros por hora'), 'km': ('kilómetro', 'kilómetros'),
+            'm': ('metro', 'metros'), 'cm': ('centímetro', 'centímetros'), 'mm': ('milímetro', 'milímetros'),
+            'kg': ('kilogramo', 'kilogramos'), 'g': ('gramo', 'gramos'), 't': ('tonelada', 'toneladas'),
+            'l': ('litro', 'litros'), 'ml': ('mililitro', 'mililitros'),
+            '°C': ('grado Celsius', 'grados Celsius'), '°F': ('grado Fahrenheit', 'grados Fahrenheit'),
+            '°': ('grado', 'grados'), 'mph': ('milla por hora', 'millas por hora'),
+            'GB': ('gigabyte', 'gigabytes'), 'MB': ('megabyte', 'megabytes')}
 ES_SCALES = {'k': ('mil', 'mil'), 'thousand': ('mil', 'mil'), 'mil': ('mil', 'mil'),
              'm': ('millón', 'millones'), 'mn': ('millón', 'millones'), 'mm': ('millón', 'millones'),
              'million': ('millón', 'millones'), 'millón': ('millón', 'millones'), 'millones': ('millón', 'millones'),
              'b': ('mil millones', 'mil millones'), 'bn': ('mil millones', 'mil millones'),
              'billion': ('mil millones', 'mil millones'), 't': ('billón', 'billones'),
              'tn': ('billón', 'billones'), 'trillion': ('billón', 'billones')}
-_es_scale = '|'.join(re.escape(k) for k in sorted(ES_SCALES, key=len, reverse=True))
+ES_NUM = (r'\d{1,3}(?:\.\d{3})+(?:,\d+)?(?!\d|[.,]\d)'
+          r'|\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d|[.,]\d)|\d+(?:[.,]\d+)?')
+_es_scale = '(?i:' + '|'.join((r'(?<!\s)' if len(k) < 3 else '') + re.escape(k)
+                             for k in sorted(ES_SCALES, key=len, reverse=True)) + ')'
+_es_cscale = '(?i:' + '|'.join(re.escape(k) for k in sorted(ES_SCALES, key=len, reverse=True)) + ')'  # '$5 MM'
+_es_unit = '|'.join(re.escape(u) for u in sorted(ES_UNITS, key=len, reverse=True))
 ES_PATTERN = re.compile(
-    rf'(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>{_es_scale})\b)?'
-    rf'|(?P<ra>{NUM})\s?(?:-|–|a)\s?(?P<rb>{NUM})\s?(?P<rpct>%)'
-    rf'|(?P<pct>-?(?:{NUM}))\s?%'
-    rf'|(?P<samt>{NUM})\s?(?P<sscale>{_es_scale})\b'
-    rf'|(?P<neg>(?<![\w.])-)?(?P<num>{NUM})'
+    rf'(?P<cur>{_cur})\s?(?P<camt>{ES_NUM})(?:\s?(?P<cscale>{_es_cscale})\b)?'
+    rf'|(?P<ra>{ES_NUM})\s?(?:-|–|a)\s?(?P<rb>{ES_NUM})\s?(?P<rpct>%)'
+    rf'|(?P<pct>-?(?:{ES_NUM}))\s?%'
+    rf'|(?P<samt>{ES_NUM})\s?(?P<sscale>{_es_scale})\b'
+    rf'|(?P<uamt>{ES_NUM})\s?(?P<unit>{_es_unit})(?![^\W\d_])'
+    rf'|(?P<neg>(?<![\w.])-)?(?P<num>{ES_NUM})'
 )
 
 
 def es_number(token: str) -> str:
-    whole, dot, fraction = token.replace(',', '').partition('.')
+    if re.fullmatch(r'\d{1,3}(?:\.\d{3})+(?:,\d+)?', token):
+        token = token.replace('.', '')
+    elif re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', token):
+        token = token.replace(',', '')
+    whole, dot, fraction = token.partition(',' if ',' in token else '.')
     words = num2words(int(whole), lang='es')
     if dot:
-        words += ' punto ' + ' '.join(num2words(int(d), lang='es') for d in fraction)
+        words += (' coma ' if dot == ',' else ' punto ') + ' '.join(num2words(int(d), lang='es') for d in fraction)
     return words
 
 
 def _es_speak(m: re.Match) -> str:
     g = m.groupdict()
-    if g['cur'] or g['samt']:
-        amount = g['camt'] or g['samt']
-        scale = g['cscale'] or g['sscale']
-        one = Decimal(amount.replace(',', '')) == 1
-        words = es_number(amount)
-        if scale or (g['cur'] and '.' not in amount):
-            words = re.sub(r'veintiuno$', 'veintiún', words)
-            words = re.sub(r'uno$', 'una' if g['cur'] in ('£', '₹') and not scale else 'un', words)
+    if g['cur'] or g['samt'] or g['uamt']:
+        token = amount = g['camt'] or g['samt'] or g['uamt']
+        scale = (g['cscale'] or g['sscale'] or '').lower()
+        if re.fullmatch(r'\d{1,3}(?:\.\d{3})+(?:,\d+)?', amount):
+            amount = amount.replace('.', '')
+        elif re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', amount):
+            amount = amount.replace(',', '')
+        whole, dot, fraction = amount.replace(',', '.').partition('.')
+        cents = g['cur'] in ES_CENTS and not scale and len(fraction) == 2
+        one = Decimal(whole if cents else amount.replace(',', '.')) == 1
+        words = es_number(whole if cents else token)
+        if scale or g['unit'] or (g['cur'] and (not dot or cents)):
+            feminine = not scale and (g['cur'] in ('£', '₹') or g['unit'] in ('t', 'mph'))
+            words = re.sub(r'veintiuno$', 'veintiuna' if feminine else 'veintiún', words)
+            words = re.sub(r'uno$', 'una' if feminine else 'un', words)
         if scale:
             words = 'mil' if one and ES_SCALES[scale][1] == 'mil' else words + ' ' + ES_SCALES[scale][0 if one else 1]
         if g['cur']:
             singular, plural = ES_CUR[g['cur']]
             words += (' de ' if scale and ES_SCALES[scale][1] != 'mil' else ' ') + (singular if one and not scale else plural)
+            if cents and int(fraction):
+                minor = re.sub(r'veintiuno$', 'veintiún', es_number(str(int(fraction))))
+                minor = re.sub(r'uno$', 'un', minor)
+                words += ' con ' + minor + ' ' + ES_CENTS[g['cur']][0 if int(fraction) == 1 else 1]
+        if g['unit']:
+            words += ' ' + ES_UNITS[g['unit']][0 if one else 1]
         return words
     if g['rpct']:
         return f"{es_number(g['ra'])} a {es_number(g['rb'])} por ciento"

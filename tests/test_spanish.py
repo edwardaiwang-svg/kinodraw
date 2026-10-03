@@ -62,11 +62,77 @@ def test_sentences(text, expected):
     ('Cuesta $1.', 'Cuesta un dólar.'),
     ('$21 y $1,000.', 'veintiún dólares y mil dólares.'),
     ('$1k y $1 million.', 'mil dólares y un millón de dólares.'),
-    ('$1.01.', 'uno punto cero uno dólares.'),
+    ('$1.01.', 'un dólar con un centavo.'),
     ('$2 million y $3.8bn.', 'dos millones de dólares y tres punto ocho mil millones de dólares.'),
-    ('Son $19.99.', 'Son diecinueve punto nueve nueve dólares.'),
+    ('Son $19.99.', 'Son diecinueve dólares con noventa y nueve centavos.'),
     ('Hay 2 millones de flores.', 'Hay dos millones de flores.'),
     ('Un valor de 0.05.', 'Un valor de cero punto cero cinco.'),
+    ('una ola de 30 m', 'una ola de treinta metros'),
+    ('10 mm de lluvia', 'diez milímetros de lluvia'),
+    ('Caen 10 mm de lluvia.', 'Caen diez milímetros de lluvia.'),
+    ('una torre de 100 m de altura', 'una torre de cien metros de altura'),
+    ('5 t de carbón', 'cinco toneladas de carbón'),
+    ('30 m de altura', 'treinta metros de altura'),
+    ('3 manzanas', 'tres manzanas'),
+    ('3 árboles y 3 mmás', 'tres árboles y tres mmás'),
+    ('5m', 'cinco millones'),
+    ('Gana 5m al año.', 'Gana cinco millones al año.'),
+    ('Son 30 mil personas.', 'Son treinta mil personas.'),
+    ('2 millones', 'dos millones'),
+    ('$3.8bn', 'tres punto ocho mil millones de dólares'),
+    ('$1k', 'mil dólares'),
+    ('$1 million', 'un millón de dólares'),
+    ('Subió un 3,5% este año', 'Subió un tres coma cinco por ciento este año'),
+    ('3,5%', 'tres coma cinco por ciento'),
+    ('Mide 2,5 metros', 'Mide dos coma cinco metros'),
+    ('2,5 metros', 'dos coma cinco metros'),
+    ('Hace 3.000 años', 'Hace tres mil años'),
+    ('3,000', 'tres mil'),
+    ('3.000', 'tres mil'),
+    ('1.500.000', 'un millón quinientos mil'),
+    ('$1.500', 'mil quinientos dólares'),
+    ('3.4%', 'tres punto cuatro por ciento'),
+    ('1.234,5', 'mil doscientos treinta y cuatro coma cinco'),
+    ('3,50 y 3,5000', 'tres coma cinco cero y tres coma cinco cero cero cero'),
+    ('3.0000', 'tres punto cero cero cero cero'),
+    ('1,500,000 y 1,234.5', 'un millón quinientos mil y mil doscientos treinta y cuatro punto cinco'),
+    ('Entre -3,5% y 1,5-2,5%.', 'Entre menos tres coma cinco por ciento y uno coma cinco a dos coma cinco por ciento.'),
+    ('Cuesta $2.50', 'Cuesta dos dólares con cincuenta centavos'),
+    ('$2.50', 'dos dólares con cincuenta centavos'),
+    ('$19.99', 'diecinueve dólares con noventa y nueve centavos'),
+    ('$1.01', 'un dólar con un centavo'),
+    ('€2,50', 'dos euros con cincuenta céntimos'),
+    ('$5.00', 'cinco dólares'),
+    ('US$1,01 y £2.50', 'un dólar con un centavo y dos libras con cincuenta peniques'),
+    ('€1,01 y £1.01', 'un euro con un céntimo y una libra con un penique'),
+    ('¥2.50 y ₹2,50', 'dos punto cinco cero yenes y dos coma cinco cero rupias'),
+    ('$1.00 y €1,00', 'un dólar y un euro'),
+    ('$1,500.01 y €1.500,50', 'mil quinientos dólares con un centavo y mil quinientos euros con cincuenta céntimos'),
+    ('$3.80bn', 'tres punto ocho cero mil millones de dólares'),
+    ('¿Mide 2,5 m? ¡Sí, cuesta $2.50!', '¿Mide dos coma cinco metros? ¡Sí, cuesta dos dólares con cincuenta centavos!'),
+    ('1 m', 'un metro'), ('1 kg', 'un kilogramo'), ('1 t', 'una tonelada'),
+    ('2 km/h', 'dos kilómetros por hora'), ('1 km/h', 'un kilómetro por hora'),
+    ('2 km', 'dos kilómetros'), ('1 km', 'un kilómetro'),
+    ('2 cm', 'dos centímetros'), ('1 cm', 'un centímetro'),
+    ('2 mm', 'dos milímetros'), ('1 mm', 'un milímetro'),
+    ('2 kg', 'dos kilogramos'), ('2 g', 'dos gramos'), ('1 g', 'un gramo'),
+    ('2 l', 'dos litros'), ('1 l', 'un litro'),
+    ('2 ml', 'dos mililitros'), ('1 ml', 'un mililitro'),
+    ('2 °C', 'dos grados Celsius'), ('1°C', 'un grado Celsius'),
+    ('2 °F', 'dos grados Fahrenheit'), ('1°F', 'un grado Fahrenheit'),
+    ('2°', 'dos grados'), ('1°', 'un grado'),
+    ('2 mph', 'dos millas por hora'), ('1 mph', 'una milla por hora'),
+    ('2 GB', 'dos gigabytes'), ('1 GB', 'un gigabyte'),
+    ('2 MB', 'dos megabytes'), ('1 MB', 'un megabyte'),
+    ('5MM y 5MN', 'cinco millones y cinco millones'),
+    ('5K y 5M', 'cinco mil y cinco millones'),
+    ('5B y 5BN', 'cinco mil millones y cinco mil millones'),
+    ('5T y 5TN', 'cinco billones y cinco billones'),
+    ('$5 MM y $5 m', 'cinco millones de dólares y cinco millones de dólares'),
+    ('$5T y $5TN', 'cinco billones de dólares y cinco billones de dólares'),
+    ('1 mil y 1 millón', 'mil y un millón'),
+    ('2 million y 2 billion', 'dos millones y dos mil millones'),
+    ('2 trillion y 2 thousand', 'dos billones y dos mil'),
 ])
 def test_numbers(display, spoken):
     n = numbers.normalize(display, 'es')
@@ -80,6 +146,14 @@ def test_number_span_mapping():
     assert n.find('3,000 años') == 'tres mil años'
     assert n.find('$5') == 'cinco dólares'
     assert n.find('La miel') == 'La miel'
+
+
+def test_spanish_separator_and_unit_span_mapping():
+    n = numbers.normalize('¿Mide 1.234,5 m y cuesta $2.50? ¡Sí!', 'es')
+    assert n.find('1.234,5 m') == 'mil doscientos treinta y cuatro coma cinco metros'
+    assert n.find('$2.50') == 'dos dólares con cincuenta centavos'
+    assert n.find('y cuesta $2.50') == 'y cuesta dos dólares con cincuenta centavos'
+    assert n.find('¡Sí!') == '¡Sí!'
 
 
 @pytest.mark.skipif(bool(voice.missing_files('es')), reason='Kokoro models not downloaded')
