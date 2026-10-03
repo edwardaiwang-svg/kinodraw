@@ -15,3 +15,25 @@ def test_keep_pacing_resolves_the_narration_next_to_the_whiteboard_timeline(tmp_
     audio.write_wav(tmp_path / 'build' / 'narration.wav', np.zeros((audio.SR, 2), np.float32))
     _, tl, _, out = preview.prepare(tmp_path, keep_pacing=True)
     assert audio.narration(tl, out) == (tmp_path / 'build' / 'narration.wav').resolve()
+
+
+def test_the_talking_mouth_reads_the_narration_in_the_build_folder(tmp_path, monkeypatch):
+    out = tmp_path / 'build' / 'stick'
+    out.mkdir(parents=True)
+    audio.write_wav(out / 'narration.wav', np.full((audio.SR, 2), .3, np.float32))
+    monkeypatch.setattr(preview, 'prepare', lambda *a, **k: ({}, {'audio': 'narration.wav', 'duration': 1.}, 'en', out))
+    seen = {}
+
+    class Prod:
+        shots, warnings = [], []
+
+        def __init__(self, *a, envelope=None, **k):
+            seen['envelope'] = envelope
+
+        def frame(self, t):
+            from PIL import Image
+            return Image.new('RGB', (4, 4))
+    monkeypatch.setattr(preview, 'StickProduction', Prod)
+    monkeypatch.chdir(tmp_path)
+    preview.main([str(tmp_path), '--stills', '0'])
+    assert seen['envelope'] is not None and seen['envelope'].max() == 1

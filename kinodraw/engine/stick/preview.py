@@ -68,7 +68,7 @@ def main(argv=None):
     project = Path(args.project)
     t0 = time.time()
     board, tl, lang, out = prepare(project, args.keep_pacing)
-    wav = Path(tl.get('audio') or out / 'narration.wav')
+    wav = audio.narration(tl, out) if tl.get('audio') else out / 'narration.wav'
     env = speech_envelope(wav) if wav.exists() else None
     prod = StickProduction(board, tl, lang, project, seed=args.seed, captions=not args.no_captions, envelope=env)
     print(f"{len(prod.shots)} shots, {tl['duration']:.1f}s ({time.time() - t0:.0f}s to prepare)", flush=True)
