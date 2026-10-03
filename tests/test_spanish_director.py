@@ -185,3 +185,11 @@ def test_spanish_rule_detectors(spanish_normalize):
     assert visual['type'] == 'grid100'
     assert visual['title']['es'] == '30% de los alumnos'
     assert visual['trigger']['es'] == '30%'
+
+
+def test_a_spanish_percentage_grid_is_titled_without_a_dangling_que():
+    from kinodraw import numbers
+    text = 'Un árbol grande produce cerca del 10% del aire que respira una familia.'
+    beat = {'id': 'b001', 'display': {'es': text}, 'spoken': {'es': numbers.normalize(text, 'es').spoken}}
+    v, _ = RulesDirector('es')._number(beat, text, numbers.normalize(text, 'es'), [])
+    assert v['title']['es'] == '10% del aire' and v['legend'][0]['text']['es'] == 'aire'

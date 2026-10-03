@@ -643,7 +643,7 @@ class RulesDirector:
             label = pct.group(2) if self.lang != 'zh' else self._noun_after(text[pct.end(1):])
             if self.lang != 'zh':                     # "27% of trips are made ..." -> "trips"
                 words = label.split()
-                stop = ES_AUX | ES_PREPS | ES_DETERMINERS if self.lang == 'es' else AUX | PREPS | DETERMINERS
+                stop = ES_AUX | ES_PREPS | ES_DETERMINERS | ES_CONNECTIVES if self.lang == 'es' else AUX | PREPS | DETERMINERS
                 while len(words) > 1 and words[-1] in stop:
                     words.pop()
                 label = ' '.join(words)
@@ -694,7 +694,7 @@ class RulesDirector:
         if self.lang == 'zh':
             return self._event_label_zh(sentence, date)
         preps = ES_PREPS if self.lang == 'es' else PREPS
-        dets = ES_DETERMINERS if self.lang == 'es' else DETERMINERS
+        dets = ES_DETERMINERS | ES_CONNECTIVES if self.lang == 'es' else DETERMINERS
         auxs = ES_AUX if self.lang == 'es' else AUX
         past = ES_PAST if self.lang == 'es' else PAST
         stops = ES_STOP if self.lang == 'es' else EN_STOP
