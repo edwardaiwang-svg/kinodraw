@@ -177,7 +177,7 @@ def finish(project_dir: Path) -> dict:
     lang, build = cfg['lang'], project_dir / 'build'
     tl = _load(build / 'timeline.json')
     mixed = audio.mix(board, tl, build)
-    stem = re.sub(r'[\\/:*?"<>|]+', '', board['title'][lang]).strip()[:80] or 'video'
+    stem = re.sub(r'[\\/:*?"<>|¿¡]+', '', board['title'][lang]).strip()[:80] or 'video'
     video = project_dir / f'{stem}.mp4'
     mux(tl, build / 'silent.mp4', mixed, video, lang, board['title'][lang], build)
     qa = encoded_qa(tl, video, mixed)
