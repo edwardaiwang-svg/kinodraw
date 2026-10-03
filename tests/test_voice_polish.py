@@ -58,6 +58,12 @@ def test_pronunciations_match_words_and_strip_clause_marks(tmp_path):
     acronyms = voice.parse_lexicon('IT = eye tee\nWHO = double you aitch oh\nus = uss\nUS = you ess')
     assert (voice.respell('The IT team said it works, but who knows what WHO said. Join us, Us, US.', acronyms, 'en')
             == 'The eye tee team said it works, but who knows what double you aitch oh said. Join uss, uss, you ess.')
+    symbols = voice.parse_lexicon('C# = see sharp\nC++ = see plus plus\n.NET = dot net\nDr. = doctor')
+    assert (voice.respell('I write C# and C++ for .NET, said Dr. Smith; c#d stays.', symbols, 'en')
+            == 'I write see sharp and see plus plus for dot net, said doctor Smith; c#d stays.')
+    sentence_case = voice.parse_lexicon('Quinoa = keen wah\niPhone = eye phone')
+    assert (voice.respell('Quinoa is a seed. Cook the quinoa on an iPhone, not an IPHONE.', sentence_case, 'en')
+            == 'keen wah is a seed. Cook the keen wah on an eye phone, not an IPHONE.')
     marks = ''.join(voice.CLAUSE.values()) + voice.PHONE_MARKS
     path.write_text(f'GIF = {marks}jif{marks}', encoding='utf-8')
     assert voice.read_lexicon(path) == {'GIF': 'jif'}

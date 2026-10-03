@@ -198,10 +198,13 @@ def respell(text: str, lexicon: dict, lang: str) -> str:
     """Change spoken words while keeping the script's spelling elsewhere."""
     if not lexicon:
         return text
-    if lang == 'en':        # "WHO" or "Nguyen" matches only as typed, "honey" in any case; exact entries first
-        keys = sorted(lexicon, key=lambda key: (-len(key), key.islower()))
-        pattern = '|'.join(f'(?i:{re.escape(key)})' if key.islower() else re.escape(key) for key in keys)
-        return re.sub(r'\b(?:' + pattern + r')\b', lambda m: lexicon.get(m[0]) or lexicon[m[0].lower()], text)
+    if lang == 'en':        # "WHO" or "iPhone" matches only as typed, "Honey" or "C#" in any case; exact entries first
+        exact = {key for key in lexicon if any(c.isupper() for c in key[1:])}
+        loose = {key.lower(): said for key, said in lexicon.items() if key not in exact}
+        keys = sorted(lexicon, key=lambda key: (-len(key), key not in exact))
+        pattern = '|'.join(re.escape(key) if key in exact else f'(?i:{re.escape(key)})' for key in keys)
+        return re.sub(r'(?<!\w)(?:' + pattern + r')(?!\w)',
+                      lambda m: lexicon[m[0]] if m[0] in exact else loose[m[0].lower()], text)
     pattern = '|'.join(re.escape(key) for key in sorted(lexicon, key=len, reverse=True))
     return re.sub(pattern, lambda m: lexicon[m[0]], text)
 

@@ -454,7 +454,7 @@ function renderNarrator(name, info, choice = info.narrator) {
         <button id="n-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button>
       </div></div><div>${speedRow('n-speed')}</div></div>
       <label>Pronunciations <textarea id="n-pronounce" rows="4" placeholder="GIF = jif&#10;Nguyen = win"></textarea></label>
-      <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling. Words with capitals, like WHO, match only as typed.</p>
+      <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling. All-caps words like WHO and mixed-case ones like iPhone match only as typed; others match in any case.</p>
       <button id="n-save" type="submit" class="primary" disabled>Save voice settings</button></form>`;
   } else {
     const lines = info.lines.map((l, i) => {
