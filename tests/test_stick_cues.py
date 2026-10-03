@@ -1,0 +1,34 @@
+"""Word rules of the stick look: which pose, face and costume a shot's words give, in English and Chinese."""
+import pytest
+
+from doodlestudio.engine.stick import cues
+
+
+@pytest.mark.parametrize('text,lang', [
+    ("Rome didn't fall in a day.", 'en'),
+    ("He wasn't killed.", 'en'),
+    ('He couldn’t escape.', 'en'),
+    ('Nobody was murdered that night.', 'en'),
+    ('The best way to remember is simple.', 'en'),
+    ('也就是说，天空是蓝的', 'zh'),
+    ('其实这可能是一个误会', 'zh'),
+    ('这个问题很难', 'zh'),
+])
+def test_negated_or_idiomatic_words_strike_no_pose(text, lang):
+    assert cues.pose_for(text, lang)[0] is None
+
+
+def test_taking_something_away_is_not_walking():
+    assert cues.pose_for('他拿走了钱', 'zh')[0] != 'walk'
+
+
+@pytest.mark.parametrize('text,lang,pose', [
+    ('Rome fell.', 'en', 'fall'),
+    ('He walked home.', 'en', 'walk'),
+    ('They won the war at last.', 'en', 'cheer'),
+    ('他走向城门', 'zh', 'walk'),
+    ('他问老师', 'zh', 'talk'),
+    ('罗马灭亡了', 'zh', 'fall'),
+])
+def test_plain_cues_still_work(text, lang, pose):
+    assert cues.pose_for(text, lang)[0] == pose

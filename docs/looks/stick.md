@@ -88,9 +88,12 @@ list (pose, framing, ground colour), never invent new ones.
 - **Pose** from the shot's words: a question -> think; otherwise the earliest action cue wins (death, collapse,
   defeat -> fall; war, attack, anger -> angry; flight and chase -> run; travel words -> walk; victory, survival
   -> cheer; loss, plague, famine -> sad; "nobody knows", "no single" -> shrug), and only without one a weak cue
-  (said, called -> talk; money, carrying -> hold; look, see -> point). A negated cue ("did not fall") does not
-  count. Otherwise point at the pictures, or stand or talk. Chinese has its own cue lists. A fallen figure gets
-  X eyes and a wavy mouth and no "!" marks.
+  (said, called -> talk; money, carrying -> hold; look, see -> point). A negated cue ("did not fall", "didn't
+  fall", "nobody was killed") does not count, and neither does "best" ("the best way to remember" is not a
+  victory). Otherwise point at the pictures, or stand or talk. Chinese has its own cue lists, which skip
+  compounds that only contain a cue character (拿走 is taking, not walking; 也就是说 is "that is", not speech;
+  问题 is a problem, not a question) and plain hedges (可能). A fallen figure gets X eyes and a wavy mouth and no
+  "!" marks.
 - **Crowd**: people, army, citizens, population (and Chinese equivalents) bring 3 to 7 figures.
 - **Costume** by topic words: Roman, legion, soldier -> crested helmet; emperor, king, queen -> crown; worker,
   farmer -> straw hat; otherwise none.

@@ -17,7 +17,7 @@ POSE = {
         ('run', r'\b(ran|run|runs|running|fled|flee\w*|escap\w*|chas\w*|rushed|raced|hurr\w*)\b'),
         ('walk', r'\b(walk\w*|travel\w*|journey\w*|march\w*|migrat\w*|moved|crossed|reach\w*|arriv\w*|went|'
                  r'spread|explor\w*|sail\w*)\b'),
-        ('cheer', r'\b(won|wins?|victor\w*|triumph\w*|success\w*|celebrat\w*|thriv\w*|golden age|survived|best)\b'),
+        ('cheer', r'\b(won|wins?|victor\w*|triumph\w*|success\w*|celebrat\w*|thriv\w*|golden age|survived)\b'),
         ('sad', r'\b(lost|lose|loss|poor|poverty|famine|plagues?|diseases?|sick\w*|sad|grief|starv\w*|suffer\w*|'
                 r'declin\w*|expensive|fewer)\b'),
         ('shrug', r'\b(maybe|perhaps|nobody knows|no one knows|unclear|unknown|myster\w*|no single|not sure|'
@@ -31,11 +31,12 @@ POSE = {
         ('fall', r'倒下|崩溃|灭亡|死|杀|击败|摧毁|覆灭|垮台|跌倒|摔倒'),
         ('angry', r'战争|战斗|攻击|入侵|愤怒|生气|敌人|反抗|起义'),
         ('run', r'跑|逃|追赶|冲向'),
-        ('walk', r'走|旅行|穿过|穿越|迁徙|前往|到达|传播|航行|探索'),
-        ('cheer', r'胜利|成功|庆祝|赢|最好|繁荣|幸存|活了下来'),
+        ('walk', r'(?<![拿带偷抢夺运搬卷吹赶冲飞抬取])走(?![私廊势红])|旅行|穿过|穿越|迁徙|前往|到达|传播|航行|探索'),
+        ('cheer', r'胜利|成功|庆祝|赢|繁荣|幸存|活了下来'),
         ('sad', r'失去|贫穷|饥荒|瘟疫|疾病|悲伤|痛苦|衰落|减少|太贵'),
-        ('shrug', r'也许|可能|不知道|谁也不知道|未知|谜|没有答案|为什么'),
-        ('talk', r'说|告诉|叫做|宣布|称为|解释|问'),
+        ('shrug', r'也许|或许|不知道|谁也不知道|没人知道|未知|谜|没有答案|说不清|不确定'),
+        ('talk', r'(?<!就是)(?<!比如)(?<!据)(?<!小)(?<!传)(?<!听)(?<!虽)(?<!再)说(?![明服])|告诉|叫做|宣布|称为|解释|'
+                 r'问(?!题)'),
         ('hold', r'拿着|握着|手里|带着|买|卖|钱|金币|用一[块个把台]'),
         ('point', r'看|观察|抬头'),
     ],
@@ -71,7 +72,7 @@ MOOD = {'fall': 'sad', 'sad': 'sad', 'angry': 'upset', 'cheer': 'happy', 'run': 
 
 
 WEAK = ('talk', 'hold', 'point')
-NEGATION = {'en': re.compile(r"\b(not|never|no|n't|nor|without)\s+(\w+\s+)?$", I),
+NEGATION = {'en': re.compile(r"(?:\b(?:not|never|no|nor|without|nobody|none|neither|no one)|n['’]t)\s+(\w+\s+)?$", I),
             'zh': re.compile(r'(不|没有|没|未|别)$')}
 
 
