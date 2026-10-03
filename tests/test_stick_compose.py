@@ -129,3 +129,36 @@ def test_a_cheerful_topic_keeps_its_smile():
     p = build('printing_press.md')
     assert p.composer.tone == 'bright'
     assert p.composer.calm_face('Printing let new ideas move faster.') is None
+
+
+def test_big_numbers_keep_their_currency_and_dates_stay_whole():
+    p = build('stick_hijack.md')
+    c = p.composer
+    said = {}
+    for b in c.beats:
+        if b['kind'] == 'narration':
+            for t, _, sent in c.sentence_times(b):
+                card = c.spoken_number([b], t, t + 6)
+                if card:
+                    said[sent] = card.data
+    money = next(d for s, d in said.items() if s.startswith('A few hours later'))
+    assert money['value'] == '$200,000'
+    assert next(d for s, d in said.items() if s.startswith('On November'))['value'] == 'November 24, 1971'
+    # a director's stat on the day of a date shows the date, not "24" over an unrelated noun
+    disp = 'On November 24, 1971, a quiet man in a dark suit bought a plane ticket.'
+    assert compose.stat_label('24', 'quiet man', disp, 'en') == ('November 24, 1971', '')
+    assert compose.stat_label('476', 'last emperor', 'Then, in the year 476, the last emperor was pushed off his '
+                                                     'throne.', 'en') == ('476', 'last emperor')
+    assert compose.stat_label('24', 'rotting bills', 'In 1980 he found 24 bags and 9 rotting bills.', 'en') == \
+        ('24', '')                                           # read past another number: not this number's label
+    found = [m.group(0) for m in compose.NUMBER['en'].finditer('found $5,800 and about $2.5 million in gold')]
+    assert found == ['$5,800', '$2.5 million']
+
+
+def test_a_spoken_dollar_amount_gets_its_sign():
+    p = build('stick_hijack.md')
+    c = p.composer
+    beat = dict(c.beats[0], display={'en': 'He found 20 dollar bills in the sand.'}, id=c.beats[0]['id'])
+    c.bt = dict(c.bt)
+    card = c.spoken_number([beat], c.bt[beat['id']]['start'] - 1, c.bt[beat['id']]['start'] + 30)
+    assert card.data == {'value': '$20', 'label': 'bills'}

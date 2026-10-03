@@ -274,8 +274,52 @@ def number_text(value, display):
     return v
 
 
-NUMBER = {'en': re.compile(r'(?<![\w.,])(\d{1,3}(?:,\d{3})+|\d{2,})(%?)(?![\w])'),
-          'zh': re.compile(r'(?<![\d.,])(\d{1,3}(?:,\d{3})+|\d{2,})(%|年|倍|亿|万|岁|度|公里|米)?')}
+# A number as written: currency sign, digits (two or more, or one before million/billion), unit.
+NUMBER = {'en': re.compile(r'(?<![\w.,$€£¥])([$€£¥]?)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,}(?:\.\d+)?|'
+                           r'\d+(?:\.\d+)?(?=\s*(?:million|billion|trillion)\b))'
+                           r'(%|\s(?:percent|million|billion|trillion)\b)?(?![\w])', re.I),
+          'zh': re.compile(r'(?<![\d.,])([$€£¥]?)(\d{1,3}(?:,\d{3})+|\d{2,})(%|年|倍|亿|万|岁|度|公里|米)?'
+                           r'(美元|元|欧元|英镑|日元)?')}
+CURRENCY_WORD = re.compile(r'\s+(dollars?|euros?|pounds?|yen)\b', re.I)
+SYMBOL = {'dollar': '$', 'euro': '€', 'pound': '£', 'yen': '¥'}
+MONTH = (r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|'
+         r'Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)')
+DATE = {'en': re.compile(rf'\b(?:{MONTH}\.?\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{3,4}})?|'
+                         rf'\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?{MONTH}(?:,?\s+\d{{3,4}})?|{MONTH},?\s+\d{{4}})\b'),
+        'zh': re.compile(r'(?:\d{3,4}年)?\d{1,2}月(?:\d{1,2}[日号])?')}
+
+
+def date_at(display, start, end, lang):
+    """The whole date ("November 24, 1971", "1971年11月24日") when display[start:end] is part of one, else None."""
+    for m in DATE[lang].finditer(display):
+        if m.start() <= start and end <= m.end():
+            return m.group(0)
+    return None
+
+
+def stat_label(value, label, display, lang):
+    """A director's stat as the card shows it: (value, label). The day or year of a date shows the whole date
+    with no label ("On November 24, 1971, a quiet man" is a date, not 24 quiet men), and a label read past
+    another number belongs to that number, not to this one."""
+    sent = sentence_with(value, display, lang)
+    shown = number_text(value, sent)
+    pos = sent.find(value)
+    if pos < 0:
+        return shown, _clean_label(label, sent, lang)
+    date = date_at(sent, pos, pos + len(value), lang)
+    if date:
+        return date, ''
+    label = _clean_label(label, sent, lang)
+    if label:
+        after = pos + len(value)
+        if '–' in shown:                                  # a range: read on from its second end
+            end = sent.find(shown.split('–')[1], after)
+            after = end + len(shown.split('–')[1]) if end >= 0 else after
+        first = label.split()[0] if lang == 'en' else label[:2]
+        at = sent.find(first, after)
+        if at >= 0 and re.search(r'\d', sent[after:at]):
+            label = ''
+    return shown, label
 POINTER = re.compile(r'^\s*(?:(?:this|that|these|those|it)\b|这|那|它)', re.I)
 NOT_LABELS = {'and', 'the', 'was', 'were', 'when', 'until', 'after', 'before', 'with', 'for', 'had', 'has', 'have',
               'that', 'this', 'its', 'his', 'her', 'their', 'from', 'into', 'but', 'then', 'they', 'are', 'all'}
@@ -761,9 +805,8 @@ class Composer:
                         data['relation'] = v['relation']
                     out.append((tt, Card('doodle', tt, data, vid)))
             elif vt == 'stat':
-                label = _clean_label(self.T(v.get('label')), sentence_with(self.T(v.get('value')), disp, lang), lang)
-                out.append((t, Card('number', t, {'value': number_text(self.T(v.get('value')), disp),
-                                                  'label': label}, vid)))
+                value, label = stat_label(self.T(v.get('value')), self.T(v.get('label')), disp, lang)
+                out.append((t, Card('number', t, {'value': value, 'label': label}, vid)))
             elif vt == 'grid100':
                 filled = int(v.get('filled', 0))
                 out.append((t, Card('number', t, {'value': f'{filled}%', 'label': self.T(v.get('title')),
@@ -960,10 +1003,18 @@ class Composer:
                 t = self.time_at(beat, m.start())
                 if not (a - .3 <= t < b - 1.):
                     continue
-                value = number_text(m.group(1), disp) + (m.group(2) or '')
+                sign, digits, unit = m.group(1), m.group(2), (m.group(3) or '')
+                end = m.end()
+                cur = CURRENCY_WORD.match(disp[end:]) if self.lang == 'en' and not sign else None
+                if cur:                                    # "20 dollar bills" -> $20, bills
+                    sign, end = SYMBOL[cur.group(1).lower().rstrip('s')], end + cur.end()
+                value = sign + number_text(digits, disp) + unit + ((m.group(4) or '') if self.lang == 'zh' else '')
                 label = ''
-                if self.lang == 'en':
-                    nxt = re.match(r'\s+([A-Za-z]{3,})\b', disp[m.end():])
+                date = date_at(disp, m.start(2), m.end(2), self.lang)
+                if date:
+                    value = date
+                elif self.lang == 'en':
+                    nxt = re.match(r'\s+([A-Za-z]{3,})\b', disp[end:])
                     if nxt and nxt.group(1).lower() not in NOT_LABELS:
                         label = nxt.group(1)
                 return Card('number', max(t, a + .2), {'value': value, 'label': label},
