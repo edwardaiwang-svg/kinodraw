@@ -408,8 +408,9 @@ def state() -> dict:
             'styles': [{'value': f"{e['id']}/{e['stories'][0]}", 'label': e['name']['en']}   # the registry's looks
                        for e in styles.looks(ready=True)],                               # that render now
             'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
+                       'es': ['ef_dora', 'em_alex'],
                        'zh': ['zf_001', 'zf_002', 'zm_010', 'zm_020']},
-            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')},
+            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh', 'es')},
             'notice': paths.NOT_MOVED if paths.left_behind else None}   # Doodle Studio's folders could not move yet
 
 
