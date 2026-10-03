@@ -46,3 +46,20 @@ def test_the_download_offers_every_computer_and_finds_the_installers_ci_publishe
     ci = (SITE.parents[1] / '.github' / 'workflows' / 'ci.yml').read_text(encoding='utf-8')
     assets = re.findall(r'"\.\./(KinoDraw-\$\{\{ github\.ref_name \}\}-\w+\.[\w.]+)"', ci)
     assert sorted(re.search(r'-(\w+)\.', a.split('}}')[1]).group(1) for a in assets) == ['linux', 'macos', 'windows']
+
+
+def test_a_mac_visitor_is_told_the_mac_app_needs_apple_silicon():
+    """The Mac app is arm64 only and every Mac browser reports "Intel Mac OS X". The script removes the visitor's own
+    platform link, which held the page's only "Apple silicon", and labelled the button "Download for macOS": an
+    Intel Mac got a one-click download of an app that cannot run, with no warning."""
+    raw = SITE.read_text(encoding='utf-8')
+    assert re.search(r'<a data-os="macos"[^>]*>macOS \(Apple silicon, M1 or newer\)</a>', raw)    # without JavaScript
+    script = re.search(r'<script>(.*?)</script>', raw, re.S).group(1)
+    mac = re.search(r"const mac = key === 'macos';(.*?)\n\s*try \{", script, re.S)               # with it, on a Mac,
+    assert mac, 'no Mac branch before the release lookup (it must not depend on GitHub answering)'
+    assert "'Needs a Mac with Apple silicon (M1 or newer), not an Intel Mac. Also for'" in mac.group(1)  # next to
+    assert "'Download for ' + os + (mac ? ' (Apple silicon)' : '')" in script                      # the button
+    box = raw[raw.index('<div class="first-open" data-os="macos">'):raw.index('<p class="small" data-os="linux">')]
+    text = ' '.join(html.unescape(re.sub(r'<[^>]+>', ' ', box)).split())
+    for words in ('Apple silicon (M1 or newer)', 'About This Mac', 'Chip', 'Processor'):    # Apple's own check
+        assert words in text, words

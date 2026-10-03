@@ -100,6 +100,8 @@
     </div>
     <div class="first-open" data-os="macos">
       <h2>First time opening on a Mac</h2>
+      <p>The Mac app needs Apple silicon (M1 or newer) and doesn't run on an Intel Mac. To check yours, choose Apple
+        menu → <b>About This Mac</b>: an Apple silicon Mac lists a <b>Chip</b>, an Intel Mac a <b>Processor</b>.</p>
       <p>KinoDraw isn't notarized by Apple yet, so the first time you open it, macOS stops it. You approve it once:</p>
       <ol>
         <li>Unzip the download, drag <b>KinoDraw</b> to Applications and double-click it. macOS says it can't
@@ -215,7 +217,11 @@ kinodraw studio          # the app window</pre>
   const mine = document.querySelector(`#platforms a[data-os="${key}"]`);
   (mine.previousElementSibling || mine.nextElementSibling)?.remove();         // its " · " separator
   mine.remove();
-  document.getElementById('also').textContent = 'Also for';
+  // The Mac app is Apple silicon only, every Mac browser says "Intel Mac OS X", and the link just removed held the
+  // page's "Apple silicon": say it next to the button, before (and without) the release lookup.
+  const mac = key === 'macos';
+  document.getElementById('also').textContent = mac
+    ? 'Needs a Mac with Apple silicon (M1 or newer), not an Intel Mac. Also for' : 'Also for';
   const box = document.querySelector(`#first-open [data-os="${key}"]`);
   box.parentNode.insertBefore(box, box.parentNode.firstElementChild);           // its first-open steps first
   const btn = document.getElementById('download');
@@ -223,7 +229,7 @@ kinodraw studio          # the app window</pre>
     const r = await fetch('https://api.github.com/repos/edwardaiwang-svg/kinodraw/releases/latest');
     const assets = (await r.json()).assets;
     const pick = (k) => assets.find(a => a.name.includes('-' + k + '.'));          // KinoDraw-v0.2.0-windows.zip ...
-    if (pick(key)) [btn.href, btn.textContent] = [pick(key).browser_download_url, 'Download for ' + os];
+    if (pick(key)) [btn.href, btn.textContent] = [pick(key).browser_download_url, 'Download for ' + os + (mac ? ' (Apple silicon)' : '')];
     document.querySelectorAll('#platforms a').forEach(a => { if (pick(a.dataset.os)) a.href = pick(a.dataset.os).browser_download_url; });
   } catch (e) {}
 })();
