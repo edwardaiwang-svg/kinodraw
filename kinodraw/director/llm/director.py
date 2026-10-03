@@ -38,6 +38,10 @@ class LLMDirector:
         groups = [(c, [b for b in board['beats'] if b['chapter'] == c['id'] and b['kind'] in ('narration', 'take')])
                   for c in chapters if c['kind'] in ('section', 'board', 'outro')]
         groups = [(c, beats) for c, beats in groups if beats]
+        if lang not in getattr(self.provider, 'languages', (lang,)):   # checked before a cloud video is counted
+            self.notes.append('The offline director planned this video (KinoDraw Cloud plans English and Chinese '
+                              'videos only; no cloud video was used)')
+            return {'usage': self.usage, 'notes': self.notes, 'warnings': validate(board)['warnings']}
         if hasattr(self.provider, 'open_video'):
             try:
                 self.provider.open_video(len(groups), sum(len(b['display'][lang]) for _, bs in groups for b in bs))
