@@ -110,7 +110,10 @@ class Skin:
             line = self._lines(drawing.line, x, y)
             if self.textured:
                 color = self._fills(drawing.color, x, y, getattr(drawing, 'doodle', False))
-                line = material_image(line, self, x, y, self.margs.get('line_cover', .2), self.margs.get('line_grow', 0))
+                doodle = getattr(drawing, 'doodle', False)       # widen only the thin lines of shapes (cards, frames, arrows):
+                line = material_image(line, self, x, y, self.margs.get('doodle_line_cover' if doodle else 'line_cover', .2),
+                                      0 if doodle else self.margs.get('line_grow', 0))      # a doodle's dense outlines
+                                                                                            # would swallow it
                 color = material_image(color, self, x, y, self.margs.get('fill_cover', .5))
                 color.alpha_composite(line)
                 la, ca = np.asarray(line), np.asarray(color)

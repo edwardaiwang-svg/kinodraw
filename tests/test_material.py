@@ -73,6 +73,22 @@ def test_material_and_existing_skin_golden_frames(tmp_path, look, lang):
         pytest.fail(f'{look}/{lang}: {changed} differing pixels; actual frame: {path}')
 
 
+@pytest.mark.parametrize('look,lang', [(look, lang) for look in MATERIALS for lang in ('en', 'zh')])
+def test_material_golden_frames_with_a_finished_picture(tmp_path, look, lang):
+    prod, tl = production(tmp_path, look, lang)
+    doodle = next(e for e in prod.els if getattr(e.drawing, 'doodle', False))     # the first doodle, fully drawn
+    frame = prod.frame(doodle.end + .1).convert('RGB').reduce(3)
+    expected_path = GOLDEN / f'{look}_{lang}_picture.png'
+    if os.environ.get('KINODRAW_UPDATE_GOLDEN') == '1':
+        frame.save(expected_path)
+    actual = np.asarray(frame)
+    expected = np.asarray(Image.open(expected_path).convert('RGB'))
+    if not np.array_equal(expected, actual):
+        frame.save(tmp_path / 'actual.png')
+        pytest.fail(f'{look}/{lang}: {np.count_nonzero(np.any(expected != actual, axis=-1))} differing pixels; '
+                    f'actual frame: {tmp_path / "actual.png"}')
+
+
 @pytest.mark.parametrize('look', MATERIALS)
 def test_material_frames_are_deterministic_at_three_times(tmp_path, look):
     prod, tl = production(tmp_path, look)
