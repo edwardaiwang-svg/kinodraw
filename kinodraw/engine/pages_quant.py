@@ -112,7 +112,7 @@ def build_bars(v, beat, box, ctx):
         ctx.add(u, x0 + 10, top - 6, t0)
         top += u.size[1] - 2
     if multi and len(groups) > 1:     # say the scales differ: footnote line when it fits
-        s = 'each card has its own scale' if ctx.lang == 'en' else '每张卡片刻度各自独立'
+        s = {'en': 'each card has its own scale', 'es': 'cada tarjeta tiene su propia escala', 'zh': '每张卡片刻度各自独立'}[ctx.lang]
         note = ctx.text(s, 40, color=SOFT_INK, pace=1.6)
         nx = x0 + w - 10 - note.size[0]
         if fn is not None and fn.x + fn.w + 50 > nx:

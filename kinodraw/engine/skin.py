@@ -343,7 +343,7 @@ class Highlighted:
 def phrase_boxes(td: ink.TextDrawing, phrase: str):
     """Where ``phrase`` is written in ``td`` (case and spacing ignored), one box per line it runs over, each with
     the time its last letter is written; [] when it is not there."""
-    sep = ' ' if td.lang == 'en' else ''
+    sep = ' ' if td.lang in ('en', 'es') else ''
     chars = []                                         # (line, index in line) per character of the joined text
     text = ''
     for i, (row, _, _) in enumerate(td.placed):
@@ -357,7 +357,7 @@ def phrase_boxes(td: ink.TextDrawing, phrase: str):
     if not target:
         return []
     low = text.lower()
-    if td.lang == 'en':        # a whole word first, else the start of a word ('warm' in 'warms'), never inside one
+    if td.lang in ('en', 'es'):        # a whole word first, else the start of a word ('warm' in 'warms'), never inside one
         hit = (re.search(rf'(?<!\w){re.escape(target)}(?!\w)', low)
                or re.search(rf'(?<!\w){re.escape(target)}', low))
         at = hit.start() if hit else -1

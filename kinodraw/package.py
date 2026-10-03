@@ -44,7 +44,8 @@ def _esc(text) -> str:
 
 
 def mux(tl: dict, silent: Path, mix: Path, output: Path, lang: str, title: str, build: Path):
-    lines = [';FFMETADATA1', f'title={_esc(title)}', f'encoder={PRODUCT["name"]}', f'language={"eng" if lang == "en" else "zho"}']
+    iso = {'en': 'eng', 'zh': 'zho', 'es': 'spa'}[lang]
+    lines = [';FFMETADATA1', f'title={_esc(title)}', f'encoder={PRODUCT["name"]}', f'language={iso}']
     for c in tl['chapters']:
         lines += ['[CHAPTER]', 'TIMEBASE=1/1000', f"START={round(c['start'] * 1000)}", f"END={round(c['end'] * 1000)}",
                   f"title={_esc(c['title'])}"]
@@ -184,6 +185,10 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
     credit = (f'Made with {PRODUCT["name"]}. Narration: {voice}. Music: FreePD (CC0).' if lang == 'en' else
               f'由 {PRODUCT["name"]} 制作。旁白：{voice}。音乐：FreePD（CC0）。')
     head = 'Chapters' if lang == 'en' else '章节'
+    if lang == 'es':
+        voice = 'la voz del creador' if own_voice else 'voz de IA de Kokoro'
+        credit = f'Hecho con {PRODUCT["name"]}. Narración: {voice}. Música: FreePD (CC0).'
+        head = 'Capítulos'
     (folder / f'{stem}-description.txt').write_text(
         f"{storyboard['title'][lang]}\n\n{head}\n" + '\n'.join(chapters) + f'\n\n{credit}\n', encoding='utf-8')
     thumbnail(storyboard, lang, folder / f'{stem}-thumbnail.png', project_dir)
