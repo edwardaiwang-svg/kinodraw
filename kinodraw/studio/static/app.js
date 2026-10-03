@@ -116,11 +116,17 @@ function showSample() {          // a finished video that ships with the app: pl
 }
 
 // ---------------------------------------------------------------- new video
+function scriptLang(text) {      // same rule as kinodraw/ingest.py detect_lang: Chinese when over 30% of letters are Chinese
+  const letters = text.match(/\p{L}/gu) || [];
+  const chinese = letters.filter((c) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(c)).length;
+  return letters.length && chinese / letters.length > 0.3 ? 'zh' : 'en';
+}
+
 function showNew() {
   current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-new').content.cloneNode(true));
   const langSel = $('#lang'), voiceSel = $('#voice'), dirSel = $('#director');
-  const voiceLang = () => langSel.value || (/[一-鿿]/.test($('#script').value) ? 'zh' : 'en');
+  const voiceLang = () => langSel.value || scriptLang($('#script').value);
   const fillVoices = () => {
     voiceSel.innerHTML = voiceOptions(voiceLang());
   };

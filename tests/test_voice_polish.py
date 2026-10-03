@@ -1,5 +1,6 @@
 """Named voices, offline samples, speed and pronunciations that leave captions alone."""
 import json
+import re
 import socket
 import time
 import urllib.error
@@ -235,3 +236,20 @@ def test_command_line_keeps_pronunciations_with_the_project_and_refuses_a_bad_fi
               '--voice', 'am_michael', '--speed', '1.1'])
     assert (tmp_path / 'Good' / 'pronounce.txt').read_text(encoding='utf-8') == 'honey = huh nee\n'
     assert pipeline.settings(tmp_path / 'Good')['speed'] == 1.1
+
+
+def test_the_studio_picks_voices_for_the_language_the_script_will_be_read_in():
+    import shutil
+    import subprocess
+    from kinodraw import ingest
+    from kinodraw.studio import server
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    source = re.search(r'^function scriptLang\(.*?^}', js, re.S | re.M)[0]
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    texts = ['Today we learn the Mandarin greeting 你好 and when to use it.', '今天我们学习蜂蜜。', 'Bees make honey.',
+             '', '蜂蜜 honey bees work hard all day']
+    out = subprocess.run([node, '-e', source + f'\nconsole.log(JSON.stringify({json.dumps(texts)}.map(scriptLang)))'],
+                         capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == [ingest.detect_lang(t) for t in texts]
