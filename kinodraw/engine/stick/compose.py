@@ -276,13 +276,16 @@ def number_text(value, display):
 
 
 # A number as written: currency sign, digits (two or more, or one before million/billion), unit.
+# A Chinese number's unit: a measure (400亿立方米, 300米, 5公斤) after an optional 万/亿, else 万/亿 or a plain unit.
+ZH_UNIT = (r'%|年|倍|岁|度|(?:万亿|亿|万)?(?:立方(?:公里|千米|米)|平方(?:公里|千米|米)|公里|千米|厘米|毫米|米|公斤|千克|吨|'
+           r'公顷|升|小时|分钟)|万亿|亿|万')
 NUMBER = {'en': re.compile(r'(?<![\w.,$€£¥])([$€£¥]?)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,}(?:\.\d+)?|'
                            r'\d+(?:\.\d+)?(?=\s*(?:million|billion|trillion)\b))'
                            r'(%|\s(?:percent|million|billion|trillion)\b)?(?![\w])', re.I),
-          'zh': re.compile(r'(?<![\d.,])([$€£¥]?)(\d{1,3}(?:,\d{3})+|\d{2,})(%|年|倍|亿|万|岁|度|公里|米)?'
-                           r'(美元|元|欧元|英镑|日元)?')}
+          'zh': re.compile(r'(?<![\d.,])([$€£¥]?)(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,}(?:\.\d+)?|\d\.\d+)'
+                           rf'({ZH_UNIT})?(美元|元|欧元|英镑|日元)?')}
 CURRENCY_WORD = re.compile(r'\s+(dollars?|euros?|pounds?|yen)\b', re.I)
-UNIT_AFTER = re.compile(r'(?:%|年|倍|亿|万|岁|度|公里|米)?(?:美元|元|欧元|英镑|日元)?')
+UNIT_AFTER = re.compile(rf'(?:{ZH_UNIT})?(?:美元|元|欧元|英镑|日元)?')
 SYMBOL = {'dollar': '$', 'euro': '€', 'pound': '£', 'yen': '¥'}
 MONTH = (r'(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|'
          r'Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)')
@@ -1101,7 +1104,7 @@ class Composer:
                 if date:
                     value = date
                 elif self.lang == 'en':
-                    nxt = re.match(r'\s+([A-Za-z]{3,})\b', disp[end:])
+                    nxt = re.match(r'\s+((?:(?:cubic|square|metric)\s+)?[A-Za-z]{3,})\b', disp[end:], re.I)
                     if nxt and nxt.group(1).lower() not in NOT_LABELS:
                         label = nxt.group(1)
                 return Card('number', max(t, a + .2), {'value': value, 'label': label},

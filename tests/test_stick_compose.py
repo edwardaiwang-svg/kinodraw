@@ -233,3 +233,19 @@ def test_what_fills_a_bare_sentence():
     p = built('stick_bias.md')
     ch = next(c['id'] for c in p.board['chapters'] if c['kind'] == 'section')
     assert p.composer.pictures.find('They are just tuned for a world with lions.', ch)[0] == 'fl_lion'
+
+
+@pytest.mark.parametrize('disp,value', [('那家公司亏了12.5亿美元。', '12.5亿美元'), ('大约有12.5万人参加了抗议。', '12.5万'),
+                                        ('最终确定下来的结果是12.5%。', '12.5%'), ('湖里有400亿立方米的水。', '400亿立方米')])
+def test_a_spoken_chinese_number_keeps_its_decimal_and_unit(disp, value):
+    c = build('sleep_zh.md').composer
+    beat = dict(c.beats[0], display={'zh': disp})
+    card = c.spoken_number([beat], c.bt[beat['id']]['start'] - 1, c.bt[beat['id']]['start'] + 30)
+    assert card.data['value'] == value
+
+
+def test_a_spoken_english_unit_keeps_both_words():
+    c = build('stick_hijack.md').composer
+    beat = dict(c.beats[0], display={'en': 'Its lake holds 40 cubic kilometers of water.'})
+    card = c.spoken_number([beat], c.bt[beat['id']]['start'] - 1, c.bt[beat['id']]['start'] + 30)
+    assert card.data == {'value': '40', 'label': 'cubic kilometers'}
