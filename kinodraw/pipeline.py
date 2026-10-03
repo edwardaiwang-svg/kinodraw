@@ -4,6 +4,7 @@ Project folder:
   project.json        settings (language, voice, speed, director, workers, credit, recording)
   script.<ext>        the source script
   recording.<ext>     optional: your own reading of the script, used as the narration
+  pronounce.txt       optional: word = respelling, for spoken words only
   read-aloud.txt      the script as it is narrated, one numbered sentence a line: what to read for your recording
   storyboard.json     chapters + beats + visuals (editable; re-running keeps your edits)
   doodles/ photos/    optional: your own SVG doodles and photos
@@ -71,6 +72,7 @@ def storyboard(project_dir: Path) -> dict:
 
 
 READ_ALOUD = 'read-aloud.txt'
+PRONOUNCE = 'pronounce.txt'
 
 
 def read_aloud(project_dir: Path) -> list[dict]:
@@ -106,6 +108,7 @@ def narrate(project_dir: Path, progress=None) -> dict:
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
+    lexicon = voice.read_lexicon(project_dir / PRONOUNCE)
     before = json.dumps(board, ensure_ascii=False, sort_keys=True)
     script.sync_takes(board)
     if json.dumps(board, ensure_ascii=False, sort_keys=True) != before:
@@ -116,7 +119,8 @@ def narrate(project_dir: Path, progress=None) -> dict:
     voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
-        clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'], cfg['speed'])
+        clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
+                                           cfg['speed'], lexicon)
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
@@ -125,7 +129,7 @@ def narrate(project_dir: Path, progress=None) -> dict:
         beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
         try:
             clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
-                                         cfg['voice'], cfg['speed'])
+                                         cfg['voice'], cfg['speed'], lexicon)
         except voice.RecordingError as error:
             raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: kinodraw voice '
                                        f'"{project_dir}" --recording none. The script to read, as it is narrated (one '

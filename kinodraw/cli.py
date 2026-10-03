@@ -3,6 +3,8 @@
   kinodraw studio                               open the Studio window
   kinodraw make script.md -o MyVideo            script -> finished MP4 (offline rules director)
   kinodraw new script.md -o MyVideo             storyboard only (edit storyboard.json, then continue)
+  kinodraw make script.md -o MyVideo --voice am_michael --speed 1.1 --pronounce words.txt
+                                                ... another voice, faster, with your pronunciations
   kinodraw direct MyVideo                       (re)add visuals to the storyboard
   kinodraw voice MyVideo                        narration + timeline
   kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of MyVideo/read-aloud.txt (none: Kokoro again)
@@ -49,10 +51,18 @@ def _file(script):
 
 
 def cmd_new(args):
-    from . import director, pipeline
+    from . import director, pipeline, voice
+    pronounce = getattr(args, 'pronounce', None)
+    if pronounce:                                     # checked before anything is made
+        try:
+            voice.read_lexicon(Path(pronounce))
+        except (OSError, ValueError) as error:
+            sys.exit(f'--pronounce {pronounce}: {error}')
     t = _stage('storyboard')
     board = pipeline.new_project(_file(args.script) or args.script, Path(args.out),
                                  title=args.title, lang=args.lang, direction=_direction(args), **_settings(args))
+    if pronounce:
+        (Path(args.out) / pipeline.PRONOUNCE).write_text(Path(pronounce).read_text(encoding='utf-8'), encoding='utf-8')
     report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
                              _progress)
     sections = sum(c['kind'] == 'section' for c in board['chapters'])
@@ -230,6 +240,8 @@ def main(argv=None):
         p.add_argument('--lang', choices=['en', 'zh'], help='default: detected from the script')
         p.add_argument('--voice')
         p.add_argument('--speed', type=float)
+        p.add_argument('--pronounce', metavar='FILE', help='how the voice says words, one "word = how to say it" a '
+                       'line (captions keep your spelling); kept as the project\'s pronounce.txt')
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
