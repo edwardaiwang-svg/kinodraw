@@ -16,6 +16,7 @@ import time
 import traceback
 import uuid
 import zipfile
+from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -341,6 +342,46 @@ def redirect(name: str, body: dict) -> dict:
     return {'job': JOBS.start('direct', name, job)}
 
 
+def move_picture(board: dict, beat_id: str, visual: int, to: int, item: int | None = None) -> dict:
+    """Move the picture's content while keeping draw triggers at their positions."""
+    moved = deepcopy(board)
+    error = 'That picture is no longer on this board. Reload the project.'
+    beat = next((b for b in moved.get('beats', []) if b.get('id') == beat_id), None)
+    visuals = beat.get('visuals', []) if beat else []
+
+    def in_range(index, pictures):
+        return type(index) is int and 0 <= index < len(pictures)
+
+    def set_trigger(picture, trigger):
+        if trigger is None:
+            picture.pop('trigger', None)
+        else:
+            picture['trigger'] = trigger
+
+    if not in_range(visual, visuals):
+        raise ValueError(error)
+    if item is not None:
+        group = visuals[visual]
+        items = group.get('items', []) if group.get('type') == 'cluster' else []
+        if not in_range(item, items) or not in_range(to, items):
+            raise ValueError(error)
+        triggers = [it.get('trigger') for it in items]
+        items.insert(to, items.pop(item))
+        for it, trigger in zip(items, triggers):
+            set_trigger(it, trigger)
+    else:
+        if not in_range(to, visuals):
+            raise ValueError(error)
+        timing = [(v.get('trigger'), [it.get('trigger') for it in v.get('items', [])]) for v in visuals]
+        visuals.insert(to, visuals.pop(visual))
+        for v, (trigger, item_triggers) in zip(visuals, timing):
+            set_trigger(v, trigger)
+            if v.get('type') == 'cluster':
+                for j, it in enumerate(v.get('items', [])):
+                    set_trigger(it, item_triggers[j] if j < len(item_triggers) else None)
+    return moved
+
+
 def save_storyboard(name: str, board: dict) -> dict:
     path = _project(name)
     report = validate(board, path)
@@ -537,6 +578,17 @@ class Handler(BaseHTTPRequestHandler):
                                    'qa': json.loads((path / 'build/qa.json').read_text(encoding='utf-8')) if (path / 'build/qa.json').exists() else None})
             if p[2:] == ['storyboard'] and method == 'PUT':
                 return self._json(save_storyboard(name, self._body()))
+            if p[2:] == ['reorder'] and method == 'POST':
+                try:
+                    body = self._body()
+                    board = body['storyboard'] if 'storyboard' in body else pipeline.storyboard(_project(name))
+                    board = move_picture(board, body.get('beat'), body.get('visual'), body.get('to'), body.get('item'))
+                    result = save_storyboard(name, board)
+                except ValueError as error:
+                    return self._json({'ok': False, 'errors': [str(error)]}, 400)
+                if result['ok']:
+                    result['storyboard'] = board
+                return self._json(result, 200 if result['ok'] else 400)
             if p[2:] == ['direct'] and method == 'POST':
                 return self._json(redirect(name, self._body()))
             if p[2:] == ['make'] and method == 'POST':

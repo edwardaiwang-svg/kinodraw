@@ -73,6 +73,10 @@ label.file input { display: none; }
 .vis { border: 1.5px solid var(--line); border-radius: 10px; padding: 6px; background: #fff; position: relative; }
 .vis .type { font-size: 11px; text-transform: uppercase; color: var(--soft); }
 .vis .del { position: absolute; top: 2px; right: 4px; border: none; background: none; padding: 0 4px; font-size: 16px; color: var(--soft); }
+.draw-order { display: flex; gap: 4px; margin-top: 4px; }
+.draw-order button.small { padding: 2px 8px; }
+.draw-order button:disabled { opacity: .4; cursor: default; }
+.item .draw-order { justify-content: center; }
 .items { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .item { width: 72px; text-align: center; }
 .item img { width: 64px; height: 64px; object-fit: contain; cursor: pointer; border-radius: 8px; background: #faf8f2; border: 1.5px dashed transparent; }
