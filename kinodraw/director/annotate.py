@@ -123,10 +123,44 @@ CUES = {'board': [], 'bold': [],                     # (bold: a salient number c
                        (r'\b(?:scissors|glue|tools?|ideas?|pencils?|tape)\b', 'tools_idea'),
                        (r'\b(?:stick\w*|together|build\w*|assembl\w*|cut out)\b', 'assemble'))}
 
+ES_CUES = {'board': [], 'bold': [],
+           'promo': _cues((r'^(?:(?:primero|solo|simplemente|ahora|luego),?\s+)?'
+                            r'(?:pega|peguen|escribe|escriban|sube|suban|carga|carguen|importa|importen)\b',
+                            'app_paste'),
+                           (r'^(?:(?:luego|ahora|solo|y|después),?\s+)?'
+                            r'(?:pulsa|pulsen|presiona|presionen|toca|toquen|haz\s+clic|hagan\s+clic)\s+'
+                            r'(?:(?:en|el|la)\s+)*[«“"]?(?-i:[A-ZÁÉÍÓÚÜÑ])', 'app_press'),
+                           (r'\b(?:mano|bolígrafo|lápiz|marcador)\s+(?:dibuja|esboza|escribe)\b', 'hand_draws'),
+                           (r'\b(?:tu|mi|un|el)\s+(?:guion|guión|ensayo|borrador|plan\s+de\s+clase)\b|'
+                            r'\b(?:tus|mis)\s+notas\b', 'script_page'),
+                           (r'\b(?:mensajes?|chats?|notificaciones?|otro\s+más)\b', 'chat_pileup'),
+                           (r'\b(?:caos|desorden|nadie|confusi\w*)\b', 'chaos'),
+                           (r'\b(?:enlaces?|comparte|compartan|compartir|envía|envíen|enviar|invita|inviten|invitar)\b',
+                            'share_link'),
+                           (r'\b(?:inscrib\w*|registr\w*|une|unen|unirse|confirma\w*|dicen\s+sí)\b', 'rsvp'),
+                           (r'\b(?:mínimo|máximo|umbral|suficientes?|al\s+menos|se\s+cancela|luz\s+verde)\b',
+                            'threshold'),
+                           (r'\b(?:crea|creen|crear|haz|hagan|hacer|configura|configuren|empieza|empiecen|'
+                            r'construye|construyan|planifica|planifiquen)\b', 'step_card'),
+                           (r'^(?:sin|cero|no\s+más)\b|\bgratis\b', 'feature_chips')),
+           'story': _cues((r'\b(?:personas?|gente|todos|multitud\w*|humanos?|amig[oa]s?)\b', 'crowd'),
+                           (r'\b(?:libros?|escrib\w*|filóso\w*|bibliotec\w*|páginas?)\b', 'stack'),
+                           (r'\b(?:estrellas?|cielo|luna|universo|planetas?)\b', 'sky_speech'),
+                           (r'\b(?:gat[oa]s?|perr[oa]s?|risa|ríe|reacci\w*)\b', 'room_reaction'),
+                           (r'\b(?:viaj\w*|camino\w*|montañas?|mares?|océanos?|carreteras?|busc\w*)\b', 'journey'),
+                           (r'\b(?:letra\s+pequeña|documentos?|papeles?|cartas?|contratos?|informes?|archivos?)\b',
+                            'document_reveal'),
+                           (r'\b(?:recog\w*|recolect\w*|reun\w*|piezas?|encontr\w*)\b', 'collect'),
+                           (r'\b(?:resulta\s+que|cajas?|regalos?|ocult[oa]s?|secretos?)\b', 'box_reveal'),
+                           (r'\b(?:tijeras|pegamento|herramientas?|ideas?|lápices|cinta)\b', 'tools_idea'),
+                           (r'\b(?:pega\w*|juntos|constru\w*|ensamb\w*|recorta\w*)\b', 'assemble'))}
+
 # ------------------------------------------------------------------- roles
 DIRECTED = ('title', 'opener', 'narration', 'take', 'closing')
 QUESTION = {'en': re.compile(r'\?[”’"\')\]]*$'), 'zh': re.compile(r'[?？][”’"」』）)]*$')}
 QUOTED = {'en': re.compile(r'[“"]([^”"]{1,200})[”"]'), 'zh': re.compile(r'[“「『]([^”」』]{1,80})[”」』]')}
+QUESTION['es'] = re.compile(r'\?[»”’"\')\]]*$')
+QUOTED['es'] = re.compile(r'[«“"]([^»”"]{1,200})[»”"]')
 SAID = {'en': re.compile(r"(?P<who>\b(?:(?:the|a|an|my|our|his|her|their)\s+)?[A-Za-z][\w'’-]*)\s+"
                          r"(?:said|says|asked|asks|replied|replies|answered|whispered|wrote|writes|shouted)\s*[,:]\s*"
                          r"(?P<q>[^,;:]+?)[.!?…]*$", re.I),
@@ -143,6 +177,50 @@ PAIN = {'en': re.compile(r'\b(?:risks?|dangers?|dangerous|problems?|worr(?:y|ies
                          r'warnings?|hassle|annoying|chaos|chaotic|mess|messy|struggl\w*|frustrat\w*|tired\s+of|sick\s+of|'
                          r'wast(?:e|es|ed|ing)|stuck|painful)\b', re.I),
         'zh': re.compile(r'风险|危险|问题|担心|害怕|危机|错误|警告|麻烦|浪费|痛苦|困扰')}
+SAID['es'] = re.compile(r"(?P<who>\b(?:(?:el|la|un|una|mi|nuestro|nuestra|su)\s+)?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\w'’-]*)\s+"
+                        r'(?:dijo|dice|preguntó|pregunta|respondió|responde|contestó|susurró|escribió|escribe|gritó)'
+                        r'\s*[,:]\s*(?P<q>[^,;:]+?)[.!?…]*$', re.I)
+COND['es'] = re.compile(r'^¿?(?:no\s+hay\s+suficientes?|no\s+hay\s+bastantes?|suficientes?|hay\s+suficientes?|'
+                        r'faltan|demasiad[oa]s?|muy\s+poc[oa]s?|(?:menos|más)\s+de)\b[^?]{0,40}\?', re.I)
+THRESHOLD['es'] = re.compile(r'\b(?:mínimo|máximo|umbral|cuórum|al\s+menos|como\s+mínimo|como\s+máximo|límite)\b', re.I)
+REVEAL['es'] = re.compile(r'^(?:(?:y|pero|así\s+que)\s+)?(?:resulta\s+que|la\s+(?:verdad|respuesta|clave)\s+es|'
+                          r'de\s+hecho|en\s+realidad)\b', re.I)
+PAIN['es'] = re.compile(r'\b(?:riesgos?|peligros?|peligros[oa]s?|problemas?|preocup\w*|miedo|amenazas?|crisis|'
+                        r'errores?|advertencias?|molest\w*|caos|desorden|frustra\w*|cansad[oa]s?\s+de|'
+                        r'desperdici\w*|atascad[oa]s?|dolor\w*)\b', re.I)
+ES_TURN = re.compile(r'^(?:(?:pero|ahora|por\s+suerte),?\s+)?hay\s+una\s+(?:forma|manera)\s+'
+                     r'(?:(?:mucho|más)\s+)*(?:fácil|mejor|simple|sencilla|rápida)\b|^(?:hasta\s+ahora|ya\s+no)\b', re.I)
+ES_FEATURE = re.compile(r'^(?:sin|cero|no\s+más)\s+\S', re.I)
+ES_PEOPLE = re.compile(r'\b(?:amig[oa]s?|personas?|gente|todos|invitad[oa]s?|equipo|compañer[oa]s?|familia|'
+                          r'miembros?|usuari[oa]s?|clientes?|vecin[oa]s?|jugador[ae]s?)\b', re.I)
+ES_JOIN = re.compile(r'\b(?:se\s+)?(?:inscrib\w*|registr\w*|unen?|unirse|apunt\w*|confirma\w*|'
+                        r'acepta\w*|responde\w*|vota\w*|dicen?\s+sí)\b', re.I)
+ES_CHANNEL_PREPS = {'en', 'por', 'vía', 'mediante', 'desde'}
+ES_IN_TIME = re.compile(r'\ben\s+(?:solo\s+|apenas\s+|menos\s+de\s+)?\d+\s+'
+                           r'(?:segundos?|minutos?|horas?|días?|clics?|toques?|pasos?)\b', re.I)
+ES_IMPERATIVE = set('''añade agrega pide trae construye compra llama comprueba elige pulsa conecta copia crea
+descarga arrastra suelta introduce rellena busca sigue consigue da ve instala invita únete mantén deja haz abre
+pega paga escoge presiona pon guarda escanea programa selecciona envía comparte firma empieza toma toca prueba
+pruébalo escribe sube usa utiliza visita vota espera mira recorta añadan agreguen pidan traigan construyan compren
+llamen comprueben elijan pulsen conecten copien creen descarguen arrastren suelten introduzcan rellenen busquen
+sigan consigan den vayan instalen inviten únanse mantengan dejen hagan abran peguen paguen escojan presionen
+pongan guarden escaneen programen seleccionen envíen compartan firmen empiecen tomen toquen prueben pruébenlo
+escriban suban usen utilicen visiten voten esperen miren recorten'''.split())
+ES_CTA = re.compile(r'\bgratis\b|^(?:(?:así\s+que|y|ahora|solo)\s+)?(?:prueba|prueben|pruébalo|pruébenlo|'
+                       r'empieza|empiecen|comienza|comiencen|consigue|consigan|descarga|descarguen|instala|instalen|'
+                       r'regístrate|regístrense|inscríbete|inscríbanse|únete|únanse|visita|visiten|suscríbete|'
+                       r'suscríbanse|sigue|sigan|reserva|reserven|compra|compren|ve\s+a|vayan\s+a|descubre|'
+                       r'descubran|aprende\s+más|aprendan\s+más|crea\s+tu\s+primer|creen\s+su\s+primer)\b', re.I)
+ES_INTRO = re.compile(r'^(?i:conoce|presentamos|te\s+presentamos|presentando|saluda\s+a)\s+'
+                         r'([A-ZÁÉÍÓÚÜÑ][\w-]*(?:\s+[A-ZÁÉÍÓÚÜÑ][\w-]*)?)')
+ES_LIST_WORD = r"\b(?!(?:y|e|o|u|pero|en|de|a|para|con|desde|por|es|son|era|somos|yo|tú|él|ella)\b)[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\w'’-]*"
+ES_LIST_ITEM = rf'(?:(?:un|una|el|la|los|las|unos|unas|su|sus|nuestro|nuestra|tu|tus|mi|mis)\s+)?{ES_LIST_WORD}(?:\s+{ES_LIST_WORD})?'
+ES_LIST_RUN = re.compile(rf'{ES_LIST_ITEM}(?:,\s+{ES_LIST_ITEM}){{1,4}},?\s+(?:y|e|o|u)\s+{ES_LIST_ITEM}', re.I)
+ES_MONTHS = re.compile(r'\b(?:ene(?:ro)?|feb(?:rero)?|mar(?:zo)?|abr(?:il)?|may(?:o)?|jun(?:io)?|jul(?:io)?|'
+                          r'ago(?:sto)?|sep(?:tiembre)?|oct(?:ubre)?|nov(?:iembre)?|dic(?:iembre)?)\b', re.I)
+ES_SCALE = re.compile(r'(?:\s+(?:cien|cientos?|mil|millones?|billones?))+', re.I)
+ES_UNIT = re.compile(r'\s+(?:segundos?|minutos?|horas?|días?|semanas?|meses|años?|pasos?|clics?|toques?|'
+                        r'euros?|dólares?|personas?|veces|kilómetros?|metros?|kilos?|por\s+ciento)\b', re.I)
 TURN = re.compile(r"^(?:but\s+|now\s+|luckily,?\s+|thankfully,?\s+)?there(?:'s|’s|\s+is)\s+(?:a\s+)?"
                   r"(?:(?:much|far|way|so\s+much)\s+)?(?:easier|better|simpler|faster|smarter|quicker|new)\s+way\b|"
                   r"^(?:until\s+now|not\s+any\s*more)\b", re.I)
@@ -190,12 +268,28 @@ TOKEN = re.compile(r"(?:[A-Za-z0-9-]+\.)+[a-z]{2,}\b|[$€£]?\d(?:[\d,.]*\d)?(?
 ZH_FUNCTION = set('的 了 是 在 和 与 或 也 都 就 还 又 很 会 能 要 把 被 让 给 对 从 到 这 那 这些 那些 它 他 她 我们 你们 '
                   '他们 我 你 吗 呢 吧 啊 着 过 一个 一些 所以 但是 而且 因为 如果 可以 其实 就是'.split())
 ZH_UNIT = re.compile(r'(?:个小时|小时|分钟|个月|个|位|名|本|家|座|年|岁|天|秒|倍|次|人|万|亿|千|百|元)')
+ES_FUNCTION = set('''el la los las un una unos unas y e o u pero ni así si entonces que como de del a al en por
+para con sin desde hasta entre sobre bajo tras durante hacia es son era eran ser sido siendo soy somos eres está
+están estaba estaban estar estoy estamos estás hay ha han haber he hemos has había tienen tiene tener puede
+pueden podría debe deben será serán fue fueron sea sean lo le les se este esta estos estas ese esa esos esas
+eso esto aquel aquella yo me mí mi mis nosotros nos nuestro nuestra nuestros nuestras tú te ti tu tus usted
+ustedes él su sus ella ellos ellas quien quién quienes qué cuál cuáles cuándo dónde porqué porque cómo no
+también muy más menos solo sólo incluso todavía aún ya otra otro otros otras todo toda todos todas cada ambos
+algún alguna algunos algunas cualquier mucho mucha muchos muchas poco poca pocos pocas bien ahora sí nunca
+siempre hoy mañana ayer después antes'''.split())
+ES_LEADING = set('y e pero así entonces o u bueno ahora también solo sólo luego'.split())
+ES_DETS = set('el la los las un una unos unas tu tus mi mis nuestro nuestra nuestros nuestras su sus este esta '
+              'estos estas ese esa esos esas otro otra cada algún alguna algunos algunas ningún ninguna'.split())
+ES_INDEFINITE = set('todos todo alguien algo cualquiera nadie nada'.split())
+ES_NOT_ITEM = ES_FUNCTION - ES_DETS - {'no', 'más', 'menos', 'todo', 'todos', 'ambos'}
+ES_TOKEN = re.compile(r"(?:[A-Za-z0-9-]+\.)+[a-z]{2,}\b|[$€£]?\d(?:[\d,.]*\d)?(?:%|[a-z]+\b)?|[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\w'’-]*")
 EMPHASIS_WORDS, READABLE_WORDS = 3, 4                 # an emphasis option; the longest emphasis a big move allows
 
 # ----------------------------------------------------------------- planner
 MOTION = {'calm': (1, 0., 0), 'lively': (3, .20, 2), 'showreel': (3, .45, 5)}   # top energy, share at 2+, showpieces
 REST, APART = 3.0, 12.0                               # seconds of rest after a hit; seconds between showpieces
 CPS = {'en': 15.0, 'zh': 4.4}                          # characters a second without a timeline (zh: its reading rate)
+CPS['es'] = 15.0
 CASCADE = {'feature', 'mechanic', 'step', 'use_cases', 'list', 'channels'}   # runs that may stay up together
 STRONG = {'brand', 'turn', 'reveal', 'feature', 'mechanic', 'channels', 'social', 'use_cases', 'number', 'quote', 'cta'}
 
@@ -388,6 +482,8 @@ def _brand(board, texts, lang):
     given = board.get('brand') or {}
     if given.get('name'):
         return {'name': given['name'], 'url': given.get('url') or ''}
+    if lang == 'es':
+        return _es_brand(board, texts)
     if lang != 'en' or not texts:
         return None
     whole = ' '.join(texts)
@@ -414,51 +510,87 @@ def _brand(board, texts, lang):
     return {'name': max(names, key=counts.get), 'url': ''} if names else None
 
 
-def _reveals(body, name):
+def _es_brand(board, texts):
+    """Spanish introductions, domains and recurring names use the same brand evidence as English."""
+    if not texts:
+        return None
+    whole = ' '.join(texts)
+    domain = DOMAIN.search(whole)
+    for text in texts:
+        m = ES_INTRO.match(text)
+        if m:
+            return {'name': m.group(1), 'url': domain.group(0) if domain else ''}
+    counts, initial = {}, {}
+    for text in texts:
+        for k, m in enumerate(re.finditer(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\w'’-]*", text)):
+            word = m.group(0)
+            if word[0].isupper() and word.lower() not in ES_FUNCTION:
+                counts[word] = counts.get(word, 0) + 1
+                initial[word] = initial.get(word, 0) + (k == 0)
+    if domain:
+        return {'name': next((w for w in counts if w.lower() == domain.group(1).lower()), domain.group(1)),
+                'url': domain.group(0)}
+    lower = set(re.findall(r"\b[a-záéíóúüñ][\w'’-]*", whole))
+    title = (board.get('title') or {}).get('es', '').strip()
+    names = [w for w, n in counts.items() if n >= 2 and n > initial[w] and w.lower() not in lower
+             and (w == title or any(_reveals(_body(t), w, 'es') for t in texts))]
+    return {'name': max(names, key=counts.get), 'url': ''} if names else None
+
+
+def _reveals(body, name, lang='en'):
     """Does the sentence reveal the brand: "Meet X", "Introducing X", "With X", or just "X"?"""
+    if lang == 'es':
+        m = re.match(rf'(?:(conoce|presentamos|te presentamos|presentando|saluda a|con|esto es)\s+)?'
+                     rf'{re.escape(name)}\b', body, re.I)
+        return bool(m) and bool(m.group(1) or m.end() == len(body))
     m = re.match(rf'(?:(meet|introducing|say hello to|presenting|enter|with|this is)\s+)?{re.escape(name)}\b', body, re.I)
     return bool(m) and bool(m.group(1) or m.end() == len(body))
 
 
-def _split_items(body, start=0):
+def _split_items(body, start=0, lang='en'):
     """(start, end) of the comma-separated parts of ``body[start:]``; "werewolves or padel" is two."""
-    cuts = [(start + m.start(), start + m.end(), bool(re.search(r'(?:and|or)\s+$', m.group(0))))
-            for m in re.finditer(r'\s*,\s*(?:(?:and|or)\s+)?', body[start:])]
+    if lang == 'es':
+        cuts = [(start + m.start(), start + m.end(), bool(re.search(r'(?:y|e|o|u)\s+$', m.group(0))))
+                for m in re.finditer(r'\s*,\s*(?:(?:y|e|o|u)\s+)?', body[start:])]
+    else:
+        cuts = [(start + m.start(), start + m.end(), bool(re.search(r'(?:and|or)\s+$', m.group(0))))
+                for m in re.finditer(r'\s*,\s*(?:(?:and|or)\s+)?', body[start:])]
     spans, a = [], start
     for s, e, _ in cuts:
         spans.append((a, s))
         a = e
     if cuts and not cuts[-1][2]:
-        m = re.search(r'\s+(?:and|or)\s+', body[a:])
+        m = re.search(r'\s+(?:y|e|o|u)\s+' if lang == 'es' else r'\s+(?:and|or)\s+', body[a:])
         if m:
             return spans + [(a, a + m.start()), (a + m.end(), len(body))]
     return spans + [(a, len(body))]
 
 
-def _whole_list(body):
+def _whole_list(body, lang='en'):
     """Items of a sentence that is nothing but a list ("Drinks, movie night, werewolves or padel."), or []."""
-    lead = re.match(r'(?:(?:and|or|like)\s+)?', body, re.I).end()
-    items = _split_items(body, lead)
+    lead = re.match(r'(?:(?:y|e|o|u|como)\s+)?' if lang == 'es' else r'(?:(?:and|or|like)\s+)?', body, re.I).end()
+    items = _split_items(body, lead, lang)
     first = [body[a:b].split()[0].lower() if body[a:b].split() else '' for a, b in items]
     if 3 <= len(items) <= 6 and all(1 <= len(body[a:b].split()) <= 7 for a, b in items) \
-            and not any(w in NOT_ITEM or not w for w in first):
+            and not any(w in (ES_NOT_ITEM if lang == 'es' else NOT_ITEM) or not w for w in first):
         return items
     return []
 
 
-def _channels(body):
+def _channels(body, lang='en'):
     """Items of "In the group chat, on Signal, or by email.", or []."""
-    items = _split_items(body)
-    if 2 <= len(items) <= 5 and all(body[a:b].split() and body[a:b].split()[0].lower() in CHANNEL_PREPS
+    items = _split_items(body, lang=lang)
+    preps = ES_CHANNEL_PREPS if lang == 'es' else CHANNEL_PREPS
+    if 2 <= len(items) <= 5 and all(body[a:b].split() and body[a:b].split()[0].lower() in preps
                                     and len(body[a:b].split()) <= 5 for a, b in items):
         return items
     return []
 
 
-def _inline_list(body):
+def _inline_list(body, lang='en'):
     """Items of three or more short things in a row inside a longer sentence ("a book, a newspaper or a website")."""
-    m = LIST_RUN.search(body)
-    return [(m.start() + a, m.start() + b) for a, b in _split_items(m.group(0))] if m else []
+    m = (ES_LIST_RUN if lang == 'es' else LIST_RUN).search(body)
+    return [(m.start() + a, m.start() + b) for a, b in _split_items(m.group(0), lang=lang)] if m else []
 
 
 def _zh_items(body):
@@ -472,7 +604,13 @@ def _zh_items(body):
     return []
 
 
-def _imperative(body):
+def _imperative(body, lang='en'):
+    if lang == 'es':
+        words = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\w'’-]*", body)
+        while words and words[0].lower() in ES_LEADING | {'primero', 'después', 'finalmente', 'simplemente'}:
+            words = words[1:]
+        return len(words) >= 2 and words[0].lower() in ES_IMPERATIVE and words[1].lower() not in (
+            'es', 'son', 'era', 'eran', 'ha', 'han', 'será', 'puede', 'pueden', 'podría', 'debe', 'deben')
     words = re.findall(r"[A-Za-z][\w'’-]*", body)
     while words and words[0].lower() in LEADING | {'first', 'next', 'finally', 'simply'}:
         words = words[1:]
@@ -486,6 +624,19 @@ def _numbers(text, lang):
     out = []
     for d0, d1, _, _ in numbers.normalize(text, lang).spans:
         token = text[d0:d1]
+        if lang == 'es':
+            if re.fullmatch(r'(?:1[1-9]\d\d|20\d\d)(?:\s?[-–]\s?(?:1[1-9]\d\d|20\d\d))?', token) \
+                    or ':' in token or ES_MONTHS.search(token):
+                continue
+            digits = re.sub(r'[^\d,.]', '', token).strip('.,')
+            digits = digits.replace('.', '').replace(',', '.') if ',' in digits else digits
+            if re.fullmatch(r'\d{1,3}(?:\.\d{3})+', digits):
+                digits = digits.replace('.', '')
+            value = float(digits) if re.fullmatch(r'\d+(?:\.\d+)?', digits) else 0.
+            if value >= 20 or ES_SCALE.match(text[d1:]) or ES_UNIT.match(text[d1:]) \
+                    or re.search(r'[%％$€£¥x×]|[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]', token):
+                out.append((d0, d1))
+            continue
         if re.fullmatch(r'(?:1[1-9]\d\d|20\d\d)(?:s|\s?[-–]\s?(?:1[1-9]\d\d|20\d\d))?', token) or ':' in token \
                 or MONTHS.search(token) or re.match(r'\s*年', text[d1:]):
             continue
@@ -501,7 +652,7 @@ def _quote(text, lang):
     """(start, end) of the quoted words ("the cat said, nap" -> "nap"), or None. A term in quotation marks
     (the "dandy horse") is not a quote."""
     m = QUOTED[lang].search(text)
-    if m and (len(m.group(1).split()) >= 3 if lang == 'en' else len(re.findall(r'[一-鿿]', m.group(1))) >= 4):
+    if m and (len(m.group(1).split()) >= 3 if lang in ('en', 'es') else len(re.findall(r'[一-鿿]', m.group(1))) >= 4):
         return m.start(1), m.end(1)
     m = SAID[lang].search(text)
     return (m.start('q'), m.end('q')) if m else None
@@ -534,6 +685,32 @@ def _detect(text, lang, story, brand, f, mechanic):
             return 'list'
         return 'question' if question else 'number' if _numbers(text, lang) else \
             'problem' if PAIN['zh'].search(text) else 'none'
+    if lang == 'es':
+        if brand and _reveals(body, brand['name'], lang):
+            return 'brand'
+        if ES_TURN.match(body):
+            return 'turn'
+        if REVEAL['es'].match(body):
+            return 'reveal'
+        if not question:
+            if ES_FEATURE.match(body) and len(body.split()) <= 5:
+                return 'feature'
+            if _channels(body, lang):
+                return 'channels'
+            if ES_PEOPLE.search(body) and ES_JOIN.search(body):
+                return 'social'
+            items = _whole_list(body, lang)
+            if items and story in ('promo', 'showcase') and all(len(body[a:b].split()) <= 3 for a, b in items):
+                return 'use_cases'
+            if items or _inline_list(body, lang):
+                return 'list'
+        if question:
+            return 'question'
+        if MIDDLE[0] <= f < MIDDLE[1] and (_imperative(body, lang) or ES_IN_TIME.search(body)):
+            return 'step'
+        if _numbers(text, lang):
+            return 'number'
+        return 'problem' if PAIN['es'].search(body) else 'none'
     if brand and _reveals(body, brand['name']):
         return 'brand'
     if TURN.match(body):
@@ -587,7 +764,7 @@ def _roles(rows, content, lang, story, brand):
         hook['role'] = 'hook'
     tail = content[min(n - 1, int(n * TAIL)):] if content else []
     cta = next((r for r in reversed(tail) if r['role'] not in ('hook', 'quote') and
-                (CTA.search(_body(r['text'])) or DOMAIN.search(r['text']) or
+                ((ES_CTA if lang == 'es' else CTA).search(_body(r['text'])) or DOMAIN.search(r['text']) or
                  (brand and brand['name'].lower() in r['text'].lower()))), None)
     if cta is not None:
         cta['role'] = 'cta'
@@ -599,7 +776,7 @@ def _roles(rows, content, lang, story, brand):
         if a['role'] == 'use_cases' and b['role'] == 'none' and a['beat'] is b['beat'] and story in ('promo', 'showcase'):
             b['role'] = 'tagline'
     for r in content:                                 # the closing run: "Everything that's better together."
-        short = len(_body(r['text']).split()) <= 6 if lang == 'en' else len(re.findall(r'[一-鿿]', r['text'])) <= 12
+        short = len(_body(r['text']).split()) <= 6 if lang in ('en', 'es') else len(re.findall(r'[一-鿿]', r['text'])) <= 12
         if r['role'] == 'none' and r['k'] / max(1, n - 1) >= TAIL and short and not QUESTION[lang].search(r['text']) \
                 and r['beat']['chapter'] == content[-1]['beat']['chapter']:
             r['role'] = 'tagline'
@@ -619,7 +796,8 @@ def _scenes(role, text, kind, family, prev, lang):
     whiteboard has one scene). A plain sentence's words choose; otherwise the role does, then the words."""
     counts = family == 'bold' and bool(_numbers(text, lang))          # only a salient number counts up
     picks = [scene for scene in PICKS[family].get(role, []) if scene != 'count_up' or counts]
-    cued = [scene for pattern, scene in CUES[family] if pattern.search(text)] + (['count_up'] if counts else [])
+    cues = ES_CUES if lang == 'es' else CUES
+    cued = [scene for pattern, scene in cues[family] if pattern.search(text)] + (['count_up'] if counts else [])
     order = ([s for s in cued if s in picks] + picks + cued) if role in CUE_FIRST else picks + cued
     order = [s for s in cued if s in LEADS] + order
     lead = KIND_SCENES.get(kind, {}).get(family)
@@ -645,32 +823,38 @@ def _readable(emphasis, lang):
     return bool(emphasis) and _words(emphasis, lang) <= READABLE_WORDS
 
 
-def _last_content(toks, j):
+def _last_content(toks, j, lang='en'):
     """Index of the last word at or before ``j`` that carries meaning, or -1: "called off" keeps its particle,
     "for everyone" is dropped."""
+    function = ES_FUNCTION if lang == 'es' else FUNCTION
+    indefinite = ES_INDEFINITE if lang == 'es' else INDEFINITE
     while j >= 0:
         word = toks[j][2]
-        if word in PARTICLES and j > 0 and toks[j - 1][2] not in FUNCTION:
+        if lang != 'es' and word in PARTICLES and j > 0 and toks[j - 1][2] not in function:
             return j
-        if word in FUNCTION or (word in INDEFINITE and j > 0 and toks[j - 1][2] in FUNCTION):
+        if word in function or (word in indefinite and j > 0 and toks[j - 1][2] in function):
             j -= 1
             continue
         return j
     return -1
 
 
-def _end_focus(toks):
+def _end_focus(toks, lang='en'):
     """The words at the end of a clause, where English puts what is new: "a purpose", "enormous books",
     "scissors and glue", "purpose of life", "called off" (at most three words)."""
-    j = _last_content(toks, len(toks) - 1)
+    function = ES_FUNCTION if lang == 'es' else FUNCTION
+    indefinite = ES_INDEFINITE if lang == 'es' else INDEFINITE
+    dets = ES_DETS if lang == 'es' else DETS
+    links = ('y', 'e', 'o', 'u', 'de') if lang == 'es' else ('and', 'or', 'of')
+    j = _last_content(toks, len(toks) - 1, lang)
     if j < 0:
         return None
     k = j
-    if k > 0 and toks[k - 1][2] not in FUNCTION and toks[k - 1][2] not in INDEFINITE:
+    if k > 0 and toks[k - 1][2] not in function and toks[k - 1][2] not in indefinite:
         k -= 1
-    if k == j and k >= 2 and toks[k - 1][2] in ('and', 'or', 'of') and toks[k - 2][2] not in FUNCTION:
+    if k == j and k >= 2 and toks[k - 1][2] in links and toks[k - 2][2] not in function:
         k -= 2                                        # "scissors and glue", "purpose of life"
-    if k > 0 and toks[k - 1][2] in DETS and j - k < 2:
+    if k > 0 and toks[k - 1][2] in dets and j - k < 2:
         k -= 1
     return toks[k][0], toks[j][1]
 
@@ -695,8 +879,14 @@ def _phrases(text, role, lang, brand, head=0, names=True):
     if lang == 'zh':
         _zh_phrases(text, role, head, add)
         return out[:4]
+    function = ES_FUNCTION if lang == 'es' else FUNCTION
+    leading = ES_LEADING if lang == 'es' else LEADING
+    dets = ES_DETS if lang == 'es' else DETS
+    not_item = ES_NOT_ITEM if lang == 'es' else NOT_ITEM
+    preps = ES_CHANNEL_PREPS if lang == 'es' else CHANNEL_PREPS
+    token = ES_TOKEN if lang == 'es' else TOKEN
     body_end = head + len(_body(text[head:]))
-    toks = [(m.start(), m.end(), m.group(0).lower().replace('’', "'")) for m in TOKEN.finditer(text, head, body_end)]
+    toks = [(m.start(), m.end(), m.group(0).lower().replace('’', "'")) for m in token.finditer(text, head, body_end)]
     domains = [m.span() for m in DOMAIN.finditer(text)]
     if role == 'cta':
         for a, b in domains:
@@ -706,42 +896,58 @@ def _phrases(text, role, lang, brand, head=0, names=True):
             if not any(a <= m.start() < b for a, b in domains):
                 add(*m.span())
     if role == 'cta':
-        for m in re.finditer(r'\b(?:for\s+)?free\b|\b(?:try|start|get|join|download)\s+(?:it|now|today|started)\b',
+        pattern = r'\b(?:por\s+)?gratis\b|\b(?:pruébalo|pruébenlo|regístrate|regístrense|únete|únanse)\b|' \
+            r'\b(?:prueba|prueben|empieza|empiecen|descarga|descarguen)\s+(?:ahora|hoy)\b' \
+            if lang == 'es' else r'\b(?:for\s+)?free\b|\b(?:try|start|get|join|download)\s+(?:it|now|today|started)\b'
+        for m in re.finditer(pattern,
                              text, re.I):
             add(*m.span())
     if role == 'quote':
         span = _quote(text, lang)
         if span:
             add(*span)
-        m = SAID['en'].search(text)
+        m = SAID[lang].search(text)
         if m:
             add(*m.span('who'))
     if role in ('channels', 'use_cases', 'list'):
         body = text[head:body_end]
-        items = _channels(body) if role == 'channels' else _whole_list(body) or _inline_list(body)
+        items = _channels(body, lang) if role == 'channels' else _whole_list(body, lang) or _inline_list(body, lang)
         for a, b in items:
-            words = [(m.start(), m.end(), m.group(0).lower()) for m in TOKEN.finditer(body, a, b)]
-            while words and (words[0][2] in CHANNEL_PREPS or (role == 'channels' and words[0][2] in DETS)
-                             or (len(words) > 1 and words[0][2] in NOT_ITEM)):
+            words = [(m.start(), m.end(), m.group(0).lower()) for m in token.finditer(body, a, b)]
+            while words and (words[0][2] in preps or (role == 'channels' and words[0][2] in dets)
+                             or (len(words) > 1 and words[0][2] in not_item)):
                 words = words[1:]
             if len(words) > EMPHASIS_WORDS:           # "a dog who's thrilled you're home" -> "a dog"
-                words = words[:2] if words[0][2] in DETS else words[:1]
+                words = words[:2] if words[0][2] in dets else words[:1]
             if words:
                 add(head + words[0][0], head + words[-1][1])
     if role == 'mechanic':
-        for m in THRESHOLD['en'].finditer(text):
-            before = re.search(r'\b(?:a|an|the)\s+$', text[:m.start()])
+        for m in THRESHOLD[lang].finditer(text):
+            before = re.search(r'\b(?:un|una|el|la)\s+$' if lang == 'es' else r'\b(?:a|an|the)\s+$', text[:m.start()])
             add(before.start() if before else m.start(), m.end())
-    if role == 'social' and JOIN.search(text):
-        add(*JOIN.search(text).span())
+    join = ES_JOIN if lang == 'es' else JOIN
+    if role == 'social' and join.search(text):
+        add(*join.search(text).span())
     k = 0
-    while k < len(toks) and toks[k][2] in LEADING:
+    while k < len(toks) and toks[k][2] in leading:
         k += 1
-    j = _last_content(toks, len(toks) - 1)
+    j = _last_content(toks, len(toks) - 1, lang)
     if k <= j and j - k < EMPHASIS_WORDS:             # a short line whole: "Green light", "No account"
         add(toks[k][0], toks[j][1])
     for a, b in [(a, b) for a, b in _numbers(text, lang) if a >= head]:
         rest = text[b:]
+        if lang == 'es':
+            scale = ES_SCALE.match(rest)
+            end = b + (scale.end() if scale else 0)
+            unit = ES_UNIT.match(text, end)
+            if unit:
+                end = unit.end()
+            else:
+                m = re.match(r"\s+de\s+(?:(?:el|la|los|las)\s+)?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ][\w'’-]*", text[end:]) \
+                    if text[a:b].endswith('%') else None
+                end += m.end() if m else 0
+            add(a, end)
+            continue
         end = b + (SCALE.match(rest).end() if SCALE.match(rest) else 0)
         m = re.match(r"\s+of\s+(?:the\s+)?[A-Za-z][\w'’-]*", text[end:]) if text[a:b].endswith('%') else \
             re.match(r"\s+(?:[A-Z][\w'’-]*\s+)?(?!(?:and|or|of|to|in|on|at|for|by|with|from|than|later|ago|more|"
@@ -750,21 +956,21 @@ def _phrases(text, role, lang, brand, head=0, names=True):
     if names:                                         # a name said mid-sentence: "Signal", "Susan B. Anthony"
         run = []
         for t in toks[1:] + [(len(text), len(text), '')]:
-            if t[2] and text[t[0]].isupper() and t[2] not in FUNCTION and \
+            if t[2] and text[t[0]].isupper() and t[2] not in function and \
                     (not run or re.fullmatch(r'\.?\s+', text[run[-1][1]:t[0]])):
                 run.append(t)
                 continue
             if run:
                 add(run[0][0], run[-1][1])
-            run = [t] if t[2] and text[t[0]].isupper() and t[2] not in FUNCTION else []
+            run = [t] if t[2] and text[t[0]].isupper() and t[2] not in function else []
     clauses = [(m.start(), m.end()) for m in re.finditer(r'[^,;:—–]+', text[:body_end])]
     for a, b in reversed([c for c in clauses if c[1] > head]):
-        span = _end_focus([t for t in toks if a <= t[0] < b])
+        span = _end_focus([t for t in toks if a <= t[0] < b], lang)
         if span:
             add(*span)
-    first = next((n for n in range(k, len(toks)) if toks[n][2] not in FUNCTION), None)
+    first = next((n for n in range(k, len(toks)) if toks[n][2] not in function), None)
     if first is not None:                             # the first word that carries meaning: "your friends"
-        add(toks[first - 1][0] if first > k and toks[first - 1][2] in DETS else toks[first][0], toks[first][1])
+        add(toks[first - 1][0] if first > k and toks[first - 1][2] in dets else toks[first][0], toks[first][1])
     return out[:4]
 
 

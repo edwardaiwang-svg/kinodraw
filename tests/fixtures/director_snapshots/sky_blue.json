@@ -1,0 +1,931 @@
+{
+  "version": 1,
+  "lang": "en",
+  "title": {
+    "en": "Why Is the Sky Blue?"
+  },
+  "narrator": "narrator",
+  "chapters": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": {
+        "en": "Why Is the Sky Blue?"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "preamble",
+      "kind": "board",
+      "label": {
+        "en": "Intro"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "agenda",
+      "kind": "agenda",
+      "label": {
+        "en": "What we'll cover"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "s1",
+      "kind": "section",
+      "label": {
+        "en": "Part 1"
+      },
+      "title": {
+        "en": "Sunlight is a mix"
+      }
+    },
+    {
+      "id": "s2",
+      "kind": "section",
+      "label": {
+        "en": "Part 2"
+      },
+      "title": {
+        "en": "Scattering in the air"
+      }
+    },
+    {
+      "id": "s3",
+      "kind": "section",
+      "label": {
+        "en": "Part 3"
+      },
+      "title": {
+        "en": "Red sunsets"
+      }
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "label": {
+        "en": "Wrap-up"
+      },
+      "title": {
+        "en": ""
+      }
+    }
+  ],
+  "beats": [
+    {
+      "id": "b001",
+      "chapter": "intro",
+      "kind": "title",
+      "display": {
+        "en": "Today: Why Is the Sky Blue?"
+      },
+      "spoken": {
+        "en": "Today: Why Is the Sky Blue?"
+      },
+      "visuals": [],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            27
+          ],
+          "role": "hook",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "the Sky Blue",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the Sky Blue"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b002",
+      "chapter": "preamble",
+      "kind": "narration",
+      "display": {
+        "en": "On a clear day the sky is a deep blue, but sunlight is white. So where does the blue come from?"
+      },
+      "spoken": {
+        "en": "On a clear day the sky is a deep blue, but sunlight is white. So where does the blue come from?"
+      },
+      "visuals": [
+        {
+          "id": "b002v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sunlight"
+              },
+              "trigger": {
+                "en": "sunlight"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "sunlight"
+          }
+        },
+        {
+          "id": "b002v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_think",
+              "trigger": {
+                "en": "So where does the blue come from?"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "So where does the blue come from?"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            61
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "white",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "white",
+              "a deep blue",
+              "a clear"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            62,
+            95
+          ],
+          "role": "question",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "the blue come",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the blue come"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b003",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Here's what we'll cover. First: Sunlight is a mix."
+      },
+      "spoken": {
+        "en": "Here's what we'll cover. First: Sunlight is a mix."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b004",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Second: Scattering in the air."
+      },
+      "spoken": {
+        "en": "Second: Scattering in the air."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b005",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "And finally: Red sunsets."
+      },
+      "spoken": {
+        "en": "And finally: Red sunsets."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b006",
+      "chapter": "s1",
+      "kind": "opener",
+      "display": {
+        "en": "Part 1: Sunlight is a mix."
+      },
+      "spoken": {
+        "en": "Part one: Sunlight is a mix."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            26
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "a mix",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "a mix",
+              "Sunlight"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b007",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "en": "White sunlight is really a mix of every colour of the rainbow. Each colour is a wave, and blue light has a much shorter wave than red light."
+      },
+      "spoken": {
+        "en": "White sunlight is really a mix of every colour of the rainbow. Each colour is a wave, and blue light has a much shorter wave than red light."
+      },
+      "visuals": [
+        {
+          "id": "b007v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sunlight"
+              },
+              "trigger": {
+                "en": "sunlight"
+              }
+            },
+            {
+              "doodle": "fl_rainbow",
+              "label": {
+                "en": "Rainbow"
+              },
+              "trigger": {
+                "en": "rainbow"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "sunlight"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            62
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the rainbow",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the rainbow",
+              "White"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            63,
+            140
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "red light",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "red light",
+              "a wave",
+              "Each colour"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b008",
+      "chapter": "s1",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: White sunlight is really a mix of every colour of the rainbow."
+      },
+      "spoken": {
+        "en": "Key takeaway: White sunlight is really a mix of every colour of the rainbow."
+      },
+      "visuals": [
+        {
+          "id": "b008v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_rainbow"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b008v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "White sunlight is really a mix of every colour of the rainbow."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            76
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "the rainbow",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the rainbow",
+              "White"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b009",
+      "chapter": "s2",
+      "kind": "opener",
+      "display": {
+        "en": "Part 2: Scattering in the air."
+      },
+      "spoken": {
+        "en": "Part two: Scattering in the air."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            30
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "the air",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the air",
+              "Scattering"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b010",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "en": "When sunlight hits the tiny molecules of gas in the air, short blue waves bounce around far more than long red waves. This is called Rayleigh scattering. Blue light ends up coming at us from every part of the sky."
+      },
+      "spoken": {
+        "en": "When sunlight hits the tiny molecules of gas in the air, short blue waves bounce around far more than long red waves. This is called Rayleigh scattering. Blue light ends up coming at us from every part of the sky."
+      },
+      "visuals": [
+        {
+          "id": "b010v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sunlight"
+              },
+              "trigger": {
+                "en": "sunlight"
+              }
+            },
+            {
+              "doodle": "molecule",
+              "label": {
+                "en": "Molecules"
+              },
+              "trigger": {
+                "en": "molecules"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "sunlight"
+          }
+        },
+        {
+          "id": "b010v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "vol_waves",
+              "trigger": {
+                "en": "This is called"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "This is called"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            117
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "red waves",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "red waves",
+              "the air",
+              "sunlight"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            118,
+            153
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Rayleigh",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Rayleigh",
+              "called"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            154,
+            213
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the sky",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the sky",
+              "Blue"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b011",
+      "chapter": "s2",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: Blue light ends up coming at us from every part of the sky."
+      },
+      "spoken": {
+        "en": "Key takeaway: Blue light ends up coming at us from every part of the sky."
+      },
+      "visuals": [
+        {
+          "id": "b011v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "molecule"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b011v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "Blue light ends up coming at us from every part of the sky."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            73
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "the sky",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the sky",
+              "Blue"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b012",
+      "chapter": "s3",
+      "kind": "opener",
+      "display": {
+        "en": "Part 3: Red sunsets."
+      },
+      "spoken": {
+        "en": "Part three: Red sunsets."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            20
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Red sunsets",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Red sunsets"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b013",
+      "chapter": "s3",
+      "kind": "narration",
+      "display": {
+        "en": "At sunset the light travels through much more air. Most of the blue is scattered away before it reaches us, so the sky glows orange and red."
+      },
+      "spoken": {
+        "en": "At sunset the light travels through much more air. Most of the blue is scattered away before it reaches us, so the sky glows orange and red."
+      },
+      "visuals": [
+        {
+          "id": "b013v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_sunset",
+              "label": {
+                "en": "Sunset"
+              },
+              "trigger": {
+                "en": "sunset"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "sunset"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            50
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "air",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "air",
+              "sunset"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            51,
+            140
+          ],
+          "role": "end_line",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "orange and red",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "orange and red",
+              "reaches",
+              "the blue"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b014",
+      "chapter": "s3",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: At sunset the light travels through much more air."
+      },
+      "spoken": {
+        "en": "Key takeaway: At sunset the light travels through much more air."
+      },
+      "visuals": [
+        {
+          "id": "b014v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_sunset"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "At sunset the light travels through much more air."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            64
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "air",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "air",
+              "sunset"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b015",
+      "chapter": "outro",
+      "kind": "closing",
+      "display": {
+        "en": "Thanks for watching!"
+      },
+      "spoken": {
+        "en": "Thanks for watching!"
+      },
+      "visuals": [
+        {
+          "id": "b015v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_wave"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            20
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Thanks for watching",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Thanks for watching",
+              "watching"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    }
+  ]
+}

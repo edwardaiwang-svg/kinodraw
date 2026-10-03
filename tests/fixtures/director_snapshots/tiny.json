@@ -1,0 +1,511 @@
+{
+  "version": 1,
+  "lang": "en",
+  "title": {
+    "en": "Three Facts About Honey"
+  },
+  "narrator": "narrator",
+  "chapters": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": {
+        "en": "Three Facts About Honey"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "preamble",
+      "kind": "board",
+      "label": {
+        "en": "Intro"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "agenda",
+      "kind": "agenda",
+      "label": {
+        "en": "What we'll cover"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "s1",
+      "kind": "section",
+      "label": {
+        "en": "Part 1"
+      },
+      "title": {
+        "en": "It never spoils"
+      }
+    },
+    {
+      "id": "s2",
+      "kind": "section",
+      "label": {
+        "en": "Part 2"
+      },
+      "title": {
+        "en": "Bees work hard"
+      }
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "label": {
+        "en": "Wrap-up"
+      },
+      "title": {
+        "en": ""
+      }
+    }
+  ],
+  "beats": [
+    {
+      "id": "b001",
+      "chapter": "intro",
+      "kind": "title",
+      "display": {
+        "en": "Today: Three Facts About Honey."
+      },
+      "spoken": {
+        "en": "Today: Three Facts About Honey."
+      },
+      "visuals": [],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            31
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Honey",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Honey",
+              "Three"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b002",
+      "chapter": "preamble",
+      "kind": "narration",
+      "display": {
+        "en": "Honey is one of the oldest foods people still eat."
+      },
+      "spoken": {
+        "en": "Honey is one of the oldest foods people still eat."
+      },
+      "visuals": [
+        {
+          "id": "b002v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_explain"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            50
+          ],
+          "role": "hook",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "eat",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "eat",
+              "Honey"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b003",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Here's what we'll cover. First: It never spoils."
+      },
+      "spoken": {
+        "en": "Here's what we'll cover. First: It never spoils."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b004",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "And finally: Bees work hard."
+      },
+      "spoken": {
+        "en": "And finally: Bees work hard."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b005",
+      "chapter": "s1",
+      "kind": "opener",
+      "display": {
+        "en": "Part 1: It never spoils."
+      },
+      "spoken": {
+        "en": "Part one: It never spoils."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            24
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "It never spoils",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "It never spoils",
+              "spoils"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b006",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "en": "Archaeologists have found pots of honey more than 3,000 years old that were still safe to eat."
+      },
+      "spoken": {
+        "en": "Archaeologists have found pots of honey more than three thousand years old that were still safe to eat."
+      },
+      "visuals": [
+        {
+          "id": "b006n",
+          "type": "stat",
+          "value": {
+            "en": "3,000"
+          },
+          "label": {
+            "en": "years old"
+          },
+          "trigger": {
+            "en": "three thousand"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            94
+          ],
+          "role": "number",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "3,000 years",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "3,000 years",
+              "eat",
+              "Archaeologists"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b007",
+      "chapter": "s1",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: It never spoils."
+      },
+      "spoken": {
+        "en": "Key takeaway: It never spoils."
+      },
+      "visuals": [],
+      "take": {
+        "headline": {
+          "en": "It never spoils."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            30
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "It never spoils",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "It never spoils",
+              "spoils"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b008",
+      "chapter": "s2",
+      "kind": "opener",
+      "display": {
+        "en": "Part 2: Bees work hard."
+      },
+      "spoken": {
+        "en": "Part two: Bees work hard."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            23
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Bees work hard",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Bees work hard",
+              "work hard"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b009",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "en": "To make one jar of honey, bees visit about two million flowers."
+      },
+      "spoken": {
+        "en": "To make one jar of honey, bees visit about two million flowers."
+      },
+      "visuals": [
+        {
+          "id": "b009v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_explain"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            63
+          ],
+          "role": "end_line",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "million flowers",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "million flowers",
+              "jar of honey",
+              "make"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b010",
+      "chapter": "s2",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: To make one jar of honey, bees visit about two million flowers."
+      },
+      "spoken": {
+        "en": "Key takeaway: To make one jar of honey, bees visit about two million flowers."
+      },
+      "visuals": [],
+      "take": {
+        "headline": {
+          "en": "To make one jar of honey, bees visit about two million flowers."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            77
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "million flowers",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "million flowers",
+              "jar of honey",
+              "make"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b011",
+      "chapter": "outro",
+      "kind": "closing",
+      "display": {
+        "en": "Thanks for watching!"
+      },
+      "spoken": {
+        "en": "Thanks for watching!"
+      },
+      "visuals": [
+        {
+          "id": "b011v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_wave"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            20
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Thanks for watching",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Thanks for watching",
+              "watching"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    }
+  ]
+}

@@ -37,3 +37,17 @@ def test_the_talking_mouth_reads_the_narration_in_the_build_folder(tmp_path, mon
     monkeypatch.chdir(tmp_path)
     preview.main([str(tmp_path), '--stills', '0'])
     assert seen['envelope'] is not None and seen['envelope'].max() == 1
+
+
+def test_a_spanish_project_is_told_to_use_a_whiteboard_look(tmp_path, monkeypatch):
+    import pytest
+    from kinodraw import pipeline
+    monkeypatch.setattr(pipeline, 'settings', lambda project: {'lang': 'es'})
+    with pytest.raises(SystemExit, match='English and Chinese'):
+        preview.main([str(tmp_path), '--stills', '1'])
+
+
+def test_stick_text_keeps_spanish_words_whole():
+    from kinodraw.engine.stick import text
+    lines = text.wrap('Los pingüinos emperador caminan juntos por el hielo', 40, 'es', 300)
+    assert all(w in 'Los pingüinos emperador caminan juntos por el hielo'.split() for l in lines for w in l.split())

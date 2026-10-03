@@ -43,6 +43,7 @@ FILES = {       # name: (url, sha256, bytes)
 }
 LANGS = {
     'en': {'model': 'kokoro-v1.0.fp16.onnx', 'voices': 'voices-v1.0.bin', 'config': None, 'voice': 'af_heart'},
+    'es': {'model': 'kokoro-v1.0.fp16.onnx', 'voices': 'voices-v1.0.bin', 'config': None, 'voice': 'ef_dora'},
     'zh': {'model': 'kokoro-v1.1-zh.fp16.onnx', 'voices': 'voices-v1.1-zh.bin', 'config': 'config-v1.1-zh.json',
            'voice': 'zf_001'},
 }
@@ -52,12 +53,13 @@ VOICES = {
            ('am_fenrir', 'Fenrir, US man, deep'), ('bf_emma', 'Emma, UK woman'), ('bm_george', 'George, UK man')],
     'zh': [('zf_001', 'Mei, Mandarin woman (default)'), ('zf_002', 'Lan, Mandarin woman'),
            ('zm_010', 'Wei, Mandarin man'), ('zm_020', 'Jun, Mandarin man')],
+    'es': [('ef_dora', 'Dora, Latin American woman (default)'), ('em_alex', 'Alex, Latin American man')],
 }
 SPEEDS = (0.85, 1.15)
 SR = 24000
 GAP = .4                 # silence after each beat
 VERSION = 1              # bump when synthesis or alignment changes (invalidates cached clips)
-CLAUSE = {'en': ',.;:?!—', 'zh': '，。；：？！、—'}
+CLAUSE = {'en': ',.;:?!—', 'zh': '，。；：？！、—', 'es': ',.;:?!—'}
 PHONE_MARKS = ',.;:?!—…'
 NOT_SOUNDS = set(' ˈˌːʲ')
 
@@ -95,15 +97,20 @@ def _espeak_config():
     return EspeakConfig(data_path=str(data))
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def _engine(lang: str):
+    ensure_models(lang)
+    spec = LANGS[lang]
+    return _model_engine(spec['model'], spec['voices'], spec['config'])
+
+
+@lru_cache(maxsize=2)
+def _model_engine(model, voices, config):
     import onnxruntime
     onnxruntime.set_default_logger_severity(3)       # fp16 graphs log many harmless constant-folding warnings
     from kokoro_onnx import Kokoro
-    ensure_models(lang)
-    spec = LANGS[lang]
-    config = str(MODEL_DIR / spec['config']) if spec['config'] else None
-    return Kokoro(str(MODEL_DIR / spec['model']), str(MODEL_DIR / spec['voices']), espeak_config=_espeak_config(),
+    config = str(MODEL_DIR / config) if config else None
+    return Kokoro(str(MODEL_DIR / model), str(MODEL_DIR / voices), espeak_config=_espeak_config(),
                   vocab_config=config)
 
 
@@ -121,7 +128,7 @@ def voices(lang: str) -> list[str]:
 def phonemes(text: str, lang: str) -> str:
     if lang == 'zh':
         return _zh_g2p()(text)[0]
-    return _engine('en').tokenizer.phonemize(text, 'en-us')
+    return _engine(lang).tokenizer.phonemize(text, 'es-419' if lang == 'es' else 'en-us')
 
 
 # --------------------------------------------------------------- alignment
@@ -129,7 +136,7 @@ def _is_clause_mark(text: str, i: int, lang: str) -> bool:
     ch = text[i]
     if ch not in CLAUSE[lang]:
         return False
-    return lang == 'zh' or ch == '—' or i + 1 == len(text) or text[i + 1] in ' "”’)'
+    return lang == 'zh' or ch == '—' or i + 1 == len(text) or text[i + 1] in ' "”’)' or (lang == 'es' and text[i + 1] == '»')
 
 
 def align(spoken: str, timings, lang: str) -> list[float]:
@@ -219,7 +226,8 @@ def preview(voice_id: str, lang: str, speed: float = 1.0) -> Path:
         size = 220 if lang == 'zh' else 190
         raise ValueError(f'The voices download with your first video (about {size} MB). '
                          'Make a video once, then you can hear every voice here.')
-    text = {'en': 'Hi! I can read your script aloud, just like this.', 'zh': '你好！我可以像这样为你朗读脚本。'}
+    text = {'en': 'Hi! I can read your script aloud, just like this.', 'zh': '你好！我可以像这样为你朗读脚本。',
+            'es': '¡Hola! Puedo leer tu guion en voz alta, así.'}
     return synthesize(text[lang], lang, paths.cache_dir() / 'voice-samples', voice_id, speed).wav
 
 

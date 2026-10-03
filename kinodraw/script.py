@@ -20,13 +20,18 @@ EN_BEAT = (15, 35, 55)          # min / target / max words per beat
 ZH_BEAT = (30, 70, 110)         # min / target / max CJK characters per beat
 MAX_SECTIONS = 8
 CONCLUSION = re.compile(r'^(conclusion|summary|final thoughts|wrap[- ]?up|key takeaways|takeaways|in closing|'
-                        r'结语|总结|结论|小结|最后)\b', re.I)
+                        r'结语|总结|结论|小结|最后|conclusión|conclusiones|resumen|en resumen|para terminar|para cerrar|cierre|ideas clave)\b', re.I)
 TEXT = {
     'en': {'intro': 'Today: {title}', 'agenda_first': "Here's what we'll cover. First: {t}",
            'agenda_mid': ['Second: {t}', 'Third: {t}', 'Fourth: {t}', 'Fifth: {t}', 'Sixth: {t}', 'Seventh: {t}'],
            'agenda_last': 'And finally: {t}', 'label': 'Part {n}', 'closing': 'Thanks for watching!',
            'intro_label': 'Intro', 'outro_label': 'Wrap-up', 'agenda_label': "What we'll cover",
            'opener': '{label}: {title}', 'take': 'Key takeaway: {h}'},
+    'es': {'intro': 'Hoy: {title}', 'agenda_first': 'Esto es lo que veremos. Primero: {t}',
+           'agenda_mid': ['Segundo: {t}', 'Tercero: {t}', 'Cuarto: {t}', 'Quinto: {t}', 'Sexto: {t}', 'Séptimo: {t}'],
+           'agenda_last': 'Y por último: {t}', 'label': 'Parte {n}', 'closing': '¡Gracias por ver!',
+           'intro_label': 'Introducción', 'outro_label': 'Cierre', 'agenda_label': 'Lo que veremos',
+           'opener': '{label}: {title}', 'take': 'Idea clave: {h}'},
     'zh': {'intro': '今天的主题：{title}', 'agenda_first': '本期我们聊{n}件事。第一，{t}',
            'agenda_mid': ['第二，{t}', '第三，{t}', '第四，{t}', '第五，{t}', '第六，{t}', '第七，{t}'],
            'agenda_last': '最后，{t}', 'label': '第{n}部分', 'closing': '感谢收看！',
@@ -37,12 +42,20 @@ ZH_NUM = '零一二三四五六七八九十'
 
 
 def size(text: str, lang: str) -> int:
-    return len(text.split()) if lang == 'en' else len(re.findall(r'[一-鿿]', text))
+    return len(text.split()) if lang in ('en', 'es') else len(re.findall(r'[一-鿿]', text))
 
 
 def sentences(paragraph: str, lang: str) -> list[str]:
     if lang == 'zh':
         parts = re.findall(r'[^。！？!?]+[。！？!?]+[”’」』）)]*|[^。！？!?]+$', paragraph)
+    elif lang == 'es':
+        protected = re.sub(r'\b(Sr|Sra|Srta|Dr|Dra|Prof|Ud|Uds|EE\.UU|etc)\.',
+                           lambda m: m.group(0).replace('.', '\0'), paragraph)
+        parts, start = [], 0
+        for m in re.finditer(r'[.!?]+[”’»")\]]*(?=\s+[¿¡«“"(\[]*[A-ZÁÉÍÓÚÑÜ0-9])', protected):
+            parts.append(protected[start:m.end()])
+            start = m.end()
+        parts = [p.replace('\0', '.') for p in parts + [protected[start:]]]
     else:
         protected = re.sub(r'\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K|No)\.', lambda m: m.group(0).replace('.', '\0'),
                            paragraph)
@@ -58,7 +71,7 @@ def _split_long(sentence: str, lang: str, limit: int) -> list[str]:
     """Split one over-long sentence at the clause mark nearest its middle (recursively)."""
     if size(sentence, lang) <= limit:
         return [sentence]
-    marks = [m.end() for m in re.finditer(r'[,;:](?=\s)|—' if lang == 'en' else r'[，；：、]', sentence)]
+    marks = [m.end() for m in re.finditer(r'[,;:](?=\s)|—' if lang in ('en', 'es') else r'[，；：、]', sentence)]
     if not marks:
         return [sentence]
     mid = len(sentence) / 2
@@ -68,8 +81,8 @@ def _split_long(sentence: str, lang: str, limit: int) -> list[str]:
 
 def beats_of(paragraphs: list[str], lang: str) -> list[str]:
     """Group sentences into beats of about the target size; paragraphs never share a beat."""
-    lo, target, hi = EN_BEAT if lang == 'en' else ZH_BEAT
-    joiner = ' ' if lang == 'en' else ''
+    lo, target, hi = EN_BEAT if lang in ('en', 'es') else ZH_BEAT
+    joiner = ' ' if lang in ('en', 'es') else ''
     out = []
     for para in paragraphs:
         chunks, cur = [], []
@@ -90,7 +103,7 @@ def beats_of(paragraphs: list[str], lang: str) -> list[str]:
 def _balanced_sections(paragraphs: list[str], lang: str) -> list[Section]:
     """No usable headings: cut the paragraphs into 2–6 sections of similar length."""
     total = sum(size(p, lang) for p in paragraphs)
-    k = max(2, min(6, round(total / (220 if lang == 'en' else 420)), len(paragraphs)))
+    k = max(2, min(6, round(total / (220 if lang in ('en', 'es') else 420)), len(paragraphs)))
     if len(paragraphs) < 2:
         return [Section('', paragraphs)]
     sections, cur, acc = [], [], 0
@@ -126,8 +139,11 @@ def _merge_to(sections: list[Section], limit: int, lang: str) -> list[Section]:
 
 
 CONTEXT = {'en': re.compile(r'^(this|that|these|those|it|its|they|their|he|she|so|but|and|or|then)\b', re.I),
+           'es': re.compile(r'^(esto|eso|estos|estas|esta|este|ese|esa|ellos|ellas|él|ella|así|pero|y|o|entonces|por eso)\b', re.I),
            'zh': re.compile(r'^(这|那|它|他|她|所以|但是|而且|因此)')}
 NAMING = re.compile(r'\b(call|calls|called|name|names|named)\s+(this|that|these|those|it|them)\b', re.I)
+
+ES_NAMING = re.compile(r'\b(se llama|se llaman|llamamos|llamado|llamada)\s+(esto|eso|lo)\b', re.I)
 
 
 def headline(beat_texts: list[str], fallback: str, lang: str) -> str:
@@ -135,11 +151,12 @@ def headline(beat_texts: list[str], fallback: str, lang: str) -> str:
     called..." or "We call this..."), from the section's last paragraph that has one; in English, if none has,
     the same with sentences of up to 18 words and 90 characters (still three lines on the note); else the
     section title."""
-    floor = 4 if lang == 'en' else 8
-    for cap, room in ((14, None), (18, 90)) if lang == 'en' else ((28, None),):
+    floor = 4 if lang in ('en', 'es') else 8
+    for cap, room in ((14, None), (18, 90)) if lang in ('en', 'es') else ((28, None),):
         for text in reversed(beat_texts):
             fits = [s for s in sentences(text, lang) if floor <= size(s, lang) <= cap and len(s) <= (room or len(s))
-                    and not CONTEXT[lang].match(s) and not (lang == 'en' and NAMING.search(s))]
+                    and not CONTEXT[lang].match(s) and not (lang == 'en' and NAMING.search(s))
+                    and not (lang == 'es' and ES_NAMING.search(s))]
             if fits:
                 return min(fits, key=lambda s: size(s, lang))
     return sentence_of(fallback, lang)
@@ -168,7 +185,7 @@ def sentence_of(text: str, lang: str) -> str:
     text = text.strip().rstrip('.。:：;；,，')
     if text.endswith(('?', '？', '!', '！')):
         return text
-    return text + ('.' if lang == 'en' else '。')
+    return text + ('.' if lang in ('en', 'es') else '。')
 
 
 def build(doc: Document, story: str = 'explain') -> dict:

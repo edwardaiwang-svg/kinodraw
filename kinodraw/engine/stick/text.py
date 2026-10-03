@@ -47,7 +47,7 @@ def width(text: str, size: int, lang: str) -> float:
 
 def wrap(text: str, size: int, lang: str, max_w: float) -> list[str]:
     """Greedy wrap: whole words in English, characters in Chinese (no line starts with closing punctuation)."""
-    units = re.findall(r'\S+\s*', text) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
+    units = re.findall(r'\S+\s*', text) if lang != 'zh' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
     lines, cur = [], ''
     for u in units:
         trial = cur + u
@@ -56,7 +56,7 @@ def wrap(text: str, size: int, lang: str, max_w: float) -> list[str]:
                 cur = trial
                 continue
             lines.append(cur.rstrip())
-            cur = u.lstrip() if lang == 'en' else u
+            cur = u.lstrip() if lang != 'zh' else u
         else:
             cur = trial
     if cur.strip():
@@ -78,10 +78,10 @@ def block(text: str, lang: str, size: int, max_w: float = 1e9, max_lines: int = 
           outline: int = 0, outline_color=(255, 255, 255), align: str = 'center', line_gap: float = 1.16,
           min_size: int = 24, upper: bool = False) -> Image.Image:
     """Text set as an RGBA image (wrapped and shrunk to fit ``max_w`` x ``max_lines``)."""
-    if upper and lang == 'en':
+    if upper and lang != 'zh':
         text = text.upper()
     lines, size = fit(text, lang, max_w, max_lines, size, min_size)
-    asc, desc = font(LATIN if lang == 'en' else CJK, size).getmetrics()
+    asc, desc = font(LATIN if lang != 'zh' else CJK, size).getmetrics()
     lh = int(size * line_gap)
     pad = outline + 4
     widths = [width(ln, size, lang) for ln in lines]
@@ -101,4 +101,4 @@ def block(text: str, lang: str, size: int, max_w: float = 1e9, max_lines: int = 
 
 def caption(text: str, lang: str) -> Image.Image:
     """A burned-in caption: black on a white outline, at most two lines across 1500 px."""
-    return block(text, lang, 46 if lang == 'en' else 48, max_w=1500, max_lines=2, outline=6, min_size=34)
+    return block(text, lang, 46 if lang != 'zh' else 48, max_w=1500, max_lines=2, outline=6, min_size=34)

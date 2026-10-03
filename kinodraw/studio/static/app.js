@@ -3,6 +3,7 @@ const T = window.STUDIO_TOKEN;
 const $ = (sel, root = document) => root.querySelector(sel);
 const COLORS = { orange: '#f57c00', blue: '#1e6fd9', green: '#2e9d4f', purple: '#8e24aa', red: '#d32f2f', teal: '#00897b' };
 const CYCLE = Object.keys(COLORS);
+const LANG_NAMES = { en: 'English', zh: '中文', es: 'Español' };
 // The AI director is KinoDraw Cloud: the user's plan decides the model. Directors that use the user's own
 // API key or program appear only when Settings -> Advanced directors is on.
 const DIRECTORS = [['rules', 'Offline (free, private)'], ['cloud', 'KinoDraw Cloud AI (your plan)']];
@@ -103,7 +104,7 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
 async function loadProjects() {
   const items = await api('/api/projects');
   $('#projects').innerHTML = items.map((p) => `<a data-name="${esc(p.name)}" class="${p.name === current ? 'on' : ''}">
-    ${esc(p.title)}<small>${p.broken ? 'incomplete' : `${p.lang === 'zh' ? '中文' : 'English'} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
+    ${esc(p.title)}<small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
     || '<div class="muted">No videos yet.</div>';
   $('#projects').querySelectorAll('a').forEach((a) => (a.onclick = () => openProject(a.dataset.name)));
 }
@@ -119,7 +120,15 @@ function showSample() {          // a finished video that ships with the app: pl
 function scriptLang(text) {      // same rule as kinodraw/ingest.py detect_lang: Chinese when over 30% of letters are Chinese
   const letters = text.match(/\p{L}/gu) || [];
   const chinese = letters.filter((c) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(c)).length;
-  return letters.length && chinese / letters.length > 0.3 ? 'zh' : 'en';
+  if (letters.length && chinese / letters.length > 0.3) return 'zh';
+  const words = text.match(/\p{L}+/gu) || [];
+  const caps = words.map((w) => w[0] !== w[0].toLowerCase()).concat(false);
+  const spanish = new Set('el la los las de del que y en un una es por con para se no su al lo como más pero sus le ya o este esta son también'.split(' '));
+  const english = new Set('the and of to is in that it for was on are with as this be by you'.split(' '));
+  const es = words.filter((w, i) => spanish.has(w.toLowerCase()) && !(caps[i] && caps[i + 1])).length
+    + words.filter((w, i) => !caps[i]).join(' ').replace(/[^áéíóúüñ]/g, '').length + 2 * (text.match(/[¿¡]/g) || []).length;
+  const en = words.filter((w) => english.has(w.toLowerCase())).length;
+  return es >= 2 && es > 2 * en + 1 ? 'es' : 'en';
 }
 
 function showNew() {
@@ -211,7 +220,7 @@ async function openProject(name, tab = null) {
   board = p.storyboard;
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
-  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${voiceName(p.settings.voice)}`}`;
+  $('#p-meta').textContent = `${board.beats.length} beats · ${LANG_NAMES[p.lang]}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${voiceName(p.settings.voice)}`}`;
   $('#p-format').innerHTML = formatOptions(p.settings.aspect || '16:9');
   $('#p-format').onchange = async () => {
     try {
@@ -592,7 +601,7 @@ function showSettings() {
     <section><h3>Videos</h3><label class="row"><input id="s-credit" type="checkbox" style="width:auto"${STATE.credit ? ' checked' : ''}>
       <span>End each video with a 2-second "Made with ${esc(STATE.product)}" credit</span></label></section>
     <section><h3>Projects folder</h3><div class="row"><input id="s-root" value="${esc(STATE.projects_root)}"><button id="s-save" class="small">Save</button></div></section>
-    <section><h3>Voices</h3><p class="muted">English: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · 中文: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'}</p></section></div>`);
+    <section><h3>Voices</h3><p class="muted">${LANG_NAMES.en}: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · ${LANG_NAMES.zh}: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'} · ${LANG_NAMES.es}: ${STATE.models_ready.es ? 'ready' : 'downloads on first use (~190 MB)'}</p></section></div>`);
   $('#c-email', body)?.addEventListener('input', (e) => { cloudEmail = e.target.value.trim(); });
   $('#c-send', body)?.addEventListener('click', async () => {
     try { await api('/api/cloud/signup', { method: 'POST', body: JSON.stringify({ email: $('#c-email', body).value }) });

@@ -4,7 +4,7 @@
  "looks": [
   {
    "id": "whiteboard",
-   "name": {"en": "Whiteboard", "zh": "白板"},
+   "name": {"en": "Whiteboard", "zh": "白板", "es": "Pizarra blanca"},
    "status": "built",
    "render_ready": true,
    "renderer": "whiteboard",
@@ -12,7 +12,7 @@
             "hand": "marker", "emphasis": "none"},
    "fonts": {"en_hand": "PlaypenSans-Bold.ttf", "zh_hand": "DoodleKai-Medium.ttf",
              "en_caption": "Arimo-Bold.ttf", "zh_caption": "NotoSansSC-Bold.otf", "ui": "Arimo-Bold.ttf"},
-   "languages": ["en", "zh"],
+   "languages": ["en", "zh", "es"],
    "stories": ["explain", "story"],
    "motion": {"min": "calm", "max": "lively", "default": "lively"},
    "length_s": [120, 1200],
@@ -22,7 +22,7 @@
   },
   {
    "id": "chalkboard",
-   "name": {"en": "Chalkboard", "zh": "黑板"},
+   "name": {"en": "Chalkboard", "zh": "黑板", "es": "Pizarra"},
    "status": "skin",
    "render_ready": true,
    "renderer": "whiteboard",
@@ -31,7 +31,7 @@
             "caption": "#FAFAF6", "caption_edge": "#15201C"},
    "fonts": {"en_hand": "PlaypenSans-Bold.ttf", "zh_hand": "DoodleKai-Medium.ttf",
              "en_caption": "Arimo-Bold.ttf", "zh_caption": "NotoSansSC-Bold.otf", "ui": "Arimo-Bold.ttf"},
-   "languages": ["en", "zh"],
+   "languages": ["en", "zh", "es"],
    "stories": ["explain", "story"],
    "motion": {"min": "calm", "max": "lively", "default": "lively"},
    "length_s": [180, 900],
@@ -41,7 +41,7 @@
   },
   {
    "id": "notebook",
-   "name": {"en": "Notebook", "zh": "笔记本"},
+   "name": {"en": "Notebook", "zh": "笔记本", "es": "Cuaderno"},
    "status": "skin",
    "render_ready": true,
    "renderer": "whiteboard",
@@ -49,7 +49,7 @@
             "grain": "graphite", "hand": "pencil", "emphasis": "highlighter"},
    "fonts": {"en_hand": "PlaypenSans-Bold.ttf", "zh_hand": "DoodleKai-Medium.ttf",
              "en_caption": "Arimo-Bold.ttf", "zh_caption": "NotoSansSC-Bold.otf", "ui": "Arimo-Bold.ttf"},
-   "languages": ["en", "zh"],
+   "languages": ["en", "zh", "es"],
    "stories": ["explain", "story"],
    "motion": {"min": "calm", "max": "lively", "default": "lively"},
    "length_s": [120, 600],

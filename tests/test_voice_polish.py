@@ -249,7 +249,8 @@ def test_the_studio_picks_voices_for_the_language_the_script_will_be_read_in():
     if not node:
         pytest.skip('node is not installed')
     texts = ['Today we learn the Mandarin greeting 你好 and when to use it.', '今天我们学习蜂蜜。', 'Bees make honey.',
-             '', '蜂蜜 honey bees work hard all day']
+             '', '蜂蜜 honey bees work hard all day', '¿Cómo comen las plantas? Las plantas usan la luz del sol.',
+             'El Niño warms the Pacific and changes the weather.']
     out = subprocess.run([node, '-e', source + f'\nconsole.log(JSON.stringify({json.dumps(texts)}.map(scriptLang)))'],
                          capture_output=True, text=True, check=True).stdout
     assert json.loads(out) == [ingest.detect_lang(t) for t in texts]

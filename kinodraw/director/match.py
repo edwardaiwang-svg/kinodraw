@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 import threading
@@ -14,7 +15,7 @@ import numpy as np
 from .. import paths
 from ..library import ASSETS, catalog
 
-EMBED_MODELS = {'en': 'BAAI/bge-small-en-v1.5', 'zh': 'BAAI/bge-small-zh-v1.5'}
+EMBED_MODELS = {'en': 'BAAI/bge-small-en-v1.5', 'zh': 'BAAI/bge-small-zh-v1.5', 'es': 'BAAI/bge-small-en-v1.5'}
 CACHE = (Path(paths.getenv('KINODRAW_MODELS')).expanduser() / 'embed' if paths.getenv('KINODRAW_MODELS')
          else paths.cache_dir() / 'embed')
 HF = 'https://huggingface.co/'
@@ -47,6 +48,74 @@ turns check step steps end side form set sort white black red blue green yellow 
 colour color colours colors'''.split())
 ZH_STOP = set('时间 问题 方法 东西 事情 人们 一些 这个 那个 自己 今天 明天 现在 以后 以前 很多 非常 可以 需要 固定 工作 '
               '白色 黑色 红色 蓝色 绿色 黄色 橙色 粉色 紫色 棕色 灰色 颜色'.split())
+ES_STOP = set('''el la los las un una unos unas de del al a ante bajo con contra desde durante en entre hacia
+hasta para por según sin sobre tras y e o u pero que como cuando donde quien quienes cuyo cuya sus su mi mis
+tu tus nuestro nuestra nuestros nuestras este esta estos estas ese esa esos esas aquel aquella aquellos aquellas
+yo tú usted ustedes él ella ellos ellas nosotros nos me te se lo le les sí no ni es son era eran ser estar está
+están fue fueron ha han hay había muy más menos mucho mucha muchos muchas poco poca pocos pocas todo toda todos
+todas cada algún alguna algunos algunas otro otra otros otras también ya aún ahora entonces porque hacer hace
+hacen hizo tener tiene tienen puede pueden uno dos tres'''.split())
+ES_FOLD = str.maketrans('áéíóúü', 'aeiouu')
+
+
+@lru_cache(maxsize=1)
+def es_lexicon():
+    return json.loads((ASSETS / 'es_en.json').read_text(encoding='utf-8'))
+
+
+@lru_cache(maxsize=1)
+def _es_folded():
+    return {k.translate(ES_FOLD): v for k, v in es_lexicon().items()}
+
+
+def _es_key(word: str) -> str:
+    word = word.lower()
+    lex = es_lexicon()
+    folded = _es_folded()
+    candidates = [word]
+    if word.endswith('ces'):
+        candidates.append(word[:-3] + 'z')
+    if word.endswith('es'):
+        candidates.append(word[:-2])
+    if word.endswith('s'):
+        candidates.append(word[:-1])
+    if word.endswith('as'):
+        candidates.append(word[:-2] + 'o')
+    elif word.endswith('a'):
+        candidates.append(word[:-1] + 'o')
+    for candidate in candidates:
+        gloss = lex.get(candidate) or folded.get(candidate.translate(ES_FOLD))
+        if gloss:
+            return _en_key(gloss)
+    return ''
+
+
+def _es_spans(text: str):
+    """English glosses with their original Spanish spans; fixed phrases take precedence."""
+    words = list(re.finditer(r'[^\W\d_]+', text))
+    longest = max(len(k.split()) for k in es_lexicon())
+    i = 0
+    while i < len(words):
+        for n in range(min(longest, len(words) - i), 1, -1):
+            chunk = words[i:i + n]
+            phrase = text[chunk[0].start():chunk[-1].end()]
+            key = ' '.join(m.group().lower() for m in chunk)
+            gloss = (es_lexicon().get(key) or _es_folded().get(key.translate(ES_FOLD))) \
+                if re.fullmatch(r'[^\W\d_]+(?:\s+[^\W\d_]+)*', phrase) else None
+            if gloss:
+                yield _en_key(gloss), chunk[0].start(), chunk[-1].end()
+                i += n
+                break
+        else:
+            word = words[i]
+            gloss = '' if word.group().lower() in ES_STOP else _es_key(word.group())
+            if gloss:
+                yield gloss, word.start(), word.end()
+            i += 1
+
+
+def es_gloss(text: str) -> str:
+    return ' '.join(key for key, _, _ in _es_spans(text))
 
 
 @dataclass
@@ -78,12 +147,12 @@ class Matcher:
                         if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')}
         self.index: dict[str, list[tuple[str, float]]] = {}
         for did, e in self.entries.items():
-            keywords = e.get(lang) or []
+            keywords = e.get('en' if lang == 'es' else lang) or []
             if e['set'] == 'fluent':
                 keywords = keywords[:6]
             for rank, kw in enumerate(keywords):
-                key = _en_key(kw) if lang == 'en' else kw.strip()
-                if not key or (lang == 'en' and (key in EN_STOP or len(key) < 3 or key.isdigit())) or \
+                key = _en_key(kw) if lang in ('en', 'es') else kw.strip()
+                if not key or (lang in ('en', 'es') and (key in EN_STOP or len(key) < 3 or key.isdigit())) or \
                         (lang == 'zh' and (len(key) < 2 or key in ZH_STOP)):
                     continue
                 weight = (1.0 - .04 * min(rank, 5)) * (1.08 if e['set'] == 'bespoke' else .8)
@@ -110,6 +179,20 @@ class Matcher:
                         k = (did, start) if every_phrase else did
                         if k not in hits or hits[k].score < score:
                             hits[k] = Hit(did, score, phrase, start)
+        elif self.lang == 'es':
+            words = [(w, a, b) for gloss, a, b in _es_spans(text) for w in gloss.split()]
+            for n in (3, 2, 1):
+                for i in range(len(words) - n + 1):
+                    chunk = words[i:i + n]
+                    key = ' '.join(w for w, _, _ in chunk)
+                    start, end = chunk[0][1], chunk[-1][2]
+                    if re.search(r'[,;:.!?¿¡]', text[start:end]):
+                        continue
+                    for did, weight in self.index.get(key, []):
+                        score = weight * self.rarity[key] + .15 * (n - 1)
+                        k = (did, start) if every_phrase else did
+                        if k not in hits or hits[k].score < score:
+                            hits[k] = Hit(did, score, text[start:end], start)
         else:
             for key, owners in self.index.items():
                 start = text.find(key)
@@ -132,6 +215,10 @@ class Matcher:
         return self._ids, self._vecs
 
     def semantic(self, text: str, k: int = 5) -> list[Hit]:
+        if self.lang == 'es':
+            text = es_gloss(text)
+            if not text:
+                return []
         ids, vecs = self._catalog_vectors()
         query = _normalize(np.array(list(_model(self.lang).embed([text])), np.float32))[0]
         sims = vecs @ query
@@ -140,6 +227,7 @@ class Matcher:
 
 
 def _entry_text(e: dict, lang: str) -> str:
+    lang = 'en' if lang == 'es' else lang
     words = e.get(lang) or []
     return (f"{e.get('desc', '')}. {', '.join(words[:8])}" if lang == 'en'
             else f"{'，'.join(words[:8])}。{e.get('desc', '')}")
@@ -147,13 +235,14 @@ def _entry_text(e: dict, lang: str) -> str:
 
 def _picture_text(e: dict, lang: str) -> str:
     """What the drawing shows, without its search keywords (so a keyword's other meanings don't leak in)."""
-    return e.get('desc', '') if lang == 'en' else '，'.join((e.get('zh') or [])[:8])
+    return e.get('desc', '') if lang in ('en', 'es') else '，'.join((e.get('zh') or [])[:8])
 
 
 TEXTS = {'embed': _entry_text, 'picture': _picture_text}
 
 
 def _table(lang: str, kind: str = 'embed'):
+    lang = 'en' if lang == 'es' else lang
     entries = catalog()
     ids = sorted(entries)
     texts = [TEXTS[kind](entries[i], lang) for i in ids]
@@ -165,6 +254,8 @@ def _table(lang: str, kind: str = 'embed'):
 def catalog_vectors(lang: str, kind: str = 'embed'):
     """Embeddings of every doodle ('embed': description + keywords, for search; 'picture': description
     only, for judging senses): shipped with the app, else cached, else computed once (about a minute)."""
+    if lang == 'es':
+        return catalog_vectors('en') if kind == 'embed' else catalog_vectors('en', kind)
     with _LOCK:
         ids, texts, digest = _table(lang, kind)
         for path in (ASSETS / f'{kind}-{lang}.npz', CACHE / f'catalog-{kind}-{lang}-{digest}.npz'):
@@ -181,6 +272,8 @@ def catalog_vectors(lang: str, kind: str = 'embed'):
 def bundle():
     """Write assets/doodles/{embed,picture}-<lang>.npz so new users never wait (run after changing the library)."""
     for lang in EMBED_MODELS:
+        if lang == 'es':
+            continue
         for kind in TEXTS:
             ids, texts, digest = _table(lang, kind)
             vecs = _normalize(np.array(list(_model(lang).embed(texts)), np.float32))
@@ -197,14 +290,17 @@ def ensure_model(lang: str, progress=None) -> Path:
     ``progress(done, total)`` in bytes. (fastembed's own download shows no byte progress and, for Chinese,
     falls back to a second host.)"""
     from ..net import download
+    lang = 'en' if lang == 'es' else lang
     repo, files = EMBED_FILES[lang]
     folder = CACHE / f"{repo.split('/')[1]}-{repo.split('/')[3][:8]}"
     download([(HF + repo + name, folder / name, digest, size) for name, (digest, size) in files.items()], progress)
     return folder
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def _model(lang: str):
+    if lang == 'es':
+        return _model('en')
     from fastembed import TextEmbedding
     return TextEmbedding(EMBED_MODELS[lang], cache_dir=str(CACHE), specific_model_path=str(ensure_model(lang)))
 

@@ -115,7 +115,7 @@ class Vertical:
         lh = int(size * 1.2)
         parts = []                                       # (image, gap above)
         if label and label.strip().lower() != title.strip().lower():
-            parts.append((_ui_line(label.upper() if lang == 'en' else label, 38, self._label_color(color), fonts), 0))
+            parts.append((_ui_line(label.upper() if lang != 'zh' else label, 38, self._label_color(color), fonts), 0))
         block = Image.new('RGBA', (W, lh * len(lines) + 16), (0, 0, 0, 0))
         d = ImageDraw.Draw(block)
         for k, line in enumerate(lines):
@@ -218,7 +218,7 @@ def _fit_ui(text, size, fonts):
 def wrap(text, lang, size, fonts=ink.FONTS, width=TEXT_W):
     """Balanced lines of ``text`` no wider than ``width`` in the caption font at ``size``: the fewest lines, then the
     narrowest widest line, so a two-line caption is two even lines rather than a full one and a stub."""
-    f = ink.font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
+    f = ink.font('en_caption' if lang != 'zh' else 'zh_caption', size, fonts)
     us = cap.units(text.strip(), lang)
 
     def greedy(limit):
@@ -258,7 +258,7 @@ def caption_lines(text, lang, fonts=ink.FONTS):
     size = CAP_SIZE
     while True:
         lines = wrap(text, lang, size, fonts)
-        f = ink.font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
+        f = ink.font('en_caption' if lang != 'zh' else 'zh_caption', size, fonts)
         if (len(lines) <= CAP_LINES and all(f.getlength(l) <= TEXT_W for l in lines)) or size <= CAP_MIN:
             return lines[:CAP_LINES], size
         size -= 2
@@ -268,7 +268,7 @@ def caption_lines(text, lang, fonts=ink.FONTS):
 def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255)):
     """The caption below the board: ``color`` letters in an ``edge`` outline, like the 16:9 captions, larger."""
     lines, size = caption_lines(text, lang, fonts)
-    f = ink.font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
+    f = ink.font('en_caption' if lang != 'zh' else 'zh_caption', size, fonts)
     stroke = max(5, round(size / 10))
     lh = int(size * 1.18)
     widths = [f.getlength(l) for l in lines]

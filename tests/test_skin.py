@@ -19,10 +19,10 @@ def test_every_look_is_described_once_with_what_the_app_needs():
     assert [e['id'] for e in entries][0] == 'whiteboard' == DIALS['look'][0]        # the default comes first
     assert len({e['id'] for e in entries}) == len(entries)
     for e in entries:
-        assert set(e['name']) == {'en', 'zh'} and all(e['name'].values()), e['id']
+        assert set(e['name']) == ({'en', 'zh', 'es'} if e['renderer'] == 'whiteboard' else {'en', 'zh'}) and all(e['name'].values()), e['id']
         assert e['status'] in styles.STATUSES and isinstance(e['render_ready'], bool)
         assert e['render_ready'] == (e['status'] != 'planned'), e['id']           # planned looks are never offered
-        assert e['languages'] and set(e['languages']) <= {'en', 'zh'}
+        assert e['languages'] and set(e['languages']) <= {'en', 'zh', 'es'}
         assert e['stories'] and set(e['stories']) <= set(DIALS['story'])
         m = e['motion']
         assert {m['min'], m['max'], m['default']} <= set(MOTIONS)
@@ -90,12 +90,12 @@ def test_the_cli_offers_exactly_the_looks_that_render(capsys):
 SKINS = ('chalkboard', 'notebook')
 
 
-def test_the_chalkboard_and_notebook_looks_are_offered_in_both_languages():
+def test_the_chalkboard_and_notebook_looks_are_offered_in_all_languages():
     ready = styles.ids(ready=True)
     for look in SKINS:
         e = styles.get(look)
         assert look in ready and look in DIALS['look'], look
-        assert e['status'] == 'skin' and e['renderer'] == 'whiteboard' and e['languages'] == ['en', 'zh']
+        assert e['status'] == 'skin' and e['renderer'] == 'whiteboard' and e['languages'] == ['en', 'zh', 'es']
         skin = skins.for_look(look)
         assert skin.id == look and not skin.plain and skin.hand != 'marker'
     chalk, note = skins.for_look('chalkboard'), skins.for_look('notebook')

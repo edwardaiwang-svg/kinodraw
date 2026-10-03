@@ -40,6 +40,9 @@ def prepare(project: Path, keep_pacing=False, progress=None) -> tuple[dict, dict
     """(storyboard, timeline, language, build dir) with narration laid out for this look."""
     cfg = pipeline.settings(project)
     lang = cfg['lang']
+    if lang not in ('en', 'zh'):
+        raise SystemExit('The stick-figure preview reads English and Chinese scripts only; '
+                         'make this video in the Whiteboard, Chalkboard or Notebook look.')
     out = project / 'build' / 'stick'
     out.mkdir(parents=True, exist_ok=True)
     if keep_pacing:

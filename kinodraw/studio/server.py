@@ -532,7 +532,7 @@ def state() -> dict:
                        for e in styles.looks(ready=True)],                               # that render now
             'voices': {lang: [{'id': vid, 'name': name} for vid, name in choices]
                        for lang, choices in voice.VOICES.items()},
-            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')},
+            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh', 'es')},
             'notice': paths.NOT_MOVED if paths.left_behind else None}   # Doodle Studio's folders could not move yet
 
 

@@ -16,17 +16,20 @@ from . import ink
 SIZE = 70
 MAX_W = 1760
 EN_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’)])|—')
+ES_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’»)])|—')
 ZH_PUNCT = re.compile(r'[，。；：？！、—]')
 EN_WEAK = {'a', 'an', 'the', 'of', 'to', 'and', 'or', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'as',
            'that', 'is', 'was', 'his', 'her', 'its', 'their', 'my', 'our', 'your', 'but', 'if', 'than'}
 
+ES_WEAK = set('el la los las de del a al y o en por para con desde como que es era su sus mi nuestro tu pero si'.split())
+
 
 def cap_font(lang, fonts=ink.FONTS):
-    return ink.font('en_caption' if lang == 'en' else 'zh_caption', SIZE, fonts)
+    return ink.font('en_caption' if lang in ('en', 'es') else 'zh_caption', SIZE, fonts)
 
 
 def clause_spans(text, lang):
-    pat = EN_PUNCT if lang == 'en' else ZH_PUNCT
+    pat = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
     spans, start = [], 0
     for m in pat.finditer(text):
         end = m.end()
@@ -38,7 +41,7 @@ def clause_spans(text, lang):
 
 
 def units(text, lang):
-    if lang == 'en':
+    if lang in ('en', 'es'):
         return re.findall(r'\S+\s*', text)
     return re.findall(r"[A-Za-z0-9$.,%×\-–/+'’&]+\s*|.", text)
 
@@ -62,9 +65,9 @@ def balanced_lines(text, lang, fonts=ink.FONTS):
         if wa > MAX_W or wb > MAX_W:
             continue
         penalty = abs(wa - wb)
-        if lang == 'en':
+        if lang in ('en', 'es'):
             last = a.split()[-1].lower().strip(',.;:') if a.split() else ''
-            if last in EN_WEAK:
+            if last in (ES_WEAK if lang == 'es' else EN_WEAK):
                 penalty += 400
             if len(b.split()) <= 2:
                 penalty += 600
@@ -108,8 +111,8 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end):
             frac = off / max(1, len(dtext))
             atoms.append((p, sa + frac * (sb - sa)))
             off += len(p)
-    target = 80 if lang == 'en' else 28
-    minimum = 26 if lang == 'en' else 8
+    target = 80 if lang in ('en', 'es') else 28
+    minimum = 26 if lang in ('en', 'es') else 8
     cues, cur, cur_pos = [], '', None
     for text, pos in atoms:
         trial = cur + text

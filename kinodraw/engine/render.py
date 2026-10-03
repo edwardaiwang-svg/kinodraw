@@ -674,7 +674,7 @@ def chip_image(ch, lang, fonts=ink.FONTS):
     key = (text, ch.get('color'), lang, fonts)     # by what it shows: one process may render several videos
     if key not in _chip_cache:
         from PIL import ImageDraw
-        f = ink.font('ui' if lang == 'en' else 'zh_caption', 32, fonts)
+        f = ink.font('ui' if lang in ('en', 'es') else 'zh_caption', 32, fonts)
         w = int(f.getlength(text)) + 44
         img = Image.new('RGBA', (w, 52), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
@@ -692,6 +692,9 @@ def chip_image(ch, lang, fonts=ink.FONTS):
 def source_line(ch, lang):
     sp = ch.get('speaker')
     if ch['kind'] == 'section' and sp and sp.get('show'):
+        if lang == 'es':
+            return (f"Fuente: {sp['name'].get('es', sp['name'].get('en', ''))} · "
+                    f"{sp['show'].get('es', sp['show'].get('en', ''))}, {sp['date'].get('es', sp['date'].get('en', ''))}")
         return (f"Source: {sp['name']['en']} · {sp['show']['en']}, {sp['date']['en']}" if lang == 'en'
                 else f"来源：{sp['name']['zh']} · {sp['show']['zh']}，{sp['date']['zh']}")
     return (ch.get('source') or {}).get(lang)
@@ -760,7 +763,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--project', required=True, help='project folder (photos/, doodles/, stock/)')
     ap.add_argument('--episode', required=True)
-    ap.add_argument('--lang', required=True, choices=['en', 'zh'])
+    ap.add_argument('--lang', required=True, choices=['en', 'zh', 'es'])
     ap.add_argument('--timeline')
     ap.add_argument('--synthetic', action='store_true')
     ap.add_argument('--output')

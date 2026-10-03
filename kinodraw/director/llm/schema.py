@@ -78,7 +78,8 @@ Return every beat of the section in beat_ids order, including beats with no visu
 """
 
 MAX_VISUALS_PER_BEAT = 4
-LIMITS = {'en': {'label': 22, 'title': 40, 'hook': 30, 'quote': 110, 'gloss': 80, 'takeaway_words': 12},
+LIMITS = {'es': {'label': 22, 'title': 40, 'hook': 30, 'quote': 110, 'gloss': 80, 'takeaway_words': 12},
+          'en': {'label': 22, 'title': 40, 'hook': 30, 'quote': 110, 'gloss': 80, 'takeaway_words': 12},
           'zh': {'label': 10, 'title': 20, 'hook': 15, 'quote': 44, 'gloss': 32, 'takeaway_chars': 24}}
 
 

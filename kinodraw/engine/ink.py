@@ -57,7 +57,7 @@ def font(kind: str, size: int, fonts: Fonts = FONTS) -> ImageFont.FreeTypeFont:
 
 
 def hand_font(lang: str, size: int, fonts: Fonts = FONTS):
-    return font('en_hand' if lang == 'en' else 'zh_hand', size, fonts)
+    return font('en_hand' if lang in ('en', 'es') else 'zh_hand', size, fonts)
 
 
 @lru_cache(maxsize=8)
@@ -69,7 +69,7 @@ def _cmap(path: str, index: int):
 
 def font_runs(text: str, lang: str, size: int, fonts: Fonts = FONTS):
     """Split text into (substring, font) runs; missing glyphs fall back to the other hand font, then the caption font."""
-    primary = 'en_hand' if lang == 'en' else 'zh_hand'
+    primary = 'en_hand' if lang in ('en', 'es') else 'zh_hand'
     order = [primary, 'zh_hand' if primary == 'en_hand' else 'en_hand', 'zh_caption']
     runs = []
     for ch in text:
@@ -574,8 +574,8 @@ class TextDrawing:
 def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
     """Greedy wrap for board text (whole words; CJK per character)."""
     f = hand_font(lang, size, fonts) if kind == 'hand' else \
-        font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
-    units = re.findall(r'\S+\s*', text) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
+        font('en_caption' if lang in ('en', 'es') else 'zh_caption', size, fonts)
+    units = re.findall(r'\S+\s*', text) if lang in ('en', 'es') else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
     lines, cur = [], ''
     for u in units:
         trial = cur + u
@@ -584,7 +584,7 @@ def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
                 cur = trial
                 continue
             lines.append(cur.rstrip())
-            cur = u.lstrip() if lang == 'en' else u
+            cur = u.lstrip() if lang in ('en', 'es') else u
         else:
             cur = trial
     if cur.strip():

@@ -12,7 +12,7 @@ FIX = Path(__file__).parent / 'fixtures'
 
 
 def _prod(tmp_path, look, lang, aspect='9:16'):
-    fx = 'promo_tiny.md' if look == 'collage' else ('sleep_zh.md' if lang == 'zh' else 'tiny.md')
+    fx = 'promo_tiny.md' if look == 'collage' else {'zh': 'sleep_zh.md', 'es': 'miel_es.md'}.get(lang, 'tiny.md')
     board = pipeline.new_project(FIX / fx, tmp_path / f'{look}-{lang}',
                                  direction={'look': look, 'story': 'promo' if look == 'collage' else None})
     tl = timeline.layout(board, lang, timeline.synthetic_clips(board, lang))
@@ -96,3 +96,10 @@ def test_captions_wrap_into_even_lines():
     assert max(widths) <= vertical.TEXT_W and max(widths) - min(widths) < 400
     zh, _ = vertical.caption_lines('植物利用阳光、水和空气制造养分，同时释放出我们呼吸的氧气，这个过程叫做光合作用。', 'zh')
     assert all(not l[:1] in '，。、' for l in zh)
+
+
+def test_spanish_captions_are_set_like_english():
+    text = 'Los pingüinos emperador caminan juntos durante el invierno más frío de la Antártida'
+    lines, size = vertical.caption_lines(text, 'es')
+    assert all(w in text.split() for l in lines for w in l.split())          # whole words: never 'ping|üinos'
+    assert vertical.caption_image(text, 'es').size == vertical.caption_image(text, 'en').size  # Arimo, as in English
