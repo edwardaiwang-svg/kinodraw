@@ -80,3 +80,19 @@ def test_negated_or_idiomatic_words_leave_the_face_calm(text, lang):
 def test_said_shock_and_grim_words_still_count():
     assert cues.shock('He was killed.', 'en') >= 0 and cues.grim('He was killed.', 'en')
     assert cues.shock('他被杀了。', 'zh') >= 0 and cues.grim('他被杀了。', 'zh')
+
+
+@pytest.mark.parametrize('text,lang,pose', [
+    ('She sat down on the bench.', 'en', 'sit'),
+    ('她坐了下来。', 'zh', 'sit'),
+    ('He waved goodbye.', 'en', 'wave'),
+    ('他挥手告别。', 'zh', 'wave'),
+    ('Everyone cheered when the new bridge opened.', 'en', 'cheer'),
+    ('大家都欢呼起来。', 'zh', 'cheer'),
+])
+def test_words_make_the_figure_sit_wave_and_cheer(text, lang, pose):
+    assert cues.pose_for(text, lang)[0] == pose
+
+
+def test_ocean_waves_are_not_a_wave():
+    assert cues.pose_for('The waves were huge that night.', 'en')[0] != 'wave'

@@ -17,7 +17,10 @@ POSE = {
         ('run', r'\b(ran|run|runs|running|fled|flee\w*|escap\w*|chas\w*|rushed|raced|hurr\w*)\b'),
         ('walk', r'\b(walk\w*|travel\w*|journey\w*|march\w*|migrat\w*|moved|crossed|reach\w*|arriv\w*|went|'
                  r'spread|explor\w*|sail\w*)\b'),
-        ('cheer', r'\b(won|wins?|victor\w*|triumph\w*|success\w*|celebrat\w*|thriv\w*|golden age|survived)\b'),
+        ('cheer', r'\b(won|wins?|victor\w*|triumph\w*|success\w*|celebrat\w*|thriv\w*|golden age|survived|'
+                  r'cheer(?:ed|ing|s)?|hooray)\b'),
+        ('wave', r'\b(waved|waving|waves? (?:goodbye|hello|at|to))\b'),
+        ('sit', r'\b(sat|sit|sits|sitting|seated)\b'),
         ('sad', r'\b(lost|lose|loss|poor|poverty|famine|plagues?|diseases?|sick\w*|sad|grief|starv\w*|suffer\w*|'
                 r'declin\w*|expensive|fewer)\b'),
         ('shrug', r'\b(maybe|perhaps|nobody knows|no one knows|unclear|unknown|myster\w*|no single|not sure|'
@@ -32,7 +35,9 @@ POSE = {
         ('angry', r'战争|战斗|攻击|入侵|愤怒|生气|敌人|反抗|起义'),
         ('run', r'跑|逃|追赶|冲向'),
         ('walk', r'(?<![拿带偷抢夺运搬卷吹赶冲飞抬取])走(?![私廊势红])|旅行|穿过|穿越|迁徙|前往|到达|传播|航行|探索'),
-        ('cheer', r'胜利|成功|庆祝|赢|繁荣|幸存|活了下来'),
+        ('cheer', r'胜利|成功|庆祝|赢|繁荣|幸存|活了下来|欢呼'),
+        ('wave', r'挥手|招手|挥了挥手|挥着手'),
+        ('sit', r'坐下|坐了下来|坐着|坐在'),
         ('sad', r'失去|贫穷|饥荒|瘟疫|疾病|悲伤|痛苦|衰落|减少|太贵'),
         ('shrug', r'也许|或许|不知道|谁也不知道|没人知道|未知|谜|没有答案|说不清|不确定'),
         ('talk', r'(?<!就是)(?<!比如)(?<!据)(?<!小)(?<!传)(?<!听)(?<!虽)(?<!再)说(?![明服])|告诉|叫做|宣布|称为|解释|'
@@ -89,7 +94,7 @@ GROUND = [('history', re.compile(r'\b(roman?|empire|ancient|wars?|kings?|emperor
                                 r'nature|wildlife)\b|植物|动物|森林|树|生物|恐龙|昆虫|自然', I))]
 NARRATOR_POSES = {'think': 'think', 'wave': 'wave', 'explain': 'talk', 'worried': 'sad', 'thumbs': 'cheer',
                   'magnifier': 'point', 'present': 'point', 'head': 'talk'}
-MOOD = {'fall': 'sad', 'sad': 'sad', 'angry': 'upset', 'cheer': 'happy', 'run': 'scared'}
+MOOD = {'fall': 'sad', 'sad': 'sad', 'angry': 'upset', 'cheer': 'happy', 'wave': 'happy', 'run': 'scared'}
 
 
 WEAK = ('talk', 'hold', 'point')
