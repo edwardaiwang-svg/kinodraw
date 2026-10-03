@@ -44,6 +44,7 @@ def prepare(project: Path, keep_pacing=False, progress=None) -> tuple[dict, dict
     out.mkdir(parents=True, exist_ok=True)
     if keep_pacing:
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
+        tl['audio'] = str(audio.narration(tl, project / 'build').resolve())   # it sits next to that timeline
     else:
         clips = pipeline.narrate(project, progress)
         tl = audio.assemble(pipeline.storyboard(project), lang, clips, out, pauses={}, credit=cfg.get('credit', True))
