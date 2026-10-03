@@ -91,6 +91,32 @@ def test_a_folder_that_cannot_be_renamed_is_left_where_it_is(tmp_path, monkeypat
     assert (old / 'models' / 'voices-v1.0.bin').exists()
 
 
+def test_a_doodle_studio_sign_in_is_not_shown_as_a_kinodraw_one(tmp_path, monkeypatch):
+    """The keychain entries keep Doodle Studio's name and are never read, so their list (saved-keys.json, in the
+    settings folder) must not move either: the Studio would say "signed in", preselect KinoDraw Cloud, skip the
+    sign-in prompt and fail the first Create, and list API keys that are not there."""
+    from kinodraw.director.llm import cloud, providers
+    from kinodraw.paths import legacy_moves
+    from kinodraw.studio import server
+    _fake_dirs(monkeypatch, tmp_path)
+    old = _old_install(tmp_path)
+    (old / 'saved-keys.json').write_text(json.dumps(['cloud-token', 'openai']))
+    new = tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw'
+    monkeypatch.setattr(providers, 'SAVED', new / 'saved-keys.json')
+    monkeypatch.setattr(server, 'CONFIG', new / 'studio.json')
+    monkeypatch.setattr(cloud, 'URL', 'https://api.example.org')
+    for var in ('KINODRAW_CLOUD_TOKEN', 'DOODLE_CLOUD_TOKEN', *providers.KEY_ENV.values()):
+        monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv(var.replace('KINODRAW_', 'DOODLE_'), raising=False)
+    assert len(REAL_MIGRATE(legacy_moves(), new / 'studio.json')) == 2
+    state = server.state()
+    assert not state['cloud_signed_in'] and state['default_director'] == 'rules'     # the sign-in prompt shows
+    assert not any(state['keys'].values())                                           # "re-enter any saved keys"
+    assert (new / 'models' / 'voices-v1.0.bin').exists() and json.loads((new / 'studio.json').read_text())['credit'] is False
+    providers.remember('openai')                          # KinoDraw's own list is never touched by a later run
+    assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [] and providers.saved() == {'openai'}
+
+
 def _env_probe(env: dict) -> list:
     code = ('import json; from kinodraw import voice; from kinodraw.director import match; '
             'from kinodraw.director.llm import cloud; '

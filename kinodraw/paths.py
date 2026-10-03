@@ -2,7 +2,8 @@
 
 KinoDraw was called Doodle Studio up to version 0.1.6. The first run of 0.2.0 renames the old folders (models, settings,
 the doodle-search cache, the projects folder) so nothing is downloaded or lost again. Saved keys and the sign-in
-live in the keychain under the old name and are not read: the user enters them again once.
+live in the keychain under the old name and are not read: the user enters them again once, so the list of their
+names (saved-keys.json) is deleted after the move instead of claiming keys and a sign-in KinoDraw doesn't have.
 """
 from __future__ import annotations
 
@@ -54,7 +55,8 @@ def legacy_moves() -> list[tuple[Path, Path]]:
 def migrate(moves: list[tuple[Path, Path]] | None = None, settings: Path | None = None) -> list[tuple[Path, Path]]:
     """Rename each old folder that exists to its new name, unless the new one already exists. A rename that fails
     (another drive, a file in use) leaves the old folder where it is and the app starts fresh. A projects folder
-    saved in the Studio's settings follows its move. Returns the moves made."""
+    saved in the Studio's settings follows its move; the moved list of saved keys is deleted (its keychain entries
+    stay under Doodle Studio's name). Returns the moves made."""
     done = []
     for old, new in legacy_moves() if moves is None else moves:
         if old == new or not old.is_dir():
@@ -72,6 +74,10 @@ def migrate(moves: list[tuple[Path, Path]] | None = None, settings: Path | None 
         if old.parent.name == OLD_APP:              # Windows: %LOCALAPPDATA%\DoodleStudio\DoodleStudio
             with contextlib.suppress(OSError):
                 old.parent.rmdir()                  # only if now empty
+    keys = config_dir() / 'saved-keys.json'          # Doodle Studio's names, not KinoDraw's (providers.SAVED)
+    if any(keys.is_relative_to(new) for _, new in done):
+        with contextlib.suppress(OSError):
+            keys.unlink(missing_ok=True)
     settings = settings or config_dir() / 'studio.json'
     with contextlib.suppress(OSError, ValueError, AttributeError):
         cfg = json.loads(settings.read_text())
