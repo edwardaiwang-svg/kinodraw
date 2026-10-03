@@ -30,19 +30,34 @@ def cta_sentence(sentences):
     return next((s for s in reversed(ctas) if URL.search(s.text) or ASK.match(s.text.strip())), ctas[-1])
 
 
+NOT_NAMES = {'with', 'meet', 'introducing', 'presenting', 'enter', 'say', 'there', "there's", 'here', "here's", 'this',
+             'the', 'now', 'so', 'and', 'but'}
+
+
+def name_in(text: str) -> str:
+    """The product name a brand sentence reveals: its first run of capitalised words, whole ("Meet Khan Academy." ->
+    Khan Academy, "With Friendr, you set a minimum." -> Friendr), or ''."""
+    run = []
+    for w in text.split():
+        word = w.strip('.,!?:;"“”()')
+        if word[:1].isupper() and (run or word.lower() not in NOT_NAMES):
+            run.append(word)
+            if w[-1] in '.,!?:;':
+                break
+        elif run:
+            break
+    return ' '.join(run)
+
+
 def brand_of(prod) -> dict:
-    """The storyboard's brand, filled in from the script: the brand sentence's capitalised word, a domain, the last
+    """The storyboard's brand, filled in from the script: the name the brand sentence reveals, a domain, the last
     call to action."""
     brand = dict(prod.ep.get('brand') or {})
     said = prod.said
     if not brand.get('name'):
-        for s in said:
-            if s.role == 'brand':
-                words = [w.strip('.,!?') for w in s.text.split() if w[:1].isupper() and w.lower().strip('.,!?') not in
-                         ('with', 'meet', 'introducing', 'there', "there's", 'this', 'the')]
-                if words:
-                    brand['name'] = words[-1]
-                    break
+        name = next((name_in(s.text) for s in said if s.role == 'brand' and name_in(s.text)), '')
+        if name:
+            brand['name'] = name
     if not brand.get('url'):
         found = [m.group(0) for s in said for m in URL.finditer(s.text)]
         if found:
@@ -75,15 +90,18 @@ def items_in(text: str, lang: str) -> list[str]:
     return [x for x in out if x][:6] or items_of(text)
 
 
-def _hero(prod, text, size=150, color='#EF7B3A'):
-    """The brand's word mark (or the storyboard's logo image): big display letters with a paper border."""
+def _hero(prod, text, size=150, color='#EF7B3A', fit=1200):
+    """The brand's word mark (or the storyboard's logo image): big display letters with a paper border, smaller
+    when a long name would be wider than ``fit``."""
     logo = prod.brand.get('logo_image')
-    img = logo if logo is not None else ui.raster(_wordmark(text, prod.lang, size, color))
+    img = logo if logo is not None else ui.raster(_wordmark(text, prod.lang, size, color, fit))
     return motion.die_cut(img, border=14)
 
 
-def _wordmark(text, lang, size, color):
+def _wordmark(text, lang, size, color, fit=None):
     fam = ui._family(lang, hand=True)
+    if fit and ui.text_width(text, fam, size) + 30 > fit:
+        size = int(size * (fit - 30) / ui.text_width(text, fam, size))
     w, h = ui.text_width(text, fam, size) + 30, size * 1.35
     return ui._doc(w, h, ui._text(15, size * 1.02, text, fam, size, fill=color))
 
@@ -393,7 +411,7 @@ def end(prod, stage):
     lab = ui.LABELS[prod.lang]
     name = prod.brand.get('name') or prod.ep['title'][prod.lang]
     t0 = stage.start + .15
-    els.append(Piece(_hero(prod, name, size=170), 960, 230, t0, stage.sentences[0].beat, 'end.name', enter='slam',
+    els.append(Piece(_hero(prod, name, size=170, fit=1640), 960, 230, t0, stage.sentences[0].beat, 'end.name', enter='slam',
                      energy=3, cue='slam'))
     els.append(Burst(960, 230, t0 + .08, r0=330, r1=390, n=16, ident='end.burst'))
     cta = cta_sentence(stage.sentences)

@@ -12,7 +12,8 @@ model may pick among the options the rules offer, but it never invents what is d
 | `story` | `explain` (sections, agenda, takeaways), `promo` (problem → brand → steps → proof → call to action), `story` (question → journey → twist → end line), `showcase` (one idea per beat, a signature end card) | `explain` |
 | `motion` | `calm` (no big moves), `lively`, `showreel` (beat-synced, many showpieces) | `lively` |
 
-`brand` (optional) is `{name, url, cta, reveal}` for promos; `reveal: "hand"` has the drawing hand write the name (and a closing line) instead of slamming it in. Set the dials with `kinodraw make --look collage --story promo`.
+`brand` (optional) is `{name, url, cta, reveal}` for promos; `reveal: "hand"` has the drawing hand write the name (and a closing line) instead of slamming it in. Set the dials with `kinodraw make --look collage --story promo`, and the brand with `--brand "Khan Academy"`,
+`--brand-url` and `--brand-cta` (each found in the script when left out).
 
 ## Who decides what
 

@@ -186,7 +186,10 @@ def _settings(args):
 
 
 def _direction(args):
-    return {key: getattr(args, key, None) for key in ('look', 'story', 'motion')}
+    brand = {key: getattr(args, arg, None)
+             for key, arg in (('name', 'brand'), ('url', 'brand_url'), ('cta', 'brand_cta'))}
+    return {**{key: getattr(args, key, None) for key in ('look', 'story', 'motion')},
+            'brand': {k: v for k, v in brand.items() if v} or None}
 
 
 MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
@@ -215,6 +218,9 @@ def main(argv=None):
         p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
         p.add_argument('--story', choices=STORIES, help='story shape (default explain)')
         p.add_argument('--motion', choices=MOTIONS, help='how lively the animation is (default lively)')
+        p.add_argument('--brand', help='a promo\'s product name, as it should appear (default: from the script)')
+        p.add_argument('--brand-url', help='a promo\'s website, for the end card (default: from the script)')
+        p.add_argument('--brand-cta', help='a promo\'s button text, e.g. "Try it for free" (default: from the script)')
         p.add_argument('--model')
         p.add_argument('--base-url')
         p.set_defaults(func=fn)

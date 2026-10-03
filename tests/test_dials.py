@@ -33,3 +33,39 @@ def test_a_promo_is_told_straight_without_whiteboard_narration(tmp_path):
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     assert tl['end_card']['end'] == tl['duration']                                   # the silent end card stays
     assert renderer.make_production(board, tl, 'en', tmp_path / 'p').frame(2.0).size == (1920, 1080)
+
+
+KHAN = ('# Learn anything\n\nStuck on a math problem at eleven at night? Your teacher is asleep and the textbook makes '
+        'no sense.\n\nThere\'s a better way. Meet Khan Academy.\n\nPick a topic. Watch a short video. Practice until it '
+        'clicks.\n\nKhan Academy. Learn at your own pace. Try it free today.\n')
+
+
+def test_a_product_name_of_several_words_is_shown_whole(tmp_path):
+    """With the product name left blank, "Meet Khan Academy." slammed in "Academy" (and put it in the corner tag)."""
+    from kinodraw.director.annotate import annotate
+    from kinodraw.engine.collage import promo
+    board = pipeline.new_project(KHAN, tmp_path / 'p', direction={'look': 'collage', 'story': 'promo'})
+    annotate(board)
+    prod = renderer.make_production(board, timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en')), 'en',
+                                    tmp_path / 'p')
+    assert any(s.role == 'brand' and s.text == 'Meet Khan Academy.' for s in prod.said)
+    assert prod.brand['name'] == 'Khan Academy'
+    for said, name in [('Introducing Notion Calendar.', 'Notion Calendar'), ('Meet Google Docs.', 'Google Docs'),
+                       ('With Friendr, you set a minimum.', 'Friendr'), ("Now there's KinoDraw.", 'KinoDraw'),
+                       ('Meet the Tidepool app.', 'Tidepool')]:
+        assert promo.name_in(said) == name
+    for size, fit in ((150, 1200), (170, 1640)):                      # a long name is smaller, never off the screen
+        assert promo._hero(prod, 'Google Workspace for Education', size=size, fit=fit).width <= fit + 2 * 14
+
+
+def test_the_command_line_can_name_the_brand(tmp_path, monkeypatch):
+    from kinodraw import cli, director
+    monkeypatch.setattr(director, 'direct', lambda *a: {})
+    (tmp_path / 'khan.md').write_text(KHAN, encoding='utf-8')
+    script = str(tmp_path / 'khan.md')
+    cli.main(['new', script, '-o', str(tmp_path / 'p'), '--look', 'collage', '--story', 'promo', '--brand', 'Khan Academy',
+              '--brand-url', 'khanacademy.org', '--brand-cta', 'Start learning'])
+    cli.main(['new', script, '-o', str(tmp_path / 'q'), '--look', 'collage', '--story', 'promo'])
+    assert json.loads((tmp_path / 'p' / 'storyboard.json').read_text())['brand'] == \
+        {'name': 'Khan Academy', 'url': 'khanacademy.org', 'cta': 'Start learning'}
+    assert 'brand' not in json.loads((tmp_path / 'q' / 'storyboard.json').read_text())     # left to the script
