@@ -27,7 +27,7 @@ Each project folder holds a `storyboard.json`. You can edit it by hand or in Stu
 - `narrator`: `"none"` hides the character. Any other value is a prefix, and poses are looked up as `<prefix>_wave`, `<prefix>_head`, `<prefix>_present`, `<prefix>_thumbs`, and so on (see "Your own doodles" below).
 - `music`: `true`, `false`, or `{"primary": "fresh_focus", "secondary": "natural_vibes"}`.
 - `host`: optional, `{"photo": "photos/me.jpg", "badge": {"en": "Name · role"}}`. It adds a photo badge to the title board and end card.
-- `look`, `story`, `motion`: the direction dials, all optional. `look` is a look in `kinodraw/styles/registry.json` that can render now: `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `chalkboard`, `notebook` or `collage` (`bold` is planned, not available yet); looks with `"status": "skin"` are the whiteboard with another paper, ink, fills, fonts and hand (`kinodraw/engine/skin.py`): `chalkboard` is chalk on a slate-green board, `notebook` pencil on lined paper with a highlighter. `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
+- `look`, `story`, `motion`: the direction dials, all optional. `look` is a look in `kinodraw/styles/registry.json` that can render now: `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `chalkboard`, `notebook`, `pixel_quest`, `mosaic` or `collage` (`bold` is planned, not available yet); looks with `"status": "skin"` are the whiteboard with another paper, ink, fills, fonts and hand (`kinodraw/engine/skin.py`): `chalkboard` is chalk on a slate-green board, `notebook` pencil on lined paper with a highlighter. `pixel_quest` is Pixel Quest (像素冒险): an 8-pixel grid, a fixed 32-colour palette, a pixel cursor and speech bubbles. `mosaic` is Mosaic (镶嵌画): 14-pixel terracotta tiles with grout, a marker hand and caption plaques. Both support English and Chinese, with the same board scenes and voice timing as whiteboard. `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
 - `brand`: optional, `{"name", "url", "cta", "reveal"}`, all text; `"reveal": "hand"` has the drawing hand write the name. Without it the brand is found in the script: a domain such as `friendr.nl`, or a name said twice that the title or a "Meet X" backs up.
 
 ## Chapters
@@ -89,6 +89,14 @@ Visuals that take the whole board (the camera moves to a new page):
 
 `emphasis` circles, underlines or strikes part of an earlier visual: `target: "<visual id>[.<index>]"`, `kind: circle | underline | strike | highlight`.
 
+## Pixel and mosaic materials
+
+Pixel Quest and Mosaic are skins of the whiteboard renderer. Select them with `--look pixel_quest` or `--look mosaic`, or choose their names in Studio. Both offer `explain` and `story`, and `calm` or `lively` motion. Pixel Quest defaults to lively and fits 45–480 seconds; Mosaic defaults to calm and fits 60–900 seconds. Both render at 16:9.
+
+The grid belongs to the board, so drawings, fills and paper keep their cells as the camera pans. Marks reveal along the existing pen paths. Pixel Quest reduces artwork to its Quest32 palette on an 8-pixel grid; Mosaic mixes seven-level tile colours with terracotta and leaves two-pixel grout on a 14-pixel grid. Text remains sharp for both languages rather than becoming tiles. English uses Silkscreen for Pixel Quest and Cinzel for Mosaic; Chinese uses DoodleKai for handwriting and Noto Sans SC for captions, with glyph fallback for mixed text.
+
+Material captions fit the complete cue into at most two lines, reducing size only as needed and never below 36 pixels. Pixel Quest frames captions in a bubble and chapter labels in brackets; Mosaic uses a plaque and tablet. The material and its settings are declared once in `kinodraw/styles/registry.json`, under `skin.material` and `skin.material_args`; the skin handles the paper, marks, cursor, captions and chapter labels.
+
 ## Direction
 
 The collage and bold looks turn every sentence into a scene from a fixed template library and animate it with an energy from 0 to 3. `kinodraw/director/annotate.py` plans this without any AI: `annotate(board)` writes a `direction` list on every title, opener, narration, take and closing beat, one entry per sentence, and `plan(board, timeline)` fits the energies to the motion dial (run it again once the voice timing is known; without a timeline it assumes 15 characters a second).
@@ -112,7 +120,7 @@ The collage and bold looks turn every sentence into a scene from a fixed templat
 
 | look | story | scenes |
 |---|---|---|
-| whiteboard, chalkboard, notebook | any | board |
+| whiteboard, chalkboard, notebook, pixel_quest, mosaic | any | board |
 | collage | promo, showcase | chat_pileup, chaos, brand_reveal, step_card, share_link, rsvp, feature_chips, threshold, use_case_grid, brand_endcard, script_page, app_paste, app_press, hand_draws, sticker_row |
 | collage | story, explain | title_question, crowd, stack, sky_speech, room_reaction, journey, document_reveal, collect, moodboard, box_reveal, tools_idea, assemble, end_line, sticker_row |
 | bold | any | slam_line, bracket_focus, count_up, marquee_rings, morph, particle_assemble, iris_end |

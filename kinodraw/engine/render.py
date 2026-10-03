@@ -26,7 +26,6 @@ from PIL import Image
 
 from .. import script, styles
 from . import auto_scenes as auto
-from . import captions as cap
 from . import ink
 from . import scenes
 from . import skin as skins
@@ -368,7 +367,11 @@ class Production:
         return 'board', {}, None, None
 
     def view(self, t, L, hand=True):
-        frame = self.skin.background().copy()
+        if self.skin.textured:
+            L = int(round(L))
+            frame = self.skin.background(x=L).copy()
+        else:
+            frame = self.skin.background().copy()
         lo, hi = L - 20, L + SIZE[0] + 20
         for layer in (0, 1):
             for e in self.els:
@@ -379,6 +382,8 @@ class Production:
                 img, _, _ = e.state(t)
                 if img is not None:
                     ink.paste(frame, img, e.x - L, e.y)
+        if self.skin.textured:
+            frame = self.skin.post(frame, L)
         if hand:
             self._hand(frame, t, L)
         return frame
@@ -519,7 +524,9 @@ class Production:
             return
         ch, a, b = span
         alpha = min(1., (t - a) / .4, (b - t) / .3)       # labels fade in and out; nothing pops
-        chip = faded(chip_image(ch, self.lang, self.skin.fonts), alpha)
+        tag = (chip_image(ch, self.lang, self.skin.fonts) if self.skin.chapter_tag == 'chip'
+               else skins.tag_image(ch, self.lang, self.skin))
+        chip = faded(tag, alpha)
         ink.paste(frame, chip, 36, 22)
         src = source_line(ch, self.lang)
         if src:
@@ -542,7 +549,7 @@ class Production:
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
             return
-        img = cap.caption_image(c['text'], self.lang, self.skin.fonts, self.skin.caption, self.skin.caption_edge)
+        img = self.skin.caption_image(c['text'], self.lang)
         ink.paste(frame, img, (SIZE[0] - img.width) / 2, 1046 - img.height)
 
 
@@ -653,11 +660,16 @@ def ui_text(text, size, color, fonts=ink.FONTS):
     return _txt_cache[key]
 
 
-def chip_image(ch, lang, fonts=ink.FONTS):
+def chip_text(ch, lang):
     label = (ch.get('label') or {}).get(lang, '')
     title = (ch.get('title') or {}).get(lang, '')
     short = title.split(':')[0].split('：')[0] if ch['kind'] == 'section' else title
     text = f'{label} · {short}' if label and short and short.strip().lower() != label.strip().lower() else (label or short)
+    return text
+
+
+def chip_image(ch, lang, fonts=ink.FONTS):
+    text = chip_text(ch, lang)
     key = (text, ch.get('color'), lang, fonts)     # by what it shows: one process may render several videos
     if key not in _chip_cache:
         from PIL import ImageDraw

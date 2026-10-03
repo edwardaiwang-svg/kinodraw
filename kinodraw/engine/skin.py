@@ -10,6 +10,11 @@ Looks (all drawn in code, no image models; the hand is J's photo, restyled):
               pictures as chalk lines over pastel chalk rubbed in at about 80%, a white chalk marker in the hand
   notebook    lined paper with a red margin, graphite pencil with grain, colour-pencil fills, a yellow
               highlighter swiped behind each sentence's key phrase where it is written, a pencil in the hand
+  pixel_quest a cream quest world with pixel pictures, a cursor, speech bubbles and golden corner brackets
+  mosaic      limestone tesserae with terracotta grout, a marker, caption plaques and tabula ansata tags
+
+Materials affect pictures only, never board text, captions, chrome or the hand. Their cell grids and reveal
+are anchored to board coordinates; the seamless world backdrop pans with the board.
 """
 from __future__ import annotations
 
@@ -18,7 +23,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 from scipy import ndimage
 
 from . import ink
@@ -31,11 +36,11 @@ ON_YELLOW = (255, 96, 170, 140)             # a pink one, for words on a yellow 
 @dataclass(frozen=True)
 class Skin:
     id: str = 'whiteboard'
-    paper: str = 'whiteboard'           # background: whiteboard (ink.paper) | slate | lined
+    paper: str = 'whiteboard'           # background: whiteboard (ink.paper) | slate | lined | quest | mosaic
     lines: str = 'identity'             # how line and text colours map: identity | chalk | graphite
     fills: str = 'identity'             # how fills map: identity | chalk | pencil
     grain: str = 'none'                 # texture of every mark: none | chalk | graphite
-    hand: str = 'marker'                # what the hand holds: marker | chalk | pencil
+    hand: str = 'marker'                # what the hand holds: marker | chalk | pencil | cursor
     emphasis: str = 'none'              # each sentence's key phrase on the board: none | highlighter
     fonts: ink.Fonts = ink.FONTS
     base: tuple = ink.PAPER_RGB         # the paper's colour, which fills are mixed towards
@@ -46,13 +51,46 @@ class Skin:
     ink: tuple = ink.INK[:3]            # what ink.INK becomes (titles, labels, outlines); last: the name
                                         # hides the ink module in the rest of this class body
 
+    material: str = 'none'             # pictures only: none | pixel | tile
+    material_args: tuple = ()          # sorted registry (key, value) pairs, keeping Skin hashable
+    caption_style: str = 'outline'     # outline | bubble | plaque
+    chapter_tag: str = 'chip'          # chip | bracket | tablet
+    bloom: float = 0.
+
+    @property
+    def margs(self) -> dict:
+        return dict(self.material_args)
+
+    @property
+    def textured(self) -> bool:
+        return self.material != 'none'
+
     @property
     def plain(self) -> bool:
-        return self.lines == self.fills == 'identity' and self.grain == 'none'
+        return self.lines == self.fills == 'identity' and self.grain == 'none' and self.material == 'none'
 
-    def background(self, width=1920, height=1080) -> Image.Image:
+    def background(self, width=1920, height=1080, x=0) -> Image.Image:
         """The paper (RGBA, cached: copy before drawing on it)."""
+        if self.paper in ('quest', 'mosaic'):
+            period = 3840 if self.paper == 'quest' else 3836
+            left = int(x) % period
+            return _world(self, width, height).crop((left, 0, left + width, height))
         return ink.paper(width, height) if self.paper == 'whiteboard' else _paper(self.paper, self.base, width, height)
+
+    def caption_image(self, text, lang):
+        from . import captions
+        if self.caption_style == 'outline':
+            return captions.caption_image(text, lang, self.fonts, self.caption, self.caption_edge)
+        return _caption_panel(text, lang, self)
+
+    def cursor_image(self):
+        return cursor_image()
+
+    def post(self, frame, L):
+        """Board-aligned, low-resolution pixel glow, before hand and UI compositing."""
+        if not self.bloom:
+            return frame
+        return _bloom(frame, int(L), self.margs.get('cell', 8), self.bloom)
 
     def color(self, rgb) -> tuple:
         """One reference colour as this skin draws it (chrome, thumbnails)."""
@@ -70,6 +108,16 @@ class Skin:
             drawing.alpha = np.asarray(drawing.ink.getchannel('A'))
         elif isinstance(drawing, ink.PathDrawing):
             line = self._lines(drawing.line, x, y)
+            if self.textured:
+                color = self._fills(drawing.color, x, y, getattr(drawing, 'doodle', False))
+                line = material_image(line, self, x, y, self.margs.get('line_cover', .2), self.margs.get('line_grow', 0))
+                color = material_image(color, self, x, y, self.margs.get('fill_cover', .5))
+                color.alpha_composite(line)
+                la, ca = np.asarray(line), np.asarray(color)
+                drawing.line = Image.fromarray(np.where(la[..., 3:] == 0,
+                    np.dstack([ca[..., :3], la[..., 3:]]), la), 'RGBA')
+                drawing.color = color
+                return MaterialDrawing(drawing, x, y, self.margs.get('cell', 8))
             if drawing.color is drawing.line:
                 color = line
             else:
@@ -80,6 +128,8 @@ class Skin:
                 la, ca = np.asarray(line), np.asarray(color)
                 line = Image.fromarray(np.where(la[..., 3:] == 0, np.dstack([ca[..., :3], la[..., 3:]]), la), 'RGBA')
             drawing.line, drawing.color = line, color
+        elif self.textured and isinstance(drawing, ink.StaticDrawing):
+            drawing.image = material_image(drawing.image, self, x, y, self.margs.get('fill_cover', .5))
         return drawing
 
     def _lines(self, img, x, y):
@@ -117,6 +167,8 @@ def _skin(look: str) -> Skin:
     for key in ('ink', 'base', 'soft', 'faint', 'caption', 'caption_edge'):
         if key in params:
             params[key] = ink.rgba(params[key])[:3]
+    if 'material_args' in params:
+        params['material_args'] = tuple(sorted(params['material_args'].items()))
     fonts = entry.get('fonts')
     if fonts:
         files = {kind: (str(ink.ASSETS / 'fonts' / name), 0) for kind, name in fonts.items()}
@@ -429,3 +481,312 @@ def _under(elements, el, x, y):
 
 def _yellow(rgb):
     return rgb is not None and rgb[0] > 190 and rgb[1] > 170 and rgb[2] < .8 * min(rgb[0], rgb[1])
+
+
+# ------------------------------------------------------------------ board materials
+QUEST32 = np.array([ink.rgba('#' + c)[:3] for c in (
+    '1E1B2E 3A3550 5E5A78 8C8AA6 BFC0D1 E9E8EE FFFDF5 5A2A27 '
+    '8E3B30 C9503C F07B4E F8A96B FBD7A1 E8C547 F7E68A 2F5D3A '
+    '3F8E46 7BC05A BFE58A 1F3B73 2E64B5 4FA3E0 9AD7F2 2A7F86 '
+    '5CC3B4 6B3F8E A65FB8 E37FA8 F5B6CF 7A5236 B07E54 E2B48A').split()], dtype=np.uint8)
+
+
+def _blocks(a, cell, x, y):
+    """Pad to board cell boundaries, returning the cell-shaped array and crop offsets."""
+    h, w = a.shape[:2]
+    left, top = int(x) % cell, int(y) % cell
+    pads = ((top, -(h + top) % cell), (left, -(w + left) % cell)) + ((0, 0),) * (a.ndim - 2)
+    padded = np.pad(a, pads)
+    shape = (padded.shape[0] // cell, cell, padded.shape[1] // cell, cell) + a.shape[2:]
+    return padded.reshape(shape), left, top
+
+
+def _tile_jitter(gx, gy):
+    """Stable integer hash of absolute board tile indices, independent of draw order."""
+    h = (np.asarray(gx, np.int64) * 73856093) ^ (np.asarray(gy, np.int64) * 19349663)
+    h = (h ^ (h >> 13)) * 1274126177
+    return ((h ^ (h >> 16)) & 65535).astype(np.float32) / 32767.5 - 1
+
+
+def material_image(img, skin, x=0, y=0, cover=.5, grow=0):
+    """Alpha-weighted cell colour and binary coverage, expanded on the board grid; size is preserved. ``grow``
+    widens the coverage (not the colour) by that many pixels first, so a line thinner than a cell that straddles two
+    cells still lights one of them instead of dropping out."""
+    args, a = skin.margs, np.asarray(img.convert('RGBA'), np.float32)
+    cell = args.get('cell', 8 if skin.material == 'pixel' else 14)
+    blocks, left, top = _blocks(a, cell, x, y)
+    alpha = blocks[..., 3]
+    weight = alpha.sum(axis=(1, 3))
+    if grow:
+        wide, _, _ = _blocks(ndimage.grey_dilation(a[..., 3], size=(2 * grow + 1, 2 * grow + 1)), cell, x, y)
+        coverage = wide.sum(axis=(1, 3))
+    else:
+        coverage = weight
+    sums = (blocks[..., :3] * alpha[..., None]).sum(axis=(1, 3))
+    if grow:                # a cell lit only by the widening takes its neighbours' colour
+        near = ndimage.uniform_filter(sums, (3, 3, 1), mode='constant')
+        near_w = ndimage.uniform_filter(weight, 3, mode='constant')
+        sums = np.where(weight[..., None] > 0, sums, near * (weight.max() > 0))
+        weight = np.where(weight > 0, weight, near_w)
+    rgb = sums / np.maximum(weight[..., None], 1e-6)
+    active = coverage >= cover * 255 * cell * cell
+    if skin.material == 'pixel':
+        # Only the reduced cells take the 32-colour nearest-neighbour search.
+        distances = ((rgb[..., None, :] - QUEST32.astype(np.float32)) ** 2).sum(-1)
+        rgb = QUEST32[distances.argmin(-1)]
+    else:
+        # tone, not channel, quantisation: each tessera keeps its hue at one of `levels` lightness steps, so warm
+        # stones stay warm instead of snapping to greys
+        steps = args.get('levels', 7) - 1
+        lum = _luma(rgb)[..., None]
+        rgb = rgb * (np.round(lum * steps) / steps) / np.maximum(lum, 1e-3)
+        gx = int(x) // cell + np.arange(rgb.shape[1])[None, :]
+        gy = int(y) // cell + np.arange(rgb.shape[0])[:, None]
+        rgb *= 1 + args.get('jitter', .04) * _tile_jitter(gx, gy)[..., None]
+    out = np.dstack((rgb.clip(0, 255).round().astype(np.uint8), active.astype(np.uint8) * 255))
+    out = out.repeat(cell, 0).repeat(cell, 1)[top:top + img.height, left:left + img.width]
+    if skin.material == 'tile':
+        rows = (np.arange(img.height) + int(y)) % cell < args.get('grout_px', 2)
+        cols = (np.arange(img.width) + int(x)) % cell < args.get('grout_px', 2)
+        grout = rows[:, None] | cols[None, :]
+        mixed = out[grout, :3].astype(np.float32)
+        mixed += (np.array(ink.rgba(args.get('grout', '#542D1F'))[:3]) - mixed) * args.get('grout_mix', .45)
+        out[grout, :3] = mixed.round().clip(0, 255).astype(np.uint8)
+    return Image.fromarray(out, 'RGBA')
+
+
+class MaterialDrawing(ink.PathDrawing):
+    """A PathDrawing whose existing brush mask reveals whole board-aligned cells."""
+    def __init__(self, drawing, x, y, cell):
+        self.__dict__.update(drawing.__dict__)
+        self.material_x, self.material_y, self.material_cell = int(x), int(y), cell
+
+    def state(self, elapsed):
+        if not 0 <= elapsed < self.draw_time:
+            return super().state(elapsed)
+        mask, pen, down = self._mask(elapsed)
+        blocks, left, top = _blocks(np.asarray(mask), self.material_cell, self.material_x, self.material_y)
+        reduced = blocks.max(axis=(1, 3))
+        expanded = reduced.repeat(self.material_cell, 0).repeat(self.material_cell, 1)
+        expanded = expanded[top:top + self.size[1], left:left + self.size[0]]
+        out = self.line.copy()
+        out.putalpha(Image.fromarray((np.asarray(self.line.getchannel('A'), np.uint16) * expanded // 255).astype(np.uint8)))
+        return out, (None if pen is None else (float(pen[0]), float(pen[1]))), down
+
+
+@lru_cache(maxsize=4)
+def _world(skin, width, height):
+    """A material-processed seamless period plus screen width, with column zero at board zero."""
+    period = 3840 if skin.paper == 'quest' else 3836
+    cell = skin.margs['cell']
+    # Build the period only, then repeat its processed pixels, including periodic tile jitter.
+    img = Image.new('RGB', (period, height), skin.base)
+    a = np.asarray(img).copy()
+    sky_end = round(height * .30)
+    top = np.array(ink.rgba('#6EC3F0' if skin.paper == 'quest' else '#3E6E9E')[:3])
+    bottom = np.array(skin.base if skin.paper == 'quest' else ink.rgba('#9FC3D8')[:3])
+    a[:sky_end] = (top + (bottom - top) * np.linspace(0, 1, sky_end)[:, None, None]).round().astype(np.uint8)
+    if skin.paper == 'quest':
+        a[:sky_end] = _dithered_sky(sky_end, period, cell, ('#4FA3E0', '#9AD7F2', '#FFFDF5'))
+    img = Image.fromarray(a, 'RGB')
+    d = ImageDraw.Draw(img)
+    sun_x, sun_y, radius = round(period * .72), round(height * .10), round(height * .048)
+    d.ellipse((sun_x - radius, sun_y - radius, sun_x + radius, sun_y + radius),
+              fill='#F7E68A' if skin.paper == 'quest' else '#D9A441')
+    if skin.paper == 'quest':
+        d.ellipse((sun_x - radius * .65, sun_y - radius * .65, sun_x + radius * .65, sun_y + radius * .65), fill='#FFFDF5')
+        rng = np.random.default_rng(41)
+        for cx in (period * .13, period * .38, period * .88):
+            cy, cw = int(rng.uniform(.07, .20) * height), int(rng.uniform(140, 220))
+            for dx, dy, r in ((-cw // 3, 0, 25), (0, -12, 36), (cw // 3, 0, 28)):
+                d.ellipse((cx + dx - r, cy + dy - r, cx + dx + r, cy + dy + r), fill='#FFFDF5')
+            d.rectangle((cx - cw // 2, cy, cx + cw // 2, cy + 24), fill='#FFFDF5')
+        xx = np.arange(period + 1)
+        for offset, amp, phase, color in ((.89, .034, .1, '#9CC98A'), (.935, .028, 1.3, '#5FA05A')):
+            ridge = height * (offset + amp * (np.sin(2 * np.pi * xx / period + phase)
+                      + .3 * np.sin(6 * np.pi * xx / period + phase)))
+            d.polygon([(0, height), *zip(xx.tolist(), ridge.tolist()), (period, height)], fill=color)
+        ground = (round(height * .968) // cell) * cell
+        d.rectangle((0, ground, period, height), fill='#7A5236')
+        d.rectangle((0, ground, period, ground + cell - 1), fill='#7BC05A')
+    else:
+        sand = (round(height * .85) // cell) * cell
+        d.rectangle((0, sand, period, height), fill='#D8B27A')
+        d.rectangle((0, sand + cell, period, sand + 2 * cell - 1), fill='#B5532E')
+    processed = material_image(img, skin, cover=0).convert('RGBA')
+    if skin.paper == 'mosaic':
+        # Limestone's grout is quieter than the sky and sand; keep the same tile values and jitter.
+        from dataclasses import replace
+        quiet = replace(skin, material_args=tuple(sorted({**skin.margs, 'grout_mix': .12}.items())))
+        middle = material_image(img, quiet, cover=0)
+        start, end = sky_end, (round(height * .85) // cell) * cell
+        processed.paste(middle.crop((0, start, period, end)), (0, start))
+    repeats = (period + width + period - 1) // period
+    out = Image.new('RGBA', (period + width, height))
+    for i in range(repeats):
+        out.paste(processed, (i * period, 0))
+    return out
+
+
+BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], np.float32) / 16 + 1 / 32
+
+
+def _dithered_sky(rows, width, cell, colors):
+    """A pixel-art sky: bands of ``colors`` from the top down, blended by an ordered (Bayer) dither in whole cells
+    on the board grid (``width`` a multiple of 4 cells keeps the pattern seamless)."""
+    cy, cx = np.mgrid[0:-(-rows // cell), 0:width // cell]
+    level = cy / max(1, cy.max()) * (len(colors) - 1)
+    base = np.floor(level)
+    index = np.minimum(base + ((level - base) > BAYER4[cy % 4, cx % 4]), len(colors) - 1).astype(int)
+    rgb = np.array([ink.rgba(c)[:3] for c in colors], np.uint8)[index]
+    return rgb.repeat(cell, 0).repeat(cell, 1)[:rows, :width]
+
+
+def _bloom(frame, L, cell, strength):
+    left = L % cell
+    right = -(frame.width + left) % cell
+    # PIL's integer box reduction is cheap; padding both ends keeps its cells on the board.
+    padded = Image.new('RGBA', (frame.width + left + right, frame.height))
+    padded.paste(frame, (left, 0))
+    if left:
+        padded.paste(frame.crop((0, 0, 1, frame.height)).resize((left, frame.height)), (0, 0))
+    if right:
+        padded.paste(frame.crop((frame.width - 1, 0, frame.width, frame.height)).resize((right, frame.height)), (left + frame.width, 0))
+    low = np.asarray(padded.reduce(cell), np.float32)[..., :3] / 255
+    bright = np.maximum(0, _luma(low * 255) - .78) / .22
+    glow = ndimage.gaussian_filter(low * bright[..., None], (1.2, 1.2, 0), mode='nearest')
+    # Quantise the additive glow at low resolution, then expand without smoothing.
+    glow = (strength * 255 * glow).round().clip(0, 255).astype(np.uint8)
+    rgba = np.dstack((glow, np.zeros(glow.shape[:2], np.uint8)))
+    expanded = Image.fromarray(rgba, 'RGBA').resize(frame.size, Image.Resampling.NEAREST,
+        box=(left / cell, 0, (left + frame.width) / cell, frame.height / cell))
+    return ImageChops.add(frame, expanded)
+
+
+# ------------------------------------------------------------------ crisp material-look UI
+@lru_cache(maxsize=1)
+def cursor_image():
+    """Classic 12 by 19 arrow bitmap, enlarged fourfold; its first pixel is the tip."""
+    rows = (
+        'X...........', 'XX..........', 'XOX.........', 'XOOX........', 'XOOOX.......',
+        'XOOOOX......', 'XOOOOOX.....', 'XOOOOOOX....', 'XOOOOOOOX...', 'XOOOOOOOOX..',
+        'XOOOOOOOOOX.', 'XOOOOOOOOOOX', 'XOOOOOXXXXXX', 'XOOXOOX.....', 'XOX.XOOX....',
+        'XX..XOOX....', 'X....XOOX...', '.....XOOX...', '......XX....')
+    a = np.zeros((19, 12, 4), np.uint8)
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch != '.':
+                a[y, x] = ink.rgba('#1E1B2E' if ch == 'X' else '#FFFDF5')
+    # a transparent margin, so the hand's soft shadow is not cut off at the arrow's own box
+    big = Image.fromarray(a, 'RGBA').resize((48, 76), Image.Resampling.NEAREST)
+    out = Image.new('RGBA', (48 + 40, 76 + 40), (0, 0, 0, 0))
+    out.paste(big, (8, 8))
+    return out, (8, 8)
+
+
+def glyph_runs(text, kind, size, fonts):
+    """Per-character UI runs: absent primary cmap glyphs use Noto Sans SC captions."""
+    cmap = ink._cmap(*getattr(fonts, kind))
+    return [(ch, ink.font(kind if ord(ch) in cmap or ch.isspace() else 'zh_caption', size, fonts)) for ch in text]
+
+
+def _run_width(text, kind, size, fonts):
+    return sum(f.getlength(ch) for ch, f in glyph_runs(text, kind, size, fonts))
+
+
+@lru_cache(maxsize=2048)
+def caption_layout(text, lang, skin):
+    """Wrap on measured fallback runs, shrinking to two lines without leading CJK punctuation."""
+    kind = 'en_caption' if lang == 'en' else 'zh_caption'
+    units = re.findall(r'\S+\s*', text) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
+    for size in range(56 if lang == 'en' else 60, 35, -2):
+        lines, current = [], ''
+        for u in units:
+            trial = current + u
+            if current and _run_width(trial.rstrip(), kind, size, skin.fonts) > 1640:
+                if lang == 'zh' and re.match(r'[，。！？；：、）」』”’%]', u):
+                    current = trial
+                    continue
+                lines.append(current.rstrip())
+                current = u.lstrip() if lang == 'en' else u
+            else:
+                current = trial
+        if current.strip():
+            lines.append(current.rstrip())
+        if len(lines) <= 2 and all(_run_width(l, kind, size, skin.fonts) <= 1640 for l in lines):
+            return lines or [''], size
+    return lines or [''], size          # never stop a render: the smallest size, on as many lines as it takes
+
+
+def _draw_runs(draw, text, pos, kind, size, fonts, color):
+    x, y = pos
+    # A shared baseline keeps Latin and fallback glyphs aligned despite different ascents.
+    for ch, f in glyph_runs(text, kind, size, fonts):
+        draw.text((x, y), ch, font=f, fill=color, anchor='ls')
+        x += f.getlength(ch)
+
+
+def _stepped(draw, box, fill, step=8):
+    x0, y0, x1, y1 = box
+    draw.polygon([(x0 + step, y0), (x1 - step, y0), (x1 - step, y0 + step),
+                  (x1, y0 + step), (x1, y1 - step), (x1 - step, y1 - step),
+                  (x1 - step, y1), (x0 + step, y1), (x0 + step, y1 - step),
+                  (x0, y1 - step), (x0, y0 + step), (x0 + step, y0 + step)], fill=fill)
+
+
+@lru_cache(maxsize=2048)
+def _caption_panel(text, lang, skin):
+    lines, size = caption_layout(text, lang, skin)
+    kind = 'en_caption' if lang == 'en' else 'zh_caption'
+    widths = [_run_width(l, kind, size, skin.fonts) for l in lines]
+    lh = round(size * 1.25)
+    w, panel_h = int(np.ceil(max(widths))) + 64, lh * len(lines) + 40
+    tail = 20 if skin.caption_style == 'bubble' else 0
+    img = Image.new('RGBA', (w, panel_h + tail), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if tail:
+        _stepped(d, (0, 0, w - 1, panel_h - 1), '#1E1B2E')
+        d.polygon([(40, panel_h - 9), (80, panel_h - 9), (80, panel_h + 3),
+                   (68, panel_h + 3), (68, panel_h + 11), (56, panel_h + 11),
+                   (56, panel_h + 19), (40, panel_h + 19)], fill='#1E1B2E')
+        _stepped(d, (8, 8, w - 9, panel_h - 9), '#FFFDF5', 4)
+        d.polygon([(48, panel_h - 12), (72, panel_h - 12), (72, panel_h - 5),
+                   (60, panel_h - 5), (60, panel_h + 3), (48, panel_h + 3)], fill='#FFFDF5')
+    else:
+        d.rectangle((0, 0, w - 1, panel_h - 1), fill='#3B2418')
+        d.rectangle((8, 8, w - 9, panel_h - 9), outline='#D9A441', width=3)
+    for i, line in enumerate(lines):
+        _draw_runs(d, line, ((w - widths[i]) / 2, 20 + size + i * lh), kind, size, skin.fonts, ink.rgba(skin.caption))
+    return img
+
+
+def tag_image(ch, lang, skin):
+    """Chapter text in a pixel bracket or a tabula ansata; UI remains crisp."""
+    from .render import chip_text
+    return _tag_panel(chip_text(ch, lang), lang, skin)
+
+
+@lru_cache(maxsize=256)
+def _tag_panel(text, lang, skin):
+    size, kind = 30, 'ui'
+    width = int(np.ceil(_run_width(text, kind, size, skin.fonts)))
+    w, h = width + 64, 56
+    img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if skin.chapter_tag == 'bracket':
+        _stepped(d, (0, 0, w - 1, h - 1), (30, 27, 46, 230), 4)
+        for x, side in ((8, 1), (w - 12, -1)):
+            d.rectangle((x, 8, x + 3, 23), fill='#E8C547')
+            d.rectangle((min(x, x + side * 12), 8, max(x + 3, x + side * 12), 11), fill='#E8C547')
+        color = '#FFFDF5'
+    else:
+        d.polygon([(0, 6), (15, 16), (15, 0), (w - 16, 0), (w - 16, 16),
+                   (w - 1, 6), (w - 1, h - 7), (w - 16, h - 17),
+                   (w - 16, h - 1), (15, h - 1), (15, h - 17), (0, h - 7)],
+                  fill='#3B2418')
+        d.rectangle((18, 3, w - 19, h - 4), fill='#F3E7CF')
+        d.polygon([(3, 11), (15, 19), (15, h - 20), (3, h - 12)], fill='#F3E7CF')
+        d.polygon([(w - 4, 11), (w - 16, 19), (w - 16, h - 20), (w - 4, h - 12)], fill='#F3E7CF')
+        color = '#3B2418'
+    _draw_runs(d, text, (32, 39), kind, size, skin.fonts, color)
+    return img
