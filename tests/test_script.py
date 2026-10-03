@@ -82,3 +82,13 @@ def test_a_takeaway_never_leans_on_the_sentence_before_it():
     assert script.headline([text], 'Precipitation', 'en') == 'When the drops in a cloud get too big and heavy, they fall to the ground.'
     assert script.headline(['Rain falls. ' + 'Tiny drops of water float high above us in very cold clouds, then join into much bigger and heavier drops.'],
                            'Precipitation', 'en') == 'Precipitation.'          # over 18 words: the title
+
+
+def test_a_long_script_pasted_on_the_command_line_is_the_script_not_a_file_name(tmp_path, monkeypatch):
+    """kinodraw new "<a whole script>" crashed with OSError [Errno 63] File name too long."""
+    from kinodraw import cli, director
+    monkeypatch.setattr(director, 'direct', lambda *a: {})
+    text = ' '.join(['Honey never spoils because it holds so little water.'] * 100)[:5000].strip()
+    assert len(text) >= 4990
+    cli.main(['new', text, '-o', str(tmp_path / 'p')])
+    assert (tmp_path / 'p' / 'script.md').read_text(encoding='utf-8') == text

@@ -40,10 +40,18 @@ def _stage(name):
     return time.time()
 
 
+def _file(script):
+    """The script file named on the command line, or None when ``script`` is the script's text itself."""
+    try:
+        return Path(script) if Path(script).is_file() else None
+    except OSError:                                   # pasted text too long or odd to be a file name
+        return None
+
+
 def cmd_new(args):
     from . import director, pipeline
     t = _stage('storyboard')
-    board = pipeline.new_project(Path(args.script) if Path(args.script).is_file() else args.script, Path(args.out),
+    board = pipeline.new_project(_file(args.script) or args.script, Path(args.out),
                                  title=args.title, lang=args.lang, direction=_direction(args), **_settings(args))
     report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
                              _progress)
