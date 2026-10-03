@@ -136,6 +136,7 @@ function showNew() {
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
   $('#style').innerHTML = STATE.styles.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('');
+  $('#format').innerHTML = formatOptions('16:9');
   $('#style').onchange = () => {            // a promo names its product; the whiteboard ignores Motion
     const collage = $('#style').value === 'collage/promo';
     $('#brand').classList.toggle('hidden', !collage);
@@ -147,7 +148,7 @@ function showNew() {
       const [look, story] = $('#style').value.split('/');
       const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
-        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story,
+        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story, aspect: $('#format').value,
         motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' ? brand : null };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
       const res = await watch(job, 'Creating the storyboard');
@@ -160,13 +161,31 @@ function showNew() {
 }
 
 // ---------------------------------------------------------------- project
+function formatOptions(selected) {
+  return STATE.formats.map((f) => `<option value="${esc(f.value)}"${f.value === selected ? ' selected' : ''}>${esc(f.label)}</option>`).join('');
+}
+
 async function openProject(name, tab = null) {
   current = name; dirty = false; loadProjects();
   const p = await api(`/api/projects/${encodeURIComponent(name)}`);
   board = p.storyboard;
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
-  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${p.settings.voice}`}`;
+  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${p.settings.voice}`}`;
+  $('#p-format').innerHTML = formatOptions(p.settings.aspect || '16:9');
+  $('#p-format').onchange = async () => {
+    try {
+      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/format`, { method: 'POST', body: JSON.stringify({ aspect: $('#p-format').value }) });
+      p.settings.aspect = cfg.aspect;
+      const meta = $('#p-meta');
+      meta.textContent = meta.textContent.replace(' · vertical 9:16', '');
+      if (cfg.aspect === '9:16') {
+        const last = meta.textContent.lastIndexOf(' · ');
+        meta.textContent = `${meta.textContent.slice(0, last)} · vertical 9:16${meta.textContent.slice(last)}`;
+      }
+      toast('Format saved. Make video to render it.');
+    } catch (e) { $('#p-format').value = p.settings.aspect || '16:9'; toast(e.message, 6000); }
+  };
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (needsCloudSignIn($('#p-director').value)) return;

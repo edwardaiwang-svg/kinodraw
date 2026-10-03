@@ -27,7 +27,7 @@ def test_every_look_is_described_once_with_what_the_app_needs():
         m = e['motion']
         assert {m['min'], m['max'], m['default']} <= set(MOTIONS)
         assert MOTIONS.index(m['min']) <= MOTIONS.index(m['default']) <= MOTIONS.index(m['max'])
-        assert e['aspect'] == ['16:9']                                            # the engine renders 1920x1080
+        assert e['aspect'] == (['16:9', '9:16'] if e['render_ready'] else ['16:9'])
         low, high = e['length_s']
         assert 0 < low < high
         assert {'topic', 'audience', 'tone', 'structure'} <= set(e['fit'])
