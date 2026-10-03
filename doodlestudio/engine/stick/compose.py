@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import re
+import zlib
 from dataclasses import dataclass, field, replace
 from typing import Callable
 
@@ -20,7 +21,7 @@ from PIL import Image, ImageDraw
 
 from ... import numbers, script
 from .. import ink
-from . import cues, fill, marks, paint, palette, rig, text
+from . import cast, cues, fill, marks, paint, palette, rig, text
 from .rig import DRAW_FPS
 
 W, H = 1920, 1080
@@ -325,7 +326,15 @@ NOT_LABELS = {'and', 'the', 'was', 'were', 'when', 'until', 'after', 'before', '
               'that', 'this', 'its', 'his', 'her', 'their', 'from', 'into', 'but', 'then', 'they', 'are', 'all'}
 
 
-def doodle_block(did, label, lang, box, t, gid, project_dir, size=56, shown=None):
+def picture(did, box, variant, project_dir, words='', style=('modern', None)):
+    """A library doodle in this look; a picture of people becomes our own stick figures (cast.py). ``style``: the
+    story's era and the face its figures wear."""
+    if cast.kind(did):
+        return cast.image(did, box, variant, words, style[0], style[1], seed=zlib.crc32(did.encode()) % 97)
+    return paint.doodle(did, box, variant, project_dir)
+
+
+def doodle_block(did, label, lang, box, t, gid, project_dir, size=56, shown=None, style=('modern', None)):
     """Doodle with its label under it, centred in ``box``; returns (items, doodle rect). ``t``: when its words are
     said; ``shown``: when it appears (default ``t``)."""
     t = t if shown is None else shown
@@ -333,12 +342,12 @@ def doodle_block(did, label, lang, box, t, gid, project_dir, size=56, shown=None
     bw, bh = x1 - x0, y1 - y0
     lab = text.block(label, lang, size, max_w=bw, max_lines=2, min_size=34) if label else None
     lh = lab.height + 10 if lab else 0
-    first = paint.doodle(did, (int(bw), int(bh - lh)), 0, project_dir)
+    first = picture(did, (int(bw), int(bh - lh)), 0, project_dir, label, style)
     total = first.height + lh
     top = y0 + (bh - total) / 2
     dx = x0 + (bw - first.width) / 2
-    items = [image_item('doodle', lambda v: paint.doodle(did, (int(bw), int(bh - lh)), v, project_dir), dx, top, t,
-                        group=gid, boil=True)]
+    items = [image_item('doodle', lambda v: picture(did, (int(bw), int(bh - lh)), v, project_dir, label, style), dx,
+                        top, t, group=gid, boil=True)]
     if lab:
         items.append(image_item('label', lambda v: lab, x0 + (bw - lab.width) / 2, top + first.height + 10, t,
                                 group=gid))
@@ -435,12 +444,13 @@ def term_block(term, definition, lang, box, t, gid, shown=None):
     return items, hi.rect
 
 
-def card_items(card, lang, box, gid, project_dir, tail='left', shown=None):
+def card_items(card, lang, box, gid, project_dir, tail='left', shown=None, style=('modern', None)):
     """A card's items in ``box``: there from ``shown`` (default: when its words are said); its red mark is drawn
     when its words are said."""
     d = card.data
     if card.kind == 'doodle':
-        return doodle_block(d['doodle'], d.get('label', ''), lang, box, card.t, gid, project_dir, shown=shown)
+        return doodle_block(d['doodle'], d.get('label', ''), lang, box, card.t, gid, project_dir, shown=shown,
+                            style=style)
     if card.kind == 'number':
         return number_block(d['value'], d.get('label', ''), lang, box, card.t, gid, d.get('people'), shown=shown)
     if card.kind == 'quote':
@@ -473,6 +483,7 @@ class Composer:
         self.ground = cues.ground(texts)
         self.era = cues.era(texts, lang)
         self.tone = cues.tone(texts, lang)
+        self.style = (self.era, SERIOUS if self.tone == 'grim' else None)
         self.warnings = []
         self.last_layout = ''
         self.side = 1
@@ -634,7 +645,7 @@ class Composer:
             shot.items += self.head_marks(fig, feet, 'question', t0 + .6)
         if self.hero:
             items, rect = doodle_block(self.hero, '', self.lang, (1000, 460, 1600, 860), t0 + .3, 'hero',
-                                       self.project_dir)
+                                       self.project_dir, style=self.style)
             shot.items += items
             shot.items.append(mark_item(marks.Mark('circle', rect, t0 + 1.2, seed=5)))
         return shot
@@ -960,7 +971,7 @@ class Composer:
         shot = self.base(a, b, layout, ch, beats, words=words)
         if pose is None:
             pose = 'point' if doodles else ('talk' if layout in ('close', 'solo') else 'stand')
-        if pose == 'hold' and len(doodles) != 1:
+        if pose == 'hold' and (len(doodles) != 1 or cast.kind(doodles[0].data['doodle'])):   # nobody holds a person
             pose = 'point' if doodles else 'talk'
         if layout in ('close',) and pose in ('walk', 'run', 'sit', 'fall', 'hold'):
             pose = 'talk'
@@ -1126,7 +1137,8 @@ class Composer:
         rects = []
         for i, c in enumerate(cards):
             box = (x0 + i * (cw + gap), y0, x0 + i * (cw + gap) + cw, y1)
-            items, rect = card_items(c, self.lang, box, f'card{i}', self.project_dir, tail, shown=shot.start)
+            items, rect = card_items(c, self.lang, box, f'card{i}', self.project_dir, tail, shown=shot.start,
+                                     style=self.style)
             shot.items += items
             shot.targets[c.vid] = rect
             rects.append(rect)
@@ -1234,10 +1246,11 @@ class Composer:
             px = left + i * (pw + gap)
             frame = panel_image(int(pw), int(ph))
             shot.items.append(image_item('panel', lambda v, f=frame: f, px, top, t, group=f'p{i}'))
-            img = paint.doodle(entry['doodle'], (int(pw - 40), int(ph - 40)), 0, self.project_dir)
+            img = picture(entry['doodle'], (int(pw - 40), int(ph - 40)), 0, self.project_dir, entry.get('label', ''),
+                          self.style)
             shot.items.append(image_item(
-                'doodle', lambda v, e=entry: paint.doodle(e['doodle'], (int(pw - 40), int(ph - 40)), v,
-                                                          self.project_dir),
+                'doodle', lambda v, e=entry: picture(e['doodle'], (int(pw - 40), int(ph - 40)), v, self.project_dir,
+                                                     e.get('label', ''), self.style),
                 px + (pw - img.width) / 2, top + (ph - img.height) / 2, t, group=f'p{i}', boil=True))
             if entry.get('label'):
                 shot.items.append(text_item(entry['label'], self.lang, px + pw / 2, top + ph + 14, 44, t,
