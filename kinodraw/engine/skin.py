@@ -105,6 +105,8 @@ class Skin:
             return drawing
         if isinstance(drawing, ink.TextDrawing):
             drawing.ink = self._lines(drawing.ink, x, y)
+            if self.textured:
+                _outline_text(self, drawing)
             drawing.alpha = np.asarray(drawing.ink.getchannel('A'))
         elif isinstance(drawing, ink.PathDrawing):
             line = self._lines(drawing.line, x, y)
@@ -148,6 +150,41 @@ class Skin:
         if doodle and self.fills == 'pencil':
             alpha = alpha * _hatch(a.shape[:2], x, y)
         return Image.fromarray(np.dstack([rgb, alpha]).round().clip(0, 255).astype(np.uint8), 'RGBA')
+
+
+def _wcag(rgb):
+    c = np.asarray(rgb, np.float64) / 255
+    c = np.where(c <= .03928, c / 12.92, ((c + .055) / 1.055) ** 2.4)
+    return float(c @ (.2126, .7152, .0722))
+
+
+def contrast(a, b) -> float:
+    """WCAG contrast ratio of two colours."""
+    hi, lo = sorted((_wcag(a), _wcag(b)), reverse=True)
+    return (hi + .05) / (lo + .05)
+
+
+def _outline_text(skin, drawing):
+    """Material worlds have a busy sky band and tiles behind the board: text that does not already stand out from
+    the paper (chapter-coloured headings) gets an outline in the skin's ink, written with the letters it rings."""
+    a = np.asarray(drawing.ink)
+    alpha = a[..., 3]
+    solid = alpha > 127
+    if not solid.any() or contrast(np.median(a[solid][:, :3], 0), skin.base) >= 4.5:
+        return
+    asc, desc = drawing.placed[0][2] if drawing.placed else (40, 10)
+    r = int(np.clip(round((asc + desc) * .035), 2, 5))      # inside TextDrawing's 6 px pad
+    yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+    disk = np.ones_like(xx, bool) if skin.material == 'pixel' else (xx * xx + yy * yy) <= r * r + r    # square pixel corners
+    ring = ndimage.grey_dilation(alpha, footprint=disk)
+    edge = np.zeros_like(a)
+    edge[..., :3], edge[..., 3] = skin.ink, ring
+    out = Image.fromarray(edge, 'RGBA')
+    out.alpha_composite(drawing.ink)
+    drawing.ink = out
+    # the outline appears with the stroke it surrounds
+    _, near = ndimage.distance_transform_edt(alpha == 0, return_indices=True)
+    drawing.arrival = drawing.arrival[near[0], near[1]]
 
 
 WHITEBOARD = Skin()

@@ -237,3 +237,27 @@ def test_material_frame_cost_under_250_ms(tmp_path, look):
     ms = median(costs)
     print(f'{look} frame median: {ms:.1f} ms')
     assert ms < 250, f'{look}: {ms:.1f} ms median over 10 frames'
+
+
+@pytest.mark.parametrize('look', MATERIALS)
+@pytest.mark.parametrize('colour', ['blue', 'orange'])
+def test_material_chapter_coloured_headings_get_an_ink_outline_that_writes_with_them(look, colour):
+    skin = skins.for_look(look)
+    heading = ink.TextDrawing(['Part 2'], 'en', 140, color=ink.SECTION_COLORS[colour], fonts=skin.fonts)
+    glyphs = np.asarray(heading.ink.getchannel('A')) > 0
+    skin.dress(heading, 0, 0)
+    a = np.asarray(heading.ink)
+    ring = (a[..., 3] > 127) & ~glyphs
+    assert ring.sum() > .2 * glyphs.sum(), 'an outline surrounds the letters'
+    assert np.all(np.abs(a[ring][:, :3].astype(int) - skin.ink).max(-1) <= 2), 'the outline is the skin ink'
+    # against the darkest and lightest sky of each world, the outline separates the letters from the sky
+    sky = ((101, 137, 170), (62, 110, 158)) if look == 'mosaic' else ((162, 223, 250), (79, 163, 224), (255, 253, 245))
+    assert min(skins.contrast(skin.ink, s) for s in sky) >= 3
+    assert skins.contrast(ink.SECTION_COLORS[colour], skin.ink) >= 3
+    half = heading.state(heading.duration / 2)[0]
+    shown = np.asarray(half.getchannel('A')) > 127
+    assert 0 < (shown & ring).sum() < ring.sum(), 'the outline is written with its letters, not before or after'
+    dark = ink.TextDrawing(['Part 2'], 'en', 140, fonts=skin.fonts)
+    before = np.asarray(dark.ink).copy()
+    skin.dress(dark, 0, 0)
+    assert np.array_equal(before, np.asarray(dark.ink)), 'ink-coloured text keeps its letters unchanged'
