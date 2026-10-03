@@ -94,7 +94,21 @@ MOOD = {'fall': 'sad', 'sad': 'sad', 'angry': 'upset', 'cheer': 'happy', 'run': 
 
 WEAK = ('talk', 'hold', 'point')
 NEGATION = {'en': re.compile(r"(?:\b(?:not|never|no|nor|without|nobody|none|neither|no one)|n['’]t)\s+(\w+\s+)?$", I),
-            'zh': re.compile(r'(不|没有|没|未|别)$')}
+            'zh': re.compile(r'不|没|未|别|无人|从未|并非')}
+# A Chinese negation can stand a few characters before its verb (没有人被杀, 他不会死), so it counts anywhere in the
+# cue's clause; these words only look negative.
+ZH_NOT_NEGATION = re.compile(r'不久|不少|不过|不断|不同|不仅|不但|不得不|不幸|差不多|没想到|不料|不知不觉|不禁')
+ZH_CLAUSE_END = re.compile(r'[，。！？；：、,.!?;:]')
+# Words that hold a cue but mean something else ("笑死我了" is laughing hard).
+FALSE_FRIENDS = {('zh', 'fall'): re.compile(r'笑死|气死|急死|累死|烦死|死心|死板|死机')}
+
+
+def negated(text: str, at: int, lang: str) -> bool:
+    """Whether the cue at ``at`` is said negated ("did not fall", "没有人被杀")."""
+    if lang != 'zh':
+        return bool(NEGATION[lang].search(text[max(0, at - 24):at]))
+    clause = ZH_CLAUSE_END.split(text[:at])[-1][-8:]
+    return bool(NEGATION['zh'].search(ZH_NOT_NEGATION.sub('', clause)))
 
 
 def pose_for(text: str, lang: str) -> tuple[str | None, int]:
@@ -105,8 +119,12 @@ def pose_for(text: str, lang: str) -> tuple[str | None, int]:
         return 'think', len(text)
     found = []
     for rank, (pose, rx) in enumerate(POSE_RE[lang]):
+        false = FALSE_FRIENDS.get((lang, pose))
+        skip = [f.span() for f in false.finditer(text)] if false else []
         for m in rx.finditer(text):
-            if not NEGATION[lang].search(text[max(0, m.start() - 24):m.start()]):
+            if any(s0 <= m.start() < s1 for s0, s1 in skip):
+                continue
+            if not negated(text, m.start(), lang):
                 found.append((pose in WEAK, m.start(), rank, pose))
                 break
     if not found:

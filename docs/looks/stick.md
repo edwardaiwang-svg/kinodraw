@@ -94,7 +94,8 @@ list (pose, framing, ground colour), never invent new ones.
   fall", "nobody was killed") does not count, and neither does "best" ("the best way to remember" is not a
   victory). Otherwise point at the pictures, or stand or talk. Chinese has its own cue lists, which skip
   compounds that only contain a cue character (拿走 is taking, not walking; 也就是说 is "that is", not speech;
-  问题 is a problem, not a question) and plain hedges (可能). A fallen figure gets X eyes and a wavy mouth and no
+  问题 is a problem, not a question) and plain hedges (可能); a Chinese negation counts anywhere in the cue's
+  clause (没有人被杀, 他不会死, 从来没有被击败), but 不久, 不幸 and 没想到 are not negations, and 笑死 is laughing. A fallen figure gets X eyes and a wavy mouth and no
   "!" marks.
 - **Face**: a figure that stands, talks, points, holds or walks looks shocked (wide eyes, an "o" mouth and two
   red "!") at shock words (a bomb, a gun, "killed", "millions"), worried (tilted brows, a frown) at grim words

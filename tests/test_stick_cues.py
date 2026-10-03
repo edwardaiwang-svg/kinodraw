@@ -18,6 +18,17 @@ def test_negated_or_idiomatic_words_strike_no_pose(text, lang):
     assert cues.pose_for(text, lang)[0] is None
 
 
+@pytest.mark.parametrize('text', ['没有人被杀。', '没有人死。', '他不会死在那里。', '从来没有被击败。', '笑死我了。',
+                                  '那天晚上墙没有倒下，也没有人被杀。'])
+def test_a_chinese_negation_anywhere_in_the_clause_means_nobody_falls(text):
+    assert cues.pose_for(text, 'zh')[0] != 'fall'
+
+
+@pytest.mark.parametrize('text', ['不久之后罗马灭亡了', '他不幸死了', '没想到他死了', '他不愿投降，最后战死了'])
+def test_words_that_only_look_negative_still_fall(text):
+    assert cues.pose_for(text, 'zh')[0] == 'fall'
+
+
 def test_taking_something_away_is_not_walking():
     assert cues.pose_for('他拿走了钱', 'zh')[0] != 'walk'
 
