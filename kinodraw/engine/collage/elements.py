@@ -237,7 +237,9 @@ def burst_lines(cx, cy, r0, r1, n, seed_key):
 
 
 class Burst(Element):
-    """Radiating lines that pop out around a point (for a reveal or a logo)."""
+    """Radiating lines that pop out around a point (for a reveal or a logo), under it: a long name hides the lines
+    that would cross its letters."""
+    layer = 0
 
     def __init__(self, cx, cy, t0, r0=180, r1=240, n=14, color=(255, 255, 255), beat=None, ident='', until=None):
         super().__init__(t0, beat, ident, until)

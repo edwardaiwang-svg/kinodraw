@@ -189,3 +189,30 @@ def test_text_written_over_text_fails_the_finish(tmp_path, monkeypatch):
     t = prod.crowded()[0][0]
     assert not qa['ok'] and qa['problems'] == [f'At {pipeline.clock(t)} "All in one place." and "Any time you like." '
                                                'are written on top of each other.']
+
+
+def test_the_burst_around_a_long_name_never_crosses_its_letters(tmp_path):
+    """The burst lines around the reveal and the end card's name were drawn over it: white strokes through the letters
+    of a two-word name like "Khan Academy", there for the whole end card."""
+    from PIL import Image, ImageFilter
+    prod = _annotated(SIGN_OFF, tmp_path / 'p')
+
+    def draw(els, t):
+        canvas = Image.new('RGBA', (1920, 1080), (90, 140, 200, 255))
+        for e in els:
+            if e.start <= t:
+                e.draw(canvas, t)
+        return canvas
+    for kind in ('brand', 'end'):
+        k = next(k for k, st in enumerate(prod.stages) if st.kind == kind)
+        els = prod.stage_els[k]
+        name = next(e for e in els if e.ident == f'{kind}.name')
+        burst = next(e for e in els if e.ident == f'{kind}.burst')
+        t = burst.end + .3
+        alone = Image.new('RGBA', (1920, 1080), (0, 0, 0, 0))
+        name.draw(alone, t)
+        letters = np.asarray(alone.getchannel('A').filter(ImageFilter.MinFilter(7))) > 250    # inside the name
+        changed = np.abs(np.asarray(draw(els, t), np.int16) -
+                         np.asarray(draw([e for e in els if e is not burst], t), np.int16)).sum(2) > 0
+        assert letters.sum() > 20000 and changed.sum() > 500                  # the name is there, so is the burst
+        assert not (changed & letters).any(), kind
