@@ -8,9 +8,10 @@ from __future__ import annotations
 import copy
 
 from . import ink
+from .. import styles
 
 KINDS = {'intro', 'agenda', 'section', 'board', 'outro'}
-DIALS = {'look': ('whiteboard', 'collage', 'bold'),              # the first value is the default
+DIALS = {'look': tuple(styles.ids()),                            # the first value is the default (the registry's order)
          'story': ('explain', 'promo', 'story', 'showcase'),
          'motion': ('lively', 'calm', 'showreel')}
 

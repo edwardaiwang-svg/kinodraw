@@ -21,8 +21,8 @@ EN_WEAK = {'a', 'an', 'the', 'of', 'to', 'and', 'or', 'in', 'on', 'at', 'for', '
            'that', 'is', 'was', 'his', 'her', 'its', 'their', 'my', 'our', 'your', 'but', 'if', 'than'}
 
 
-def cap_font(lang):
-    return ink.font('en_caption' if lang == 'en' else 'zh_caption', SIZE)
+def cap_font(lang, fonts=ink.FONTS):
+    return ink.font('en_caption' if lang == 'en' else 'zh_caption', SIZE, fonts)
 
 
 def clause_spans(text, lang):
@@ -43,14 +43,14 @@ def units(text, lang):
     return re.findall(r"[A-Za-z0-9$.,%×\-–/+'’&]+\s*|.", text)
 
 
-def width(text, lang):
-    return cap_font(lang).getlength(text.strip())
+def width(text, lang, fonts=ink.FONTS):
+    return cap_font(lang, fonts).getlength(text.strip())
 
 
-def balanced_lines(text, lang):
+def balanced_lines(text, lang, fonts=ink.FONTS):
     """Return <=2 lines (balanced) or None when the text cannot fit in two lines."""
     text = text.strip()
-    if width(text, lang) <= MAX_W:
+    if width(text, lang, fonts) <= MAX_W:
         return [text]
     us = units(text, lang)
     best = None
@@ -58,7 +58,7 @@ def balanced_lines(text, lang):
         a, b = ''.join(us[:k]).strip(), ''.join(us[k:]).strip()
         if lang == 'zh' and re.match(r'[，。！？；：、）」』”’%]', b[:1] or ''):
             continue
-        wa, wb = width(a, lang), width(b, lang)
+        wa, wb = width(a, lang, fonts), width(b, lang, fonts)
         if wa > MAX_W or wb > MAX_W:
             continue
         penalty = abs(wa - wb)
@@ -138,9 +138,10 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end):
 
 
 @lru_cache(maxsize=2048)
-def caption_image(text, lang):
-    lines = balanced_lines(text, lang) or split_long(text, lang)[:2]
-    f = cap_font(lang)
+def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255)):
+    """The caption as an image: ``color`` letters inside an ``edge`` outline (a skin sets all three)."""
+    lines = balanced_lines(text, lang, fonts) or split_long(text, lang)[:2]
+    f = cap_font(lang, fonts)
     stroke = 7
     lh = int(SIZE * 1.16)
     widths = [f.getlength(l) for l in lines]
@@ -150,6 +151,6 @@ def caption_image(text, lang):
     d = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
         x = (w - widths[i]) / 2
-        d.text((x, stroke + i * lh), line, font=f, fill=(18, 18, 18, 255), stroke_width=stroke,
-               stroke_fill=(255, 255, 255, 255))
+        d.text((x, stroke + i * lh), line, font=f, fill=tuple(color) + (255,), stroke_width=stroke,
+               stroke_fill=tuple(edge) + (255,))
     return img

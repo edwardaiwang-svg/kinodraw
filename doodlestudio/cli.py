@@ -190,8 +190,12 @@ def _direction(args):
 
 
 MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
-LOOKS, STORIES, MOTIONS = ['whiteboard', 'collage', 'bold'], ['explain', 'promo', 'story', 'showcase'], \
-    ['calm', 'lively', 'showreel']
+STORIES, MOTIONS = ['explain', 'promo', 'story', 'showcase'], ['calm', 'lively', 'showreel']
+
+
+def _looks():
+    from . import styles
+    return styles.ids(ready=True)                     # the looks this version can render (styles/registry.json)
 
 
 def main(argv=None):
@@ -208,7 +212,7 @@ def main(argv=None):
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
-        p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
+        p.add_argument('--look', choices=_looks(), help='visual style (default whiteboard)')
         p.add_argument('--story', choices=STORIES, help='story shape (default explain)')
         p.add_argument('--motion', choices=MOTIONS, help='how lively the animation is (default lively)')
         p.add_argument('--model')

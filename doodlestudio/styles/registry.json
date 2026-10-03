@@ -1,0 +1,51 @@
+{
+ "version": 1,
+ "note": "Every look a video can have. The app offers a look only when render_ready is true; status is built (its own renderer, shipped), skin (the whiteboard renderer with another paper, ink, fills, hand and chrome) or planned. Fits and lengths come from the 2026-10-02 styles catalog.",
+ "looks": [
+  {
+   "id": "whiteboard",
+   "name": {"en": "Whiteboard", "zh": "白板"},
+   "status": "built",
+   "render_ready": true,
+   "renderer": "whiteboard",
+   "skin": {"paper": "whiteboard", "ink": "#1B1B1B", "lines": "identity", "fills": "identity", "grain": "none",
+            "hand": "marker", "emphasis": "none"},
+   "fonts": {"en_hand": "PlaypenSans-Bold.ttf", "zh_hand": "DoodleKai-Medium.ttf",
+             "en_caption": "Arimo-Bold.ttf", "zh_caption": "NotoSansSC-Bold.otf", "ui": "Arimo-Bold.ttf"},
+   "languages": ["en", "zh"],
+   "stories": ["explain", "story"],
+   "motion": {"min": "calm", "max": "lively", "default": "lively"},
+   "length_s": [120, 1200],
+   "aspect": ["16:9"],
+   "fit": {"topic": ["any"], "audience": ["teachers", "students", "creators"], "tone": ["any"],
+           "structure": ["explain", "list", "narrative"]}
+  },
+  {
+   "id": "collage",
+   "name": {"en": "Paper collage promo", "zh": "纸艺拼贴宣传片"},
+   "status": "built",
+   "render_ready": true,
+   "renderer": "collage",
+   "languages": ["en"],
+   "stories": ["promo", "showcase"],
+   "motion": {"min": "calm", "max": "showreel", "default": "lively"},
+   "length_s": [45, 120],
+   "aspect": ["16:9"],
+   "fit": {"topic": ["product"], "audience": ["customers"], "tone": ["playful", "neutral"], "structure": ["promo"]}
+  },
+  {
+   "id": "bold",
+   "name": {"en": "Bold kinetic type", "zh": "动感大字"},
+   "status": "planned",
+   "render_ready": false,
+   "renderer": "bold",
+   "languages": ["en", "zh"],
+   "stories": ["promo", "showcase", "explain"],
+   "motion": {"min": "lively", "max": "showreel", "default": "lively"},
+   "length_s": [20, 180],
+   "aspect": ["16:9"],
+   "fit": {"topic": ["product", "numbers"], "audience": ["customers", "creators"], "tone": ["playful", "neutral"],
+           "structure": ["promo", "list"]}
+  }
+ ]
+}

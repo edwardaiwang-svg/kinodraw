@@ -13,6 +13,7 @@ import math
 import re
 from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import resvg_py
@@ -36,42 +37,52 @@ UI_FONT = EN_CAPTION
 FONT_FILES = [EN_HAND[0], ZH_HAND[0], EN_CAPTION[0], ZH_CAPTION[0]]
 
 
+class Fonts(NamedTuple):
+    """The four typefaces of a look, as (file, index): handwriting and captions per language, and the UI font.
+    A skin carries its own (engine/skin.py); every text measure and drawing takes the set it is given."""
+    en_hand: tuple
+    zh_hand: tuple
+    en_caption: tuple
+    zh_caption: tuple
+    ui: tuple
+
+
+FONTS = Fonts(EN_HAND, ZH_HAND, EN_CAPTION, ZH_CAPTION, UI_FONT)      # the whiteboard's
+
+
 @lru_cache(maxsize=128)
-def font(kind: str, size: int) -> ImageFont.FreeTypeFont:
-    path, index = {'en_hand': EN_HAND, 'zh_hand': ZH_HAND, 'en_caption': EN_CAPTION,
-                   'zh_caption': ZH_CAPTION, 'ui': UI_FONT}[kind]
+def font(kind: str, size: int, fonts: Fonts = FONTS) -> ImageFont.FreeTypeFont:
+    path, index = getattr(fonts, kind)
     return ImageFont.truetype(path, size, index=index)
 
 
-def hand_font(lang: str, size: int):
-    return font('en_hand' if lang == 'en' else 'zh_hand', size)
+def hand_font(lang: str, size: int, fonts: Fonts = FONTS):
+    return font('en_hand' if lang == 'en' else 'zh_hand', size, fonts)
 
 
 @lru_cache(maxsize=8)
-def _cmap(kind: str):
+def _cmap(path: str, index: int):
     from fontTools.ttLib import TTCollection, TTFont
-    path, index = {'en_hand': EN_HAND, 'zh_hand': ZH_HAND, 'en_caption': EN_CAPTION,
-                   'zh_caption': ZH_CAPTION, 'ui': UI_FONT}[kind]
     f = TTCollection(path).fonts[index] if path.endswith('.ttc') else TTFont(path)
     return frozenset(f.getBestCmap())
 
 
-def font_runs(text: str, lang: str, size: int):
+def font_runs(text: str, lang: str, size: int, fonts: Fonts = FONTS):
     """Split text into (substring, font) runs; missing glyphs fall back to the other hand font, then the caption font."""
     primary = 'en_hand' if lang == 'en' else 'zh_hand'
     order = [primary, 'zh_hand' if primary == 'en_hand' else 'en_hand', 'zh_caption']
     runs = []
     for ch in text:
-        kind = next((k for k in order if ord(ch) in _cmap(k) or ch.isspace()), primary)
+        kind = next((k for k in order if ord(ch) in _cmap(*getattr(fonts, k)) or ch.isspace()), primary)
         if runs and runs[-1][1] == kind:
             runs[-1][0] += ch
         else:
             runs.append([ch, kind])
-    return [(t, font(k, size)) for t, k in runs]
+    return [(t, font(k, size, fonts)) for t, k in runs]
 
 
-def text_width(text: str, lang: str, size: int) -> float:
-    return sum(f.getlength(t) for t, f in font_runs(text, lang, size))
+def text_width(text: str, lang: str, size: int, fonts: Fonts = FONTS) -> float:
+    return sum(f.getlength(t) for t, f in font_runs(text, lang, size, fonts))
 
 
 def is_cjk(ch: str) -> bool:
@@ -277,8 +288,10 @@ def _svg_layers(svg_path: str, box_w: int, box_h: int):
 
 def svg_drawing(svg_path, box, speed=700., min_dur=.8, max_dur=2.0) -> PathDrawing:
     color, line, polylines, brush = _svg_layers(str(svg_path), int(box[0]), int(box[1]))
-    return PathDrawing(color, line, [np.asarray(p, np.float32) for p in polylines], brush,
-                       speed=speed, min_dur=min_dur, max_dur=max_dur)
+    drawing = PathDrawing(color, line, [np.asarray(p, np.float32) for p in polylines], brush,
+                          speed=speed, min_dur=min_dur, max_dur=max_dur)
+    drawing.doodle = True                    # a picture with its own colours (a skin restyles its fills)
+    return drawing
 
 
 def stroke_drawing(size, polylines, color=INK, width=6, fill=None, closed_fill=None,
@@ -391,10 +404,10 @@ class TextDrawing:
     """
 
     def __init__(self, lines, lang, size, color=INK, align='left', line_gap=1.18, pace=1.0,
-                 min_dur=.6, max_dur=6.0, pad=6):
-        f = hand_font(lang, size)
-        self.lines = lines
-        widths = [text_width(line, lang, size) for line in lines]
+                 min_dur=.6, max_dur=6.0, pad=6, fonts: Fonts = FONTS):
+        f = hand_font(lang, size, fonts)
+        self.lines, self.lang = lines, lang
+        widths = [text_width(line, lang, size, fonts) for line in lines]
         asc, desc = f.getmetrics()
         lh = int(size * line_gap)
         w = int(math.ceil(max(widths or [1]))) + 2 * pad
@@ -407,13 +420,14 @@ class TextDrawing:
             x = pad if align == 'left' else (pad + (w - 2 * pad - widths[i]) / 2 if align == 'center' else w - pad - widths[i])
             y = pad + i * lh
             chars = []
-            for part, pf in font_runs(line, lang, size):
+            for part, pf in font_runs(line, lang, size, fonts):
                 d.text((x, y), part, font=pf, fill=rgba(color))
                 for k, ch in enumerate(part):
                     chars.append((ch, x + pf.getlength(part[:k]), x + pf.getlength(part[:k + 1])))
                 x += pf.getlength(part)
             runs.append((line, chars, y, f))
         self.ink = ink
+        self.placed = [(chars, y, f.getmetrics()) for _, chars, y, f in runs]   # where each character is
         self._trace(runs, pace, min_dur, max_dur)
 
     def _trace(self, runs, pace, min_dur, max_dur):
@@ -496,9 +510,10 @@ class TextDrawing:
         return out, (float(point[0]), float(point[1])), bool(self.down[j])
 
 
-def wrap_words(text, lang, size, max_width, kind='hand'):
+def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
     """Greedy wrap for board text (whole words; CJK per character)."""
-    f = hand_font(lang, size) if kind == 'hand' else font('en_caption' if lang == 'en' else 'zh_caption', size)
+    f = hand_font(lang, size, fonts) if kind == 'hand' else \
+        font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
     units = re.findall(r'\S+\s*', text) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
     lines, cur = [], ''
     for u in units:
@@ -516,9 +531,9 @@ def wrap_words(text, lang, size, max_width, kind='hand'):
     return lines
 
 
-def fit_text(text, lang, max_width, max_lines, size, min_size=30):
+def fit_text(text, lang, max_width, max_lines, size, min_size=30, fonts: Fonts = FONTS):
     while True:
-        lines = wrap_words(text, lang, size, max_width)
+        lines = wrap_words(text, lang, size, max_width, fonts=fonts)
         if len(lines) <= max_lines or size <= min_size:
             return lines, size
         size -= 2
@@ -563,12 +578,16 @@ def circle_points(cx, cy, rx, ry, start=-math.pi / 2, turns=1.0, n=90, wobble=0.
 # ------------------------------------------------------------------------ hand
 class Hand:
     """J's drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no forearm)
-    into assets/hand."""
+    into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
+    'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil."""
 
-    def __init__(self):
+    def __init__(self, tool='marker'):
         import json
         base = ASSETS / 'hand'
         self.img = Image.open(base / 'hand.png').convert('RGBA')
+        if tool != 'marker':
+            from .skin import hand_image
+            self.img = hand_image(self.img, tool)
         anchor = json.loads((base / 'hand.json').read_text())
         self.tip = (anchor['tip_x'], anchor['tip_y'])
         shadow = Image.new('RGBA', self.img.size, (0, 0, 0, 0))

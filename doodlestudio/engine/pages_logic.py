@@ -47,14 +47,14 @@ def _trig(ctx, beat, item, fallback):
     return ctx.time_of(beat, item.get('trigger')) if item.get('trigger') else fallback
 
 
-def _clause_break(s, lang, size, max_w):
+def _clause_break(s, lang, size, max_w, fonts=ink.FONTS):
     """Two lines split after a clause mark (，：, · …) when both fit and neither is under 40% of the other."""
     best = None
     for m in re.finditer(r'[，；：、]|[,;:·](?=\s)', s):
         a, b = s[:m.end()].strip(), s[m.end():].strip()
         if not b:
             continue
-        wa, wb = ink.text_width(a, lang, size), ink.text_width(b, lang, size)
+        wa, wb = ink.text_width(a, lang, size, fonts), ink.text_width(b, lang, size, fonts)
         if max(wa, wb) <= max_w and min(wa, wb) >= .4 * max(wa, wb) and (best is None or abs(wa - wb) < best[0]):
             best = (abs(wa - wb), [a, b])
     return best[1] if best else None
@@ -65,22 +65,22 @@ def _text(ctx, s, size, max_w, max_lines=3, color=None, align='left', pace=1.0, 
 
     Two-line text breaks at a clause mark when one is near the middle, and an EN line never
     starts with a bare '/'. Board text stays >= 40 px (contract)."""
-    lines, size = ink.fit_text(s, ctx.lang, max_w, max_lines, size, min_size=min_size)
+    lines, size = ink.fit_text(s, ctx.lang, max_w, max_lines, size, min_size=min_size, fonts=ctx.fonts)
     if len(lines) > 1:
         lo, hi = max_w * .4, max_w
         for _ in range(12):
             mid = (lo + hi) / 2
-            if len(ink.wrap_words(s, ctx.lang, size, mid)) <= len(lines):
+            if len(ctx.wrap(s, size, mid)) <= len(lines):
                 hi = mid
             else:
                 lo = mid
-        lines = ink.wrap_words(s, ctx.lang, size, hi)
+        lines = ctx.wrap(s, size, hi)
     if len(lines) == 2:
-        lines = _clause_break(s, ctx.lang, size, max_w) or lines
+        lines = _clause_break(s, ctx.lang, size, max_w, ctx.fonts) or lines
     for i in range(1, len(lines)):
-        if lines[i].startswith('/ ') and ink.text_width(lines[i - 1] + ' /', ctx.lang, size) <= max_w:
+        if lines[i].startswith('/ ') and ctx.width(lines[i - 1] + ' /', size) <= max_w:
             lines[i - 1], lines[i] = lines[i - 1] + ' /', lines[i][2:]
-    return ink.TextDrawing(lines, ctx.lang, size, color=color or ink.INK, align=align, pace=pace)
+    return ink.TextDrawing(lines, ctx.lang, size, color=color or ink.INK, align=align, pace=pace, fonts=ctx.fonts)
 
 
 # ================================================================== dial

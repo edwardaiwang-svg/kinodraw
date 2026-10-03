@@ -16,6 +16,7 @@ for package in ('kokoro_onnx', 'misaki', 'espeakng_loader', 'phonemizer', 'jieba
     hidden += h
 datas += [(str(ROOT / 'doodlestudio' / 'assets'), 'doodlestudio/assets'),
           (str(ROOT / 'doodlestudio' / 'studio' / 'static'), 'doodlestudio/studio/static'),
+          (str(ROOT / 'doodlestudio' / 'styles' / 'registry.json'), 'doodlestudio/styles'),
           (str(ROOT / 'LICENSE'), '.'), (str(ROOT / 'THIRD_PARTY_NOTICES.md'), '.'), (str(ROOT / 'LICENSES'), 'LICENSES')]
 icon = {'darwin': 'icon.icns', 'win32': 'icon.ico'}.get(sys.platform)
 

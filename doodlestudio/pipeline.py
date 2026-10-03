@@ -17,7 +17,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import ingest, script, voice
+from . import ingest, script, styles, voice
 from .audio import mix as audio
 from .engine import render as renderer
 from .package import clock, contact_sheet, encoded_qa, mux, publish, sha
@@ -138,7 +138,7 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
         renderer.encode(prod, start, n, out, 20)
         warnings = prod.warnings
     board = storyboard(project_dir)
-    if board.get('look', 'whiteboard') != 'whiteboard':    # sound effects follow the scheduled animation
+    if styles.renderer(board.get('look')) != 'whiteboard':   # sound effects follow the scheduled animation
         if workers > 1:
             prod = renderer.make_production(board, tl, cfg['lang'], project_dir)
         _save(build / 'cues.json', {'cues': prod.cues()})
