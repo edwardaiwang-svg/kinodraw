@@ -144,14 +144,23 @@ def crowd(text: str, lang: str) -> bool:
     return bool(CROWD[lang].search(text))
 
 
+def _said(rx, text: str, lang: str) -> int:
+    """Position of the first match of ``rx`` that is meant as said: not negated ("nobody was killed", "他不会死")
+    and not inside a false friend ("笑死"), else -1."""
+    skip = [f.span() for (lg, _), false in FALSE_FRIENDS.items() if lg == lang for f in false.finditer(text)]
+    for m in rx.finditer(text):
+        if not any(s0 <= m.start() < s1 for s0, s1 in skip) and not negated(text, m.start(), lang):
+            return m.start()
+    return -1
+
+
 def shock(text: str, lang: str) -> int:
     """Position of the first shock word, or -1."""
-    m = SHOCK[lang].search(text)
-    return m.start() if m else -1
+    return _said(SHOCK[lang], text, lang)
 
 
 def grim(text: str, lang: str) -> bool:
-    return bool(GRIM[lang].search(text))
+    return _said(GRIM[lang], text, lang) >= 0
 
 
 def tone(texts: list[str], lang: str) -> str:

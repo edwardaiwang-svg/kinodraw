@@ -68,3 +68,15 @@ def test_soldiers_wear_the_helmet_of_their_era():
     assert cues.costume('A Roman legion marched north.', 'en', 'modern') == 'helmet'   # a Roman is always Roman
     assert cues.costume('In general, people sleep less now.', 'en') is None
     assert cues.costume('士兵们搜索了树林', 'zh', 'modern') == 'combat'
+
+
+@pytest.mark.parametrize('text,lang', [('Nobody was killed.', 'en'), ('Not one person was killed.', 'en'),
+                                       ('没有人被杀。他不会死在那里。', 'zh'), ('这个笑话让他笑死了。', 'zh')])
+def test_negated_or_idiomatic_words_leave_the_face_calm(text, lang):
+    assert cues.shock(text, lang) == -1 and not cues.grim(text, lang)
+    assert cues.pose_for(text, lang)[0] != 'fall'
+
+
+def test_said_shock_and_grim_words_still_count():
+    assert cues.shock('He was killed.', 'en') >= 0 and cues.grim('He was killed.', 'en')
+    assert cues.shock('他被杀了。', 'zh') >= 0 and cues.grim('他被杀了。', 'zh')
