@@ -85,3 +85,28 @@ def test_a_software_promo_has_a_page_an_app_window_and_the_drawing_hand(tmp_path
     assert any(c['id'].startswith('brand.written') for c in writes) and any(c['id'].startswith('app.ink') for c in writes)
     assert promo.items_in('Captions, chapters and a thumbnail come with it.', 'en') == ['Captions', 'chapters',
                                                                                       'a thumbnail']
+
+
+def test_a_collage_thumbnail_shows_the_paper_puppet_not_the_whiteboard_narrator(tmp_path, monkeypatch):
+    """The thumbnail is the video's cover: a collage promo's actor is the puppet, on the collage's cream paper."""
+    from PIL import Image
+    from doodlestudio import package
+    from doodlestudio.engine import auto_scenes
+    from doodlestudio.engine.collage import puppet
+    board = script.build(ingest.read(FIX / 'promo_tiny.md'), 'promo')
+
+    def share(img, hexes, tol=30):
+        a = np.asarray(img.convert('RGB'), np.int16)[:, 760:]          # the actor's side
+        hit = np.zeros(a.shape[:2], bool)
+        for h in hexes:
+            hit |= (np.abs(a - [int(h[i:i + 2], 16) for i in (1, 3, 5)]).max(-1) < tol)
+        return hit.mean()
+    sunny = [puppet.PRESETS['sunny'][k] for k in ('hat', 'top', 'pants')]
+    package.thumbnail(board, 'en', tmp_path / 'whiteboard.png', tmp_path)
+    monkeypatch.setattr(auto_scenes, 'narrator', lambda *a: (_ for _ in ()).throw(AssertionError('narrator drawn')))
+    package.thumbnail({**board, 'look': 'collage'}, 'en', tmp_path / 'collage.png', tmp_path)
+    white, collage = Image.open(tmp_path / 'whiteboard.png'), Image.open(tmp_path / 'collage.png')
+    assert collage.size == (1280, 720)
+    assert share(collage, sunny) > .04 and share(white, sunny) < .005          # the puppet's hat, coat and trousers
+    corner = np.asarray(collage.convert('RGB'))[650:, :300].reshape(-1, 3).mean(0)
+    assert corner[0] - corner[2] > 12                                         # cream paper, not the grey board
