@@ -291,6 +291,8 @@ def save_picture(name: str, filename: str, stream, length: int) -> dict:
                 raise ValueError('wrong picture type')
             with Image.open(io.BytesIO(data)) as image:
                 image.verify()
+            with Image.open(io.BytesIO(data)) as image:
+                image.load()                    # verify() skips JPEG data, so a cut-off photo would pass
     except Exception:
         raise ValueError(f'“{filename}” isn’t a picture KinoDraw can open. Save it again as a PNG, JPG or SVG '
                          'and upload it again.') from None

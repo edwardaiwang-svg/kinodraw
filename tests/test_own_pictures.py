@@ -313,3 +313,8 @@ def test_wide_own_picture_sticker_fits_its_spot(project, name):
     img = sticker('own:' + name, 230, str(path))
     border = max(8, round(230 * .06)) + 2      # die_cut grows the canvas by border + 2 on every side
     assert img.width <= 230 + 2 * border and img.height <= 230 + 2 * border
+
+
+def test_studio_rejects_cut_off_jpeg(studio):
+    code, result, _ = studio('/api/projects/Honey/pictures?filename=cut.jpg', picture_bytes('JPEG')[:-10])
+    assert code == 400 and 'isn’t a picture KinoDraw can open' in result['error']
