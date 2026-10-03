@@ -49,8 +49,8 @@ function voiceOptions(lang, selected) {
   return STATE.voices[lang].map((v) => `<option value="${esc(v.id)}"${v.id === selected ? ' selected' : ''}>${esc(v.name)}</option>`).join('');
 }
 function speedRow(id) {
-  return `<label for="${id}">Speed <output id="${id}-label">1.00×</output></label>
-    <div class="row muted"><span>Slower</span><input id="${id}" type="range" min="0.85" max="1.15" step="0.05" value="1"><span>Faster</span></div>`;
+  return `<label class="speed" for="${id}">Speed <output id="${id}-label">1.00×</output></label>
+    <div class="row muted speed-row"><span>Slower</span><input id="${id}" type="range" min="0.85" max="1.15" step="0.05" value="1"><span>Faster</span></div>`;
 }
 function bindSpeed(id) {
   const slider = $(`#${id}`), label = $(`#${id}-label`);

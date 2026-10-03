@@ -47,7 +47,11 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0; }
 .row { display: flex; gap: 12px; align-items: center; }
 #voice-play, #n-play { flex: none; white-space: nowrap; }
+#voice, #n-voice { flex: 1; min-width: 0; }
+@media (min-width: 700px) { #voice-wrap { grid-column: span 2; } }
 #speed-wrap { margin-top: 8px; }
+label.speed { flex-direction: row; gap: 6px; }
+.speed-row input[type="range"] { flex: 1; }
 input[type="range"] { padding: 0; accent-color: var(--orange); }
 label.file { display: inline-block; border: 2px dashed var(--ink); border-radius: 10px; padding: 6px 12px; color: var(--ink); cursor: pointer; }
 label.file input { display: none; }
