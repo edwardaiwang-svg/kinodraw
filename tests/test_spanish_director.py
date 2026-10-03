@@ -218,3 +218,33 @@ def test_spanish_board_number_keeps_decimal_comma_and_thousands(sentence, kind, 
     v, _ = director._number({'id': 'b001', 'chapter': 'b1'}, sentence, numbers.normalize(sentence, 'es'), set())
     assert v['type'] == kind
     assert (v['value']['es'] if kind == 'stat' else v['title']['es']).startswith(shown)
+
+
+def test_a_grouped_spanish_percentage_is_never_cut_into_a_grid():
+    text = 'El rendimiento fue 1.025,5% del valor inicial.'
+    board = board_for([text])
+    board['beats'][0]['spoken']['es'] = numbers.normalize(text, 'es').spoken
+    RulesDirector('es').direct(board)
+    assert not [v for v in board['beats'][0]['visuals'] if v['type'] == 'grid100']   # not '025,5% del valor inicial'
+    assert validate(board)['ok']
+
+
+def test_kinodraw_cloud_is_not_charged_for_a_spanish_video(spanish_normalize):
+    from kinodraw.director.llm.cloud import CloudProvider
+    from kinodraw.director.llm.director import LLMDirector
+
+    class Cloud:
+        languages = CloudProvider.languages
+        opened = sent = 0
+
+        def open_video(self, sections, characters):
+            Cloud.opened += 1
+
+        def direct_section(self, payload, usage):
+            Cloud.sent += 1
+            return {}
+    board = board_for(SENTENCES[:2])
+    report = LLMDirector(Cloud(), 'es').direct(board)
+    assert Cloud.opened == Cloud.sent == 0                                   # no cloud video counted
+    assert report['notes'][0].startswith('The offline director planned this video')   # the Studio shows this
+    assert all(b['visuals'] for b in board['beats']) and validate(board)['ok']

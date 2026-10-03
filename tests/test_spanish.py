@@ -26,7 +26,7 @@ def test_detection_and_all_existing_fixtures():
     assert ingest.detect_lang('KinoDraw') == 'en'
     for path in FIX.iterdir():
         if path.suffix in ('.md', '.txt') and path.name != 'miel_es.md':
-            assert ingest.read(path).lang == ('zh' if path.name == 'sleep_zh.md' else 'en'), path.name
+            assert ingest.read(path).lang == ('zh' if path.name.endswith('_zh.md') else 'en'), path.name
 
 
 ENGLISH_WITH_SPANISH_NAMES = [
@@ -165,6 +165,15 @@ def test_sentences(text, expected):
     ('1 mil y 1 millón', 'mil y un millón'),
     ('2 million y 2 billion', 'dos millones y dos mil millones'),
     ('2 trillion y 2 thousand', 'dos billones y dos mil'),
+    ('Caen 10mm de lluvia.', 'Caen diez milímetros de lluvia.'),
+    ('Tengo 1 perro y 1 gata.', 'Tengo un perro y una gata.'),
+    ('Tiene 21 años y come 1 vez al día.', 'Tiene veintiún años y come una vez al día.'),
+    ('Dura 31 minutos.', 'Dura treinta y un minutos.'),
+    ('Son 101 dálmatas y 21 casas.', 'Son ciento un dálmatas y veintiuna casas.'),
+    ('Hay 1 ave y 1 canción.', 'Hay un ave y una canción.'),
+    ('Viven 21.000 personas.', 'Viven veintiún mil personas.'),
+    ('1 de cada 4', 'uno de cada cuatro'),
+    ('Capítulo 1.', 'Capítulo uno.'),
 ])
 def test_numbers(display, spoken):
     n = numbers.normalize(display, 'es')

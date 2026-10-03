@@ -201,8 +201,8 @@ ES_SCALES = {'k': ('mil', 'mil'), 'thousand': ('mil', 'mil'), 'mil': ('mil', 'mi
              'tn': ('billón', 'billones'), 'trillion': ('billón', 'billones')}
 ES_NUM = (r'\d{1,3}(?:\.\d{3})+(?:,\d+)?(?!\d|[.,]\d)'
           r'|\d{1,3}(?:,\d{3})+(?:\.\d+)?(?!\d|[.,]\d)|\d+(?:[.,]\d+)?')
-_es_scale = '(?i:' + '|'.join((r'(?<!\s)' if len(k) < 3 else '') + re.escape(k)
-                             for k in sorted(ES_SCALES, key=len, reverse=True)) + ')'
+_es_scale = '(?:MM|(?i:' + '|'.join((r'(?<!\s)' if len(k) < 3 else '') + re.escape(k)   # '10MM' is millions,
+                                     for k in sorted(ES_SCALES, key=len, reverse=True) if k != 'mm') + '))'  # '10mm' rain
 _es_cscale = '(?i:' + '|'.join(re.escape(k) for k in sorted(ES_SCALES, key=len, reverse=True)) + ')'  # '$5 MM'
 _es_unit = '|'.join(re.escape(u) for u in sorted(ES_UNITS, key=len, reverse=True))
 ES_PATTERN = re.compile(
@@ -222,6 +222,8 @@ def es_number(token: str) -> str:
         token = token.replace(',', '')
     whole, dot, fraction = token.partition(',' if ',' in token else '.')
     words = num2words(int(whole), lang='es')
+    words = re.sub(r'(veinti)?uno(?= (?:mil|millones|billones)\b)', lambda m: 'veintiún' if m.group(1) else 'un',
+                   words)                         # num2words says 'veintiuno mil'; Spanish says 'veintiún mil'
     if dot:
         words += (' coma ' if dot == ',' else ' punto ') + ' '.join(num2words(int(d), lang='es') for d in fraction)
     return words
@@ -261,7 +263,43 @@ def _es_speak(m: re.Match) -> str:
     if g['pct']:
         token = g['pct']
         return ('menos ' if token.startswith('-') else '') + f"{es_number(token.lstrip('-'))} por ciento"
-    return ('menos ' if g['neg'] else '') + es_number(g['num'])
+    words = es_number(g['num'])
+    noun = re.match(r'\s+([a-záéíóúüñ]+)\b', m.string[m.end():])
+    if (noun and words.endswith('uno') and re.fullmatch(r'[\d.]+', g['num']) and noun.group(1) not in ES_NOT_NOUN
+            and not re.fullmatch(r'1\d\d\d|20\d\d', g['num'])):   # '1 perro' -> 'un perro', '21 años' -> 'veintiún'
+        feminine = _es_feminine(noun.group(1))
+        words = words[:-3] + ('una' if feminine else 'ún' if words.endswith('veintiuno') else 'un')
+    return ('menos ' if g['neg'] else '') + words
+
+
+# Words that follow a number without being what it counts: '1 de cada 4', 'el 1 y el 2', 'tengo 21 más'.
+ES_NOT_NOUN = {'de', 'del', 'y', 'e', 'o', 'u', 'a', 'al', 'en', 'por', 'para', 'con', 'sin', 'que', 'es', 'son',
+               'fue', 'era', 'eran', 'fueron', 'será', 'más', 'menos', 'entre', 'sobre', 'hasta', 'desde', 'como',
+               'cada', 'se', 'lo', 'la', 'el', 'los', 'las', 'le', 'les', 'un', 'una', 'ni', 'pero', 'si', 'no',
+               'ya', 'hay', 'está', 'están', 'tiene', 'tienen', 'veces'}
+ES_MASCULINE_A = {'día', 'días', 'mapa', 'mapas', 'problema', 'problemas', 'planeta', 'planetas', 'idioma', 'idiomas',
+                  'sistema', 'sistemas', 'tema', 'temas', 'clima', 'climas', 'programa', 'programas', 'poema',
+                  'poemas', 'esquema', 'esquemas', 'dilema', 'drama', 'dramas', 'cometa', 'cometas', 'sofá',
+                  'sofás', 'diploma', 'diplomas', 'telegrama', 'kilograma', 'gorila', 'gorilas', 'koala', 'koalas',
+                  'panda', 'pandas', 'atleta', 'atletas', 'astronauta', 'astronautas', 'artista', 'artistas',
+                  'dentista', 'dentistas', 'turista', 'turistas', 'papá', 'papás', 'dálmata', 'dálmatas',
+                  'ave', 'águila', 'agua', 'hacha', 'alma', 'arma', 'aula', 'área', 'hambre', 'hada', 'ala',
+                  'arpa'}   # the last row: feminine, but 'un ave', 'un águila' before a stressed a
+ES_FEMININE = {'vez', 'clase', 'clases', 'noche', 'noches', 'parte', 'partes', 'gente', 'mano', 'manos', 'flor',
+               'flores', 'mujer', 'mujeres', 'calle', 'calles', 'nube', 'nubes', 'leche', 'llave', 'llaves',
+               'fuente', 'fuentes', 'frase', 'frases', 'imagen', 'imágenes', 'luz', 'luces', 'red', 'redes', 'piel',
+               'sal', 'muerte', 'suerte', 'mente', 'mentes', 'foto', 'fotos', 'moto', 'motos', 'radio', 'tarde',
+               'tardes', 'torre', 'torres', 'carne', 'sangre', 'fiebre', 'nariz', 'raíz', 'raíces', 'voz', 'voces',
+               'cruz', 'paz', 'ley', 'leyes', 'miel', 'col', 'sed', 'pared', 'paredes', 'serie', 'series',
+               'especie', 'especies', 'superficie', 'nieve', 'base', 'bases', 'fase', 'fases', 'clave',
+               'claves', 'nave', 'naves', 'aves'}
+
+
+def _es_feminine(noun: str) -> bool:
+    if noun in ES_MASCULINE_A:
+        return False
+    return noun in ES_FEMININE or noun.endswith(('a', 'as', 'ción', 'ciones', 'sión', 'siones', 'dad', 'dades',
+                                                 'tad', 'tades', 'tud', 'tudes', 'umbre', 'umbres', 'eza'))
 
 
 def normalize_es(display: str) -> Normalized:
