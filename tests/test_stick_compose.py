@@ -162,3 +162,13 @@ def test_a_spoken_dollar_amount_gets_its_sign():
     c.bt = dict(c.bt)
     card = c.spoken_number([beat], c.bt[beat['id']]['start'] - 1, c.bt[beat['id']]['start'] + 30)
     assert card.data == {'value': '$20', 'label': 'bills'}
+
+
+def test_pictures_are_there_at_the_cut(prod):
+    """The Paint way: a shot's pictures, numbers and words are on screen from its first frame, so the figure
+    never points at empty space; only the red marks are drawn as their words are said."""
+    for s in prod.shots:
+        if s.layout not in ('left', 'right', 'close', 'crowd', 'grid'):
+            continue
+        late = [(i.kind, round(i.t0 - s.start, 2)) for i in s.items if i.kind != 'mark' and i.t0 > s.start + 1e-6]
+        assert not late, f'{s.layout} shot at {s.start:.1f}s: {late}'

@@ -1,8 +1,8 @@
 """Storyboard + timeline -> shots for the stick look.
 
 A shot is a fixed picture cut in hard (no pans, no zooms): a ground strip, a header tab, a figure or a crowd and
-up to two "cards" (a doodle with its label, a big number, a quote bubble, a term), plus red marks. Cards and marks
-appear when their words are said; everything else is there at the cut. Shots follow sentence ends: each is at
+up to two "cards" (a doodle with its label, a big number, a quote bubble, a term), plus red marks. Cards are there
+at the cut, the Paint way; red marks are drawn when their words are said (timeline dates too). Shots follow sentence ends: each is at
 least MIN_SHOT long and a long one is cut again at its second card. Layouts alternate so two shots in a row never
 share one, and every item has a fixed screen rectangle so tests can check that nothing overlaps.
 
@@ -325,8 +325,10 @@ NOT_LABELS = {'and', 'the', 'was', 'were', 'when', 'until', 'after', 'before', '
               'that', 'this', 'its', 'his', 'her', 'their', 'from', 'into', 'but', 'then', 'they', 'are', 'all'}
 
 
-def doodle_block(did, label, lang, box, t, gid, project_dir, size=56):
-    """Doodle with its label under it, centred in ``box``; returns (items, doodle rect)."""
+def doodle_block(did, label, lang, box, t, gid, project_dir, size=56, shown=None):
+    """Doodle with its label under it, centred in ``box``; returns (items, doodle rect). ``t``: when its words are
+    said; ``shown``: when it appears (default ``t``)."""
+    t = t if shown is None else shown
     x0, y0, x1, y1 = box
     bw, bh = x1 - x0, y1 - y0
     lab = text.block(label, lang, size, max_w=bw, max_lines=2, min_size=34) if label else None
@@ -344,7 +346,8 @@ def doodle_block(did, label, lang, box, t, gid, project_dir, size=56):
     return items, items[0].rect
 
 
-def number_block(value, label, lang, box, t, gid, people=None):
+def number_block(value, label, lang, box, t, gid, people=None, shown=None):
+    said, t = t, (t if shown is None else shown)
     x0, y0, x1, y1 = box
     bw, bh = x1 - x0, y1 - y0
     num = text.block(value, lang, 200 if bh > 380 else 150, max_w=bw, max_lines=1, min_size=80)
@@ -364,8 +367,8 @@ def number_block(value, label, lang, box, t, gid, people=None):
         y += p.height + 16
     # the drawn glyphs sit inside the image's padding: underline the ink, not the box
     nx0, ny0, nx1, ny1 = num_rect
-    items.append(mark_item(marks.Mark('underline', (nx0 + 8, ny0, nx1 - 8, ny1 - num.height * .12), t + .35,
-                                      seed=int(t * 100))))
+    items.append(mark_item(marks.Mark('underline', (nx0 + 8, ny0, nx1 - 8, ny1 - num.height * .12),
+                                      max(said, t) + .35, seed=int(said * 100))))
     return items, num_rect
 
 
@@ -387,7 +390,8 @@ def people_grid(filled, side):
     return img
 
 
-def bubble_block(quote, who, lang, box, t, gid, tail='left'):
+def bubble_block(quote, who, lang, box, t, gid, tail='left', shown=None):
+    t = t if shown is None else shown
     x0, y0, x1, y1 = box
     bw = x1 - x0
     body = text.block(quote, lang, 54 if lang == 'en' else 56, max_w=bw - 90, max_lines=5, min_size=34)
@@ -411,7 +415,8 @@ def bubble_block(quote, who, lang, box, t, gid, tail='left'):
     return [it], it.rect
 
 
-def term_block(term, definition, lang, box, t, gid):
+def term_block(term, definition, lang, box, t, gid, shown=None):
+    said, t = t, (t if shown is None else shown)
     x0, y0, x1, y1 = box
     bw = x1 - x0
     head = text.block(term, lang, 96, max_w=bw, max_lines=2, min_size=50)
@@ -422,25 +427,28 @@ def term_block(term, definition, lang, box, t, gid):
     hi = image_item('text', lambda v: head, x0 + (bw - head.width) / 2, y, t, group=gid)
     items = [hi]
     if body:
-        items.append(image_item('label', lambda v: body, x0 + (bw - body.width) / 2, y + head.height + 30, t + .2,
+        items.append(image_item('label', lambda v: body, x0 + (bw - body.width) / 2, y + head.height + 30, t,
                                 group=gid))
     hx0, hy0, hx1, hy1 = hi.rect
-    items.append(mark_item(marks.Mark('underline', (hx0 + 8, hy0, hx1 - 8, hy1 - head.height * .1), t + .35,
-                                      seed=int(t * 100) + 1)))
+    items.append(mark_item(marks.Mark('underline', (hx0 + 8, hy0, hx1 - 8, hy1 - head.height * .1),
+                                      max(said, t) + .35, seed=int(said * 100) + 1)))
     return items, hi.rect
 
 
-def card_items(card, lang, box, gid, project_dir, tail='left'):
+def card_items(card, lang, box, gid, project_dir, tail='left', shown=None):
+    """A card's items in ``box``: there from ``shown`` (default: when its words are said); its red mark is drawn
+    when its words are said."""
     d = card.data
     if card.kind == 'doodle':
-        return doodle_block(d['doodle'], d.get('label', ''), lang, box, card.t, gid, project_dir)
+        return doodle_block(d['doodle'], d.get('label', ''), lang, box, card.t, gid, project_dir, shown=shown)
     if card.kind == 'number':
-        return number_block(d['value'], d.get('label', ''), lang, box, card.t, gid, d.get('people'))
+        return number_block(d['value'], d.get('label', ''), lang, box, card.t, gid, d.get('people'), shown=shown)
     if card.kind == 'quote':
-        return bubble_block(d['text'], d.get('who', ''), lang, box, card.t, gid, tail)
+        return bubble_block(d['text'], d.get('who', ''), lang, box, card.t, gid, tail, shown=shown)
     if card.kind == 'term':
-        return term_block(d['term'], d.get('text', ''), lang, box, card.t, gid)
-    it = text_item(d.get('text', ''), lang, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2, 72, card.t,
+        return term_block(d['term'], d.get('text', ''), lang, box, card.t, gid, shown=shown)
+    it = text_item(d.get('text', ''), lang, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2, 72,
+                   card.t if shown is None else shown,
                    max_w=box[2] - box[0], max_lines=3, group=gid, anchor='middle', kind='text')
     return [it], it.rect
 
@@ -1081,7 +1089,7 @@ class Composer:
         rects = []
         for i, c in enumerate(cards):
             box = (x0 + i * (cw + gap), y0, x0 + i * (cw + gap) + cw, y1)
-            items, rect = card_items(c, self.lang, box, f'card{i}', self.project_dir, tail)
+            items, rect = card_items(c, self.lang, box, f'card{i}', self.project_dir, tail, shown=shot.start)
             shot.items += items
             shot.targets[c.vid] = rect
             rects.append(rect)
@@ -1090,10 +1098,11 @@ class Composer:
             gx = x0 + cw + gap / 2
             gy = (max(rects[0][1], rects[1][1]) + min(rects[0][3], rects[1][3])) / 2
             if rel == 'arrow':
-                shot.items.append(mark_item(marks.Mark('arrow', (gx - 55, gy, gx + 55, gy), cards[1].t + .1, seed=2)))
+                shot.items.append(mark_item(marks.Mark('arrow', (gx - 55, gy, gx + 55, gy),
+                                                       max(cards[1].t, shot.start + .3) + .1, seed=2)))
             else:
                 glyph = {'plus': '+', 'vs': 'VS', 'equals': '='}.get(rel, '+')
-                shot.items.append(text_item(glyph, 'en', gx, gy, 90 if glyph != 'VS' else 64, cards[1].t,
+                shot.items.append(text_item(glyph, 'en', gx, gy, 90 if glyph != 'VS' else 64, shot.start,
                                             color=palette.RED if glyph == 'VS' else (0, 0, 0), max_w=gap - 10,
                                             max_lines=1, anchor='middle', kind='label', group='rel'))
 
@@ -1184,7 +1193,7 @@ class Composer:
         top = 250
         shot.targets = {}
         for i, entry in enumerate(items):
-            t = grid.t + .45 * i
+            t = shot.start
             px = left + i * (pw + gap)
             frame = panel_image(int(pw), int(ph))
             shot.items.append(image_item('panel', lambda v, f=frame: f, px, top, t, group=f'p{i}'))
