@@ -1,5 +1,6 @@
 """The stick look's scene composer on rules-director storyboards (synthetic reading-rate timing, no voice model):
 every beat is acted out, shots cut cleanly end to end, nothing on screen overlaps, and Chinese renders."""
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,12 @@ def build(name, seed=0):
     board = RulesDirector(lang).direct(board)
     timing = tl.layout(board, lang, tl.synthetic_clips(board, lang), pauses={})
     return StickProduction(board, timing, lang, None, seed=seed)
+
+
+@lru_cache(maxsize=None)
+def built(name):
+    """A production shared by tests that only read it."""
+    return build(name)
 
 
 @pytest.fixture(scope='module', params=['printing_press.md', 'sky_blue.md', 'sleep_zh.md'])
@@ -110,7 +117,7 @@ def test_a_holding_figure_carries_its_picture():
 def test_a_true_crime_narrator_never_grins():
     """Grim words ("a bomb", "the ransom") make the narrator look worried or shocked, and a video that keeps talking
     about crime is told with a straight face: no smile or grin on a figure that stands, talks, points or holds."""
-    p = build('stick_hijack.md')
+    p = built('stick_hijack.md')
     assert p.composer.tone == 'grim'
     faces = {}
     for s in p.shots:
@@ -132,7 +139,7 @@ def test_a_cheerful_topic_keeps_its_smile():
 
 
 def test_big_numbers_keep_their_currency_and_dates_stay_whole():
-    p = build('stick_hijack.md')
+    p = built('stick_hijack.md')
     c = p.composer
     said = {}
     for b in c.beats:
@@ -190,7 +197,7 @@ def figure_only_share(p):
 def test_a_figure_is_rarely_alone_on_white(name):
     """The Paint grammar is a figure plus a prop: a sentence the storyboard left bare gets the name it gives, a
     number it says, a picture for its words or the picture still in play."""
-    assert figure_only_share(build(name)) <= .1
+    assert figure_only_share(built(name)) <= .1
 
 
 def test_what_fills_a_bare_sentence():
@@ -201,6 +208,6 @@ def test_what_fills_a_bare_sentence():
     assert fill.term('这叫做散射。', 'zh') == '散射'
     assert fill.number_word('Imagine you get ten compliments and one insult today.', 'en')[1:] == ('10', 'compliments')
     assert fill.number_word('Two of them left.', 'en') is None
-    p = build('stick_bias.md')
+    p = built('stick_bias.md')
     ch = next(c['id'] for c in p.board['chapters'] if c['kind'] == 'section')
     assert p.composer.pictures.find('They are just tuned for a world with lions.', ch)[0] == 'fl_lion'
