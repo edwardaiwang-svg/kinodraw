@@ -127,6 +127,8 @@ On every dial, showpieces are at least 12 seconds apart; the 3 seconds after a s
 
 ## Your own voice
 
+In the Studio, open a project's **Narrator** tab and choose **My own voice**: it shows the script as numbered sentences to read aloud, takes the recording as your phone saved it (m4a, mp3, wav, ogg, opus, webm, 3gp, amr, flac, aiff), and **Use it for this video** does the alignment below and says which sentences matched.
+
 `project.json` (next to `storyboard.json`) can name a recording of you reading the script: `"recording": "recording.m4a"`, a path in the project folder or an absolute one. `doodle voice MyVideo --recording take.m4a` copies the file in (wav, m4a, mp3 or aiff) and sets the key; `--recording none` removes it and the Kokoro voice reads again.
 
 Read every beat's `spoken` text in one take, at your own pace, with a pause between paragraphs. Kokoro still reads the script as a guide; the guide is aligned to your take, every beat is cut out of it at a pause, and the captions and drawings follow your words. `voice/recording-align.json` shows where each beat was found and how well it matched: about 0.35 for other words and 0.45 or more for a reading of the script, and beats under 0.4 are marked `check`. A take that is not a reading of this script is refused. A false start, a repeated sentence or an ad-lib stays in the beat it falls in (and the words around it may be timed a little off), so record that part again or edit it out of the take.

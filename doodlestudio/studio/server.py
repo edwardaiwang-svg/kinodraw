@@ -241,22 +241,22 @@ def save_take(name: str, filename: str, stream, length: int) -> dict:
     suffix = Path(filename).suffix.lower()
     suffix = suffix if re.fullmatch(r'\.[a-z0-9]{1,5}', suffix) else '.audio'
     part = path / f'.upload{suffix}'
-    with part.open('wb') as f:
-        left = length
-        while left:
-            chunk = stream.read(min(left, 1 << 20))
-            if not chunk:
-                break
-            f.write(chunk)
-            left -= len(chunk)
     try:
+        with part.open('wb') as f:
+            left = length
+            while left and (chunk := stream.read(min(left, 1 << 20))):
+                f.write(chunk)
+                left -= len(chunk)
         if left:
-            raise ValueError('the upload stopped part-way')
-        voice._decode(part)
-    except ValueError:
-        part.unlink()
-        raise ValueError(f'“{filename}” isn’t a recording we can play. Voice memos (.m4a), .mp3 and .wav files all '
-                         'work: save or export your recording as one of those and try again.') from None
+            raise ValueError(f'The upload of “{filename}” stopped part-way. Try again.')
+        try:
+            voice._decode(part)
+        except ValueError:
+            raise ValueError(f'“{filename}” isn’t a recording we can play. Voice memos (.m4a), .mp3 and .wav files '
+                             'all work: save or export your recording as one of those and try again.') from None
+    except BaseException:
+        part.unlink(missing_ok=True)
+        raise
     for old in _takes(path):
         old.unlink()
     take = part.rename(path / f'recording{suffix}')
