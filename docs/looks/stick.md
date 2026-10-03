@@ -95,8 +95,10 @@ list (pose, framing, ground colour), never invent new ones.
   问题 is a problem, not a question) and plain hedges (可能). A fallen figure gets X eyes and a wavy mouth and no
   "!" marks.
 - **Crowd**: people, army, citizens, population (and Chinese equivalents) bring 3 to 7 figures.
-- **Costume** by topic words: Roman, legion, soldier -> crested helmet; emperor, king, queen -> crown; worker,
-  farmer -> straw hat; otherwise none.
+- **Costume** by topic words: Roman, legion, gladiator -> crested helmet; soldier, army, warrior -> the crested
+  helmet in an ancient story and a plain green combat helmet in a modern one (a story is ancient when it names
+  antiquity, Rome, legions, pharaohs, more often than it gives modern years or modern things like planes or the
+  FBI); emperor, king, queen -> crown; worker, farmer -> straw hat; otherwise none.
 - **Framing** alternates so two shots in a row never share a layout: figure left with props right, figure right
   with props left, close-up with big text, crowd, text card.
 - **Narrator pictures** (think, wave, explain...) in the storyboard become poses of our figure, not doodles.

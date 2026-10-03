@@ -59,7 +59,7 @@ FACES = {
 EYES = ('open', 'up', 'down', 'wide', 'happy', 'x', 'dot', 'half', 'shades')
 BROWS = ('none', 'flat', 'raised', 'worried', 'angry')
 MOUTHS = ('smile', 'grin', 'flat', 'o', 'frown', 'shout', 'wavy', 'teeth')
-HATS = ('helmet', 'crown', 'strawhat', 'cap', 'tophat')
+HATS = ('helmet', 'combat', 'crown', 'strawhat', 'cap', 'tophat')
 
 
 @dataclass(frozen=True)
@@ -384,6 +384,10 @@ def _hat(d, hat, hc, R, lw, f, tilt):
         _poly(d, crest, PALETTE['maroon'] + (255,), lw)
         for a in np.linspace(.5, math.pi - .5, 5):           # brush bristles
             _stroke(d, [H(.42 * math.cos(a) - .08, 1.02 + .3 * math.sin(a)), H(.7 * math.cos(a) - .08, 1.0 + .52 * math.sin(a))], lw * .6)
+    elif hat == 'combat':                               # a modern soldier's plain green helmet
+        dome = [H(1.1 * math.cos(a), .05 + 1.1 * math.sin(a)) for a in np.linspace(.47, math.pi - .47, 22)]
+        _poly(d, dome, PALETTE['green'] + (255,), lw)
+        _poly(d, [H(-1.18, .64), H(1.18, .64), H(1.14, .52), H(-1.14, .52)], PALETTE['green'] + (255,), lw)
     elif hat == 'crown':
         pts = [H(-.75, .62), H(-.82, 1.32), H(-.42, 1.02), H(0, 1.42), H(.42, 1.02), H(.82, 1.32), H(.75, .62)]
         _poly(d, pts, PALETTE['yellow'] + (255,), lw)

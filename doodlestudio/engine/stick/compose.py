@@ -418,6 +418,7 @@ class Composer:
                 self.numbers[c['id']] = n
         texts = [self.T(board.get('title'))] + [b['display'][lang] for b in self.beats]
         self.ground = cues.ground(texts)
+        self.era = cues.era(texts, lang)
         self.warnings = []
         self.last_layout = ''
         self.side = 1
@@ -558,7 +559,7 @@ class Composer:
         shot.items.append(text_item(title, self.lang, W / 2, 150, 104, t0, max_w=1640, max_lines=2, kind='text',
                                     group='title'))
         question = bool(cues.QUESTION.search(title))
-        hat = cues.costume(title, self.lang)
+        hat = cues.costume(title, self.lang, self.era)
         fig = rig.Figure(pose='think' if question else 'wave', height=430, facing=1, hat=hat,
                          seed=rig.seed_of(self.seed, 'title'))
         fig, feet = fit_figure(fig, (300, 470, 860, GROUND_Y))
@@ -631,7 +632,7 @@ class Composer:
         shot.items.append(image_item('text', lambda v: ttl, 470, 268, t0, group='head'))
         dur = t1 - t0
         walk = min(1500., 430. * dur)
-        hat = cues.costume(self.T(ch.get('title')), self.lang)
+        hat = cues.costume(self.T(ch.get('title')), self.lang, self.era)
         fig = rig.Figure(pose='walk', height=320, facing=1, shirt=self.accent(ch['id']), hat=hat,
                          seed=rig.seed_of(self.seed, ch['id']))
         fig, feet = fit_figure(fig, (80, 560, 1840, GROUND_Y), travel=walk)
@@ -660,7 +661,7 @@ class Composer:
         shot.items.append(mark_item(marks.Mark('underline', (x0 + 10, y0, x1 - 10, y1 - 14), t_head + 1.2, seed=9,
                                                dur=.6)))
         fig = rig.Figure(pose='point', height=560, facing=1, shirt=self.accent(ch['id']),
-                         hat=cues.costume(head, self.lang), seed=rig.seed_of(self.seed, ch['id'], 'take'))
+                         hat=cues.costume(head, self.lang, self.era), seed=rig.seed_of(self.seed, ch['id'], 'take'))
         fig, feet = fit_figure(fig, (50, 300, 480, GROUND_Y))
         shot.items.append(figure_item(fig, feet, prep, talk=self.talking))
         shot.pose = 'point'
@@ -900,7 +901,7 @@ class Composer:
             pose = 'talk'
         if layout == 'grid' and pose not in ('point', 'think', 'talk'):
             pose = 'point'
-        hat = cues.costume(words, lang)
+        hat = cues.costume(words, lang, self.era)
         shirt = self.accent(ch['id']) if ch and ch['kind'] == 'section' else None
         shocked = cues.shock(words, lang)
         face = None

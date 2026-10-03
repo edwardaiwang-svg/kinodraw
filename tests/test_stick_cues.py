@@ -32,3 +32,14 @@ def test_taking_something_away_is_not_walking():
 ])
 def test_plain_cues_still_work(text, lang, pose):
     assert cues.pose_for(text, lang)[0] == pose
+
+
+def test_soldiers_wear_the_helmet_of_their_era():
+    modern = ['On November 24, 1971, a man hijacked a plane.', 'The FBI searched the woods with hundreds of soldiers.']
+    ancient = ['Rome was the largest empire of the ancient world.', 'Roman legions guarded the border.']
+    assert cues.era(modern, 'en') == 'modern' and cues.era(ancient, 'en') == 'ancient'
+    assert cues.costume('Hundreds of soldiers and agents searched the woods.', 'en', 'modern') == 'combat'
+    assert cues.costume('Gothic warriors crushed an army at Adrianople.', 'en', 'ancient') == 'helmet'
+    assert cues.costume('A Roman legion marched north.', 'en', 'modern') == 'helmet'   # a Roman is always Roman
+    assert cues.costume('In general, people sleep less now.', 'en') is None
+    assert cues.costume('士兵们搜索了树林', 'zh', 'modern') == 'combat'

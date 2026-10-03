@@ -52,13 +52,21 @@ SHOCK = {'en': re.compile(r'\b(shocking|disturbing|deadliest|worst|horrif\w*|ter
 STRONG = {'en': re.compile(r'\b(largest|biggest|first|only|last|most|greatest|oldest|longest|enormous|'
                            r'for good|itself)\b', I),
           'zh': re.compile(r'最|第一|唯一|整个')}
+# 'soldier' is the crested Roman helmet in an ancient story and a plain green combat helmet in a modern one.
 COSTUME = {'en': [('crown', r'\b(emperors?|kings?|queens?|pharaohs?|throne|rulers?|monarchs?|empress)\b'),
-                  ('helmet', r'\b(romans?|legions?|legionar\w*|soldiers?|army|armies|gladiators?|centurions?|'
-                             r'warriors?|general)\b'),
+                  ('helmet', r'\b(romans?|legions?|legionar\w*|gladiators?|centurions?|spartans?|hoplites?)\b'),
+                  ('soldier', r'\b(soldiers?|army|armies|troops|warriors?|(?<!in )general)\b'),
                   ('strawhat', r'\b(farmers?|peasants?|workers?|villagers?)\b')],
-           'zh': [('crown', r'皇帝|国王|女王|王位|统治者'), ('helmet', r'罗马人|士兵|军队|战士|将军'),
-                  ('strawhat', r'农民|工人|村民')]}
+           'zh': [('crown', r'皇帝|国王|女王|王位|统治者'), ('helmet', r'罗马人|罗马军|军团|角斗士|斯巴达'),
+                  ('soldier', r'士兵|军队|战士|将军|部队'), ('strawhat', r'农民|工人|村民')]}
 COSTUME_RE = {lang: [(hat, re.compile(rx, I)) for hat, rx in rules] for lang, rules in COSTUME.items()}
+# A story is ancient when it talks about antiquity more than it gives modern years or modern things.
+ANCIENT = {'en': re.compile(r'\b(rome|romans?|ancient|antiquity|legions?|pharaohs?|egyptians?|spartans?|athens|'
+                            r'athenians?|greeks?|gladiators?|centurions?|caesar|emperors?|BCE?)\b', I),
+           'zh': re.compile(r'罗马|古代|古罗马|军团|角斗士|法老|埃及|斯巴达|雅典|希腊|凯撒|皇帝|公元前')}
+MODERN = {'en': re.compile(r'\b(1[5-9]\d\d|20\d\d|guns?|rifles?|tanks?|planes?|airplanes?|jets?|airlines?|FBI|police|'
+                           r'computers?|phones?|cars?|world war)\b', I),
+          'zh': re.compile(r'1[5-9]\d\d|20\d\d|枪|坦克|飞机|警察|电脑|手机|汽车|世界大战')}
 GROUND = [('history', re.compile(r'\b(roman?|empire|ancient|wars?|kings?|emperors?|medieval|histor\w*|centur\w*|'
                                  r'dynast\w*|castles?|pyramids?|pharaoh\w*|army|armies)\b|罗马|帝国|古代|战争|皇帝|'
                                  r'历史|朝代|王朝', I)),
@@ -109,9 +117,18 @@ def strong(text: str, lang: str) -> int:
     return m.start() if m else -1
 
 
-def costume(text: str, lang: str) -> str | None:
+def era(texts: list[str], lang: str) -> str:
+    """'ancient' or 'modern' for the whole video, from all of its words."""
+    blob = ' '.join(texts)
+    old, new = len(ANCIENT[lang].findall(blob)), len(MODERN[lang].findall(blob))
+    return 'ancient' if old >= 2 and old > new else 'modern'
+
+
+def costume(text: str, lang: str, era: str = 'modern') -> str | None:
     for hat, rx in COSTUME_RE[lang]:
         if rx.search(text):
+            if hat == 'soldier':
+                return 'helmet' if era == 'ancient' else 'combat'
             return hat
     return None
 
