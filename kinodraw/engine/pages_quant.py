@@ -42,8 +42,8 @@ def _when(ctx, beat, item, fallback):
 
 
 def _fits(ctx, s, size, max_w, max_lines):
-    lines = ink.wrap_words(s, ctx.lang, size, max_w)
-    return len(lines) <= max_lines and all(ink.text_width(ln, ctx.lang, size) <= max_w for ln in lines)
+    lines = ctx.wrap(s, size, max_w)
+    return len(lines) <= max_lines and all(ctx.width(ln, size) <= max_w for ln in lines)
 
 
 def _fit_all(ctx, strings, size, max_ws, max_lines=1, min_size=40, colors=None, floor=32, **kw):

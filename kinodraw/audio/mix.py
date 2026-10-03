@@ -3,7 +3,7 @@
 assemble(): place every beat's clip on the timeline, normalize to -18 LUFS, write captions.
 mix(): lay the bundled CC0 music under the timeline's music windows (title, agenda,
 section transitions, outro and end card), ducked under speech, fading at every edge.
-The animated looks (any storyboard look but the whiteboard) get a bed under the whole video instead,
+The animated looks (any look the whiteboard renderer does not draw) get a bed under the whole video instead,
 the sound effects the renderer cued (build/cues.json), and a mastered mix (-14 LUFS, -1 dBTP).
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import imageio_ffmpeg
 import numpy as np
 from scipy.signal import resample_poly
 
-from .. import voice
+from .. import styles, voice
 from ..engine import timeline
 from . import master, sfx
 
@@ -226,7 +226,7 @@ def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
     out_dir = Path(out_dir)
     speech = read_wav(narration(tl, out_dir))[0][:, 0]
     total = len(speech)
-    animated = storyboard.get('look', 'whiteboard') != 'whiteboard'
+    animated = styles.renderer(storyboard.get('look')) != 'whiteboard'   # skins over the whiteboard mix as it does
     cued = out_dir / 'cues.json'
     cues = json.loads(cued.read_text(encoding='utf-8'))['cues'] if cued.is_file() else []
     music = np.zeros((total, 2), np.float32)

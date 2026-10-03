@@ -13,6 +13,7 @@ import numpy as np
 
 from . import ink
 from .board import COL, Element, Layout
+from .skin import WHITEBOARD
 from ..library import MISSING, resolve
 
 HERE = Path(__file__).resolve().parent
@@ -25,8 +26,11 @@ def mix(c, k=.5, base=(255, 255, 255)):
 
 
 class Ctx:
-    def __init__(self, episode, lang, timing, layout: Layout, project_dir=None):
+    def __init__(self, episode, lang, timing, layout: Layout, project_dir=None, skin=WHITEBOARD):
+        """Builders draw in the whiteboard's colours; ``skin`` restyles every drawing as it is added (engine/skin.py)
+        and its fonts write and measure every text."""
         self.ep, self.lang, self.timing, self.layout = episode, lang, timing, layout
+        self.skin, self.fonts = skin, skin.fonts
         self.project_dir = Path(project_dir) if project_dir else None
         self.elements: list[Element] = []
         self.registry: dict = {}
@@ -60,10 +64,18 @@ class Ctx:
     # ---- drawable factories
     def text(self, s, size, color=None, max_w=None, max_lines=3, align='left', pace=1.0, min_size=28):
         if max_w:
-            lines, size = ink.fit_text(s, self.lang, max_w, max_lines, size, min_size=min_size)
+            lines, size = ink.fit_text(s, self.lang, max_w, max_lines, size, min_size=min_size, fonts=self.fonts)
         else:
             lines = [s]
-        return ink.TextDrawing(lines, self.lang, size, color=color or ink.INK, align=align, pace=pace)
+        return ink.TextDrawing(lines, self.lang, size, color=color or ink.INK, align=align, pace=pace,
+                               fonts=self.fonts)
+
+    def width(self, s, size):
+        """How wide ``s`` is written at ``size`` in this look's handwriting."""
+        return ink.text_width(s, self.lang, size, self.fonts)
+
+    def wrap(self, s, size, max_w):
+        return ink.wrap_words(s, self.lang, size, max_w, fonts=self.fonts)
 
     def doodle(self, did, box, **kw):
         return ink.svg_drawing(resolve(did, self.project_dir) or MISSING, box, **kw)
@@ -72,7 +84,7 @@ class Ctx:
         return ink.stroke_drawing(size, polylines, color=color or ink.INK, width=width, closed_fill=fills, **kw)
 
     def add(self, drawing, x, y, trigger, **kw) -> Element:
-        el = Element(drawing, x, y, trigger, **kw)
+        el = Element(self.skin.dress(drawing, x, y), x, y, trigger, **kw)
         self.elements.append(el)
         return el
 

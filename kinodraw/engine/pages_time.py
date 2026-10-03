@@ -30,8 +30,8 @@ _NUM_PREFIX = tuple('年月近约超逾仅达至到比第')
 
 
 # ------------------------------------------------------------------ helpers
-def _block_h(lang, size, n):
-    asc, desc = ink.hand_font(lang, size).getmetrics()
+def _block_h(lang, size, n, fonts=ink.FONTS):
+    asc, desc = ink.hand_font(lang, size, fonts).getmetrics()
     return int(size * 1.18) * (n - 1) + asc + desc + 12
 
 
@@ -56,10 +56,10 @@ def _atoms(s, lang):
     return atoms
 
 
-def _wrap(s, lang, size, max_w):
+def _wrap(s, lang, size, max_w, fonts=ink.FONTS):
     lines, cur = [], ''
     for a in _atoms(s, lang):
-        if cur and ink.text_width((cur + a).rstrip(), lang, size) > max_w:
+        if cur and ink.text_width((cur + a).rstrip(), lang, size, fonts) > max_w:
             lines.append(cur.rstrip())
             cur = a
         else:
@@ -83,18 +83,18 @@ def fit(ctx, s, size, max_w, max_h=None, max_lines=3, min_size=30, color=None, a
     lang = ctx.lang
 
     def fits(lines, sz):       # an unsplittable unit wider than max_w also means "smaller"
-        return (len(lines) <= max_lines and (max_h is None or _block_h(lang, sz, len(lines)) <= max_h)
-                and max(ink.text_width(ln, lang, sz) for ln in lines) <= max_w)
+        return (len(lines) <= max_lines and (max_h is None or _block_h(lang, sz, len(lines), ctx.fonts) <= max_h)
+                and max(ctx.width(ln, sz) for ln in lines) <= max_w)
 
     choice, rank = None, 0
     for sz in range(int(size), int(min_size) - 1, -2):
-        lines = _wrap(s, lang, sz, max_w)
+        lines = _wrap(s, lang, sz, max_w, ctx.fonts)
         ok = fits(lines, sz)
         if not ok and sz - 2 >= min_size:
             continue
         cands = [lines]
         for frac in np.linspace(.95, .45, 11):
-            cand = _wrap(s, lang, sz, max_w * frac)
+            cand = _wrap(s, lang, sz, max_w * frac, ctx.fonts)
             if len(cand) != len(lines):
                 break
             cands.append(cand)
@@ -108,8 +108,8 @@ def fit(ctx, s, size, max_w, max_h=None, max_lines=3, min_size=30, color=None, a
     _, lines, sz = choice
     grow = 1.1
     while len(lines) > max_lines and grow < 4:   # nothing fits: keep the line count, run wider
-        lines, grow = _wrap(s, lang, sz, max_w * grow), grow + .1
-    td = ink.TextDrawing(lines, lang, sz, color=color or ink.INK, align=align, pace=pace)
+        lines, grow = _wrap(s, lang, sz, max_w * grow, ctx.fonts), grow + .1
+    td = ink.TextDrawing(lines, lang, sz, color=color or ink.INK, align=align, pace=pace, fonts=ctx.fonts)
     td.fsize = sz
     return td
 
@@ -191,7 +191,7 @@ def build_lanes(v, beat, box, ctx):
     lx0, lx1 = x0 + lab_w + 44, x0 + w - 24          # arrow span
     px0, px1 = lx0 + 70, lx1 - 90                     # where pos 0..1 lands
     date_size = 52 if lane_h >= 250 else 44
-    date_h = _block_h(ctx.lang, date_size, 1)
+    date_h = _block_h(ctx.lang, date_size, 1, ctx.fonts)
     everything, events, line_y, blocks, below, lane_t, tints = [], [], {}, {}, {}, {}, {}
     # Event times first (untriggered events follow the previous one); never before the title.
     lane_evs, lane_ts, t_prev = [], [], t0 + .2
