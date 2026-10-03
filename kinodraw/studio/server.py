@@ -88,8 +88,10 @@ JOBS = Jobs()
 
 
 def _plain(error: Exception) -> str:
-    """What a failed job tells the user: a ValueError's message is written for them; anything else is a bug, named
-    so it can be reported."""
+    """What a failed job tells the user: a ValueError's message is written for them (a recording's without the
+    command line's advice: the Narrator tab has its own); anything else is a bug, named so it can be reported."""
+    if isinstance(error, voice.RecordingError):
+        return error.plain
     if isinstance(error, ValueError):
         return str(error)
     return f'Something went wrong ({type(error).__name__}: {error}). Please tell us using "Feedback or a problem?".'
@@ -323,7 +325,7 @@ def use_take(name: str) -> dict:
             problem.parent.mkdir(exist_ok=True)
             problem.write_text(json.dumps({'sha256': sha(take), 'lines': [[line['beat'], line['text']]
                                                                           for line in _lines(path)],
-                                           'missing': getattr(error, 'beat', None), 'problem': str(error)},
+                                           'missing': getattr(error, 'beat', None), 'problem': _plain(error)},
                                           ensure_ascii=False), encoding='utf-8')
             return narrator(name)
         progress('timeline', 0, 1)

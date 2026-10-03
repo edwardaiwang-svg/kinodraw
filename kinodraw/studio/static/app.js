@@ -391,9 +391,10 @@ function narratorResult(info) {
       <p>Or make the video now: the drawings for ${poor.length === 1 ? 'that sentence' : 'those sentences'} may not line up.</p>
       <button id="n-make" class="ghost">Make the video anyway</button></div>`;
   }
-  if (missing.length) {
+  if (missing.length) {                         // the voice step's refusal names the part: say it as it is
     return `<div class="result bad"><p>Your recording doesn’t follow the script: ${sentences(missing).toLowerCase()}
-      ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in it (marked below). ${again}</p>${detail}</div>`;
+      ${missing.length === 1 ? 'wasn’t' : 'weren’t'} found in it (marked below). ${again}</p>
+      ${check.problem ? `<p>${esc(check.problem)}</p>` : ''}<p>Or choose <b>Built-in voice</b> above.</p></div>`;
   }
   if (poor.length) {
     return `<div class="result bad"><p>Your recording doesn’t sound like this script. ${again}</p>${detail}</div>`;

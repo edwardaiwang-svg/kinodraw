@@ -45,8 +45,8 @@ def studio(tmp_path, monkeypatch):
     httpd.shutdown()
 
 
-def _wait(call, job):
-    for _ in range(200):
+def _wait(call, job, seconds=10):
+    for _ in range(round(seconds / .05)):
         state = call(f'/api/jobs/{job}')[1]
         if state['state'] in ('done', 'failed'):
             return state
@@ -264,3 +264,40 @@ def test_the_page_warns_before_making_a_video_from_sentences_that_dont_fit():
     assert make.index("didn’t match your recording") < make.index('/make`')
     assert make.index('changed after you recorded') < make.index('/make`')
     assert "addEventListener('click', () => makeVideo(name, true))" in js
+
+
+def _reading(tmp_path, beats, skip=()):
+    """``beats`` read aloud by another voice (am_michael at 0.9), the beats at ``skip`` left out, as a wav."""
+    parts = [np.zeros(9600, np.float32)]
+    for k, (_, text) in enumerate(beats):
+        if k not in skip:
+            clip = voice.synthesize(text, 'en', tmp_path / 'reader', 'am_michael', .9)
+            parts += [voice._read_wav(clip.wav), np.zeros(14400, np.float32)]
+    x = np.concatenate(parts)
+    path = tmp_path / 'take.wav'
+    voice._write_wav(path, x + np.random.default_rng(0).normal(0, .002, len(x)).astype(np.float32))
+    return path
+
+
+@pytest.mark.skipif(bool(voice.missing_files('en')), reason='Kokoro models not downloaded (kinodraw setup --lang en)')
+def test_a_take_that_leaves_out_a_part_is_refused_on_the_narrator_tab_naming_it(studio, tmp_path):
+    """A take without one whole part is refused at the voice step (a video cut from it would run ahead of the voice).
+    In the Studio the Narrator tab says so in the refusal's own words, naming the part, without the command line's
+    advice, and marks that part's sentences as not found; Make video refuses it too, so nothing goes past it."""
+    project = studio.root / 'Honey'
+    beats = [(b['id'], b['spoken']['en']) for b in pipeline.storyboard(project)['beats']]
+    status, _ = studio('/api/projects/Honey/recording?filename=take.wav', raw=_reading(tmp_path, beats, {1}).read_bytes())
+    assert status == 200
+    job = _wait(studio, studio('/api/projects/Honey/align', {})[1]['job'], 600)
+    assert job['state'] == 'done', job
+    info = job['result']
+    check = info['check']
+    assert check['ok'] is False
+    assert check['problem'].startswith('Part of the script seems to be missing from your recording, around the part '
+                                       'that says "Honey is one of the oldest foods people still eat." (b002).')
+    assert 'kinodraw voice' not in check['problem']
+    assert check['missing'] == [n for n, line in enumerate(info['lines'], 1) if line['beat'] == 'b002'] == [2]
+    assert studio('/api/projects/Honey/narrator')[1]['check'] == check             # still shown when opened again
+
+    job = _wait(studio, studio('/api/projects/Honey/make', {})[1]['job'], 600)
+    assert job['state'] == 'failed' and job['error'] == check['problem']

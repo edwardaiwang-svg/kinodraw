@@ -111,7 +111,8 @@ def narrate(project_dir: Path, progress=None) -> dict:
                                          cfg['voice'], cfg['speed'])
         except voice.RecordingError as error:
             raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: '
-                                       f'kinodraw voice "{project_dir}" --recording none') from None
+                                       f'kinodraw voice "{project_dir}" --recording none', error.beat,
+                                       error.plain) from None
     return clips
 
 

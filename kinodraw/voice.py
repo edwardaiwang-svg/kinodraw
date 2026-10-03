@@ -196,7 +196,13 @@ SCALES = (.7, .75, .8, .85, .9, .95, 1., 1.05, 1.1, 1.15, 1.2)    # the take's f
 
 
 class RecordingError(ValueError):
-    """Your recording cannot narrate this script; the message says what is wrong and what to do (no traceback)."""
+    """Your recording cannot narrate this script; the message says what is wrong and what to do (no traceback).
+    ``beat``: the part of the script it is about, if one (the Studio marks that part's sentences); ``plain``: the
+    message without the command-line advice the voice step adds to it (the Studio has its own)."""
+
+    def __init__(self, message: str, beat: str | None = None, plain: str | None = None):
+        super().__init__(message)
+        self.beat, self.plain = beat, plain or message
 
 
 def _decode(path: Path, rate: int = SR) -> np.ndarray:
@@ -437,10 +443,8 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         sound = a + np.flatnonzero(room[a:b])
         heard = _power(tl[a:b], tq)
         if b - a < PAUSE or not heard:
-            error = RecordingError(f'Your recording skips or changes the part that says "{_quote(text)}" ({bid}). '
-                                   'Read the whole script once through, every sentence as written, and try again.')
-            error.beat = bid                       # the Studio marks that beat's sentences
-            raise error
+            raise RecordingError(f'Your recording skips or changes the part that says "{_quote(text)}" ({bid}). '
+                                 'Read the whole script once through, every sentence as written, and try again.', bid)
         start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
         audio = full[start * hop:end * hop]
         gain = np.sqrt(_power(gl[gs:ge + 1], gq) / heard)
@@ -499,7 +503,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         bid, text = beats[min(missing)[1]]
         raise RecordingError(f'Part of the script seems to be missing from your recording, around the part that says '
                              f'"{_quote(text)}" ({bid}). Read the whole script once through, every sentence as '
-                             'written, and try again.')
+                             'written, and try again.', bid)
     out.mkdir(parents=True, exist_ok=True)
     for c, audio in zip(clips, sounds):
         _write_wav(out / c['wav'], audio, TAKE_SR)
