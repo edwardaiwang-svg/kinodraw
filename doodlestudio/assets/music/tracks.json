@@ -1,8 +1,11 @@
 {
  "fresh_focus": {"title": "Fresh Focus", "composer": "Kevin MacLeod", "mood": "bright and airy", "role": "intro/outro",
+                 "bpm": 103.5, "downbeat": 0.142,
                  "sha256": "87d70572729712abfb6d444b7de4cc7b0104eafca1f0fcfec1798fd824325c3c"},
  "natural_vibes": {"title": "Natural Vibes", "composer": "Kevin MacLeod", "mood": "neutral and nice", "role": "transitions",
+                   "bpm": 100.0, "downbeat": 2.132,
                    "sha256": "12ac1554aa7d48a40a4c906ca1b89e81138093556f8c0f457f53040479226ad8"},
  "inventing_flight": {"title": "Inventing Flight", "composer": "Bryan Teoh", "mood": "delightful, discovery", "role": "alternative",
+                      "bpm": 145.0, "downbeat": 0.047,
                       "sha256": "916e736efa3caed4ea8534e727670dbac41af0fb44f00fa667aebaab9b2b6407"}
 }

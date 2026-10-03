@@ -209,3 +209,38 @@ def test_a_rules_picture_the_model_drew_elsewhere_is_not_drawn_twice(board):
     doodles = [i['doodle'] for v in beat['visuals'] for i in v.get('items', [])]
     assert doodles.count('lightbulb_idea') == 1 and doodles[0] == 'lightbulb_idea'
     assert ['book_stack', 'newspaper', 'web_page'] == doodles[1:4]         # the list still comes with the second sentence
+
+
+def test_chart_pages_keep_their_beat_whoever_planned_them():
+    """A model timeline becomes a 'lanes' page: it keeps its beat as the model planned it (no rules pictures drawn in
+    the middle of it), and a rules timeline or 100-square grid is never dropped for the model's lone picture."""
+    board = script.build(ingest.read(
+        '# A day at the bakery\n\nAt dawn, the baker lights the oven and mixes flour and water. At noon, fresh bread '
+        'and cakes fill the shop window. At dusk, the shop closes and the ovens cool down.\n\nIn 1817, Karl Drais built '
+        'a wooden running machine with two wheels and a seat. In 1861, French makers added pedals to the front wheel. '
+        'In 1885, John Kemp Starley sold the Rover, the first safe bicycle.\n\nToday there are about 1 billion bicycles '
+        'in the world. In the Netherlands, about 27% of trips are made by bicycle.'))
+    reference = copy.deepcopy(board)
+    LLMDirector(Recorded({}), 'en').rules.direct(reference)
+    bakery, dates, grid = (next(b for b in reference['beats'] if b['kind'] == 'narration' and word in b['display']['en'])
+                           for word in ('dawn', '1817', '27%'))
+    assert len(bakery['visuals']) > 1 and 'lanes' in [v['type'] for v in dates['visuals']] and \
+        'grid100' in [v['type'] for v in grid['visuals']]
+
+    def answer(payload):
+        beats = []
+        for b in payload['beats']:
+            if 'dawn' in b['text']:
+                beats.append({'beat_id': b['beat_id'], 'visuals': [{'type': 'timeline', 'title': 'A baker\'s day', 'events': [
+                    {'when': when, 'label': label, 'trigger': when}
+                    for when, label in (('At dawn', 'Oven on'), ('At noon', 'Bread sold'), ('At dusk', 'Shop shut'))]}]})
+            elif b['kind'] == 'narration':
+                beats.append({'beat_id': b['beat_id'], 'visuals': [{'type': 'cluster', 'relation': 'none', 'items': [
+                    {'doodle': b['candidates'][0]['id'], 'label': '', 'trigger': ''}]}]})
+        return {'section_title': '', 'hook': '', 'takeaway': '', 'beats': beats}
+    titles = [c['title']['en'] for c in board['chapters'] if c['kind'] == 'section']
+    LLMDirector(Recorded(dict.fromkeys(titles, answer)), 'en').direct(board)
+    beats = {b['id']: b for b in board['beats']}
+    assert [(v['type'], v['id']) for v in beats[bakery['id']]['visuals']] == [('lanes', f"{bakery['id']}m0")]
+    assert beats[dates['id']]['visuals'] == dates['visuals'] and beats[grid['id']]['visuals'] == grid['visuals']
+    assert validate(board)['ok']

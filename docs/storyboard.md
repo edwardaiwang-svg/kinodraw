@@ -15,6 +15,10 @@ Each project folder holds a `storyboard.json`. You can edit it by hand or in Stu
   "music": true,
   "footer": {"en": "optional small print on every board"},
   "ui": {"en": {"agenda": "What we'll cover", "takeaway": "KEY TAKEAWAY", "thanks": "Thanks for watching"}},
+  "look": "whiteboard",
+  "story": "explain",
+  "motion": "lively",
+  "brand": {"name": "Friendr", "url": "friendr.nl", "cta": "Try it for free"},
   "chapters": [],
   "beats": []
 }
@@ -23,6 +27,8 @@ Each project folder holds a `storyboard.json`. You can edit it by hand or in Stu
 - `narrator`: `"none"` hides the character. Any other value is a prefix, and poses are looked up as `<prefix>_wave`, `<prefix>_head`, `<prefix>_present`, `<prefix>_thumbs`, and so on (see "Your own doodles" below).
 - `music`: `true`, `false`, or `{"primary": "fresh_focus", "secondary": "natural_vibes"}`.
 - `host`: optional, `{"photo": "photos/me.jpg", "badge": {"en": "Name · role"}}`. It adds a photo badge to the title board and end card.
+- `look`, `story`, `motion`: the direction dials, all optional. `look` is `whiteboard` (the default: the hand-drawn board, which ignores the other dials), `collage` or `bold`. `story` is `explain` (the default), `promo`, `story` or `showcase`. `motion` is `calm`, `lively` (the default) or `showreel`. See "Direction" below.
+- `brand`: optional, `{"name", "url", "cta", "reveal"}`, all text; `"reveal": "hand"` has the drawing hand write the name. Without it the brand is found in the script: a domain such as `friendr.nl`, or a name said twice that the title or a "Meet X" backs up.
 
 ## Chapters
 
@@ -82,6 +88,48 @@ Visuals that take the whole board (the camera moves to a new page):
 - `range`, `ladder`, `levels`, `zones`, `table`, `dial`, `calendar`, `coins`: see the builders in `doodlestudio/engine/pages_*.py`.
 
 `emphasis` circles, underlines or strikes part of an earlier visual: `target: "<visual id>[.<index>]"`, `kind: circle | underline | strike | highlight`.
+
+## Direction
+
+The collage and bold looks turn every sentence into a scene from a fixed template library and animate it with an energy from 0 to 3. `doodlestudio/director/annotate.py` plans this without any AI: `annotate(board)` writes a `direction` list on every title, opener, narration, take and closing beat, one entry per sentence, and `plan(board, timeline)` fits the energies to the motion dial (run it again once the voice timing is known; without a timeline it assumes 15 characters a second).
+
+```json
+"direction": [
+  {"i": 1, "span": [27, 40], "role": "brand", "energy": 3, "scene": "brand_reveal", "emphasis": "Friendr",
+   "options": {"scene": ["brand_reveal", "brand_endcard", "sticker_row"], "emphasis": ["Friendr", "With Friendr"],
+               "energy": [2, 3]},
+   "source": "rules"}
+]
+```
+
+- `i` is the sentence's index in the beat, and `span` its characters in `display` (split as captions are).
+- `role`: `hook`, `question`, `problem`, `turn`, `brand`, `step`, `feature`, `channels`, `social`, `mechanic`, `use_cases`, `list`, `number`, `quote`, `reveal`, `tagline`, `cta`, `end_line` or `none`. A `step` also has `n`, its number in the video.
+- `energy`: 0 still, 1 calm, 2 lively, 3 a showpiece.
+- `scene`: one of `options.scene`, which offers 2–3 templates from the look's library with the rules' pick first (the whiteboard has only `board`).
+- `emphasis`: the key phrase shown big, cut from the sentence (at most three words): one of `options.emphasis`, or empty.
+- `options`: what an AI may later choose from, by index. `energy` is `[low, high]`.
+- `source`: `rules`, or `user` for an entry you set by hand. Annotating again never changes a `user` entry, and planning only reports where it breaks the dial.
+
+| look | story | scenes |
+|---|---|---|
+| whiteboard | any | board |
+| collage | promo, showcase | chat_pileup, chaos, brand_reveal, step_card, share_link, rsvp, feature_chips, threshold, use_case_grid, brand_endcard, script_page, app_paste, app_press, hand_draws, sticker_row |
+| collage | story, explain | title_question, crowd, stack, sky_speech, room_reaction, journey, document_reveal, collect, moodboard, box_reveal, tools_idea, assemble, end_line, sticker_row |
+| bold | any | slam_line, bracket_focus, count_up, marquee_rings, morph, particle_assemble, iris_end |
+
+| motion | time at energy 2 or more | showpieces (energy 3) |
+|---|---|---|
+| calm | none: nothing above 1 | none |
+| lively | at most 20% | at most 2 |
+| showreel | at most 45% | at most 5 |
+
+On every dial, showpieces are at least 12 seconds apart; the 3 seconds after a sentence at 2 or more stay at 1 or less, unless the sentences go on with the same list or cascade ("No app. No account."); and a sentence reaches 2 only with an emphasis of at most four words. When something has to give, the anchors (the first hook, the brand reveal, and the final call to action or end line) stay up longest.
+
+## Your own voice
+
+`project.json` (next to `storyboard.json`) can name a recording of you reading the script: `"recording": "recording.m4a"`, a path in the project folder or an absolute one. `doodle voice MyVideo --recording take.m4a` copies the file in (wav, m4a, mp3 or aiff) and sets the key; `--recording none` removes it and the Kokoro voice reads again.
+
+Read every beat's `spoken` text in one take, at your own pace, with a pause between paragraphs. Kokoro still reads the script as a guide; the guide is aligned to your take, every beat is cut out of it at a pause, and the captions and drawings follow your words. `voice/recording-align.json` shows where each beat was found and how well it matched: about 0.35 for other words and 0.45 or more for a reading of the script, and beats under 0.4 are marked `check`. A take that is not a reading of this script is refused. A false start, a repeated sentence or an ad-lib stays in the beat it falls in (and the words around it may be timed a little off), so record that part again or edit it out of the take.
 
 ## Your own doodles
 

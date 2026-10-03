@@ -10,7 +10,7 @@ import { normalizeStoryboard } from './storyboard.js';
 
 const NARRATOR_POSES = ['narrator_wave', 'narrator_explain', 'narrator_present', 'narrator_think', 'narrator_magnifier',
   'narrator_notebook', 'narrator_thumbs', 'narrator_worried'];
-const PAGE_TYPES = new Set(['bars', 'grid100', 'timeline', 'flow', 'split']);
+const PAGE_TYPES = new Set(['bars', 'grid100', 'timeline', 'lanes', 'flow', 'split']);   // as the model names them, and as drawn
 const KEEPABLE = new Set(['cluster', 'stat', 'quote', 'glossary']);   // rules visuals that stand alone in one sentence
 const MAX_VISUALS_PER_BEAT = 4;
 const LIMITS = { label: 22, title: 40, hook: 30, quote: 110, gloss: 80, takeaway_words: 12 };
@@ -136,9 +136,11 @@ export class LLMDirector {
 
   /** Code decides how much is drawn: sentence by sentence, the model's visuals replace the rules draft only when they
    *  draw at least as much (a list keeps every item; a sentence the model left bare keeps its picture). A chart page
-   *  from the model keeps the beat as the model planned it. */
+   *  from the model keeps the beat as the model planned it; without one, a chart page from the rules (a timeline, a
+   *  100-square grid) keeps the beat as the rules planned it. */
   keepPictures(beat, made, draft) {
     if (made.some((v) => PAGE_TYPES.has(v.type))) return made;
+    if (draft.some((v) => PAGE_TYPES.has(v.type))) return draft;
     const spoken = normalizeNumbers(beat.display.en).spoken;
     const ends = [];
     let cursor = 0;

@@ -19,7 +19,7 @@ from .schema import LIMITS, MAX_VISUALS_PER_BEAT
 
 NARRATOR_POSES = ['narrator_wave', 'narrator_explain', 'narrator_present', 'narrator_think', 'narrator_magnifier',
                   'narrator_notebook', 'narrator_thumbs', 'narrator_worried']
-PAGE_TYPES = {'bars', 'grid100', 'timeline', 'flow', 'split'}
+PAGE_TYPES = {'bars', 'grid100', 'timeline', 'lanes', 'flow', 'split'}   # as the model names them, and as drawn
 KEEPABLE = {'cluster', 'stat', 'quote', 'glossary'}     # rules visuals that stand alone in one sentence
 
 
@@ -127,9 +127,12 @@ class LLMDirector:
     def _keep_pictures(self, beat: dict, made: list, draft: list) -> list:
         """Code decides how much is drawn: sentence by sentence, the model's visuals replace the rules draft only
         when they draw at least as much (a list keeps every item; a sentence the model left bare keeps its
-        picture). A chart page from the model keeps the beat as the model planned it."""
+        picture). A chart page from the model keeps the beat as the model planned it; without one, a chart page
+        from the rules (a timeline, a 100-square grid) keeps the beat as the rules planned it."""
         if any(v['type'] in PAGE_TYPES for v in made):
             return made
+        if any(v['type'] in PAGE_TYPES for v in draft):
+            return draft
         lang = self.lang
         spoken = numbers.normalize(beat['display'][lang], lang).spoken
         ends, cursor = [], 0

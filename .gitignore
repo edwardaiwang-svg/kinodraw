@@ -7,8 +7,10 @@ projects/
 !docs/media/*.mp4
 !doodlestudio/studio/static/sample/*.mp4
 *.wav
+!doodlestudio/assets/sfx/*.wav
 .DS_Store
 /dist/
 /build/
 .pytest_cache/
 .Rhistory
+.claude/

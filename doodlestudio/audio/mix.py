@@ -3,6 +3,8 @@
 assemble(): place every beat's clip on the timeline, normalize to -18 LUFS, write captions.
 mix(): lay the bundled CC0 music under the timeline's music windows (title, agenda,
 section transitions, outro and end card), ducked under speech, fading at every edge.
+The animated looks (any storyboard look but the whiteboard) get a bed under the whole video instead,
+the sound effects the renderer cued (build/cues.json), and a mastered mix (-14 LUFS, -1 dBTP).
 """
 from __future__ import annotations
 
@@ -17,11 +19,16 @@ from scipy.signal import resample_poly
 
 from .. import voice
 from ..engine import timeline
+from . import master, sfx
 
 SR = 48000
 FADE = 1.5
 UNDER_SPEECH_LUFS = -31.0
 OPEN_LUFS = -25.0
+BED_UNDER_LUFS = -36.0     # animated looks: the bed sits 18 dB under the -18 LUFS narration
+SFX_DUCK_DB = -6.0         # sound effects while someone speaks
+SWELL_DB, SWELL = 3.0, 1.5  # the bed comes up after every cut, easing back over 1.5 s
+MASTER_LUFS, CEILING_DBTP = -14.0, -1.0
 MUSIC = Path(__file__).resolve().parents[1] / 'assets' / 'music'
 DEFAULT_TRACKS = {'primary': 'fresh_focus', 'secondary': 'natural_vibes'}
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
@@ -127,50 +134,104 @@ def envelope(speech: np.ndarray, window=.05) -> np.ndarray:
     return np.repeat(out, n)[:len(speech)]
 
 
+def track(slug) -> tuple[np.ndarray, float]:
+    """A bundled track at SR with its silent ends trimmed, and its loudness (LUFS)."""
+    path = MUSIC / f'{slug}.mp3'
+    audio = decode(path, 2)
+    nz = np.flatnonzero(np.abs(audio).max(1) > 1e-3)
+    return audio[nz[0]:nz[-1] + 1] if len(nz) else audio, float(loudness(path)['input_i'])
+
+
+def loop(audio, n) -> np.ndarray:
+    """The track repeated to n samples, with 1 s crossfades."""
+    seg, pos, xf = np.zeros((n, 2), np.float32), 0, SR
+    while pos < n:
+        take = min(len(audio), n - pos)
+        piece = audio[:take].copy()
+        if pos > 0:
+            ramp = np.linspace(0, 1, min(xf, take))[:, None]
+            piece[:len(ramp)] *= ramp
+            seg[pos:pos + len(ramp)] *= (1 - ramp)
+        seg[pos:pos + take] += piece
+        pos += take - (xf if take == len(audio) else 0)
+    return seg
+
+
+def fades(n) -> np.ndarray:
+    """Gain 1, easing in and out over FADE seconds at the ends."""
+    fade = np.ones(n, np.float32)
+    f = min(int(FADE * SR), n // 2)
+    fade[:f] = np.linspace(0, 1, f) ** 1.5
+    fade[n - f:] = np.linspace(1, 0, f) ** 1.5
+    return fade
+
+
+def windows(storyboard: dict, tl: dict, env: np.ndarray, tracks: dict) -> np.ndarray:
+    """The whiteboard's music: each music window, the primary track near the start and end."""
+    total = len(env)
+    music = np.zeros((total, 2), np.float32)
+    kinds = {c['id']: c['kind'] for c in storyboard['chapters']}
+    spans = {kinds[c['id']]: c for c in tl['chapters']}
+    intro_end = spans['intro']['end'] if 'intro' in spans else 0
+    outro_start = spans['outro']['start'] if 'outro' in spans else tl['duration']
+    cache = {}
+    for win in tl['music']:
+        a, b = win['start'], min(win['end'], total / SR)
+        slug = tracks['primary'] if (a < intro_end + 1 or b > outro_start - 1) else tracks['secondary']
+        if slug not in cache:
+            cache[slug] = track(slug)
+        audio, lufs = cache[slug]
+        n = int((b - a) * SR)
+        if n <= 0:
+            continue
+        g_under, g_open = 10 ** ((UNDER_SPEECH_LUFS - lufs) / 20), 10 ** ((OPEN_LUFS - lufs) / 20)
+        i0 = int(a * SR)
+        gain = g_open + (g_under - g_open) * env[i0:i0 + n]
+        music[i0:i0 + n] += loop(audio, n) * (gain * fades(n))[:, None]
+    return music
+
+
+def swell(cues: list, n: int) -> np.ndarray:
+    """Bed gain: up SWELL_DB within 50 ms of every cut, easing back to 0 dB over SWELL seconds."""
+    db = np.zeros(n, np.float32)
+    u = np.arange(int(SWELL * SR)) / SR
+    shape = (SWELL_DB * np.minimum(1, u / .05) * np.cos(np.pi / 2 * u / SWELL) ** 2).astype(np.float32)
+    for cue in cues:
+        i = round(float(cue['t']) * SR)
+        if cue['kind'] == 'cut' and 0 <= i < n:
+            np.maximum(db[i:i + len(shape)], shape[:n - i], out=db[i:i + len(shape)])
+    return 10 ** (db / 20)
+
+
+def bed(env: np.ndarray, cues: list, slug: str) -> np.ndarray:
+    """The animated looks' music: one track under the whole video, 18 dB under speech, swelling after cuts."""
+    audio, lufs = track(slug)
+    g_under, g_open = 10 ** ((BED_UNDER_LUFS - lufs) / 20), 10 ** ((OPEN_LUFS - lufs) / 20)
+    gain = (g_open + (g_under - g_open) * env) * fades(len(env)) * swell(cues, len(env))
+    return loop(audio, len(env)) * gain[:, None]
+
+
 def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
-    """Write mix.wav (48 kHz stereo): the narration plus the music bed (or narration only when music is off)."""
+    """Write mix.wav (48 kHz stereo): the narration plus the music bed (or narration only when music is off).
+    Any look but the whiteboard also gets its sound effects and a bed under the whole video, and is mastered;
+    storyboard keys 'sfx' and 'master' (true or false) override either."""
     out_dir = Path(out_dir)
     speech = read_wav(tl['audio'])[0][:, 0]
     total = len(speech)
+    animated = storyboard.get('look', 'whiteboard') != 'whiteboard'
+    cued = out_dir / 'cues.json'
+    cues = json.loads(cued.read_text(encoding='utf-8'))['cues'] if cued.is_file() else []
     music = np.zeros((total, 2), np.float32)
     setting = storyboard.get('music', True)
+    env = envelope(speech) if setting or cues else None
     if setting:
         tracks = {**DEFAULT_TRACKS, **(setting if isinstance(setting, dict) else {})}
-        kinds = {c['id']: c['kind'] for c in storyboard['chapters']}
-        spans = {kinds[c['id']]: c for c in tl['chapters']}
-        intro_end = spans['intro']['end'] if 'intro' in spans else 0
-        outro_start = spans['outro']['start'] if 'outro' in spans else tl['duration']
-        env, cache = envelope(speech), {}
-        for win in tl['music']:
-            a, b = win['start'], min(win['end'], total / SR)
-            slug = tracks['primary'] if (a < intro_end + 1 or b > outro_start - 1) else tracks['secondary']
-            if slug not in cache:
-                path = MUSIC / f'{slug}.mp3'
-                audio = decode(path, 2)
-                nz = np.flatnonzero(np.abs(audio).max(1) > 1e-3)
-                cache[slug] = (audio[nz[0]:nz[-1] + 1] if len(nz) else audio, float(loudness(path)['input_i']))
-            audio, lufs = cache[slug]
-            n = int((b - a) * SR)
-            if n <= 0:
-                continue
-            seg, pos, xf = np.zeros((n, 2), np.float32), 0, SR      # loop with 1 s crossfades
-            while pos < n:
-                take = min(len(audio), n - pos)
-                piece = audio[:take].copy()
-                if pos > 0:
-                    ramp = np.linspace(0, 1, min(xf, take))[:, None]
-                    piece[:len(ramp)] *= ramp
-                    seg[pos:pos + len(ramp)] *= (1 - ramp)
-                seg[pos:pos + take] += piece
-                pos += take - (xf if take == len(audio) else 0)
-            g_under, g_open = 10 ** ((UNDER_SPEECH_LUFS - lufs) / 20), 10 ** ((OPEN_LUFS - lufs) / 20)
-            i0 = int(a * SR)
-            gain = g_open + (g_under - g_open) * env[i0:i0 + n]
-            fade = np.ones(n, np.float32)
-            f = min(int(FADE * SR), n // 2)
-            fade[:f] = np.linspace(0, 1, f) ** 1.5
-            fade[n - f:] = np.linspace(1, 0, f) ** 1.5
-            music[i0:i0 + n] += seg * (gain * fade)[:, None]
-    out = out_dir / 'mix.wav'
-    write_wav(out, speech[:, None].repeat(2, axis=1) + music)
-    return out
+        music = bed(env, cues, tracks['primary']) if animated else windows(storyboard, tl, env, tracks)
+    out = speech[:, None].repeat(2, axis=1) + music
+    if cues and storyboard.get('sfx', animated):
+        out += sfx.render(cues, total / SR) * (1 + (10 ** (SFX_DUCK_DB / 20) - 1) * env)[:, None]
+    if storyboard.get('master', animated):
+        out = master.master(out, SR, MASTER_LUFS, CEILING_DBTP)
+    path = out_dir / 'mix.wav'
+    write_wav(path, out)
+    return path

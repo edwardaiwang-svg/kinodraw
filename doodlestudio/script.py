@@ -171,7 +171,12 @@ def sentence_of(text: str, lang: str) -> str:
     return text + ('.' if lang == 'en' else '。')
 
 
-def build(doc: Document) -> dict:
+def build(doc: Document, story: str = 'explain') -> dict:
+    """The storyboard skeleton. Explainers get the full structure (spoken title, agenda, part openers, takeaways,
+    sign-off); promos, stories and showcases are told straight: only the script's own sentences, then a silent end
+    card, because a spoken "Part 1" or "Key takeaway" would break an ad or a story."""
+    if story != 'explain':
+        return _lean(doc, story)
     lang, T = doc.lang, TEXT[doc.lang]
     sections = [s for s in doc.sections if s.paragraphs]
     preamble = list(doc.preamble)
@@ -227,3 +232,16 @@ def build(doc: Document) -> dict:
     beat('outro', 'closing', T['closing'], music=True)
     return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator',
             'chapters': chapters, 'beats': beats}
+
+
+def _lean(doc: Document, story: str) -> dict:
+    lang = doc.lang
+    paragraphs = list(doc.preamble) + [p for s in doc.sections for p in s.paragraphs]
+    beats = []
+    for text in beats_of(paragraphs, lang):
+        n = normalize(text, lang)
+        beats.append({'id': f'b{len(beats) + 1:03d}', 'chapter': 'main', 'kind': 'narration',
+                      'display': {lang: text}, 'spoken': {lang: n.spoken}, 'visuals': []})
+    return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator', 'story': story,
+            'chapters': [{'id': 'main', 'kind': 'board', 'label': {lang: doc.title}, 'title': {lang: ''}}],
+            'beats': beats}

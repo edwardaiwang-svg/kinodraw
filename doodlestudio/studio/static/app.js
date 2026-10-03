@@ -130,11 +130,15 @@ function showNew() {
       $('#file-name').textContent = f.name; fillVoices();
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
+  $('#style').onchange = () => $('#brand').classList.toggle('hidden', $('#style').value !== 'collage/promo');
   $('#create').onclick = async () => {
     if (needsCloudSignIn(dirSel.value)) return;
     try {
+      const [look, story] = $('#style').value.split('/');
+      const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
-        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value };
+        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story,
+        motion: $('#motion').value, brand: story === 'promo' ? brand : null };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
       const res = await watch(job, 'Creating the storyboard');
       const whole = wholeVideoOffline(res);

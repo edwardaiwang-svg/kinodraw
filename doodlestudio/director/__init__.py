@@ -30,5 +30,8 @@ def direct(project_dir: Path, mode: str = 'rules', model: str | None = None, bas
         from .llm.director import LLMDirector
         from .llm.providers import make_provider
         report = LLMDirector(make_provider(mode, model, base_url), board['lang']).direct(board, progress)
+    if board.get('look', 'whiteboard') != 'whiteboard':  # animated looks: a role, scene, emphasis and energy per sentence
+        from .annotate import annotate
+        report['direction'] = annotate(board)
     path.write_text(json.dumps(board, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     return report

@@ -5,6 +5,7 @@
   doodle new script.md -o MyVideo             storyboard only (edit storyboard.json, then continue)
   doodle direct MyVideo                       (re)add visuals to the storyboard
   doodle voice MyVideo                        narration + timeline
+  doodle voice MyVideo --recording me.m4a     ... narrated by your own reading of the script (none: Kokoro again)
   doodle render MyVideo [--stills 5,30]       silent video (or preview stills)
   doodle finish MyVideo                       music, mux, captions, chapters, QA
   doodle setup [--lang en zh]                 download the voice models once
@@ -43,7 +44,7 @@ def cmd_new(args):
     from . import director, pipeline
     t = _stage('storyboard')
     board = pipeline.new_project(Path(args.script) if Path(args.script).is_file() else args.script, Path(args.out),
-                                 title=args.title, lang=args.lang, **_settings(args))
+                                 title=args.title, lang=args.lang, direction=_direction(args), **_settings(args))
     report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
                              _progress)
     sections = sum(c['kind'] == 'section' for c in board['chapters'])
@@ -53,10 +54,21 @@ def cmd_new(args):
 
 def cmd_voice(args):
     from . import pipeline
+    project, recording = Path(args.project), getattr(args, 'recording', None)
+    if recording and recording.lower() != 'none' and not Path(recording).is_file():
+        sys.exit(f'{recording}: no such file')
+    if recording:
+        pipeline.set_recording(project, None if recording.lower() == 'none' else recording)
     t = _stage('voice')
-    clips = pipeline.narrate(Path(args.project), _progress)
-    tl = pipeline.build_audio(Path(args.project), clips)
+    clips = pipeline.narrate(project, _progress)
+    tl = pipeline.build_audio(project, clips)
     print(f"  {tl['duration']:.0f}s of narration, {len(tl['captions'])} captions ({time.time() - t:.0f}s)")
+    if pipeline.settings(project).get('recording'):
+        report = json.loads((project / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
+        print(f"  your recording: match {report['match']:.2f} (where each beat is: voice/recording-align.json)")
+        for beat in report['beats']:
+            if beat['check']:
+                print(f"  ! {beat['id']} matches its text poorly ({beat['match']:.2f}): was it read as written?")
 
 
 def cmd_render(args):
@@ -65,7 +77,7 @@ def cmd_render(args):
     if args.stills:
         from .engine import render as renderer
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
-        prod = renderer.Production(pipeline.storyboard(project), tl, pipeline.settings(project)['lang'], project)
+        prod = renderer.make_production(pipeline.storyboard(project), tl, pipeline.settings(project)['lang'], project)
         out = project / 'build' / 'stills'
         out.mkdir(parents=True, exist_ok=True)
         for s in args.stills.split(','):
@@ -170,7 +182,13 @@ def _settings(args):
     return out
 
 
+def _direction(args):
+    return {key: getattr(args, key, None) for key in ('look', 'story', 'motion')}
+
+
 MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
+LOOKS, STORIES, MOTIONS = ['whiteboard', 'collage', 'bold'], ['explain', 'promo', 'story', 'showcase'], \
+    ['calm', 'lively', 'showreel']
 
 
 def main(argv=None):
@@ -187,6 +205,9 @@ def main(argv=None):
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
+        p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
+        p.add_argument('--story', choices=STORIES, help='story shape (default explain)')
+        p.add_argument('--motion', choices=MOTIONS, help='how lively the animation is (default lively)')
         p.add_argument('--model')
         p.add_argument('--base-url')
         p.set_defaults(func=fn)
@@ -210,6 +231,8 @@ def main(argv=None):
     p.set_defaults(func=cmd_studio)
     p = sub.add_parser('voice')
     p.add_argument('project')
+    p.add_argument('--recording', help='your own reading of the whole script, in one take (wav, m4a, mp3, aiff), '
+                                       'or "none" to go back to the Kokoro voice')
     p.set_defaults(func=cmd_voice)
     p = sub.add_parser('render')
     p.add_argument('project')
