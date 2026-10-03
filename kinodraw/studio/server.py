@@ -74,7 +74,8 @@ class Jobs:
                     job['result'] = fn(progress)
                     job['state'] = 'done'
                 except Exception as error:  # noqa: BLE001 - shown to the user
-                    job.update(state='failed', error=f'{type(error).__name__}: {error}')
+                    job.update(state='failed', error=str(error) if isinstance(error, voice.RecordingError)
+                               else f'{type(error).__name__}: {error}')
                     traceback.print_exc()
         threading.Thread(target=run, daemon=True).start()
         return jid
@@ -132,6 +133,8 @@ def create_project(body: dict) -> dict:
     def job(progress):
         progress('storyboard', 0, 1)
         pipeline.new_project(text, path, title=title, lang=body.get('lang') or None,
+                             direction={**{k: body.get(k) for k in ('look', 'story', 'motion')},
+                                        'brand': {k: v for k, v in (body.get('brand') or {}).items() if v} or None},
                              director=mode, **settings)
         report = director.direct(path, mode, body.get('model') or None, body.get('base_url') or None, progress)
         usage = report.get('usage')
@@ -237,7 +240,7 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     if beat in tl['beats']:
         info = tl['beats'][beat]
         t = min(info['start'] + offset, info['end'] - .1)
-    prod = renderer.Production(board, tl, lang, path)
+    prod = renderer.make_production(board, tl, lang, path)
     buf = io.BytesIO()
     prod.frame(min(t, tl['duration'] - .05)).convert('RGB').resize((960, 540)).save(buf, 'JPEG', quality=85)
     return buf.getvalue()

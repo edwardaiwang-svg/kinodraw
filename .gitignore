@@ -7,8 +7,10 @@ projects/
 !docs/media/*.mp4
 !kinodraw/studio/static/sample/*.mp4
 *.wav
+!kinodraw/assets/sfx/*.wav
 .DS_Store
 /dist/
 /build/
 .pytest_cache/
 .Rhistory
+.claude/

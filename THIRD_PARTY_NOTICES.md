@@ -15,6 +15,7 @@ The packaged apps on the Releases page also contain GPL components (FFmpeg built
 | Arimo Bold (static instance) | `assets/fonts/` | SIL OFL 1.1, © The Arimo Project Authors |
 | Noto Sans SC Bold | `assets/fonts/` | SIL OFL 1.1, © Adobe / Google |
 | Music: *Fresh Focus* and *Natural Vibes* (Kevin MacLeod), *Inventing Flight* (Bryan Teoh) | `assets/music/` | CC0 / public domain, via FreePD.com; see `music/NOTICE.md` |
+| Sound effects from Kenney's *Interface Sounds*, *RPG Audio* and *Casino Audio*, and OwlishMedia's *202 More Sound Effects* (OpenGameArt) | `assets/sfx/` | CC0 1.0; see `sfx/NOTICE.md` |
 
 ## Downloaded on first use
 

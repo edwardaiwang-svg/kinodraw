@@ -118,8 +118,14 @@ def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0):
 
 
 def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
-    """1280x720: the title in big handwriting, section colours, the narrator giving a thumbs-up."""
-    img = ink.paper(1280, 720).copy()
+    """1280x720: the title in big handwriting, section colours, and the video's own actor: the narrator giving a
+    thumbs-up, or in the collage look the paper puppet cheering on cream paper."""
+    collage = storyboard.get('look') == 'collage'
+    if collage:
+        from .engine import motion
+        img = motion.paper_texture((1280, 720), 'cream').convert('RGBA')
+    else:
+        img = ink.paper(1280, 720).copy()
     d = ImageDraw.Draw(img)
     storyboard = normalize(storyboard)
     title = storyboard['title'][lang]
@@ -136,6 +142,18 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
     colors = [ink.SECTION_COLORS[c['color']] for c in storyboard['chapters'] if c['kind'] == 'section' and c.get('color')]
     for i, col in enumerate(colors[:6]):
         d.rounded_rectangle((56 + i * 70, 640, 106 + i * 70, 668), 10, fill=col)
+    if collage:
+        from .engine import motion
+        from .engine.collage import puppet
+        look = storyboard.get('puppet') or {}
+        cut = motion.die_cut(puppet.raster('cheer', 'happy', 0, look.get('preset', 'sunny'),
+                                           tuple(sorted((look.get('colors') or {}).items())), height=600), border=12)
+        x, y = 1280 - cut.width - 40, 720 - cut.height - 10
+        shadow = motion.shadow_only(cut, blur=10, opacity=.3)
+        img.alpha_composite(shadow, (x + 8 - (shadow.width - cut.width) // 2, y + 10 - (shadow.height - cut.height) // 2))
+        img.alpha_composite(cut, (x, y))
+        img.convert('RGB').save(path)
+        return
     pose = auto_scenes.narrator(storyboard, 'thumbs')
     art = resolve(pose, project_dir) if pose else None
     if art:

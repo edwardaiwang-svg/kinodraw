@@ -458,6 +458,10 @@ class Production:
         self._caption(frame, t)
         return frame
 
+    def cues(self):
+        """Sound-effect events ({t, kind, strength, id}); the whiteboard mix has none."""
+        return []
+
     def _in_title(self, t):
         ids = {c['id'] for c in self.ep['chapters'] if c['kind'] == 'intro'}
         return any(c['start'] <= t < c['end'] for c in self.tl['chapters'] if c['id'] in ids)
@@ -538,6 +542,15 @@ class Production:
         ink.paste(frame, img, (SIZE[0] - img.width) / 2, 1046 - img.height)
 
 
+def make_production(episode, tline, lang, project_dir, relaxed=False):
+    """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
+    A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does."""
+    if episode.get('look') == 'collage':
+        from .collage.render import CollageProduction
+        return CollageProduction(episode, tline, lang, project_dir, relaxed=relaxed)
+    return Production(episode, tline, lang, project_dir, relaxed=relaxed)
+
+
 def pacing(episode, lang, clips, project_dir, rounds=3) -> dict:
     """Pauses (beat id -> seconds) that let the drawing hand finish each beat's pictures before the next
     beat is said, instead of rushing or skipping them: at most PAUSE_MAX after any one beat.
@@ -547,7 +560,7 @@ def pacing(episode, lang, clips, project_dir, rounds=3) -> dict:
     pauses: dict = {}
     for _ in range(rounds):
         timing = tl.layout(episode, lang, clips, pauses)
-        prod = Production(episode, timing, lang, project_dir, relaxed=True)
+        prod = make_production(episode, timing, lang, project_dir, relaxed=True)
         ends: dict = {}
         for e in prod.ctx.elements:
             if e.beat and e.start is not None and not e.skipped and not e.fixed:
@@ -678,7 +691,7 @@ def load(args):
 
 def build(episode, tline, args):
     t0 = time.time()
-    prod = Production(episode, tline, args.lang, args.project)
+    prod = make_production(episode, tline, args.lang, args.project)
     print(json.dumps({'elements': len(prod.els), 'warnings': prod.warnings[:40], 'n_warnings': len(prod.warnings),
                       'build_s': round(time.time() - t0, 1), 'duration': tline['duration']}, ensure_ascii=False), flush=True)
     return prod
