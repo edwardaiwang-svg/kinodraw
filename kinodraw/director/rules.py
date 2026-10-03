@@ -649,9 +649,9 @@ class RulesDirector:
         pct = re.search(r'(\d+(?:\.\d+)?)\s?%\s+of\s+(?:the\s+)?([a-z][\w-]*(?: [a-z][\w-]*)?)' if self.lang == 'en'
                         else r'(\d+(?:\.\d+)?)\s?[%％]的([一-鿿]{2,6})', text)
         if self.lang == 'es':
-            pct = re.search(r'(\d+(?:[.,]\d+)?)\s?%\s+(?:de\s+(?:(?:los|las|el|la)\s+)?|del\s+)'
-                            r'([^\W\d_][\w-]*(?: [^\W\d_][\w-]*)?)', text)
-        if pct and 1 <= float(pct.group(1).replace(',', '.')) <= 99:
+            pct = re.search(rf'(?<![\d.,])({numbers.ES_NUM})\s?%\s+(?:de\s+(?:(?:los|las|el|la)\s+)?|del\s+)'
+                            r'([^\W\d_][\w-]*(?: [^\W\d_][\w-]*)?)', text)   # the whole '1.025,5', never '025,5'
+        if pct and 1 <= _pct_value(pct.group(1), self.lang) <= 99:
             value = pct.group(0).split('of')[0].strip() if self.lang == 'en' else pct.group(1) + '%'
             if self.lang == 'es':
                 value = text[pct.start():text.index('%', pct.end(1)) + 1]
@@ -666,7 +666,7 @@ class RulesDirector:
             if self.lang == 'es':
                 title = text[pct.start():pct.start(2) + len(label)]
             v = {'id': f"{beat['id']}p", 'type': 'grid100', 'title': {self.lang: title},
-                 'filled': round(float(pct.group(1).replace(',', '.'))),
+                 'filled': round(_pct_value(pct.group(1), self.lang)),
                  'legend': [{'text': {self.lang: label}, 'kind': 'filled'}]}
             trig = self._spoken(norm, value)
             if trig:
@@ -855,3 +855,14 @@ class RulesDirector:
         for b in beats[a:z + 1]:
             held[b['id']] = (spoken[0][4] if b is anchor else -1, spoken[-1][4] if b is last else 10 ** 6)
         return anchor['id'], page, held
+
+
+def _pct_value(token: str, lang: str) -> float:
+    """'3,5' -> 3.5 and '1.025,5' -> 1025.5 in Spanish, as numbers.normalize_es reads them."""
+    if lang != 'es':
+        return float(token)
+    if re.fullmatch(r'\d{1,3}(?:\.\d{3})+(?:,\d+)?', token):
+        token = token.replace('.', '')
+    elif re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', token):
+        token = token.replace(',', '')
+    return float(token.replace(',', '.'))
