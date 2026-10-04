@@ -149,17 +149,36 @@ NAMING = re.compile(r'\b(call|calls|called|name|names|named)\s+(this|that|these|
 ES_NAMING = re.compile(r'\b(se llama|se llaman|llamamos|llamado|llamada)\s+(esto|eso|lo)\b', re.I)
 
 
-def headline(beat_texts: list[str], fallback: str, lang: str) -> str:
+CLAIM_STOP = set('the and but for with from are was were its this that these those how why what who when where one two '
+                 'not you your our their his her they can will does into than'.split())
+
+
+def _stems(text: str) -> set:
+    """Rough English word stems for comparing a sentence with its section title (scatters ~ scattered)."""
+    return {w[:5] if len(w) > 5 else w.rstrip('s') for w in re.findall(r'[a-z]+', text.lower())
+            if len(w) > 2 and w not in CLAIM_STOP}
+
+
+def headline(beat_texts: list[str], fallback: str, lang: str, claim: bool = False, keep_last: bool = False) -> str:
     """Takeaway note text: the shortest complete sentence that fits a note and stands on its own (not "This is
     called..." or "We call this..."), from the section's last paragraph that has one; in English, if none has,
     the same with sentences of up to 18 words and 90 characters (still three lines on the note); else the
-    section title."""
+    section title.
+
+    Never the sentence said just before the note (the section's last one, unless ``keep_last``): the narrator
+    would say it twice in a row. With ``claim`` (the writer gave the section its title), an English title that
+    makes a claim, three or more words that carry meaning ("Air scatters short waves"), is the section's main
+    point: the sentence has to say at least half of those words, or the title itself is the takeaway."""
     floor = 4 if lang in ('en', 'es') else 8
+    last = sentences(beat_texts[-1], lang)[-1] if beat_texts and not keep_last else None
+    want = _stems(fallback) if claim and lang == 'en' else set()
+    need = (len(want) + 1) // 2 if len(want) >= 3 else 0
     for cap, room in ((14, None), (18, 90)) if lang in ('en', 'es') else ((28, None),):
         for text in reversed(beat_texts):
             fits = [s for s in sentences(text, lang) if floor <= size(s, lang) <= cap and len(s) <= (room or len(s))
                     and not CONTEXT[lang].match(s) and not (lang == 'en' and NAMING.search(s))
-                    and not (lang == 'es' and ES_NAMING.search(s))]
+                    and not (lang == 'es' and ES_NAMING.search(s)) and s != last
+                    and len(_stems(s) & want) >= need]
             if fits:
                 return min(fits, key=lambda s: size(s, lang))
     return sentence_of(fallback, lang)
@@ -207,6 +226,7 @@ def build(doc: Document, story: str = 'explain') -> dict:
     if len(sections) >= 3 and CONCLUSION.match(sections[-1].heading.strip()):
         outro_paras = sections.pop().paragraphs
     sections = _merge_to(sections, MAX_SECTIONS, lang)
+    titled = [bool(s.heading.strip()) for s in sections]          # the writer's own title, not one made here
     for s in sections:
         s.heading = s.heading.strip() or _short_title(s.paragraphs[0], lang)
 
@@ -239,12 +259,18 @@ def build(doc: Document, story: str = 'explain') -> dict:
         chapters.append({'id': cid, 'kind': 'section' if multi else 'board', 'label': {lang: label},
                          'title': {lang: s.heading}})
         texts = beats_of(s.paragraphs, lang)
+        head = headline(texts, s.heading, lang, titled[k - 1])
+        closing = s.paragraphs[-1].strip()
+        if multi and len(s.paragraphs) > 1 and sentences(closing, lang) == [closing] \
+                and headline([closing], s.heading, lang, titled[k - 1], keep_last=True) == closing:
+            # a one-sentence closing paragraph that sums the section up is its takeaway, said once (as the note
+            # is written), not read out and then repeated straight after as "Key takeaway: ..."
+            head, texts = closing, beats_of(s.paragraphs[:-1], lang)
         if multi:                                   # said while the section's title card is written
             beat(cid, 'opener', T['opener'].format(label=label, title=sentence_of(s.heading, lang)))
         for text in texts:
             beat(cid, 'narration', text)
         if multi:                                   # said while the takeaway note is written
-            head = headline(texts, s.heading, lang)
             beat(cid, 'take', take_text(head, lang), take={'headline': {lang: head}})
     chapters.append({'id': 'outro', 'kind': 'outro', 'label': {lang: T['outro_label']}, 'title': {lang: ''}})
     for text in beats_of(outro_paras, lang):

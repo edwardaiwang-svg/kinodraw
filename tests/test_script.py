@@ -132,3 +132,40 @@ def test_a_key_idea_heading_closes_the_video_instead_of_being_a_part():
         assert script.CONCLUSION.match(heading), heading
     for heading in ('Shortcuts', 'Recapture the flag', 'Mainframes'):
         assert not script.CONCLUSION.match(heading), heading
+
+
+def _said(board):
+    lang = board['lang']
+    return [b['display'][lang] for b in board['beats']]
+
+
+def test_a_takeaway_is_never_the_sentence_said_just_before_it():
+    """A one-sentence section read its sentence, then "Key takeaway: <the same sentence>" straight after."""
+    for name, take in (('tiny.md', 'Key takeaway: Bees work hard.'),
+                       ('sky_blue.md', 'Key takeaway: Scattering in the air.')):
+        board = script.build(ingest.read(FIX / name))
+        said = _said(board)
+        assert take in said, said
+        for k, b in enumerate(board['beats']):
+            if b['kind'] == 'take':
+                head = b['take']['headline']['en']
+                assert script.sentences(said[k - 1], 'en')[-1] != head, (name, head)
+
+
+def test_a_closing_summary_line_is_said_once_as_the_takeaway():
+    """bicycle.md ends each part with a one-line summary paragraph: it is the takeaway, said once, not twice."""
+    board = script.build(ingest.read(FIX / 'bicycle.md'))
+    said = ' '.join(_said(board))
+    for line in ('Even without pedals, the first bicycle beat walking.',
+                 'Chains and air-filled tyres made cycling safe and comfortable.',
+                 'A cheap machine gave millions of people the freedom to travel.'):
+        assert said.count(line) == 1 and f'Key takeaway: {line}' in said, line
+
+
+def test_a_section_title_that_makes_a_claim_is_its_main_point():
+    """The takeaways of a stranger's first video were side remarks ("Red and yellow light mostly passes straight
+    through."): a sentence must say what the writer's title says, or the title is the takeaway."""
+    board = script.build(ingest.read(SKY))
+    takes = [b['take']['headline']['en'] for b in board['beats'] if b['kind'] == 'take']
+    assert takes == ['White sunlight is really every color of the rainbow traveling together.',
+                     'Air scatters short waves.', 'Sunsets turn red.']

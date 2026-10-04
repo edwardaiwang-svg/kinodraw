@@ -416,15 +416,15 @@
       "chapter": "s2",
       "kind": "take",
       "display": {
-        "en": "Key takeaway: To make one jar of honey, bees visit about two million flowers."
+        "en": "Key takeaway: Bees work hard."
       },
       "spoken": {
-        "en": "Key takeaway: To make one jar of honey, bees visit about two million flowers."
+        "en": "Key takeaway: Bees work hard."
       },
       "visuals": [],
       "take": {
         "headline": {
-          "en": "To make one jar of honey, bees visit about two million flowers."
+          "en": "Bees work hard."
         }
       },
       "direction": [
@@ -432,20 +432,19 @@
           "i": 0,
           "span": [
             0,
-            77
+            29
           ],
           "role": "tagline",
           "energy": 1,
           "scene": "board",
-          "emphasis": "million flowers",
+          "emphasis": "Bees work hard",
           "options": {
             "scene": [
               "board"
             ],
             "emphasis": [
-              "million flowers",
-              "jar of honey",
-              "make"
+              "Bees work hard",
+              "work hard"
             ],
             "energy": [
               0,

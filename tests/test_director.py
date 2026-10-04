@@ -94,7 +94,8 @@ def test_timelines_only_show_dates_their_section_says_when_it_says_them():
         said = by_id[ev['trigger'].get('beat', owner['id'])]
         assert said['chapter'] == owner['chapter'] and ev['trigger']['en'] in said['spoken']['en'], ev
     held = [b for b in board['beats'] if b['chapter'] == owner['chapter'] and b['kind'] == 'narration']
-    between = held[held.index(owner) + 1:held.index(by_id['b012'])]
+    last = next(b for b in held if '1888' in b['display']['en'])     # the beat that says the last date
+    between = held[held.index(owner) + 1:held.index(last)]
     assert all(not b['visuals'] for b in between)             # the page holds the board between its dates
 
 
