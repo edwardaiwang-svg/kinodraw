@@ -54,7 +54,7 @@
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 2.5px solid var(--ink); border-radius: 14px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 14px; border-bottom: 1.5px solid #d8d4ca; }
   th { font-family: 'Playpen', sans-serif; }
-  code { background: #fff; border: 1.5px solid #d8d4ca; border-radius: 8px; padding: 2px 6px; font-size: 15px; }
+  code { background: #fff; border: 1.5px solid #d8d4ca; border-radius: 8px; padding: 2px 6px; font-size: 15px; overflow-wrap: anywhere; word-break: break-word; }
   pre { background: #1b1b1b; color: #f5f2ea; border-radius: 14px; padding: 16px; overflow-x: auto; font-size: 15px; }
   footer { padding: 36px 0 60px; color: var(--soft); font-size: 14px; }
   .first-open { background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; padding: 18px 22px; box-shadow: 0 6px 0 var(--orange); }
@@ -74,6 +74,8 @@
       <h1>Kino<span>Draw</span></h1>
       <p class="lead">Turn any script into a hand-drawn whiteboard explainer video, on your own computer.
         Free and open source, no watermark, works offline. In English and 中文.</p>
+      <p id="other-device" hidden><b>KinoDraw runs on Mac, Windows and Linux computers.</b>
+        Open this page on one of those computers to download it.</p>
       <a class="btn primary" id="download" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Download</a>
       <a class="btn" href="https://github.com/edwardaiwang-svg/kinodraw">Source on GitHub</a>
       <p class="small"><span id="also">For</span> <span id="platforms"><a data-os="windows" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Windows</a><span> · </span><a data-os="macos" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">macOS (Apple silicon, M1 or newer)</a><span> · </span><a data-os="linux" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Linux</a></span>.
@@ -207,13 +209,23 @@ kinodraw studio          # the app window</pre>
 <script>
 // The visitor's own computer comes first: the Download button starts its installer from the latest release, and the
 // other platforms stay one click away. Without JavaScript (or on a phone) every link opens the Releases page.
+function kinodrawPlatform(ua, uaData, touchPoints) {
+  const ipad = /Mac/.test(ua) && touchPoints > 1;
+  const fromUA = /Android|iPhone|iPad/.test(ua) || ipad || /CrOS/.test(ua) ? 'other'
+    : /Win/.test(ua) ? 'windows' : /Mac/.test(ua) ? 'macos' : /Linux|X11/.test(ua) ? 'linux' : null;
+  const platforms = { Windows: 'windows', macOS: 'macos', Linux: 'linux',
+    'Chrome OS': 'other', 'Chromium OS': 'other', Android: 'other', iOS: 'other' };
+  const fromData = uaData?.mobile === true ? 'other' : Object.hasOwn(platforms, uaData?.platform) ? platforms[uaData.platform] : null;
+  return fromUA === null || fromData === fromUA ? fromData : fromUA;
+}
+
 (async () => {
-  const ua = navigator.userAgent;
-  const ipad = /Mac/.test(ua) && navigator.maxTouchPoints > 1;
-  const os = /Android|iPhone|iPad/.test(ua) || ipad ? null
-    : /Win/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null;
-  if (!os) return;
-  const key = os.toLowerCase();
+  const key = kinodrawPlatform(navigator.userAgent, navigator.userAgentData, navigator.maxTouchPoints);
+  if (!key) return;
+  if (key === 'other') {
+    document.getElementById('other-device').hidden = false;
+    return;
+  }
   const mine = document.querySelector(`#platforms a[data-os="${key}"]`);
   (mine.previousElementSibling || mine.nextElementSibling)?.remove();         // its " · " separator
   mine.remove();
@@ -225,11 +237,13 @@ kinodraw studio          # the app window</pre>
   const box = document.querySelector(`#first-open [data-os="${key}"]`);
   box.parentNode.insertBefore(box, box.parentNode.firstElementChild);           // its first-open steps first
   const btn = document.getElementById('download');
+  const os = { windows: 'Windows', macos: 'Mac', linux: 'Linux' }[key];
+  btn.textContent = 'Download for ' + os + (mac ? ' (Apple silicon)' : '');
   try {
     const r = await fetch('https://api.github.com/repos/edwardaiwang-svg/kinodraw/releases/latest');
     const assets = (await r.json()).assets;
     const pick = (k) => assets.find(a => a.name.includes('-' + k + '.'));          // KinoDraw-v0.2.0-windows.zip ...
-    if (pick(key)) [btn.href, btn.textContent] = [pick(key).browser_download_url, 'Download for ' + os + (mac ? ' (Apple silicon)' : '')];
+    if (pick(key)) btn.href = pick(key).browser_download_url;
     document.querySelectorAll('#platforms a').forEach(a => { if (pick(a.dataset.os)) a.href = pick(a.dataset.os).browser_download_url; });
   } catch (e) {}
 })();
