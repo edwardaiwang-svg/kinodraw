@@ -94,8 +94,31 @@ def _engine(lang: str):
     ensure_models(lang)
     spec = LANGS[lang]
     config = str(MODEL_DIR / spec['config']) if spec['config'] else None
-    return Kokoro(str(MODEL_DIR / spec['model']), str(MODEL_DIR / spec['voices']), espeak_config=_espeak_config(),
-                  vocab_config=config)
+    engine = Kokoro(str(MODEL_DIR / spec['model']), str(MODEL_DIR / spec['voices']), espeak_config=_espeak_config(),
+                    vocab_config=config)
+    engine.sess = _Finite(engine.sess)
+    return engine
+
+
+class _Finite:
+    """The model's session, run again when a run comes out with a sample that is not a number. Kokoro's graph draws
+    fresh random noise on every run, and once in a while (fp16) a run has such a sample; kokoro-onnx's trim then keeps
+    no audio at all, and its pause step stops on numpy's "zero-size array to reduction operation maximum"."""
+    TRIES = 3
+
+    def __init__(self, sess):
+        self._sess = sess
+
+    def __getattr__(self, name):
+        return getattr(self._sess, name)
+
+    def run(self, *args, **kwargs):
+        for _ in range(self.TRIES):
+            out = self._sess.run(*args, **kwargs)
+            if np.isfinite(out[0]).all():
+                return out
+        raise RuntimeError(f'The voice model made no usable sound {self.TRIES} times in a row; run the voice step '
+                           'again.')
 
 
 @lru_cache(maxsize=1)
@@ -448,13 +471,13 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         a, b = max(0, sum(cuts[k]) // 2), min(len(tl), sum(cuts[k + 1]) // 2)     # the middles of the pauses
         sound = a + np.flatnonzero(room[a:b])
         heard = _power(tl[a:b], tq)
-        if b - a < PAUSE or not heard:
-            raise RecordingError(f'Your recording skips or changes the part that says {_said(text)} '
-                                 'Read the whole script once through, every sentence as written, and try again.', bid)
-        start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
+        if b - a < PAUSE or not heard:            # nothing of it heard: left out, like a beat with too little speech
+            start = end = a                        # (no speech, so marked missing below, whichever way it was cut)
+        else:
+            start, end = max(a, sound[0] - EDGE), min(b, sound[-1] + 1 + EDGE)
         audio = full[start * hop:end * hop]
-        gain = np.sqrt(_power(gl[gs:ge + 1], gq) / heard)
-        sounds.append(audio * min(gain, .99 / max(float(np.abs(audio).max()), 1e-6)))
+        gain = np.sqrt(_power(gl[gs:ge + 1], gq) / heard) if heard else 1.
+        sounds.append(audio * min(gain, .99 / max(float(np.abs(audio).max(initial=0)), 1e-6)))
         t = (offsets[k] / SR + np.asarray(guide.char_times)) * 100
         i0 = np.clip(t.astype(int), 0, len(first) - 2)
         j = first[i0] + np.clip(t - i0, 0, 1) * np.minimum(1, first[i0 + 1] - first[i0])
@@ -506,9 +529,9 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
                              f"try again; where each part was heard: {report}", None,
                              'Your recording does not sound like a reading of this script. Record this script, as '
                              'written, and try again.')
-    missing = [(row['speech'], k) for k, row in enumerate(rows) if row['missing']]
-    if missing:
-        bid, text = beats[min(missing)[1]]
+    missing = [k for k, row in enumerate(rows) if row['missing']]
+    if missing:                                    # the first: when parts are left out together, how the alignment
+        bid, text = beats[missing[0]]              # shares their pause between them turns on tiny differences
         raise RecordingError(f'Part of the script seems to be missing from your recording, around the part that says '
                              f'{_said(text)} Read the whole script once through, every sentence as '
                              'written, and try again.', bid)
