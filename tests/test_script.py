@@ -92,3 +92,43 @@ def test_a_long_script_pasted_on_the_command_line_is_the_script_not_a_file_name(
     assert len(text) >= 4990
     cli.main(['new', text, '-o', str(tmp_path / 'p')])
     assert (tmp_path / 'p' / 'script.md').read_text(encoding='utf-8') == text
+
+
+SKY = '''# Why the Sky Is Blue
+
+Look up on a clear afternoon and the sky is a deep, bright blue. But sunlight itself looks white. So where does the blue come from?
+
+## Sunlight is a mix of colors
+
+White sunlight is really every color of the rainbow traveling together. A prism splits it apart into red, orange, yellow, green, blue and violet. Each color is a wave, and blue waves are much shorter than red ones.
+
+## Air scatters short waves
+
+When sunlight hits the tiny molecules of nitrogen and oxygen in the air, the short blue waves bounce off in every direction. Red and yellow light mostly passes straight through. That scattered blue light reaches your eyes from all over the sky, so the whole sky glows blue.
+
+## Sunsets turn red
+
+At sunset, the light travels through much more air to reach you. Almost all the blue is scattered away before it arrives, and the reds and oranges are what is left. That is why evenings glow orange and pink.
+
+## Key idea
+
+The sky is blue because air scatters short blue light far more than long red light.
+'''
+
+
+def test_a_key_idea_heading_closes_the_video_instead_of_being_a_part():
+    """The first offline video of a stranger's script said "And finally: Key idea." and "Part four: Key idea.":
+    a closing "Key idea" (or "Bottom line", "In short", ...) is the wrap-up, said once before the sign-off."""
+    board = script.build(ingest.read(SKY))
+    said = [b['display']['en'] for b in board['beats']]
+    assert not any('Key idea' in line for line in said), said
+    assert [c['title']['en'] for c in board['chapters'] if c['kind'] == 'section'] == [
+        'Sunlight is a mix of colors', 'Air scatters short waves', 'Sunsets turn red']
+    outro = [b for b in board['beats'] if b['chapter'] == 'outro']
+    assert [b['display']['en'] for b in outro] == [
+        'The sky is blue because air scatters short blue light far more than long red light.', 'Thanks for watching!']
+    assert said[4] == 'And finally: Sunsets turn red.'
+    for heading in ('Key idea', 'Key ideas', 'The big idea', 'Main point', 'Bottom line', 'In short', 'To sum up', 'Recap'):
+        assert script.CONCLUSION.match(heading), heading
+    for heading in ('Shortcuts', 'Recapture the flag', 'Mainframes'):
+        assert not script.CONCLUSION.match(heading), heading

@@ -20,7 +20,10 @@ EN_BEAT = (15, 35, 55)          # min / target / max words per beat
 ZH_BEAT = (30, 70, 110)         # min / target / max CJK characters per beat
 MAX_SECTIONS = 8
 CONCLUSION = re.compile(r'^(conclusion|summary|final thoughts|wrap[- ]?up|key takeaways|takeaways|in closing|'
-                        r'结语|总结|结论|小结|最后|conclusión|conclusiones|resumen|en resumen|para terminar|para cerrar|cierre|ideas clave)\b', re.I)
+                        r'(the )?(key|main|big) (ideas?|points?)|the takeaway|the bottom line|bottom line|in short|in summary|'
+                        r'to sum up|recap|'
+                        r'结语|总结|结论|小结|最后|要点|核心观点|conclusión|conclusiones|resumen|en resumen|para terminar|para cerrar|'
+                        r'cierre|ideas? clave|en pocas palabras)\b', re.I)
 TEXT = {
     'en': {'intro': 'Today: {title}', 'agenda_first': "Here's what we'll cover. First: {t}",
            'agenda_mid': ['Second: {t}', 'Third: {t}', 'Fourth: {t}', 'Fifth: {t}', 'Sixth: {t}', 'Seventh: {t}'],
