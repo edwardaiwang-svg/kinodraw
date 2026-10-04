@@ -83,8 +83,8 @@ jobs:
           name: kinodraw-classroom
           path: edu/dist/*.zip
 
-  installers:
-    if: startsWith(github.ref, 'refs/tags/v')
+  installers:          # every push builds and runs the packaged apps; only a v* tag archives and publishes them
+    if: github.event_name == 'push'
     needs: test
     permissions:
       contents: write          # attach the installers to the GitHub release
@@ -103,21 +103,23 @@ jobs:
           pip install -e . pyinstaller
           pyinstaller packaging/kinodraw.spec --noconfirm
       - name: Sign the Mac app (stable identity from the repository secrets)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/v')
         env:
           MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
           MACOS_SIGN_P12_PASSWORD: ${{ secrets.MACOS_SIGN_P12_PASSWORD }}
         run: packaging/sign-macos.sh "dist/KinoDraw.app"
       - name: Archive
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
           cd dist
           if [ "$RUNNER_OS" = "Windows" ]; then 7z a "../KinoDraw-${{ github.ref_name }}-windows.zip" "KinoDraw"; \
           elif [ "$RUNNER_OS" = "macOS" ]; then ditto -c -k --keepParent "KinoDraw.app" "../KinoDraw-${{ github.ref_name }}-macos.zip"; \
           else tar czf "../KinoDraw-${{ github.ref_name }}-linux.tar.gz" "KinoDraw"; fi
-      - name: Smoke test the app the way a fresh computer runs it (no system certificates, no voice yet)
+      - name: Smoke test the app the way a fresh computer runs it (no system certificates, no voice yet), download the voice and make a short video
         if: runner.os != 'Windows'
         shell: bash
+        timeout-minutes: 25
         env:
           SSL_CERT_FILE: /nonexistent          # v0.1.4's Mac app failed every download and sign-in here
           SSL_CERT_DIR: /nonexistent
@@ -125,6 +127,37 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then app="dist/KinoDraw.app/Contents/MacOS/KinoDraw"; else app="dist/KinoDraw/KinoDraw"; fi
           "$app" setup --lang en
+          "$app" make tests/fixtures/tiny.md -o smoke --workers 1
+          python scripts/check_smoke_video.py smoke
+      - name: Smoke test the Windows app (the same, through a windowed exe that prints nothing and that a shell does not wait for)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 25          # a crash of the windowed exe can pop up a dialog nobody can click; this ends the run
+        env:
+          SSL_CERT_FILE: /nonexistent          # no effect here: Windows Python reads the Windows certificate store, not these
+          SSL_CERT_DIR: /nonexistent
+          KINODRAW_MODELS: ${{ runner.temp }}\models
+        run: |
+          $app = Join-Path $PWD 'dist\KinoDraw\KinoDraw.exe'
+          function Invoke-KinoDraw([string[]]$AppArgs) {
+            $out = Join-Path $env:RUNNER_TEMP 'kinodraw-out.txt'
+            $err = Join-Path $env:RUNNER_TEMP 'kinodraw-err.txt'
+            $run = Start-Process -FilePath $app -ArgumentList $AppArgs -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err
+            Get-Content $out, $err | Write-Host
+            if ($run.ExitCode -ne 0) { throw "KinoDraw $AppArgs exited with code $($run.ExitCode)" }
+          }
+          Invoke-KinoDraw 'setup', '--lang', 'en'
+          Invoke-KinoDraw 'make', 'tests/fixtures/tiny.md', '-o', 'smoke', '--workers', '1'
+          python scripts/check_smoke_video.py smoke
+          if ($LASTEXITCODE -ne 0) { throw "check_smoke_video.py exited with code $LASTEXITCODE" }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: packaged-smoke-${{ matrix.os }}
+          path: |
+            smoke/*.mp4
+            smoke/build/qa.json
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: KinoDraw-*
