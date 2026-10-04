@@ -30,7 +30,7 @@ async function api(path, opts = {}) {
   const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
   const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, ...type, ...(opts.headers || {}) } });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || r.statusText);
+  if (!r.ok) throw new Error(data.errors?.[0] || data.error || r.statusText);
   return data;
 }
 const doodleSrc = (id) => `/doodle/${encodeURIComponent(id)}.svg?token=${T}${current ? `&project=${encodeURIComponent(current)}` : ''}`;
@@ -301,6 +301,7 @@ function beatCard(b, ch) {
   const lang = board.lang;
   const el = document.createElement('div');
   el.className = 'beat';
+  el.dataset.beat = b.id;
   const auto = b.kind === 'title' || b.kind === 'agenda' || ch.kind === 'intro';
   el.innerHTML = `<div><div class="kind">${esc({ take: 'takeaway', opener: 'section opener', closing: 'closing', title: 'title board', agenda: 'agenda card' }[b.kind] || 'narration')}</div>
     <div class="text">${esc(b.display[lang])}</div>
@@ -315,14 +316,36 @@ function beatCard(b, ch) {
     b.visuals.push({ id: `${b.id}u${Date.now() % 100000}`, type: 'cluster', relation: 'none', items: [{ doodle: id }] });
     markDirty(); renderBoard();
   }));
-  el.querySelector('.prev').onclick = () => {
-    const img = document.createElement('img');
-    img.alt = 'preview';
-    img.onload = () => img.classList.toggle('tall', img.naturalHeight > img.naturalWidth);
-    img.src = `/api/projects/${encodeURIComponent(current)}/still?beat=${encodeURIComponent(b.id)}&offset=4&token=${T}`;
-    el.querySelector('.preview').replaceChildren(img);
-  };
+  el.querySelector('.prev').onclick = () => showBeatPreview(el, b.id);
   return el;
+}
+
+function showBeatPreview(el, beat, fresh = false) {
+  const img = document.createElement('img');
+  img.alt = 'preview';
+  img.onload = () => img.classList.toggle('tall', img.naturalHeight > img.naturalWidth);
+  img.src = `/api/projects/${encodeURIComponent(current)}/still?beat=${encodeURIComponent(beat)}&offset=4&token=${T}${fresh ? `&v=${Date.now()}` : ''}`;
+  el.querySelector('.preview').replaceChildren(img);
+}
+
+const SLOT_TYPES = ['cluster', 'quote', 'glossary', 'stat'];   // pictures that can be drawn earlier or later
+
+async function reorderPicture(beat, visual, to, item = null) {
+  const project = current, sent = board, main = $('#main');
+  main.inert = true;                                  // no edits while the move saves: the reply replaces the board
+  try {
+    const res = await api(`/api/projects/${encodeURIComponent(project)}/reorder`, {
+      method: 'POST', body: JSON.stringify({ storyboard: sent, beat, visual, to, item })
+    });
+    if (current !== project || board !== sent) return; // another project (or a fresh copy) was opened meanwhile
+    if (!res.ok) { toast('Not moved: ' + res.errors[0]); return; }
+    board = res.storyboard;
+    dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved';
+    renderBoard();
+    const card = [...$('#board').querySelectorAll('.beat')].find((el) => el.dataset.beat === beat);
+    if (card) showBeatPreview(card, beat, true);
+    loadNarrator(current, document.querySelector('input[name="n-pick"]:checked')?.value);
+  } catch (e) { toast('Not moved: ' + e.message); } finally { main.inert = false; }
 }
 
 function visualCard(b, v, i) {
@@ -331,15 +354,30 @@ function visualCard(b, v, i) {
   el.className = 'vis';
   const typeName = { cluster: 'doodles', stat: 'number', quote: 'quote', glossary: 'sticky note', lanes: 'timeline', grid100: '100 squares', bars: 'bar chart', flow: 'flow', split: 'comparison' }[v.type] || v.type;
   el.innerHTML = `<div class="type">${esc(typeName)}${v.size === 'margin' ? ' · beside the note' : ''}</div><button class="del" title="Remove">×</button>`;
+  const movable = (k) => SLOT_TYPES.includes(b.visuals[k]?.type);     // a page keeps its place (server rule)
+  if (movable(i) && (movable(i - 1) || movable(i + 1))) {
+    el.insertAdjacentHTML('beforeend', `<div class="draw-order">
+      <button class="small earlier" title="Draw earlier" aria-label="Draw earlier"${movable(i - 1) ? '' : ' disabled'}>↑</button>
+      <button class="small later" title="Draw later" aria-label="Draw later"${movable(i + 1) ? '' : ' disabled'}>↓</button></div>`);
+    el.querySelector('.earlier').onclick = () => reorderPicture(b.id, i, i - 1);
+    el.querySelector('.later').onclick = () => reorderPicture(b.id, i, i + 1);
+  }
   if (v.type === 'cluster') {
     const items = document.createElement('div');
     items.className = 'items';
-    v.items.forEach((it) => {
+    v.items.forEach((it, j) => {
       const d = document.createElement('div');
       d.className = 'item';
       d.innerHTML = `<img src="${doodleSrc(it.doodle)}" title="${esc(it.doodle)} — click to swap"><input value="${esc(it.label?.[lang] || '')}" placeholder="label">`;
       d.querySelector('img').onclick = () => pickDoodle(it.label?.[lang] || b.display[lang].slice(0, 40), (id) => { it.doodle = id; markDirty(); renderBoard(); });
       d.querySelector('input').oninput = (e) => { it.label = e.target.value ? { [lang]: e.target.value } : undefined; if (!it.label) delete it.label; markDirty(); };
+      if (v.items.length > 1) {
+        d.insertAdjacentHTML('beforeend', `<div class="draw-order">
+          <button class="small earlier" title="Draw earlier" aria-label="Draw earlier"${j === 0 ? ' disabled' : ''}>←</button>
+          <button class="small later" title="Draw later" aria-label="Draw later"${j === v.items.length - 1 ? ' disabled' : ''}>→</button></div>`);
+        d.querySelector('.earlier').onclick = () => reorderPicture(b.id, i, j - 1, j);
+        d.querySelector('.later').onclick = () => reorderPicture(b.id, i, j + 1, j);
+      }
       items.appendChild(d);
     });
     el.appendChild(items);
@@ -353,7 +391,11 @@ function visualCard(b, v, i) {
 }
 
 async function pickDoodle(query, onPick) {
-  const project = current;
+  const project = current, opened = board;
+  const pick = (id) => {           // an upload can finish after the picker closed, while or after a move replaced the board
+    if (board !== opened || $('#main').inert) { toast('Your picture was not placed because the board changed while it uploaded. Choose it again under Your pictures.', 7000); return; }
+    closeModal(); onPick(id);
+  };
   const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
   $('#picture-file', body).onchange = async (event) => {
     const file = event.target.files[0];
@@ -361,7 +403,7 @@ async function pickDoodle(query, onPick) {
     try {
       if (file.size > 10 * 1024 * 1024) throw new Error(`“${file.name}” is too big (over 10 MB). Make it smaller and try again.`);
       const res = await api(`/api/projects/${encodeURIComponent(project)}/pictures?filename=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
-      closeModal(); onPick(res.id);
+      pick(res.id);
     } catch (e) { toast(e.message, 6000); }
     event.target.value = '';
   };
@@ -369,12 +411,12 @@ async function pickDoodle(query, onPick) {
     if (!items.length) return;
     $('#own-pictures', body).classList.remove('hidden');
     $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc(d.name)}</div></div>`).join('');
-    $('#own-picks', body).querySelectorAll('.pick').forEach((p) => (p.onclick = () => { closeModal(); onPick(p.dataset.id); }));
+    $('#own-picks', body).querySelectorAll('.pick').forEach((p) => (p.onclick = () => pick(p.dataset.id)));
   }).catch((e) => toast(e.message, 6000));
   const run = async () => {
     const items = await api(`/api/doodles?q=${encodeURIComponent($('#q', body).value)}&lang=${board.lang}`);
     $('#picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc((d.desc || d.id).slice(0, 40))}</div></div>`).join('');
-    body.querySelectorAll('.pick').forEach((p) => (p.onclick = () => { closeModal(); onPick(p.dataset.id); }));
+    body.querySelectorAll('.pick').forEach((p) => (p.onclick = () => pick(p.dataset.id)));
   };
   let timer;
   $('#q', body).oninput = () => { clearTimeout(timer); timer = setTimeout(run, 250); };
