@@ -32,3 +32,9 @@ def renderer(look: str | None) -> str:
     """Which renderer draws ``look``: 'whiteboard' (the default, and every skin), 'collage', 'bold' ..."""
     entry = get(look or 'whiteboard')
     return entry['renderer'] if entry else 'whiteboard'
+
+
+def portrait(look: str | None) -> str:
+    """How ``look`` renders 9:16: native when laid out for it, otherwise letterboxed."""
+    entry = get(look or 'whiteboard')
+    return entry.get('portrait', 'letterbox') if entry else 'letterbox'

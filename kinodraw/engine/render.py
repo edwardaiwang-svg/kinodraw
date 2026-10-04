@@ -576,33 +576,54 @@ class Production:
         ink.paste(frame, img, (self.size[0] - img.width) / 2, 1046 - img.height)
 
 
-def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9'):
+def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None):
     """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
-    A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does. ``aspect`` '9:16'
-    lays each frame out for Shorts: the board in the middle, its section title above and big captions below."""
+    A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does. ``portrait`` can
+    override the look's 9:16 layout for comparisons; the registry decides by default."""
+    layout = pace_layout(episode, aspect, portrait)
     if drawable(episode.get('look') or 'whiteboard') == 'collage':
+        if layout == 'portrait':
+            raise ValueError('collage is not laid out for 9:16 yet; it renders letterboxed')
         from .collage.render import CollageProduction
         prod = CollageProduction(episode, tline, lang, project_dir, relaxed=relaxed)
+    elif layout == 'portrait':
+        from .geometry import PORTRAIT
+        prod = Production(episode, tline, lang, project_dir, relaxed=relaxed, geometry=PORTRAIT)
     else:
         prod = Production(episode, tline, lang, project_dir, relaxed=relaxed)
     if aspect == '9:16':
-        from .vertical import Vertical
-        return Vertical(prod)
-    if aspect != '16:9':
-        raise ValueError(f'unknown aspect {aspect!r} (16:9 or 9:16)')
+        from .vertical import PortraitFrame
+        return PortraitFrame(prod, native=layout == 'portrait')
     return prod
 
 
-def pacing(episode, lang, clips, project_dir, rounds=3) -> dict:
+def pace_layout(episode, aspect, portrait=None) -> str:
+    """The board geometry whose drawing times set the narration's pauses."""
+    if aspect == '16:9':
+        return 'landscape'
+    if aspect != '9:16':
+        raise ValueError(f'unknown aspect {aspect!r} (16:9 or 9:16)')
+    portrait = styles.portrait(episode.get('look')) if portrait is None else portrait
+    if portrait not in ('letterbox', 'native'):
+        raise ValueError(f'unknown portrait {portrait!r} (letterbox or native)')
+    return 'portrait' if portrait == 'native' else 'landscape'
+
+
+def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, rounds=3) -> dict:
     """Pauses (beat id -> seconds) that let the drawing hand finish each beat's pictures before the next
     beat is said, instead of rushing or skipping them: at most PAUSE_MAX after any one beat.
 
     Every round lays out the timeline with the pauses so far, schedules the drawings at natural speed
     with nothing skipped, and adds the overrun of each beat's drawings past the next beat's start."""
+    layout = pace_layout(episode, aspect, portrait)
     pauses: dict = {}
     for _ in range(rounds):
         timing = tl.layout(episode, lang, clips, pauses)
-        prod = make_production(episode, timing, lang, project_dir, relaxed=True)
+        if layout == 'portrait':
+            prod = make_production(episode, timing, lang, project_dir, relaxed=True,
+                                   aspect=aspect, portrait=portrait)
+        else:
+            prod = make_production(episode, timing, lang, project_dir, relaxed=True)
         ends: dict = {}
         for e in prod.ctx.elements:
             if e.beat and e.start is not None and not e.skipped and not e.fixed:
@@ -738,7 +759,8 @@ def load(args):
 
 def build(episode, tline, args):
     t0 = time.time()
-    prod = make_production(episode, tline, args.lang, args.project, aspect=args.aspect)
+    prod = make_production(episode, tline, args.lang, args.project, aspect=args.aspect,
+                           portrait=getattr(args, 'portrait', None))
     print(json.dumps({'elements': len(prod.els), 'warnings': prod.warnings[:40], 'n_warnings': len(prod.warnings),
                       'build_s': round(time.time() - t0, 1), 'duration': tline['duration']}, ensure_ascii=False), flush=True)
     return prod
@@ -761,7 +783,7 @@ def encode(prod, start, n, output, crf):
         sys.exit('ffmpeg failed')
 
 
-def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20, aspect='16:9'):
+def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20, aspect='16:9', portrait=None):
     """Render ``n`` frames as ``workers`` frame-aligned segments in child processes, then join them losslessly."""
     bounds = [round(n * i / workers) for i in range(workers + 1)]
     seg_dir = output.parent / f'.{output.stem}.segments'
@@ -771,6 +793,8 @@ def render_segments(project, episode, lang, timeline, start, n, output, workers,
     base = worker + ['--project', str(project), '--episode', str(episode), '--lang', lang, '--crf', str(crf),
                      '--aspect', aspect] + \
         (['--timeline', str(timeline)] if timeline else ['--synthetic'])
+    if portrait is not None:
+        base += ['--portrait', portrait]
     segs = [seg_dir / f'{i:02d}.mp4' for i in range(workers)]
     procs = [subprocess.Popen(base + ['--start', repr(start + bounds[i] / FPS), '--frames',
                                       str(bounds[i + 1] - bounds[i]), '--output', str(seg)])
@@ -802,6 +826,7 @@ def main(argv=None):
     ap.add_argument('--preview-dir')
     ap.add_argument('--crf', type=int, default=20)
     ap.add_argument('--aspect', default='16:9', choices=['16:9', '9:16'], help='9:16: vertical, for Shorts')
+    ap.add_argument('--portrait', default=None, choices=['letterbox', 'native'], help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     if not (args.stills or args.output):
         sys.exit('--output or --stills required')
@@ -822,7 +847,7 @@ def main(argv=None):
     t1 = time.time()
     if args.workers > 1:
         warnings = render_segments(args.project, args.episode, args.lang, args.timeline, args.start, n, output,
-                                   args.workers, args.crf, args.aspect)
+                                   args.workers, args.crf, args.aspect, args.portrait)
     else:
         prod = build(episode, tline, args)
         encode(prod, args.start, n, output, args.crf)
@@ -837,6 +862,8 @@ def main(argv=None):
                 'duration': n / FPS, 'language': args.lang, 'synthetic_timing': bool(args.synthetic),
                 'workers': args.workers, 'aspect': args.aspect, 'inputs': inputs, 'warnings': warnings,
                 'render_seconds': round(time.time() - t1, 1)}
+    if args.portrait is not None:
+        manifest['portrait'] = args.portrait
     Path(str(output) + '.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'wrote {output} ({n} frames) in {time.time() - t1:.0f}s')
 

@@ -16,7 +16,8 @@ def _prod(tmp_path, look, lang, aspect='9:16'):
     board = pipeline.new_project(FIX / fx, tmp_path / f'{look}-{lang}',
                                  direction={'look': look, 'story': 'promo' if look == 'collage' else None})
     tl = timeline.layout(board, lang, timeline.synthetic_clips(board, lang))
-    return renderer.make_production(board, tl, lang, tmp_path / f'{look}-{lang}', aspect=aspect), tl
+    return renderer.make_production(board, tl, lang, tmp_path / f'{look}-{lang}', aspect=aspect,
+                                    portrait='letterbox' if aspect == '9:16' else None), tl
 
 
 def _cases():
@@ -29,6 +30,15 @@ def test_every_ready_look_renders_vertical():
     assert {look for look, _ in _cases()} >= {'whiteboard', 'chalkboard', 'notebook', 'collage'}
     for e in styles.looks(ready=True):
         assert '9:16' in e['aspect'], e['id']
+
+
+@pytest.mark.parametrize('look,lang', list(_cases()))
+def test_registry_default_is_the_same_letterbox(tmp_path, look, lang):
+    forced, tl = _prod(tmp_path, look, lang)
+    default = renderer.make_production(forced.ep, tl, lang, tmp_path / f'{look}-{lang}', aspect='9:16')
+    assert isinstance(default, vertical.PortraitFrame) and not default.native
+    for t in (.05, tl['duration'] / 2, tl['duration'] - .05):
+        assert default.frame(t).tobytes() == forced.frame(t).tobytes()
 
 
 @pytest.mark.parametrize('look,lang', list(_cases()))
