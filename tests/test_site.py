@@ -40,6 +40,16 @@ def test_every_mac_first_open_step_shows_its_screenshot():
         assert img and img.group(1) == f'media/mac-open-{n}.jpg', n
         assert Path(SITE.parent, img.group(1)).stat().st_size < 300_000      # light enough for a phone
 
+
+def test_the_licence_file_is_plain_mit_so_github_names_it():
+    """GitHub showed the licence as "Other" while the art's CC BY terms sat in the same file."""
+    root = SITE.parents[1]
+    licence = (root / 'LICENSE').read_text(encoding='utf-8')
+    assert licence.startswith('MIT License') and licence.rstrip().endswith('SOFTWARE.')
+    assets = (root / 'LICENSES' / 'ASSETS.md').read_text(encoding='utf-8')
+    assert 'CC BY 4.0' in assets and 'without attribution' in assets
+    assert "ROOT / 'LICENSES'" in (root / 'packaging' / 'kinodraw.spec').read_text(encoding='utf-8')   # it ships in the apps
+
 def test_link_previews_and_search_engines_get_a_title_description_and_image():
     """v0.1.6's page had only <title>Doodle Studio</title>: shared links showed a bare URL."""
     raw = SITE.read_text(encoding='utf-8')
