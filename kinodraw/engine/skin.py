@@ -632,6 +632,13 @@ class MaterialDrawing(ink.PathDrawing):
         return out, (None if pen is None else (float(pen[0]), float(pen[1]))), down
 
 
+def ground_top(skin, height):
+    """Top row of the sand or grass band at the foot of a material world (``height`` for a plain board)."""
+    if skin.paper not in ('quest', 'mosaic'):
+        return height
+    return (round(height * (.968 if skin.paper == 'quest' else .85)) // skin.margs['cell']) * skin.margs['cell']
+
+
 @lru_cache(maxsize=4)
 def _world(skin, width, height):
     """A material-processed seamless period plus screen width, with column zero at board zero."""
@@ -664,11 +671,11 @@ def _world(skin, width, height):
             ridge = height * (offset + amp * (np.sin(2 * np.pi * xx / period + phase)
                       + .3 * np.sin(6 * np.pi * xx / period + phase)))
             d.polygon([(0, height), *zip(xx.tolist(), ridge.tolist()), (period, height)], fill=color)
-        ground = (round(height * .968) // cell) * cell
+        ground = ground_top(skin, height)
         d.rectangle((0, ground, period, height), fill='#7A5236')
         d.rectangle((0, ground, period, ground + cell - 1), fill='#7BC05A')
     else:
-        sand = (round(height * .85) // cell) * cell
+        sand = ground_top(skin, height)
         d.rectangle((0, sand, period, height), fill='#D8B27A')
         d.rectangle((0, sand + cell, period, sand + 2 * cell - 1), fill='#B5532E')
     processed = material_image(img, skin, cover=0).convert('RGBA')
@@ -677,7 +684,7 @@ def _world(skin, width, height):
         from dataclasses import replace
         quiet = replace(skin, material_args=tuple(sorted({**skin.margs, 'grout_mix': .12}.items())))
         middle = material_image(img, quiet, cover=0)
-        start, end = sky_end, (round(height * .85) // cell) * cell
+        start, end = sky_end, ground_top(skin, height)
         processed.paste(middle.crop((0, start, period, end)), (0, start))
     repeats = (period + width + period - 1) // period
     out = Image.new('RGBA', (period + width, height))

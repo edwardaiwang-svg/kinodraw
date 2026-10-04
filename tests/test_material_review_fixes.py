@@ -111,3 +111,35 @@ def test_vertical_caption_letters_stand_out_from_the_letterbox(tmp_path, monkeyp
     monkeypatch.setattr(vertical, 'caption_image', record)
     assert prod.caption_image('On top they laid big flat stones.').width
     assert skins.contrast(seen[0], prod.skin.base[:3]) >= 4.5
+
+
+@pytest.mark.parametrize('look', MATERIALS)
+def test_photo_credit_stays_text_while_the_photo_takes_the_material(tmp_path, look):
+    """The attribution under a speaker photo (CC BY-SA asks for it) is lettering, not a picture to turn into cells."""
+    from kinodraw.engine import auto_scenes as auto
+    prod, _ = production(tmp_path, look)
+    yy, xx = np.mgrid[0:300, 0:300]
+    Image.fromarray(np.dstack([xx % 256, yy % 256, 255 - xx % 256]).astype(np.uint8), 'RGB').save(tmp_path / 'ana.png')
+    credit = 'Still: Wikimedia Commons / CC BY-SA 4.0'
+    (tmp_path / 'ana.json').write_text('{"credit_line": "%s"}' % credit, encoding='utf-8')
+    ctx = prod.ctx
+    ctx.project_dir = tmp_path
+    chapter = {'label': 'One', 'title': 'Speaker', 'color': 'blue',
+               'speaker': {'photo': 'ana.png', 'name': 'Ana', 'role': 'Host', 'show': 'Show', 'date': '2026'}}
+    els = auto.build_section_opener(ctx, chapter, None, 0, 1.)
+    statics = [e for e in els if isinstance(e.drawing, ink.StaticDrawing)]
+    photo, line = statics
+    assert np.array_equal(np.asarray(line.drawing.image), np.asarray(auto.ui_small(credit, 26, prod.skin)))
+    raw = ink.circle_photo(tmp_path / 'ana.png', 250 - 4)
+    assert not np.array_equal(np.asarray(photo.drawing.image), np.asarray(raw))
+
+
+@pytest.mark.parametrize('look', MATERIALS + ('whiteboard',))
+def test_end_credit_sits_clear_of_the_ground_band(tmp_path, look):
+    """'Made with KinoDraw' and the link are written on the board's paper, above any sand or grass at its foot."""
+    from kinodraw.engine import auto_scenes as auto
+    prod, _ = production(tmp_path, look)
+    els = [e for e in prod.ctx.elements if getattr(e, 'group', None) == 'credit']
+    assert len(els) == 2
+    bottom = max(auto.ink_bbox(e)[3] for e in els)
+    assert bottom <= skins.ground_top(prod.skin, 1080) - 8

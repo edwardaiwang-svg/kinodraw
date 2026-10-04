@@ -169,6 +169,7 @@ def build_section_opener(ctx, chapter, beat, x0, t):
     credit = photo_credit(ctx.project_dir, sp.get('photo', ''), ctx.lang)
     if credit:
         cimg = ink.StaticDrawing(ui_small(credit, 26, ctx.skin), pop=.3)
+        cimg.dressed = True       # lettering already in the look's font and ink: a material look must not tile it
         # Under the photo, and below the show line when that wraps far enough to meet it.
         els.append(ctx.add(cimg, x0 + 90, max(by + 268, show_y + show.size[1] + 6), t, hand=False, after=els[2]))
     return els
@@ -255,10 +256,11 @@ CREDIT_LINE = {'en': 'Made with {name}', 'zh': '由 {name} 制作', 'es': 'Hecho
 def build_credit(ctx, x0, t):
     """The end credit, small and soft at the foot of the closing page: the app's name, then where to get it."""
     from .. import PRODUCT
+    from .skin import ground_top
     made = ink.TextDrawing([CREDIT_LINE[ctx.lang].format(**PRODUCT)], ctx.lang, 40, color=SOFT_INK, pace=1.6, max_dur=1.,
                            fonts=ctx.fonts)
     url = ink.TextDrawing([PRODUCT['url']], 'en', 30, color=SOFT_INK, pace=2.5, max_dur=.6, fonts=ctx.fonts)
-    y = 1080 - 70 - made.size[1] - url.size[1]
+    y = min(1080 - 70, ground_top(ctx.skin, 1080) - 14) - made.size[1] - url.size[1]     # on the paper, above sand
     return [ctx.add(made, x0 + (1920 - made.size[0]) / 2, y, t),
             ctx.add(url, x0 + (1920 - url.size[0]) / 2, y + made.size[1], t + made.duration)]
 
