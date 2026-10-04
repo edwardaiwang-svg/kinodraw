@@ -271,5 +271,7 @@ def test_native_quote_takes_a_whole_screen_and_stays_in_the_board_band(board, tm
     for k in range(2):
         quote = [e for e in prod.ctx.elements if e.group == f'q{k}' and isinstance(e.drawing, ink.TextDrawing)]
         assert len(quote) == 3                                        # the mark, the words and who said them
+        top = min(quote, key=lambda e: e.y)                         # the opening quote mark
+        assert top.y == PORTRAIT.rows[0][0] - 34, k                 # each quote starts its own screen (both rows)
         words = [e for e in quote if e.y >= PORTRAIT.rows[0][0]]
         assert words and max(e.y + e.h for e in words) <= PORTRAIT.rows[1][1], k
