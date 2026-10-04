@@ -28,5 +28,5 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='KinoDraw', console=Fa
 coll = COLLECT(exe, a.binaries, a.datas, name='KinoDraw')
 if sys.platform == 'darwin':
     app = BUNDLE(coll, name='KinoDraw.app', icon=str(ROOT / 'packaging' / 'icon.icns'),
-                 bundle_identifier='io.github.kinodraw', version='0.2.0',
+                 bundle_identifier='io.github.kinodraw', version='0.3.0',
                  info_plist={'NSHighResolutionCapable': True, 'LSMinimumSystemVersion': '11.0'})

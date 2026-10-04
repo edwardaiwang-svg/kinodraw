@@ -1,6 +1,6 @@
 [project]
 name = "kinodraw"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turn any script into a hand-drawn whiteboard explainer video, locally."
 readme = "README.md"
 license = "MIT"
