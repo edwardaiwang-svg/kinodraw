@@ -180,6 +180,10 @@ class Vertical:
     def caption_image(self, text):
         color = (18, 18, 18) if self.collage else tuple(self.skin.caption)
         edge = (255, 255, 255) if self.collage else tuple(self.skin.caption_edge)
+        if not self.collage and skins.contrast(color, self.skin.base[:3]) < 4.5:
+            # light letters that need their outline to show on the paper band (Mosaic) blur together at phone
+            # size: the band is plain, so write them in the look's ink instead
+            color, edge = tuple(self.skin.ink[:3]), tuple(self.skin.base[:3])
         return caption_image(text, self.lang, self.fonts, color, edge)
 
     def caption_box(self, text):

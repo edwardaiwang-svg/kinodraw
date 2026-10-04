@@ -104,8 +104,8 @@ class Skin:
 
     def dress(self, drawing, x=0, y=0):
         """Restyle a drawing in place (its images are replaced, never edited) and return it; (x, y) is where it
-        sits on the board, which anchors its grain."""
-        if self.plain:
+        sits on the board, which anchors its grain. A picture of drawings already dressed (``dressed``) is kept."""
+        if self.plain or getattr(drawing, 'dressed', False):
             return drawing
         if isinstance(drawing, ink.TextDrawing):
             drawing.ink = self._lines(drawing.ink, x, y)
@@ -139,6 +139,9 @@ class Skin:
             drawing.line, drawing.color = line, color
         elif self.textured and isinstance(drawing, ink.StaticDrawing):
             drawing.image = material_image(drawing.image, self, x, y, self.margs.get('fill_cover', .5))
+        elif self.textured and isinstance(drawing, ink.RevealDrawing):      # an own PNG or JPG picture
+            drawing.image = material_image(drawing.image, self, x, y, self.margs.get('fill_cover', .5))
+            drawing.alpha = np.asarray(drawing.image.getchannel('A'), np.float32)
         return drawing
 
     def _lines(self, img, x, y):
@@ -751,9 +754,10 @@ def _run_width(text, kind, size, fonts):
 @lru_cache(maxsize=2048)
 def caption_layout(text, lang, skin):
     """Wrap on measured fallback runs, shrinking to two lines without leading CJK punctuation."""
-    kind = 'en_caption' if lang == 'en' else 'zh_caption'
-    units = re.findall(r'\S+\s*', text) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
-    for size in range(56 if lang == 'en' else 60, 35, -2):
+    latin = lang != 'zh'                # English and Spanish wrap whole words in the look's own lettering
+    kind = 'en_caption' if latin else 'zh_caption'
+    units = re.findall(r'\S+\s*', text) if latin else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
+    for size in range(56 if latin else 60, 35, -2):
         lines, current = [], ''
         for u in units:
             trial = current + u
@@ -762,7 +766,7 @@ def caption_layout(text, lang, skin):
                     current = trial
                     continue
                 lines.append(current.rstrip())
-                current = u.lstrip() if lang == 'en' else u
+                current = u.lstrip() if latin else u
             else:
                 current = trial
         if current.strip():
@@ -791,7 +795,7 @@ def _stepped(draw, box, fill, step=8):
 @lru_cache(maxsize=2048)
 def _caption_panel(text, lang, skin):
     lines, size = caption_layout(text, lang, skin)
-    kind = 'en_caption' if lang == 'en' else 'zh_caption'
+    kind = 'en_caption' if lang != 'zh' else 'zh_caption'
     widths = [_run_width(l, kind, size, skin.fonts) for l in lines]
     lh = round(size * 1.25)
     w, panel_h = int(np.ceil(max(widths))) + 64, lh * len(lines) + 40

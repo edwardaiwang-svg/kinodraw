@@ -42,10 +42,10 @@ def layout(episode, lang, clips, pauses=None, credit=True):
     episode = normalize(episode)
     cue_options = {}
     look_skin = skin.for_look(episode.get('look'))
-    if look_skin.textured and lang in ('en', 'zh'):
+    if look_skin.textured and lang in ('en', 'es', 'zh'):
         def fits(text, lang):
             lines, size = skin.caption_layout(text, lang, look_skin)
-            kind = 'en_caption' if lang == 'en' else 'zh_caption'
+            kind = 'en_caption' if lang != 'zh' else 'zh_caption'
             return len(lines) <= 2 and all(skin._run_width(line, kind, size, look_skin.fonts) <= 1640
                                           for line in lines)
         cue_options['fits'] = fits

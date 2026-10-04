@@ -143,7 +143,7 @@ def test_material_mode_wipes_preserve_board_pixels(material, monkeypatch, kind):
     expected.paste(new.crop((0, 0, edge, new.height)), (0, 0))
     if kind == 'pullback':
         nx, ny, _, _ = note['bbox']
-        ink.paste(expected, note['image'], nx - note['x'], ny)
+        ink.paste(expected, prod._note_image(note, old, nx - note['x'], ny), nx - note['x'], ny)
     monkeypatch.setattr(prod, 'vertical', True)  # inspect the transition before chrome and captions
     assert np.array_equal(np.asarray(prod.frame(t)), np.asarray(expected))
 

@@ -344,8 +344,11 @@ class Production:
             note['image'] = img
             note['mini'] = img.resize(note['mini_size'], Image.LANCZOS)
             px, py = note['pin_xy']
-            mini = self.ctx.add(ink.StaticDrawing(note['mini'], pop=.05), px, py, note['t_pin'] - .02, fixed=True,
-                                hand=False)
+            pinned = ink.StaticDrawing(note['mini'], pop=.05)
+            # the note's drawings are already in the look's cells or tiles: shrinking them and dressing them again
+            # would melt the words into a smear of cells
+            pinned.dressed = True
+            mini = self.ctx.add(pinned, px, py, note['t_pin'] - .02, fixed=True, hand=False)
             mini.start = mini.trigger
 
     def _index(self):
@@ -502,7 +505,7 @@ class Production:
             board = self.view(tr['hold_end'] - .01, note['x'], hand=False)
             frame = (skins.wipe(board, agenda, (t - a) / (b - a), self.skin) if self.camera.locked
                      else Image.blend(board, agenda, u))
-            ink.paste(frame, note['image'], sx, sy)
+            ink.paste(frame, self._note_image(note, board, sx, sy), sx, sy)
             return frame
         if kind == 'fly':
             u = ease((t - a) / (b - a))
@@ -511,12 +514,27 @@ class Production:
             mini_w = note['mini'].width
             w = nw + (mini_w - nw) * u
             s = w / nw
-            img = note['image'].resize((max(1, int(note['image'].width * s)), max(1, int(note['image'].height * s))), Image.BILINEAR)
+            image = self._note_image(note, None, sx, sy, tr)
+            img = image.resize((max(1, int(image.width * s)), max(1, int(image.height * s))), Image.BILINEAR)
             x = sx + (tx - sx) * u
             y = sy + (ty - sy) * u - 60 * math.sin(math.pi * u)
             ink.paste(agenda, img, x, y)
             return agenda
         return agenda
+
+    def _note_image(self, note, board, sx, sy, tr=None):
+        """The takeaway note as the board showed it. A look with a glow (Pixel Quest) glows the whole board, so the
+        note is cut from that glowing board rather than pasted raw, which would dull the card in one frame."""
+        if not self.skin.bloom:
+            return note['image']
+        if 'shown' not in note:
+            if board is None:
+                board = self.view(tr['hold_end'] - .01, note['x'], hand=False)
+            x, y = int(round(sx)), int(round(sy))
+            shown = board.crop((x, y, x + note['image'].width, y + note['image'].height)).convert('RGBA')
+            shown.putalpha(note['image'].getchannel('A'))
+            note['shown'] = shown
+        return note['shown']
 
     def _zoom(self, t, p, a, b):
         u = (t - a) / (b - a)
