@@ -14,16 +14,23 @@ function directorOptions(selected) {
     return `<option value="${k}"${soon ? ' disabled' : ''}${k === selected ? ' selected' : ''}>${soon ? 'KinoDraw Cloud AI (coming soon)' : v}</option>`;
   }).join('');
 }
-function needsCloudSignIn(director) {     // KinoDraw Cloud picked but nobody signed in: open the sign-in instead of failing
-  if (director !== 'cloud' || STATE.cloud_signed_in) return false;
-  toast('Sign in to KinoDraw Cloud first (free: 5 AI videos a month), or choose Offline.', 6000);
-  showSettings();
-  return true;
+async function needsCloudSignIn(director) {     // KinoDraw Cloud picked with no email sign-in: no account needed while
+  if (director !== 'cloud' || STATE.cloud_signed_in) return false;   // the cloud allows it; when it asks, open the sign-in
+  try { STATE.cloud = await api('/api/cloud/anonymous', { method: 'POST' }); cloudAsks = ''; return false; }
+  catch (e) {
+    STATE.cloud = null;
+    if (e.code !== 'sign_in') return false;     // throttled or unreachable: the video is planned offline and says why
+    cloudAsks = e.message;
+    toast(e.message, 6000);
+    showSettings();
+    return true;
+  }
 }
 function wholeVideoOffline(res) {          // KinoDraw Cloud refused the video (quota, budget, network): say so plainly
   return res?.notes?.find((n) => n.startsWith('The offline director planned this video')) || null;
 }
 let STATE = null, current = null, board = null, dirty = false, cloudEmail = '';   // the sign-in address, kept between openings
+let cloudAsks = '';                         // KinoDraw Cloud's sentence when it asks for an email sign-in
 
 async function api(path, opts = {}) {
   const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
@@ -106,7 +113,7 @@ function showNew() {
     $('#model').placeholder = (STATE.models[d] || [])[0] || 'model name';
     $('#director-note').textContent = {
       rules: 'Offline: free and private. Visuals are chosen by matching words to 1,700+ doodles on your computer.',
-      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : 'KinoDraw Cloud AI (GPT-6 Luna) plans each section: 5 free videos a month, no API key. You sign in with an email code first; Offline needs no account.',
+      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : 'KinoDraw Cloud AI (GPT-6 Luna) plans each section: free, with no account or API key. Offline keeps everything on this computer.',
       openai: STATE.keys.openai ? 'Uses your OpenAI key (about $0.02 per 15-minute video with GPT-6 Luna).' : 'Add your OpenAI key under Settings first.',
       anthropic: STATE.keys.anthropic ? 'Uses your Anthropic key (about $1 per 15-minute video with Opus).' : 'Add your Anthropic key under Settings first.',
       compat: 'Any OpenAI-compatible server (OpenRouter, Groq, a local Ollama…): set the base URL and model.',
@@ -115,8 +122,9 @@ function showNew() {
   };
   dirSel.onchange = async () => {
     note();
-    if (dirSel.value === 'cloud' && STATE.cloud_signed_in && !STATE.cloud) {
-      try { STATE.cloud = await api('/api/cloud/me'); } catch (e) { STATE.cloud = null; }
+    if (dirSel.value === 'cloud' && STATE.cloud_available && !STATE.cloud) {    // nothing goes to the cloud before this
+      try { STATE.cloud = await (STATE.cloud_signed_in ? api('/api/cloud/me') : api('/api/cloud/anonymous', { method: 'POST' })); }
+      catch (e) { STATE.cloud = null; }
       note();
     }
   };
@@ -141,7 +149,7 @@ function showNew() {
     $('#motion-wrap').classList.toggle('hidden', !collage);
   };
   $('#create').onclick = async () => {
-    if (needsCloudSignIn(dirSel.value)) return;
+    if (await needsCloudSignIn(dirSel.value)) return;
     try {
       const [look, story] = $('#style').value.split('/');
       const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
@@ -168,7 +176,7 @@ async function openProject(name, tab = null) {
   $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${p.settings.voice}`}`;
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
-    if (needsCloudSignIn($('#p-director').value)) return;
+    if (await needsCloudSignIn($('#p-director').value)) return;
     if (dirty && !confirm('Re-planning replaces your unsaved edits. Continue?')) return;
     try {
       const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/direct`, { method: 'POST', body: JSON.stringify({ director: $('#p-director').value }) })).job, 'Planning the visuals');
@@ -471,7 +479,7 @@ function renderNarrator(name, info, choice = info.narrator) {
 // ---------------------------------------------------------------- settings
 function showSettings() {
   const cloud = STATE.cloud_available ? `<section><h3>KinoDraw Cloud</h3>
-      <p class="muted">${STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : '5 free AI-directed videos a month. No API key needed.'}
+      <p class="muted">${STATE.cloud_signed_in && STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : cloudAsks ? esc(cloudAsks) : 'Free, with no account or API key. Signing in with your email is optional.'}
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><input id="c-email" placeholder="you@example.com" value="${esc(cloudEmail)}"><button id="c-send" class="small">Email me a code</button></div>
       <p id="c-note" class="muted hidden"></p>

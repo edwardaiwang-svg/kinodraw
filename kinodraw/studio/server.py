@@ -29,6 +29,7 @@ from ..package import sha
 STATIC = Path(__file__).resolve().parent / 'static'
 FONTS = Path(__file__).resolve().parents[1] / 'assets' / 'fonts'
 CONFIG = paths.config_dir() / 'studio.json'
+SIGN_IN = 'Sign in to KinoDraw Cloud first (free: 5 AI videos a month), or choose Offline.'   # when the cloud says no more
 
 
 def projects_root() -> Path:
@@ -563,6 +564,12 @@ class Handler(BaseHTTPRequestHandler):
         if p == ['cloud', 'me'] and method == 'GET':        # read the sign-in token only when KinoDraw Cloud is chosen
             from ..director.llm import cloud
             return self._json(cloud.me())
+        if p == ['cloud', 'anonymous'] and method == 'POST':     # KinoDraw Cloud chosen with no email sign-in
+            from ..director.llm import cloud
+            try:
+                return self._json(cloud.anonymous())
+            except cloud.SignInNeeded as error:          # open access is off: 0.2.0's sign-in prompt, in the cloud's words
+                return self._json({'error': error.sentence or SIGN_IN, 'code': 'sign_in'}, 403)
         if p == ['cloud', 'signup'] and method == 'POST':
             from ..director.llm import cloud
             try:

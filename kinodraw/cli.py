@@ -10,7 +10,7 @@
   kinodraw finish MyVideo                       music, mux, captions, chapters, QA
   kinodraw setup [--lang en zh]                 download the voice models once
   kinodraw doodles "rocket launch" [--lang en]  search the doodle library
-  kinodraw login you@example.com                KinoDraw Cloud (free plan: AI-directed videos, no API key needed)
+  kinodraw login you@example.com                sign in to KinoDraw Cloud (optional: --director cloud is free with no account)
   kinodraw key set openai|anthropic|compat      store your own API key in the OS keychain
   kinodraw key set command                      store a command to use as the director (Advanced)
 

@@ -1,7 +1,9 @@
 """KinoDraw Cloud client: AI-directed videos (free and paid plans) without your own API key.
 
 The server holds the model keys, builds the prompt itself from the structured section
-payload, and enforces quotas; the app only ever sees the resulting JSON.
+payload, and enforces quotas; the app only ever sees the resulting JSON. Without an email
+sign-in, the app asks for an anonymous token for this installation (/v1/anonymous) while the
+cloud's open access is on.
 """
 from __future__ import annotations
 
@@ -37,6 +39,77 @@ def _token() -> str | None:
         return None
 
 
+ANON_KEY = 'cloud-anon-token'      # its own keychain entry: "Signed in" stays for email sign-ins only
+SIGN_IN = 'sign in to KinoDraw Cloud first (Studio > KinoDraw Cloud, or `kinodraw login`)'
+_anon_token: str | None = None     # kept for the process too, for when the keychain can't hold it
+
+
+class SignInNeeded(ProviderError, ValueError):
+    """KinoDraw Cloud wants an email sign-in (its open access is off). ``sentence`` is the server's own, if it sent one."""
+
+    def __init__(self, sentence: str | None = None):
+        super().__init__(sentence or SIGN_IN)
+        self.sentence = sentence
+
+
+def anonymous_token() -> str:
+    """This installation's anonymous token: the kept one, or a new one from /v1/anonymous (asked for once, never in a
+    loop). Raises SignInNeeded when the cloud's open access is off (403), or the server predates it (404)."""
+    return _kept_anonymous() or _issue_anonymous()['token']
+
+
+def anonymous() -> dict:
+    """The plan of the anonymous token (asking for one if there is none), for the Studio; never the token itself."""
+    token = _kept_anonymous()
+    if not token:
+        return {k: v for k, v in _issue_anonymous().items() if k != 'token'} | {'anonymous': True}
+    try:
+        return _call('/v1/me', token=token) | {'anonymous': True}
+    except ProviderError as error:
+        if getattr(error, 'status', None) != 401:
+            raise
+        forget_anonymous()
+        raise SignInNeeded(error.detail) from error
+
+
+def forget_anonymous():
+    global _anon_token
+    _anon_token = None
+    try:
+        import keyring
+        keyring.delete_password(paths.APP, ANON_KEY)
+    except Exception:  # noqa: BLE001 - nothing saved, or no keychain backend
+        pass
+
+
+def _kept_anonymous() -> str | None:
+    if _anon_token:
+        return _anon_token
+    try:
+        import keyring
+        return keyring.get_password(paths.APP, ANON_KEY)
+    except Exception:  # noqa: BLE001 - no keychain backend
+        return None
+
+
+def _issue_anonymous() -> dict:
+    global _anon_token
+    try:
+        out = _call('/v1/anonymous', {'install_id': install_id()})
+    except ProviderError as error:
+        status = getattr(error, 'status', None)
+        if status in (403, 404):                     # open access off, or a server from before it (its 404 says nothing)
+            raise SignInNeeded(error.detail if status == 403 else None) from error
+        raise
+    _anon_token = out['token']
+    try:
+        import keyring
+        keyring.set_password(paths.APP, ANON_KEY, _anon_token)
+    except Exception:  # noqa: BLE001 - no keychain backend: this process keeps it
+        pass
+    return out
+
+
 class EmailUnavailable(ValueError):
     """KinoDraw Cloud can't send sign-in emails right now (its email provider's limit, for example). The message is the
     plain sentence to show, with the way to go on offline."""
@@ -60,7 +133,9 @@ def _call(path: str, body: dict | None = None, token: str | None = None) -> dict
             reply, detail = {}, ''
         if reply.get('code') == 'email_unavailable' and detail:     # no "KinoDraw Cloud 502:" and no error codes
             raise EmailUnavailable(detail[0].upper() + detail[1:] + '.') from error
-        raise ProviderError(f'KinoDraw Cloud {error.code}: {detail or error.reason}') from error
+        failure = ProviderError(f'KinoDraw Cloud {error.code}: {detail or error.reason}')
+        failure.status, failure.detail = error.code, detail
+        raise failure from error
     except urllib.error.URLError as error:
         raise ProviderError(f'KinoDraw Cloud unreachable: {error.reason}') from error
 
@@ -88,21 +163,39 @@ class CloudProvider:
     name, model = 'cloud', 'kinodraw-cloud'
 
     def __init__(self):
-        self.token = _token()
+        self.token, self.anonymous, self.refused = _token(), False, None     # an email sign-in always wins
         if not self.token:
-            raise ProviderError('sign in to KinoDraw Cloud first (Studio > KinoDraw Cloud, or `kinodraw login`)')
+            self.anonymous = True
+            try:
+                self.token = anonymous_token()     # SignInNeeded goes up, as 0.2.0's sign-in message did
+            except SignInNeeded:
+                raise
+            except ProviderError as error:         # throttled or unreachable: this video is planned offline
+                self.refused = error
         self.video_id = None
 
     def open_video(self, sections: int, characters: int) -> dict:
         """Count one video against the plan (the server refuses when the quota is used up)."""
-        out = _call('/v1/videos', {'sections': sections, 'characters': characters}, self.token)
+        out = self._send('/v1/videos', {'sections': sections, 'characters': characters})
         self.video_id = out['video_id']
         return out
+
+    def _send(self, path: str, body: dict) -> dict:
+        if not self.token:
+            raise self.refused
+        try:
+            return _call(path, body, self.token)
+        except ProviderError as error:
+            if not (self.anonymous and getattr(error, 'status', None) == 401):
+                raise
+            forget_anonymous()                     # open access ended: the rest of this video stays offline
+            self.token, self.refused = None, SignInNeeded(error.detail)
+            raise self.refused from error
 
     def direct_section(self, payload: dict, usage: Usage) -> dict:
         if not self.video_id:
             raise ProviderError('open_video() first')
-        out = _call('/v1/direct', {'video_id': self.video_id, 'section': payload}, self.token)
+        out = self._send('/v1/direct', {'video_id': self.video_id, 'section': payload})
         u = out.get('usage') or {}
         usage.add(u.get('model', 'kinodraw-cloud'), u.get('input_tokens', 0), u.get('output_tokens', 0),
                   u.get('cached_tokens', 0), 0.0)       # the plan pays; nothing is billed to you per call
