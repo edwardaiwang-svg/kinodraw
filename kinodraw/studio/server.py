@@ -11,6 +11,7 @@ import json
 import mimetypes
 import re
 import secrets
+import socketserver
 import tempfile
 import threading
 import time
@@ -923,9 +924,18 @@ def _reveal(path: Path) -> dict:
     return {'ok': True}
 
 
+class _Server(ThreadingHTTPServer):
+    def server_bind(self):
+        """HTTPServer's own server_bind() also looks up the address's host name (socket.getfqdn), a reverse DNS
+        lookup that macOS treats as local-network access: it asked "Allow KinoDraw to find devices on local
+        networks?" before the window opened. Nothing reads server_name, so skip the lookup."""
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 def serve(port: int = 0) -> tuple[ThreadingHTTPServer, str]:
     Handler.token = secrets.token_urlsafe(24)
-    server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
+    server = _Server(('127.0.0.1', port), Handler)
     Handler.port = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, f'http://127.0.0.1:{Handler.port}/'
