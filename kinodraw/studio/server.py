@@ -177,6 +177,7 @@ def create_project(body: dict) -> dict:
     settings = {k: body[k] for k in ('workers',) if body.get(k)}
     settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
     settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
+    settings.update(credit=True, credit_chosen=True)                         # the end card starts on, whatever 0.2.0 said
 
     def job(progress):
         progress('storyboard', 0, 1)
@@ -194,7 +195,11 @@ def create_project(body: dict) -> dict:
 def project_credit(path: Path, cfg: dict | None = None) -> bool:
     if cfg is None:
         cfg = pipeline.settings(path)
-    return cfg.get('credit', _config().get('credit', True))
+    # The box's choice; a project that never chose (0.2.0 wrote 'credit' on every make) follows the old
+    # Studio-wide Settings switch, as 0.2.0 did.
+    if cfg.get('credit_chosen'):
+        return cfg.get('credit', True)
+    return _config().get('credit', True)
 
 
 def set_credit(name: str, body: dict) -> dict:
@@ -202,7 +207,7 @@ def set_credit(name: str, body: dict) -> dict:
         raise ValueError('credit must be true or false')
     path = _project(name)
     cfg = pipeline.settings(path)
-    cfg['credit'] = body['credit']
+    cfg.update(credit=body['credit'], credit_chosen=True)
     pipeline._save(path / 'project.json', cfg)
     return cfg
 
@@ -238,7 +243,7 @@ def make_video(name: str) -> dict:
 
     def job(progress):
         cfg = pipeline.settings(path)
-        # The project's own choice; older projects inherit the old Settings switch.
+        # The project's own choice (project_credit).
         cfg['credit'] = project_credit(path, cfg)
         (path / 'project.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
         clips = pipeline.narrate(path, progress)

@@ -219,7 +219,7 @@ def _settings(args):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
     if getattr(args, 'no_credit', False):
-        out['credit'] = False
+        out.update(credit=False, credit_chosen=True)                           # the Studio box shows it too
     return out
 
 

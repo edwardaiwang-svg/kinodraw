@@ -36,6 +36,8 @@ def test_the_cli_switch_is_remembered_in_the_project(tmp_path, monkeypatch):
     cli.main(['new', str(TINY), '-o', str(tmp_path / 'A'), '--no-credit'])
     cli.main(['new', str(TINY), '-o', str(tmp_path / 'B')])
     assert pipeline.settings(tmp_path / 'A')['credit'] is False and 'credit' not in pipeline.settings(tmp_path / 'B')
+    monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
+    assert server.project_credit(tmp_path / 'A') is False and server.project_credit(tmp_path / 'B') is True  # Studio box
     seen = {}
     monkeypatch.setattr(pipeline.audio, 'assemble', lambda *a, credit=True, **k: (seen.update(credit=credit), {})[1])
     monkeypatch.setattr(pipeline.renderer, 'pacing', lambda *a: {})
@@ -129,6 +131,30 @@ def test_an_old_settings_switch_still_applies_to_projects_that_never_chose(studi
     assert _make_credit('Honey', monkeypatch) is True
     assert server._config()['credit'] is False
     assert api('Bees')['credit'] is False
+
+
+def test_a_project_made_before_the_upgrade_still_follows_the_old_settings_switch(studio, monkeypatch):
+    root, api = studio
+    _make_credit('Honey', monkeypatch)                                        # 0.2.0 wrote the Studio-wide value here
+    assert pipeline.settings(root / 'Honey')['credit'] is True
+    server._save_config({'projects': str(root), 'credit': False})             # then Settings was switched off
+    assert api('Honey')['credit'] is False
+    assert _make_credit('Honey', monkeypatch) is False
+
+
+def test_a_new_studio_project_starts_with_the_end_card_on(studio, monkeypatch):
+    root, api = studio
+    server._save_config({'projects': str(root), 'credit': False})             # an old Settings switch-off
+    monkeypatch.setattr(server.director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
+    created = server.create_project({'text': TINY.read_text(), 'title': 'Wasps'})
+    job = server.JOBS.get(created['job'])
+    deadline = time.monotonic() + 10
+    while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:
+        time.sleep(.02)
+    assert job['state'] == 'done', job['error']
+    assert api(created['project'])['credit'] is True
+    assert _make_credit(created['project'], monkeypatch) is True
+    assert api('Honey')['credit'] is False                                    # older projects keep the switch-off
 
 
 def test_the_end_card_control_is_on_the_make_panel_only():
