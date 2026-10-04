@@ -181,15 +181,16 @@ def test_other_devices_are_told_to_open_the_page_on_a_computer():
     assert raw.index('id="other-device"') < raw.index('id="download"')
 
 
-def test_analytics_and_search_verification_wait_for_the_owners_codes():
-    """Placeholder analytics and verification must never make a request from the published page."""
+def test_visits_are_counted_only_by_cloudflares_cookieless_beacon_and_search_verification_waits_for_its_code():
+    """The page loads one outside script, Cloudflare Web Analytics, and a placeholder code never makes a request."""
     raw = SITE.read_text(encoding='utf-8')
-    comments = re.findall(r'<!--(.*?)-->', raw, re.S)
     live = re.sub(r'<!--.*?-->', '', raw, flags=re.S)
-    for marker in ('cloudflareinsights', 'google-site-verification'):
-        assert marker in raw and marker not in live
-        assert any(marker in comment and comment.lstrip().startswith('TODO(J):') for comment in comments)
-    assert not re.search(r'<script\b[^>]*\bsrc\s*=', live)
+    assert re.findall(r'<script\b[^>]*\bsrc\s*=\s*"([^"]+)"', live) == ['https://static.cloudflareinsights.com/beacon.min.js']
+    assert re.search(r"""data-cf-beacon='\{"token": "[0-9a-f]{32}"\}'""", live)
+    assert 'YOUR_CLOUDFLARE_TOKEN' not in raw
+    comments = re.findall(r'<!--(.*?)-->', raw, re.S)
+    assert 'google-site-verification' in raw and 'google-site-verification' not in live
+    assert any('google-site-verification' in comment and comment.lstrip().startswith('TODO(J):') for comment in comments)
 
 
 def test_website_privacy_names_the_cookieless_counter_and_server_logs():
