@@ -320,6 +320,16 @@ def _portrait_text(ctx, text, size, width, lines=3, min_size=30, **kw):
     return ink.TextDrawing(clipped, ctx.lang, fitted, fonts=ctx.fonts, **kw)
 
 
+def _portrait_title(ctx, text, size, width, **kw):
+    """The video's title keeps every word: three lines down to 72 px, else a fourth line down to 56 px."""
+    for lines, floor in ((3, 72), (4, 56)):
+        for fitted in range(size, floor - 1, -2):
+            wrapped = ctx.wrap(text, fitted, width - 12)   # a Chinese line may hang its closing mark: measure it
+            if len(wrapped) <= lines and all(ctx.width(line, fitted) <= width - 12 for line in wrapped):
+                return ink.TextDrawing(wrapped, ctx.lang, fitted, fonts=ctx.fonts, **kw)
+    return _portrait_text(ctx, text, size, width, lines=4, min_size=56, **kw)
+
+
 def _portrait_host(ctx, host, x0, y, t):
     """Stack a host photo and badge, leaving room for the screen's lower UI."""
     g = ctx.layout.g
@@ -340,7 +350,7 @@ def build_title_board_portrait(ctx, beat, x0, t):
     g, ep = ctx.layout.g, ctx.ep
     left, y, _, _ = g.text_safe[0]
     width, bottom = g.cell_w, g.text_safe[1][3]
-    title = _portrait_text(ctx, ctx.T(ep.get('title')), 110, width, lines=3, min_size=72)
+    title = _portrait_title(ctx, ctx.T(ep.get('title')), 110, width)
     els = [ctx.add(title, x0 + left, y, t)]
     tw = title.size[0]
     und = ctx.strokes((tw, 30), [[(6 + i * (tw - 12) / 30, 12 + 5 * math.sin(i / 2.5)) for i in range(31)]],
@@ -474,7 +484,7 @@ def build_end_card_portrait(ctx, x0, t):
     g, ep = ctx.layout.g, ctx.ep
     left, y, _, _ = g.text_safe[0]
     width, bottom = g.cell_w, g.text_safe[1][3]
-    title = _portrait_text(ctx, ctx.T(ep.get('title')), 100, width, lines=3, min_size=72, align='center', pace=1.8)
+    title = _portrait_title(ctx, ctx.T(ep.get('title')), 100, width, align='center', pace=1.8)
     els = [ctx.add(title, x0 + left + (width - title.size[0]) / 2, y, t)]
     y += title.size[1] + 24
     second = ctx.T(ep.get('subtitle')) or ui(ep, ctx.lang)['thanks']

@@ -275,3 +275,24 @@ def test_native_quote_takes_a_whole_screen_and_stays_in_the_board_band(board, tm
         assert top.y == PORTRAIT.rows[0][0] - 34, k                 # each quote starts its own screen (both rows)
         words = [e for e in quote if e.y >= PORTRAIT.rows[0][0]]
         assert words and max(e.y + e.h for e in words) <= PORTRAIT.rows[1][1], k
+
+
+@pytest.mark.parametrize('lang,source,title', [
+    ('en', 'tiny.md', 'Why Honey Found in Ancient Egyptian Tombs Is Still Perfectly Safe to Eat Today'),
+    ('zh', 'sleep_zh.md', '为什么我们每天晚上都需要睡足八个小时才能保持健康和清醒？'),
+])
+def test_native_title_board_and_end_card_show_a_long_title_in_full(lang, source, title, tmp_path):
+    ep = script.build(ingest.read(TINY.parent / source))
+    ep['title'] = {lang: title}
+    clips = timeline.synthetic_clips(ep, lang)
+    prod = render.make_production(ep, timeline.layout(ep, lang, clips), lang, tmp_path, aspect='9:16',
+                                  portrait='native').prod
+    left, top, right, _ = PORTRAIT.text_safe[0]
+    shown = [e for e in prod.ctx.elements if isinstance(e.drawing, ink.TextDrawing)
+             and ''.join(e.drawing.lines).replace(' ', '').rstrip('…') and
+             title.replace(' ', '').startswith(''.join(e.drawing.lines).replace(' ', '').rstrip('…')[:12])]
+    assert len(shown) == 2                                            # the title board and the end card
+    for e in shown:
+        assert ''.join(e.drawing.lines).replace(' ', '') == title.replace(' ', ''), e.drawing.lines
+        x = e.x % PORTRAIT.size[0]
+        assert left <= x and x + e.drawing.size[0] <= left + PORTRAIT.cell_w and e.y >= top
