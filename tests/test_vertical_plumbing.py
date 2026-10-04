@@ -29,6 +29,34 @@ def test_cli_saves_format_and_rejects_bad_values(tmp_path, monkeypatch):
     assert not (tmp_path / 'bad').exists()
 
 
+def test_cli_render_saves_format_before_render_and_rejects_bad_values(tmp_path, monkeypatch):
+    pipeline.new_project(TINY, tmp_path)
+    calls = []
+    def render(project, *args):
+        calls.append(pipeline.settings(project)['aspect'])
+        build = project / 'build'
+        build.mkdir(exist_ok=True)
+        pipeline._save(build / 'render-warnings.json', [])
+        return build / 'silent.mp4'
+    monkeypatch.setattr(pipeline, 'render', render)
+    cli.main(['render', str(tmp_path), '--aspect', '9:16'])
+    assert calls == ['9:16']
+    assert pipeline.settings(tmp_path)['aspect'] == '9:16'
+    before = (tmp_path / 'project.json').read_bytes()
+    with pytest.raises(SystemExit) as error:
+        cli.main(['render', str(tmp_path), '--aspect', '4:3'])
+    assert error.value.code == 2
+    assert (tmp_path / 'project.json').read_bytes() == before
+    assert calls == ['9:16']
+
+    entries = [dict(e, aspect=['16:9']) if e['id'] == 'whiteboard' else e for e in styles.looks()]
+    monkeypatch.setattr(styles, '_looks', lambda: tuple(entries))
+    with pytest.raises(SystemExit, match='does not support'):
+        cli.main(['render', str(tmp_path), '--aspect', '9:16'])
+    assert (tmp_path / 'project.json').read_bytes() == before
+    assert calls == ['9:16']
+
+
 def test_studio_creates_and_changes_format(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'projects_root', lambda: tmp_path)
     monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
@@ -136,12 +164,12 @@ def test_finish_uses_format_sizes_and_unwrapped_collage(tmp_path, monkeypatch, a
     pipeline._save(build / 'timeline.json', {'duration': 1})
     calls = {}
     monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: build / 'mix.wav')
-    monkeypatch.setattr(pipeline, 'mux', lambda *a: None)
+    monkeypatch.setattr(pipeline, 'mux', lambda *a: calls.update(video=a[3], title=a[5]))
     def qa(*args, **kw):
         calls['qa'] = kw
         return {'ok': True, 'problems': []}
     monkeypatch.setattr(pipeline, 'encoded_qa', qa)
-    monkeypatch.setattr(pipeline, 'publish', lambda *a, **k: calls.update(publish=k))
+    monkeypatch.setattr(pipeline, 'publish', lambda *a, **k: calls.update(publish=k, stem=a[5]))
     monkeypatch.setattr(pipeline, 'contact_sheet', lambda *a, **k: calls.update(sheet=k))
     monkeypatch.setattr(pipeline.renderer, 'make_production', lambda *a, **k:
                         calls.update(production=k) or SimpleNamespace(crowded=lambda: [(0, 'a', 'b')]))
@@ -150,6 +178,11 @@ def test_finish_uses_format_sizes_and_unwrapped_collage(tmp_path, monkeypatch, a
     assert calls['qa']['size'] == calls['sheet']['size'] == size
     assert calls['publish']['size'] == ((720, 1280) if aspect == '9:16' else (1280, 720))
     assert calls['production'].get('aspect', '16:9') == '16:9'
+    title = pipeline.storyboard(tmp_path)['title']['en']
+    stem = title + (' (vertical)' if aspect == '9:16' else '')
+    assert calls['stem'] == stem
+    assert calls['video'].name == f'{stem}.mp4'
+    assert calls['title'] == title
     assert not report['ok'] and 'written on top' in report['problems'][0]
 
 
@@ -178,3 +211,24 @@ def test_cli_stills_use_project_format(tmp_path, monkeypatch):
     assert calls == [{'aspect': '9:16'}]
     with Image.open(build / 'stills' / '0000.00.png') as img:
         assert img.size == (1080, 1920)
+
+
+@pytest.mark.parametrize('aspect', pipeline.ASPECTS)
+def test_cli_stills_switch_and_save_project_format(tmp_path, monkeypatch, aspect):
+    pipeline.new_project(TINY, tmp_path, aspect='9:16' if aspect == '16:9' else '16:9')
+    build = tmp_path / 'build'
+    build.mkdir()
+    pipeline._save(build / 'timeline.json', {'duration': 1})
+    calls = []
+    size = (1080, 1920) if aspect == '9:16' else (1920, 1080)
+    prod = SimpleNamespace(frame=lambda t: Image.new('RGB', size))
+    def production(*args, **kwargs):
+        calls.append(kwargs)
+        assert pipeline.settings(tmp_path)['aspect'] == aspect
+        return prod
+    monkeypatch.setattr(pipeline.renderer, 'make_production', production)
+    cli.main(['render', str(tmp_path), '--aspect', aspect, '--stills', '0'])
+    assert pipeline.settings(tmp_path)['aspect'] == aspect
+    assert calls == [{'aspect': aspect}]
+    with Image.open(build / 'stills' / '0000.00.png') as img:
+        assert img.size == size

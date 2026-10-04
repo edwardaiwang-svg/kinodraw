@@ -1,13 +1,16 @@
-"""The vertical 9:16 layout for Shorts, TikTok and Reels: a letterbox, not a crop and not a reflow.
+"""The 9:16 frame for Shorts, TikTok and Reels: one compositor with two board sources.
 
-Every frame is 1080 x 1920 on the look's paper colour. The look's own 16:9 frame (board, hand, transitions; no chrome
-and no captions) is scaled to 1080 x 608 in the middle; the section's title is written above it in the look's
-handwriting and the captions are set below it, larger than they could be on the scaled board (normally at most 3
-lines, 960 px wide). At the end card the title above is the video's and the "Made with ..." credit is set below at a
-readable size.
+Letterbox (every look today): the look's own 16:9 frame (board, hand, transitions; no chrome and no captions) is
+scaled to 1080 x 608 in the middle of a 1080 x 1920 frame on the look's paper colour; the section's title is written
+above it and the captions are set below it, larger than they could be on the scaled board (normally at most 3 lines,
+960 px wide). At the end card the title above is the video's and the "Made with ..." credit is set below.
 
-Vertical wraps any production (whiteboard, its skins, collage) and answers what they answer (frame, warnings,
-ctx.elements, cues), so pacing, parallel rendering, stills, the mix and packaging treat it like the others.
+Native (a look whose registry entry says "portrait": "native"): the production itself is laid out at 1080 x 1920
+(geometry.PORTRAIT); the title block sits in the title band while a board or takeaway is on screen, and captions are
+centred in the caption band, clear of the platforms' buttons (docs: safe-zones.md).
+
+PortraitFrame answers what its production answers (warnings, ctx.elements, cues), so pacing, parallel rendering,
+stills, the mix and packaging treat it like the others. ``Vertical`` is its old name.
 """
 from __future__ import annotations
 
@@ -19,6 +22,7 @@ from PIL import Image, ImageDraw
 from . import captions as cap
 from . import ink
 from . import skin as skins
+from .geometry import PORTRAIT
 
 W, H = 1080, 1920
 BOARD = (0, 656, 1080, 608)            # x, y, w, h: the 16:9 frame, scaled 0.5625, in the middle
@@ -30,19 +34,22 @@ CAP_SIZE, CAP_MIN, CAP_LINES = 64, 44, 3
 FADE_IN, FADE_OUT = .4, .3             # titles fade like the 16:9 chrome does; nothing pops
 
 
-class Vertical:
+class PortraitFrame:
     vertical = True
     size = (W, H)
 
-    def __init__(self, prod):
+    def __init__(self, prod, native=False):
         self.prod = prod
+        self.native = native
         prod.vertical = True                 # its frame is now the board alone: no chrome, no captions
         self.ep, self.tl, self.lang = prod.ep, prod.tl, prod.lang
         self.skin = getattr(prod, 'skin', None)
         from .skin import WHITEBOARD
         self.fonts = (self.skin or WHITEBOARD).fonts
         self.collage = self.skin is None
-        self._base = self._background()
+        self.title_w = PORTRAIT.title_band[2] - PORTRAIT.title_band[0] if native else TEXT_W
+        self.title_h = PORTRAIT.title_band[3] - PORTRAIT.title_band[1] if native else TITLE_H
+        self._base = None if native else self._background()
         self.cap_starts = [c['start'] for c in self.tl.get('captions', [])]
         self.tops = self._title_spans()
         self.top_starts = [s[0] for s in self.tops]
@@ -87,6 +94,8 @@ class Vertical:
 
     def title_at(self, t):
         """(image, alpha) of the title block above the board at time t, or (None, 0)."""
+        if self.native and self.prod.scene_at(t) not in ('board', 'take'):
+            return None, 0.
         i = bisect.bisect_right(self.top_starts, t) - 1
         if i < 0:
             return None, 0.
@@ -100,6 +109,8 @@ class Vertical:
     @lru_cache(maxsize=64)
     def _title_image(self, key):
         lang, fonts = self.lang, self.fonts
+        w = self.title_w if self.native else W
+        ui_width = self.title_w - 6 if self.native else TEXT_W   # _ui_line adds 6 px of padding
         if key[0] == 'title':
             label, title, color = None, (self.ep.get('title') or {}).get(lang, ''), None
             source = None
@@ -115,8 +126,8 @@ class Vertical:
         parts = []                                       # (image, gap above)
         if label and label.strip().lower() != title.strip().lower():
             label = label.upper() if lang != 'zh' else label
-            parts.append((_ui_line(_fit_ui(label, 38, fonts), 38, self._label_color(color), fonts), 0))
-        room = TITLE_H - 6 * bool(parts) - sum(img.height for img, _ in parts) - (18 if color else 0) \
+            parts.append((_ui_line(_fit_ui(label, 38, fonts, ui_width), 38, self._label_color(color), fonts), 0))
+        room = self.title_h - 6 * bool(parts) - sum(img.height for img, _ in parts) - (18 if color else 0) \
             - (56 if source else 0)                     # what the title lines may use, beside label, bar and source
         kind = 'en_hand' if lang != 'zh' else 'zh_hand'
         fallback = _needs_fallback(title, kind, fonts)
@@ -124,24 +135,24 @@ class Vertical:
             (lambda text: ink.text_width(text, lang, size, fonts))
         if fallback:
             while True:
-                lines = _wrap(title, lang, TEXT_W, measure)
+                lines = _wrap(title, lang, self.title_w, measure)
                 if len(lines) <= lines_max or size <= 48:
                     break
                 size -= 2
         else:
-            lines, size = ink.fit_text(title, lang, TEXT_W, lines_max, size, min_size=48, fonts=fonts)
+            lines, size = ink.fit_text(title, lang, self.title_w, lines_max, size, min_size=48, fonts=fonts)
         tall = lambda: int(size * 1.2) * len(lines) + 16 > room
-        if any(measure(l) > TEXT_W for l in lines) or tall():
+        if any(measure(l) > self.title_w for l in lines) or tall():
             while True:
-                lines = _wrap(title, lang, TEXT_W, measure)
+                lines = _wrap(title, lang, self.title_w, measure)
                 if size <= 8 or (len(lines) <= lines_max or size <= 40) and not tall():
                     break                                # below 40 px only when the title would not fit otherwise
                 size = max(8, size - 2)
         lh = int(size * 1.2)
-        block = Image.new('RGBA', (W, lh * len(lines) + 16), (0, 0, 0, 0))
+        block = Image.new('RGBA', (w, lh * len(lines) + 16), (0, 0, 0, 0))
         d = ImageDraw.Draw(block)
         for k, line in enumerate(lines):
-            x = (W - measure(line)) / 2
+            x = (w - measure(line)) / 2
             if fallback:
                 _draw_text(d, (x, 4 + k * lh), line, kind, size, fonts, fill=self._ink() + (255,))
             else:
@@ -150,18 +161,18 @@ class Vertical:
                     x += f.getlength(part)
         parts.append((block, 6 if parts else 0))
         if color:                                        # the section's colour, as a short underline
-            bar = Image.new('RGBA', (W, 12), (0, 0, 0, 0))
-            ImageDraw.Draw(bar).rounded_rectangle(((W - 140) / 2, 0, (W + 140) / 2, 9), 5,
+            bar = Image.new('RGBA', (w, 12), (0, 0, 0, 0))
+            ImageDraw.Draw(bar).rounded_rectangle(((w - 140) / 2, 0, (w + 140) / 2, 9), 5,
                                                   fill=self._label_color(color) + (255,))
             parts.append((bar, 6))
         if source:
-            parts.append((_ui_line(_fit_ui(source, 30, fonts), 30, self._soft(), fonts), 12))
+            parts.append((_ui_line(_fit_ui(source, 30, fonts, ui_width), 30, self._soft(), fonts), 12))
         h = sum(img.height + gap for img, gap in parts)
-        out = Image.new('RGBA', (W, h), (0, 0, 0, 0))
+        out = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         y = 0
         for img, gap in parts:
             y += gap
-            out.alpha_composite(img, ((W - img.width) // 2, y))
+            out.alpha_composite(img, ((w - img.width) // 2, y))
             y += img.height
         return out
 
@@ -184,11 +195,19 @@ class Vertical:
             # light letters that need their outline to show on the paper band (Mosaic) blur together at phone
             # size: the band is plain, so write them in the look's ink instead
             color, edge = tuple(self.skin.ink[:3]), tuple(self.skin.base[:3])
+        if self.native:
+            left, top, right, bottom = PORTRAIT.caption_band
+            # The band's 696 px includes the outline and padding (2 * stroke + 8, stroke 6 at 60 px).
+            return caption_image(text, self.lang, self.fonts, color, edge,
+                                 width=right - left - 20, start_size=60, height_limit=bottom - top)
         return caption_image(text, self.lang, self.fonts, color, edge)
 
     def caption_box(self, text):
-        """Where a caption goes: (x, y, w, h), its top CAP_GAP below the board, centred."""
+        """Where a caption goes: (x, y, w, h), centred in its band or below the letterboxed board."""
         img = self.caption_image(text)
+        if self.native:
+            left, top, right, bottom = PORTRAIT.caption_band
+            return (left + right - img.width) // 2, (top + bottom - img.height) // 2, img.width, img.height
         return (W - img.width) // 2, BOARD[1] + BOARD[3] + CAP_GAP, img.width, img.height
 
     def _credit(self, t):
@@ -203,20 +222,29 @@ class Vertical:
     # ------------------------------------------------------------ frame
     def frame(self, t):
         board = self.prod.frame(t)
-        out = self._base.copy()
-        out.paste(board.convert('RGB').resize(BOARD[2:], Image.LANCZOS), BOARD[:2])
+        if self.native:
+            out = board.copy()
+        else:
+            out = self._base.copy()
+            out.paste(board.convert('RGB').resize(BOARD[2:], Image.LANCZOS), BOARD[:2])
         img, alpha = self.title_at(t)
         if img is not None and alpha > 0:
-            ink.paste(out, _faded(img, alpha), 0, BOARD[1] - TITLE_GAP - img.height)
+            if self.native:
+                ink.paste(out, _faded(img, alpha), (W - img.width) // 2, PORTRAIT.title_band[3] - img.height)
+            else:
+                ink.paste(out, _faded(img, alpha), 0, BOARD[1] - TITLE_GAP - img.height)
         text = self.caption_at(t)
         if text:
             x, y, _, _ = self.caption_box(text)
             ink.paste(out, self.caption_image(text), x, y)
-        else:
+        elif not self.native:                       # native credit is already written by the production's hand
             img, alpha = self._credit(t)
             if img is not None:
                 ink.paste(out, _faded(img, alpha), (W - img.width) // 2, BOARD[1] + BOARD[3] + CAP_GAP + 20)
         return out
+
+
+Vertical = PortraitFrame
 
 
 def _faded(img, alpha):
@@ -264,12 +292,12 @@ def _ui_line(text, size, color, fonts):
     return img
 
 
-def _fit_ui(text, size, fonts):
-    """Shorten a one-line label to TEXT_W with an ellipsis."""
+def _fit_ui(text, size, fonts, width=TEXT_W):
+    """Shorten a one-line label to ``width`` with an ellipsis."""
     kind = 'ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption'
-    if _text_width(text, kind, size, fonts) <= TEXT_W:
+    if _text_width(text, kind, size, fonts) <= width:
         return text
-    while text and _text_width(text + '…', kind, size, fonts) > TEXT_W:
+    while text and _text_width(text + '…', kind, size, fonts) > width:
         text = text[:-1]
     return text.rstrip() + '…'
 
@@ -370,15 +398,15 @@ def _wrap(text, lang, width, measure):
 
 
 @lru_cache(maxsize=1024)
-def caption_lines(text, lang, fonts=ink.FONTS):
+def caption_lines(text, lang, fonts=ink.FONTS, width=TEXT_W, start_size=CAP_SIZE, height_limit=None):
     """Prefer CAP_LINES at CAP_MIN or larger; then the largest size whose lines fit the height above the buttons."""
-    for size in range(CAP_SIZE, CAP_MIN - 1, -2):
-        lines = wrap(text, lang, size, fonts)
-        if len(lines) <= CAP_LINES:
+    for size in range(start_size, CAP_MIN - 1, -2):
+        lines = wrap(text, lang, size, fonts, width)
+        if len(lines) <= CAP_LINES and (height_limit is None or _caption_height(len(lines), size) <= height_limit):
             return lines, size
-    available = H - 240 - (BOARD[1] + BOARD[3] + CAP_GAP)
+    available = H - 240 - (BOARD[1] + BOARD[3] + CAP_GAP) if height_limit is None else height_limit
     for size in range(CAP_MIN, 7, -2):
-        lines = wrap(text, lang, size, fonts)
+        lines = wrap(text, lang, size, fonts, width)
         if _caption_height(len(lines), size) <= available or size == 8:
             return lines, size                       # below 36 px only for one enormous word: smaller, never cut off
 
@@ -388,9 +416,10 @@ def _caption_height(line_count, size):
 
 
 @lru_cache(maxsize=1024)
-def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255)):
+def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255),
+                  width=TEXT_W, start_size=CAP_SIZE, height_limit=None):
     """The caption below the board: ``color`` letters in an ``edge`` outline, like the 16:9 captions, larger."""
-    lines, size = caption_lines(text, lang, fonts)
+    lines, size = caption_lines(text, lang, fonts, width, start_size, height_limit)
     kind = 'en_caption' if lang != 'zh' else 'zh_caption'
     stroke = max(5, round(size / 10))
     lh = int(size * 1.18)

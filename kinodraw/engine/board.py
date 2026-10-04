@@ -21,12 +21,14 @@ import bisect
 import math
 from dataclasses import dataclass, field
 
-COL = 640
-COLS_ON_SCREEN = 3
-CELL_X0, CELL_W = 50, 540          # cell inside a column: x 50..590
-ROW_Y = [(84, 440), (466, 822)]    # two rows; captions start below ~865
-PAGE_BOX = (60, 84, 1800, 738)     # page scene box within a 3-column screen
-PAN_SECONDS = .9
+from .geometry import LANDSCAPE
+
+COL = LANDSCAPE.col
+COLS_ON_SCREEN = LANDSCAPE.cols_on_screen
+CELL_X0, CELL_W = LANDSCAPE.cell_x0, LANDSCAPE.cell_w          # cell inside a column: x 50..590
+ROW_Y = list(LANDSCAPE.rows)    # two rows; captions start below ~865
+PAGE_BOX = LANDSCAPE.page_box     # page scene box within a 3-column screen
+PAN_SECONDS = LANDSCAPE.pan_seconds
 WIPE_SECONDS = PAN_SECONDS
 STALE = 3.0                        # max seconds between a visual's words and its first stroke
 CUT_GRACE = 1.5                    # max seconds a page change waits for unfinished drawing
@@ -85,7 +87,8 @@ class Element:
 class Layout:
     """Column-major slot allocator on the world strip (2 rows per column)."""
 
-    def __init__(self):
+    def __init__(self, geometry=LANDSCAPE):
+        self.g = geometry
         self.used = {}            # column -> set(rows)
         self.cursor = 0           # first column that may still take items
         self.page_start = 0
@@ -123,36 +126,37 @@ class Layout:
             col += 1
 
     def wide(self):
+        if self.g.name == 'portrait':
+            return self.slot()
         col = self.cursor
         while True:
             for row in (0, 1):
                 if self._free(col, row) and self._free(col + 1, row):
                     self._take(col, row), self._take(col + 1, row)
                     self.cursor = col
-                    x0 = col * COL + CELL_X0
-                    y0, y1 = ROW_Y[row]
-                    return (x0, y0, COL + CELL_W, y1 - y0), (col, col + 1)
+                    x0 = col * self.g.col + self.g.cell_x0
+                    y0, y1 = self.g.rows[row]
+                    return (x0, y0, self.g.col + self.g.cell_w, y1 - y0), (col, col + 1)
             col += 1
 
     def page(self):
         col = self.next_fresh_column()
-        for c in range(col, col + COLS_ON_SCREEN):
+        for c in range(col, col + self.g.cols_on_screen):
             self._take(c, 0), self._take(c, 1)
-        self.cursor = col + COLS_ON_SCREEN
-        x, y, w, h = PAGE_BOX
-        return (col * COL + x, y, w, h), (col, col + COLS_ON_SCREEN - 1)
+        self.cursor = col + self.g.cols_on_screen
+        x, y, w, h = self.g.page_box
+        return (col * self.g.col + x, y, w, h), (col, col + self.g.cols_on_screen - 1)
 
     def reserve(self, col_from, col_to):
         for c in range(col_from, col_to + 1):
             self._take(c, 0), self._take(c, 1)
         self.cursor = col_to + 1
 
-    @staticmethod
-    def cell_box(col, row, rows=1):
-        x0 = col * COL + CELL_X0
-        y0 = ROW_Y[row][0]
-        y1 = ROW_Y[row + rows - 1][1]
-        return (x0, y0, CELL_W, y1 - y0)
+    def cell_box(self, col, row, rows=1):
+        x0 = col * self.g.col + self.g.cell_x0
+        y0 = self.g.rows[row][0]
+        y1 = self.g.rows[row + rows - 1][1]
+        return (x0, y0, self.g.cell_w, y1 - y0)
 
 
 class Camera:
@@ -163,7 +167,8 @@ class Camera:
     A locked camera replaces pans with wipes between two stationary boards.
     """
 
-    def __init__(self, locked=False):
+    def __init__(self, geometry=LANDSCAPE, locked=False):
+        self.g = geometry
         self.locked = locked
         self.keys = [(0.0, 0.0, 'cut')]   # (t_start, to_L, 'cut' | 'pan' | 'wipe')
         self._segs = None
@@ -178,14 +183,13 @@ class Camera:
             self._segs, self._starts = segs, [s[0] for s in segs]
         return self._segs
 
-    @staticmethod
-    def _eval(seg, t):
+    def _eval(self, seg, t):
         t0, a, b, kind = seg
         if kind == 'wipe':
             return b
         if a == b:
             return b
-        f = min(1., max(0., (t - t0) / PAN_SECONDS))
+        f = min(1., max(0., (t - t0) / self.g.pan_seconds))
         return a + (b - a) * f * f * (3 - 2 * f)
 
     def at(self, t):
@@ -220,15 +224,16 @@ class Camera:
             self._segs = None
 
 
-def column_span(el):
-    return int(el.x // COL), int(max(el.x, el.x + el.w - 1) // COL)
+def column_span(el, col=COL):
+    return int(el.x // col), int(max(el.x, el.x + el.w - 1) // col)
 
 
 class Scheduler:
     """One hand: drawings happen one at a time, never before their trigger (rules: module docstring)."""
 
-    def __init__(self, camera: Camera):
+    def __init__(self, camera: Camera, geometry=LANDSCAPE):
         self.camera = camera
+        self.g = geometry
 
     def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE):
         """Place every element in time and move the camera.
@@ -241,7 +246,7 @@ class Scheduler:
         so the board keeps pace with the narration without scribbling. (Pacing measures with
         ``max_rate=1`` and no skipping: how long every drawing would really take.)
         """
-        cam = self.camera
+        cam, g = self.camera, self.g
         for _ in range(3):                                  # a drawing that follows another is never due before it
             for e in elements:
                 if e.after is not None and not e.fixed:
@@ -280,11 +285,11 @@ class Scheduler:
                 if mode == 'pan':
                     t = max(t, hand_free + SETTLE)          # never leave a page mid-stroke
                     cam.pan(t, L)
-                    state['arrive'] = t + PAN_SECONDS
+                    state['arrive'] = t + g.pan_seconds
                 else:
                     cam.cut(t, L)
                     state['arrive'] = t
-                state['base'] = int(round(L / COL))
+                state['base'] = int(round(L / g.col))
 
         for k, ((s, trig), els) in enumerate(units):
             enter(s)
@@ -312,7 +317,7 @@ class Scheduler:
             cursor = start
             for e in els:
                 key = e.group or id(e)
-                c0, c1 = column_span(e)
+                c0, c1 = column_span(e, g.col)
                 if self._gone(e, dropped) or c1 < base:     # its page is behind the camera: never go back
                     dropped.add(key)
                     e.skipped = True
@@ -326,23 +331,23 @@ class Scheduler:
                     if e.hand and a - .05 < earliest < b:
                         earliest = b + .1
                 pan_at, new_col = None, None
-                L_cols = int(round(cam.target_at(earliest) / COL))
+                L_cols = int(round(cam.target_at(earliest) / g.col))
                 if c0 < L_cols and not e.essential:
                     dropped.add(key)                        # the camera has moved past it: never pan back
                     e.skipped = True
                     continue
-                if c0 < L_cols or c1 > L_cols + COLS_ON_SCREEN - 1:
+                if c0 < L_cols or c1 > L_cols + g.cols_on_screen - 1:
                     # a page shows whole; a slot scrolls into view (never left of the page's start)
-                    new_col = base if c1 <= base + COLS_ON_SCREEN - 1 else max(c0, c1 - COLS_ON_SCREEN + 1)
-                    if cam.locked and c1 > base + COLS_ON_SCREEN - 1:
+                    new_col = base if c1 <= base + g.cols_on_screen - 1 else max(c0, c1 - g.cols_on_screen + 1)
+                    if cam.locked and c1 > base + g.cols_on_screen - 1:
                         new_col = c0
                     # Dwell: let what is on screen be read before panning away
                     # (charts ~2.5 s, glossary notes ~5 s after they finish).
-                    lo_col, hi_col = L_cols, L_cols + COLS_ON_SCREEN - 1
+                    lo_col, hi_col = L_cols, L_cols + g.cols_on_screen - 1
                     dwell = [x.end + x.hold for x in placed[-40:]
-                             if column_span(x)[1] >= lo_col and column_span(x)[0] <= hi_col]
-                    pan_at = max(earliest, min(max(dwell), earliest + 3.5)) if dwell else earliest
-                    earliest = pan_at + PAN_SECONDS
+                             if column_span(x, g.col)[1] >= lo_col and column_span(x, g.col)[0] <= hi_col]
+                    pan_at = max(earliest, min(max(dwell), earliest + g.dwell_max)) if dwell else earliest
+                    earliest = pan_at + g.pan_seconds
                 e_rate = rate if e.hand else 1.0
                 if e.hand:
                     travel = .12 if last_pen is None else min(.3, .08 + math.dist(last_pen, (e.x, e.y)) / 5000)
@@ -359,7 +364,7 @@ class Scheduler:
                 if misses:                                  # essential (or already half drawn): hurry
                     e_rate = max(e_rate, min(4.0, e.drawing.duration / max(.05, e.deadline - earliest)))
                 if pan_at is not None:
-                    cam.pan(pan_at, new_col * COL)
+                    cam.pan(pan_at, new_col * g.col)
                 e.rate, e.start = e_rate, earliest
                 started.add(key)
                 placed.append(e)

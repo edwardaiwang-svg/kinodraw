@@ -10,7 +10,7 @@
   kinodraw new script.md -o MyVideo --voice-server http://localhost:8080/v1 --server-model qwen-tts
   kinodraw voice MyVideo --voice-server none    ... back to the built-in voice
   kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of MyVideo/read-aloud.txt (none: Kokoro again)
-  kinodraw render MyVideo [--stills 5,30]       silent video (or preview stills)
+  kinodraw render MyVideo [--aspect 9:16] [--stills 5,30]  silent video (or preview stills)
   kinodraw finish MyVideo                       music, mux, captions, chapters, QA
   kinodraw setup [--lang en zh]                 download the voice models once
   kinodraw doodles "rocket launch" [--lang en]  search the doodle library
@@ -119,6 +119,11 @@ def cmd_voice(args):
 def cmd_render(args):
     from . import pipeline
     project = Path(args.project)
+    if getattr(args, 'aspect', None) is not None:
+        try:
+            pipeline.set_aspect(project, args.aspect)
+        except ValueError as error:
+            sys.exit(f'\n{error}')
     from .library import missing_pictures
     messages = missing_pictures(pipeline.storyboard(project), project)
     if messages:
@@ -128,6 +133,8 @@ def cmd_render(args):
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
         cfg, board = pipeline.settings(project), pipeline.storyboard(project)
         aspect = pipeline.validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
+        if tl.get('layout', 'landscape') != renderer.pace_layout(board, aspect):
+            tl = pipeline.build_audio(project, pipeline.narrate(project))
         prod = renderer.make_production(board, tl, cfg['lang'], project, aspect=aspect)
         out = project / 'build' / 'stills'
         out.mkdir(parents=True, exist_ok=True)
@@ -149,7 +156,10 @@ def cmd_render(args):
 def cmd_finish(args):
     from . import pipeline
     t = _stage('finish')
-    qa = pipeline.finish(Path(args.project))
+    try:
+        qa = pipeline.finish(Path(args.project))
+    except ValueError as error:
+        sys.exit(f'\n{error}')
     print(f"  {'PASS' if qa['ok'] else 'FAIL'} {qa['video']} ({qa['length']}) ({time.time() - t:.0f}s)")
     for p in qa['problems']:
         print('  !', p)
@@ -361,6 +371,8 @@ def main(argv=None):
     p.add_argument('--start', type=float, default=0)
     p.add_argument('--duration', type=float)
     p.add_argument('--workers', type=int)
+    p.add_argument('--aspect', choices=ASPECTS, default=None,
+                   help='switch the project to 16:9 or 9:16 first (saved to project.json; the narration is reused)')
     p.add_argument('--stills')
     p.set_defaults(func=cmd_render)
     p = sub.add_parser('finish')

@@ -23,7 +23,7 @@ from . import PRODUCT, ingest, library, script, styles, voice, voice_server
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
-from .package import clock, contact_sheet, encoded_qa, mux, publish, sha
+from .package import clock, contact_sheet, encoded_qa, mux, publish, sha, video_size
 
 ASPECTS = ('16:9', '9:16')
 
@@ -81,6 +81,16 @@ def settings(project_dir: Path) -> dict:
 
 def storyboard(project_dir: Path) -> dict:
     return _load(Path(project_dir) / 'storyboard.json')
+
+
+def set_aspect(project_dir: Path, aspect: str) -> dict:
+    """Save the project's format; rendering re-paces the drawings with the cached narration when needed."""
+    project_dir = Path(project_dir)
+    aspect = validate_aspect(aspect, storyboard(project_dir).get('look'))
+    cfg = settings(project_dir)
+    cfg['aspect'] = aspect
+    _save(project_dir / 'project.json', cfg)
+    return cfg
 
 
 READ_ALOUD = 'read-aloud.txt'
@@ -166,26 +176,34 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
 
 
 def build_audio(project_dir: Path, clips: dict) -> dict:
-    """Pace the narration to the drawings (pauses where the hand needs time), then assemble it."""
+    """Pace the narration to the drawings (pauses where the hand needs time), then assemble it.
+
+    The decision stamp names the measured layout: landscape or portrait. A 9:16 letterbox measures
+    the landscape drawings, so its timeline bytes are identical to 16:9."""
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
+    aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
     build = project_dir / 'build'
-    pauses = renderer.pacing(board, cfg['lang'], audio.timing(clips), project_dir)
+    pauses = renderer.pacing(board, cfg['lang'], audio.timing(clips), project_dir, aspect)
     tl = audio.assemble(board, cfg['lang'], clips, build, pauses, credit=cfg.get('credit', True))
     tl['storyboard_sha256'] = sha(project_dir / 'storyboard.json')
+    tl['layout'] = renderer.pace_layout(board, aspect)
     _save(build / 'timeline.json', tl)
     return tl
 
 
 def render(project_dir: Path, start: float = 0, duration: float | None = None, workers: int | None = None) -> Path:
     project_dir = Path(project_dir)
-    messages = library.missing_pictures(storyboard(project_dir), project_dir)
+    board = storyboard(project_dir)
+    messages = library.missing_pictures(board, project_dir)
     if messages:
         raise ValueError('\n'.join(messages))
     cfg = settings(project_dir)
-    aspect = validate_aspect(cfg.get('aspect', '16:9'), storyboard(project_dir).get('look'))
+    aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
     build = project_dir / 'build'
     tl = _load(build / 'timeline.json')
+    if tl.get('layout', 'landscape') != renderer.pace_layout(board, aspect):
+        tl = build_audio(project_dir, narrate(project_dir))
     out = build / 'silent.mp4'
     n = round((duration or tl['duration'] - start) * renderer.FPS)
     workers = workers or cfg.get('workers', 1)
@@ -212,9 +230,16 @@ def finish(project_dir: Path) -> dict:
     lang, build = cfg['lang'], project_dir / 'build'
     aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
     size = (1080, 1920) if aspect == '9:16' else (1920, 1080)
+    rendered = video_size(build / 'silent.mp4')
+    if rendered and rendered != size:                 # a format switch saved without a render (`render --stills`)
+        raise ValueError(f'The drawings in build/silent.mp4 are {rendered[0]}x{rendered[1]}, but this project is now '
+                         f'{aspect} ({size[0]}x{size[1]}). Run: kinodraw render "{project_dir}" first, so the other '
+                         'format\'s finished video is not replaced with the wrong picture.')
     tl = _load(build / 'timeline.json')
     mixed = audio.mix(board, tl, build)
     stem = re.sub(r'[\\/:*?"<>|¿¡]+', '', board['title'][lang]).strip()[:80] or 'video'
+    if aspect == '9:16':
+        stem += ' (vertical)'
     video = project_dir / f'{stem}.mp4'
     mux(tl, build / 'silent.mp4', mixed, video, lang, board['title'][lang], build)
     qa = encoded_qa(tl, video, mixed, size=size)
