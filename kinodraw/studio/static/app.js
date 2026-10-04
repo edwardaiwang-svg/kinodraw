@@ -317,11 +317,16 @@ function showBeatPreview(el, beat, fresh = false) {
   el.querySelector('.preview').replaceChildren(img);
 }
 
+const SLOT_TYPES = ['cluster', 'quote', 'glossary', 'stat'];   // pictures that can be drawn earlier or later
+
 async function reorderPicture(beat, visual, to, item = null) {
+  const project = current, sent = board, main = $('#main');
+  main.inert = true;                                  // no edits while the move saves: the reply replaces the board
   try {
-    const res = await api(`/api/projects/${encodeURIComponent(current)}/reorder`, {
-      method: 'POST', body: JSON.stringify({ storyboard: board, beat, visual, to, item })
+    const res = await api(`/api/projects/${encodeURIComponent(project)}/reorder`, {
+      method: 'POST', body: JSON.stringify({ storyboard: sent, beat, visual, to, item })
     });
+    if (current !== project || board !== sent) return; // another project (or a fresh copy) was opened meanwhile
     if (!res.ok) { toast('Not moved: ' + res.errors[0]); return; }
     board = res.storyboard;
     dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved';
@@ -329,7 +334,7 @@ async function reorderPicture(beat, visual, to, item = null) {
     const card = [...$('#board').querySelectorAll('.beat')].find((el) => el.dataset.beat === beat);
     if (card) showBeatPreview(card, beat, true);
     loadNarrator(current, document.querySelector('input[name="n-pick"]:checked')?.value);
-  } catch (e) { toast('Not moved: ' + e.message); }
+  } catch (e) { toast('Not moved: ' + e.message); } finally { main.inert = false; }
 }
 
 function visualCard(b, v, i) {
@@ -338,10 +343,11 @@ function visualCard(b, v, i) {
   el.className = 'vis';
   const typeName = { cluster: 'doodles', stat: 'number', quote: 'quote', glossary: 'sticky note', lanes: 'timeline', grid100: '100 squares', bars: 'bar chart', flow: 'flow', split: 'comparison' }[v.type] || v.type;
   el.innerHTML = `<div class="type">${esc(typeName)}${v.size === 'margin' ? ' · beside the note' : ''}</div><button class="del" title="Remove">×</button>`;
-  if (b.visuals.length > 1) {
+  const movable = (k) => SLOT_TYPES.includes(b.visuals[k]?.type);     // a page keeps its place (server rule)
+  if (movable(i) && (movable(i - 1) || movable(i + 1))) {
     el.insertAdjacentHTML('beforeend', `<div class="draw-order">
-      <button class="small earlier" title="Draw earlier" aria-label="Draw earlier"${i === 0 ? ' disabled' : ''}>↑</button>
-      <button class="small later" title="Draw later" aria-label="Draw later"${i === b.visuals.length - 1 ? ' disabled' : ''}>↓</button></div>`);
+      <button class="small earlier" title="Draw earlier" aria-label="Draw earlier"${movable(i - 1) ? '' : ' disabled'}>↑</button>
+      <button class="small later" title="Draw later" aria-label="Draw later"${movable(i + 1) ? '' : ' disabled'}>↓</button></div>`);
     el.querySelector('.earlier').onclick = () => reorderPicture(b.id, i, i - 1);
     el.querySelector('.later').onclick = () => reorderPicture(b.id, i, i + 1);
   }

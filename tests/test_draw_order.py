@@ -127,43 +127,101 @@ def test_an_untouched_board_is_not_changed(tmp_path):
     assert server.move_picture(moved, beat_id, 0, 1, item=0) == original
 
 
-def test_nonadjacent_move_keeps_missing_and_nested_triggers_at_the_right_place(tmp_path):
+def test_nonadjacent_move_keeps_missing_triggers_at_the_right_place(tmp_path):
     board, beat_id = _english_board(tmp_path / 'Honey')
     beat = _beat(board, beat_id)
     beat['visuals'] = [
         {'id': 'a', 'type': 'cluster', 'trigger': {'en': 'pots'},
          'items': [{'doodle': 'narrator_explain', 'trigger': {'en': 'pots'}},
                    {'doodle': 'narrator_wave', 'trigger': {'en': 'safe'}}]},
-        {'id': 'page', 'type': 'flow', 'trigger': {'en': 'safe'},
-         'nodes': [{'text': {'en': 'Honey'}, 'trigger': {'en': 'honey'}}]},
+        _note('note', 'safe'),
         {'id': 'c', 'type': 'cluster', 'items': [{'doodle': 'narrator_wave'}]},
     ]
     original = deepcopy(board)
     moved = server.move_picture(board, beat_id, 0, 2)
-    page, cluster, last = _beat(moved, beat_id)['visuals']
-    assert [v['id'] for v in (page, cluster, last)] == ['page', 'c', 'a']
-    assert page['trigger'] == {'en': 'pots'}
-    assert page['nodes'] == _beat(original, beat_id)['visuals'][1]['nodes']
+    note, cluster, last = _beat(moved, beat_id)['visuals']
+    assert [v['id'] for v in (note, cluster, last)] == ['note', 'c', 'a']
+    assert note['trigger'] == {'en': 'pots'}
     assert cluster['trigger'] == {'en': 'safe'}
     assert 'trigger' not in cluster['items'][0]
     assert 'trigger' not in last
-    assert all('trigger' not in it for it in last['items'])
+    assert 'trigger' not in last['items'][0]          # the last place's doodle had no words of its own
+    assert last['items'][1]['trigger'] == {'en': 'safe'}   # nothing there to take: keeps its own words
     assert [b for b in moved['beats'] if b['id'] != beat_id] == [
         b for b in original['beats'] if b['id'] != beat_id]
     assert board == original
-    page['nodes'][0]['text']['en'] = 'Moved copy'
+    note['term']['en'] = 'Moved copy'
     assert board == original                         # nested objects are copied too
 
 
-def test_a_larger_cluster_uses_destination_item_times_then_its_visual_time(tmp_path):
+def test_a_larger_cluster_uses_destination_item_times_then_keeps_its_own(tmp_path):
     board, beat_id = _english_board(tmp_path / 'Honey')
     first, second = _beat(board, beat_id)['visuals']
     second['items'].append({'doodle': 'narrator_explain', 'trigger': {'en': 'old'}})
     moved = server.move_picture(board, beat_id, 1, 0)
     items = _beat(moved, beat_id)['visuals'][0]['items']
     assert items[0]['trigger'] == first['items'][0]['trigger']
-    assert 'trigger' not in items[1]                  # no destination item: inherit the visual's timing
+    assert items[1]['trigger'] == {'en': 'old'}       # no destination doodle: it stays on its own words
     assert _beat(moved, beat_id)['visuals'][0]['trigger'] == first['trigger']
+
+
+def _note(vid, word):
+    return {'id': vid, 'type': 'glossary', 'trigger': {'en': word},
+            'term': {'en': 'Honey'}, 'text': {'en': 'A sweet food that bees make.'}}
+
+
+def _mixed_board(tmp_path):
+    """Pictures like a rules board's: a group drawn word by word, a note, then a one-doodle group."""
+    board, beat_id = _english_board(tmp_path / 'Honey')
+    _beat(board, beat_id)['visuals'] = [
+        {'id': 'group', 'type': 'cluster', 'trigger': {'en': 'pots', 'es': 'ollas'},
+         'items': [{'doodle': 'narrator_explain', 'trigger': {'en': 'pots', 'es': 'ollas'}},
+                   {'doodle': 'narrator_wave', 'trigger': {'en': 'honey', 'es': 'miel'}},
+                   {'doodle': 'narrator_explain', 'trigger': {'en': 'years', 'es': 'años'}}]},
+        _note('note', 'safe'),
+        {'id': 'one', 'type': 'cluster', 'trigger': {'en': 'eat'},
+         'items': [{'doodle': 'narrator_wave', 'trigger': {'en': 'eat'}}]},
+    ]
+    return board, beat_id
+
+
+@pytest.mark.parametrize('visual', [0, 1])
+def test_moving_a_picture_and_back_restores_groups_of_any_size(tmp_path, visual):
+    """Draw later then Draw earlier is an undo, even between a group of three, a note and a group of one."""
+    board, beat_id = _mixed_board(tmp_path)
+    original = deepcopy(board)
+    moved = server.move_picture(board, beat_id, visual, visual + 1)
+    assert server.move_picture(moved, beat_id, visual + 1, visual) == original
+    assert all(it.get('trigger') for v in _beat(moved, beat_id)['visuals'] for it in v.get('items', []))
+
+
+def test_a_note_moved_before_a_group_leaves_each_doodle_on_its_own_word(tmp_path):
+    project = tmp_path / 'Honey'
+    board, beat_id = _mixed_board(tmp_path)
+    moved = server.move_picture(board, beat_id, 1, 0)
+    assert validate(moved, project)['ok']
+    production = _production(moved, project)
+    note = _first_starts(production)['note']
+    doodles = [_item_start(production, 'group', i) for i in range(3)]
+    assert note < doodles[0] < doodles[1] < doodles[2]
+
+    def words(prod):                                 # when each doodle of the group may start
+        return [e.trigger for e in prod.ctx.elements if e.group == 'group' and e.hand]
+    assert words(production) == words(_production(board, project))
+    assert len(set(words(production))) == 3
+
+
+@pytest.mark.parametrize('visual, to', [(1, 0), (0, 1), (2, 1), (0, 2)])
+def test_a_page_keeps_its_place(tmp_path, visual, to):
+    """A page (flow, chart, timeline) has its own timed parts and its own camera stop: it is not moved."""
+    board, beat_id = _english_board(tmp_path / 'Honey')
+    _beat(board, beat_id)['visuals'].insert(1, {
+        'id': 'page', 'type': 'flow', 'trigger': {'en': 'safe'},
+        'nodes': [{'text': {'en': 'Honey'}, 'trigger': {'en': 'honey'}}]})
+    original = deepcopy(board)
+    with pytest.raises(ValueError, match='keeps its place'):
+        server.move_picture(board, beat_id, visual, to)
+    assert board == original
 
 
 @pytest.mark.parametrize('arguments', [
@@ -266,3 +324,57 @@ def test_a_rejected_reorder_does_not_write_the_storyboard(studio, invalid):
     assert status == 400 and reply['ok'] is False and reply['errors']
     assert not re.search(r'Traceback|IndexError|KeyError', ' '.join(reply['errors']))
     assert path.read_bytes() == before
+
+
+def _run_reorder_js(script):
+    """Run the Studio's reorderPicture with a held-back server reply, in node with tiny stand-ins for the page."""
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    source = re.search(r'^async function reorderPicture\(.*?^}', js, re.S | re.M)[0]
+    stage = '''
+const els = {};
+const $ = (sel) => (els[sel] = els[sel] || { textContent: '', disabled: false, inert: false, querySelectorAll: () => [] });
+let rendered = 0, release;
+const toast = () => {}, renderBoard = () => { rendered++; }, showBeatPreview = () => {}, loadNarrator = () => {};
+const document = { querySelector: () => null };
+const api = () => new Promise((resolve) => { release = resolve; });
+let current = 'A', board = { project: 'A' }, dirty = false;
+const T = 't';
+'''
+    out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True).stdout
+    return json.loads(out)
+
+
+def test_a_late_move_reply_does_not_land_in_another_project():
+    result = _run_reorder_js('''
+(async () => {
+  const pending = reorderPicture('b1', 1, 0);
+  current = 'B'; board = { project: 'B' }; dirty = true;      // the user opened project B and edited it
+  release({ ok: true, storyboard: { project: 'A', moved: true } });
+  await pending;
+  console.log(JSON.stringify({ board, dirty, rendered }));
+})();''')
+    assert result == {'board': {'project': 'B'}, 'dirty': True, 'rendered': 0}
+
+
+def test_the_board_cannot_be_edited_while_a_move_is_saving():
+    result = _run_reorder_js('''
+(async () => {
+  const pending = reorderPicture('b1', 1, 0);
+  const during = $('#main').inert;
+  release({ ok: true, storyboard: { project: 'A', moved: true } });
+  await pending;
+  console.log(JSON.stringify({ during, after: $('#main').inert, board, dirty }));
+})();''')
+    assert result == {'during': True, 'after': False, 'board': {'project': 'A', 'moved': True}, 'dirty': False}
+
+
+def test_the_studio_offers_moves_only_for_pictures_the_server_moves():
+    from kinodraw.engine import scenes
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    listed = re.search(r"^const SLOT_TYPES = \[(.*?)\];", js, re.M)[1]
+    assert sorted(re.findall(r"'(\w+)'", listed)) == sorted(scenes.SLOT_BUILDERS)
