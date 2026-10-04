@@ -52,3 +52,15 @@ def test_first_open_shows_a_finished_example_with_nothing_to_download(studio):
     assert 1e6 < int(headers['Content-Range'].split('/')[1]) < 6e6   # a finished video, small enough to ship
     assert studio(poster)[1]['Content-Type'] == 'image/jpeg'
     assert 'id="btn-sample"' in page and 'btn-sample' in js          # and it can be watched again later
+
+
+def test_opening_the_studio_looks_up_no_host_names(monkeypatch):
+    """http.server's server_bind() looks up 127.0.0.1's name (socket.getfqdn); on macOS that reverse lookup made
+    KinoDraw 0.2.0 ask "Allow KinoDraw to find devices on local networks?" before its window opened."""
+    import socket
+    asked = []
+    for name in ('getfqdn', 'gethostbyaddr', 'gethostname'):
+        monkeypatch.setattr(socket, name, lambda *args, name=name: asked.append(name) or '')
+    httpd, url = server.serve(0)
+    httpd.shutdown()
+    assert url.startswith('http://127.0.0.1:') and asked == []
