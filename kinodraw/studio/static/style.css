@@ -46,6 +46,7 @@ textarea#script { min-height: 260px; margin: 14px 0; resize: vertical; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--soft); }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 12px 0; }
 .row { display: flex; gap: 12px; align-items: center; }
+label.row { flex-direction: row; }       /* a checkbox beside its words, not over them */
 #voice-play, #n-play { flex: none; white-space: nowrap; }
 #voice, #n-voice { flex: 1; min-width: 0; }
 @media (min-width: 700px) { #voice-wrap { grid-column: span 2; } }
