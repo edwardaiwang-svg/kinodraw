@@ -39,27 +39,31 @@
     instead.)</p>
 
   <h2>KinoDraw Cloud, the AI director (optional)</h2>
-  <p>If you sign in with your email and choose "KinoDraw Cloud AI", this is what is sent, and to whom:</p>
+  <p>KinoDraw Cloud needs no account. If you choose "KinoDraw Cloud AI" without signing in, the app sends a random ID
+    for this installation of the app, and no email, to get an anonymous KinoDraw Cloud token, and uses that token for
+    your videos. Signing in with your email is optional. This is what is sent, and to whom:</p>
   <table>
     <tr><th>Where</th><th>What</th><th>Why</th></tr>
-    <tr><td>KinoDraw Cloud (api.doodlecloud.org, run by KinoDraw)</td><td>your email, a random ID for this
-      installation of the app, then each section's sentences, the video and section titles, the language, short
-      phrases the offline draft picked from the sentences, and the names of candidate doodles</td><td>to
-      sign you in, count your free videos, and ask GPT-6 Luna for picture suggestions</td></tr>
-    <tr><td>Resend (email delivery)</td><td>your email address and a 6-digit sign-in code</td><td>to email you the
-      code</td></tr>
+    <tr><td>KinoDraw Cloud (api.doodlecloud.org, run by KinoDraw)</td><td>a random ID for this
+      installation of the app (and your email, only if you sign in), then each section's sentences, the video and
+      section titles, the language, short phrases the offline draft picked from the sentences, and the names of
+      candidate doodles</td><td>to give this installation a token (or sign you in), count videos, and ask GPT-6 Luna
+      for picture suggestions</td></tr>
+    <tr><td>Resend (email delivery)</td><td>only if you sign in: your email address and a 6-digit sign-in
+      code</td><td>to email you the code</td></tr>
     <tr><td>OpenAI (GPT-6 Luna), through KinoDraw Cloud</td><td>the same sentences, titles, language and doodle names</td><td>to
       suggest pictures; OpenAI's API terms apply</td></tr>
     <tr><td>Cloudflare (hosting)</td><td>ordinary request data, such as your IP address; the service's request logs
       keep it for 3 days</td><td>to run the service, fix errors and limit abuse</td></tr>
   </table>
-  <p>KinoDraw Cloud stores your email, your plan, the install ID, counts of your videos and their AI cost, and a
-    scrambled (hashed) form of your sign-in token, never the token itself. It never stores your script, the
+  <p>KinoDraw Cloud stores the install ID, the plan, counts of the videos and their AI cost, and a scrambled
+    (hashed) form of each token it gives out, never the token itself; if you sign in, it also stores your email.
+    Without a sign-in it has no email or name for you. It never stores your script, the
     suggestions, your narration or your video. A Gmail address counts as one account however it is written (with dots
     or a "+tag").</p>
   <p>Sign-in codes are deleted when used, or within about two days after they expire. Rate-limit records, which contain
-    an IP address or email, are deleted within about four days. On your computer, the sign-in token is kept in your
-    system's keychain.</p>
+    an IP address or email, are deleted within about four days. On your computer, the token (the anonymous one, or
+    your sign-in's) is kept in your system's keychain.</p>
 
   <h2>Your own AI key or program (Advanced, optional)</h2>
   <p>If you turn on Settings &gt; Advanced directors and choose "My OpenAI key", "My Anthropic key" or
