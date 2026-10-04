@@ -643,8 +643,8 @@ function showSettings() {
   const keyHint = () => {                // a saved key belongs to one address: another address asks for its key again
     let same = false;
     try { same = new URL($('#vs-url', body).value.trim()).origin === new URL(STATE.voice_server.url).origin; } catch { same = false; }
-    $('#vs-key', body).placeholder = STATE.voice_server.key_saved && same ? 'saved in your keychain for this address'
-      : STATE.voice_server.key_saved ? 'this address needs its own key' : 'Optional';
+    $('#vs-key', body).placeholder = STATE.voice_server.key_saved && same ? 'saved for this address'
+      : STATE.voice_server.key_saved ? 'enter this address’s key' : 'Optional';
   };
   keyHint();
   $('#vs-url', body).oninput = keyHint;
