@@ -7,13 +7,15 @@
                                                 ... another voice, faster, with your pronunciations
   kinodraw direct MyVideo                       (re)add visuals to the storyboard
   kinodraw voice MyVideo                        narration + timeline
+  kinodraw new script.md -o MyVideo --voice-server http://localhost:8080/v1 --server-model qwen-tts
+  kinodraw voice MyVideo --voice-server none    ... back to the built-in voice
   kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of MyVideo/read-aloud.txt (none: Kokoro again)
   kinodraw render MyVideo [--stills 5,30]       silent video (or preview stills)
   kinodraw finish MyVideo                       music, mux, captions, chapters, QA
   kinodraw setup [--lang en zh]                 download the voice models once
   kinodraw doodles "rocket launch" [--lang en]  search the doodle library
   kinodraw login you@example.com                KinoDraw Cloud (free plan: AI-directed videos, no API key needed)
-  kinodraw key set openai|anthropic|compat      store your own API key in the OS keychain
+  kinodraw key set openai|anthropic|compat|voice-server   store your own API key in the OS keychain
   kinodraw key set command                      store a command to use as the director (Advanced)
 
 Directors: --director rules (offline, free) | cloud | openai | anthropic | compat (--base-url, --model)
@@ -71,8 +73,19 @@ def cmd_new(args):
 
 
 def cmd_voice(args):
-    from . import pipeline
+    from . import pipeline, voice_server
     project, recording = Path(args.project), getattr(args, 'recording', None)
+    try:
+        cfg = pipeline.settings(project)
+        spec = _server_settings(args, cfg.get('voice_server'))
+        if spec is not None:
+            if spec is False:
+                cfg.pop('voice_server', None)
+            else:
+                cfg['voice_server'] = spec
+            pipeline._save(project / 'project.json', cfg)
+    except voice_server.VoiceServerError as error:
+        sys.exit(f'\n{error}')
     if recording and recording.lower() != 'none' and not Path(recording).is_file():
         sys.exit(f'{recording}: no such file')
     if recording:
@@ -80,7 +93,7 @@ def cmd_voice(args):
     t = _stage('voice')
     try:
         clips = pipeline.narrate(project, _progress)
-    except pipeline.voice.RecordingError as error:      # a take that does not fit the script: say what to do
+    except (pipeline.voice.RecordingError, voice_server.VoiceServerError) as error:
         sys.exit(f'\n{error}')
     tl = pipeline.build_audio(project, clips)
     print(f"  {tl['duration']:.0f}s of narration, {len(tl['captions'])} captions ({time.time() - t:.0f}s)")
@@ -220,7 +233,43 @@ def _settings(args):
             out[key] = getattr(args, key)
     if getattr(args, 'no_credit', False):
         out['credit'] = False
+    from .voice_server import VoiceServerError
+    try:
+        spec = _server_settings(args)
+    except VoiceServerError as error:
+        sys.exit(f'\n{error}')
+    if spec:
+        out['voice_server'] = spec
     return out
+
+
+def _server_settings(args, current=None):
+    """Resolve CLI defaults once; the pipeline uses only the project's explicit choice."""
+    import os
+    from . import voice_server
+    url, model, name = (getattr(args, key, None) for key in ('voice_server', 'server_model', 'server_voice'))
+    if url is not None and url.lower() == 'none':
+        if args.command != 'voice':
+            raise voice_server.VoiceServerError('--voice-server none is for an existing project: kinodraw voice PROJECT.')
+        return False
+    if any(value is not None for value in (url, model, name)):
+        current = current or {}
+        cfg = {'url': url if url is not None else os.environ.get('TTS_API_BASE') or current.get('url', ''),
+               'model': model if model is not None else os.environ.get('TTS_MODEL') or current.get('model', ''),
+               'voice': name if name is not None else os.environ.get('TTS_VOICE') or current.get('voice', '')}
+    else:
+        cfg = voice_server.from_env()
+        if cfg is None:
+            return None
+    server = voice_server.Server(**cfg)
+    return {'url': server.url, 'model': server.model, 'voice': server.voice}
+
+
+def _server_flags(parser):
+    parser.add_argument('--voice-server', metavar='URL', help='your own OpenAI-compatible speech server '
+                        '(TTS_BACKEND=openai_compatible and TTS_API_BASE); "none" on voice uses the built-in voice')
+    parser.add_argument('--server-model', metavar='NAME', help='speech model on your server (TTS_MODEL)')
+    parser.add_argument('--server-voice', metavar='NAME', help='optional voice on your server (TTS_VOICE)')
 
 
 def _direction(args):
@@ -250,6 +299,7 @@ def main(argv=None):
         p.add_argument('--lang', choices=['en', 'zh', 'es'], help='default: detected from the script')
         p.add_argument('--voice')
         p.add_argument('--speed', type=float)
+        _server_flags(p)
         p.add_argument('--pronounce', metavar='FILE', help='how the voice says words, one "word = how to say it" a '
                        'line (captions keep your spelling); kept as the project\'s pronounce.txt')
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
@@ -279,7 +329,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_login)
     p = sub.add_parser('key')
     p.add_argument('action', choices=['set'])
-    p.add_argument('provider', choices=['openai', 'anthropic', 'compat', 'command'])
+    p.add_argument('provider', choices=['openai', 'anthropic', 'compat', 'command', 'voice-server'])
     p.set_defaults(func=cmd_key)
     p = sub.add_parser('studio')
     p.add_argument('--browser', action='store_true', help='use the web browser instead of a window')
@@ -290,6 +340,7 @@ def main(argv=None):
     p.add_argument('--recording', help='your own reading of the whole script as the project\'s read-aloud.txt says it '
                                        '(the voice step writes it), in one take (wav, m4a, mp3, aiff), or "none" to '
                                        'go back to the Kokoro voice')
+    _server_flags(p)
     p.set_defaults(func=cmd_voice)
     p = sub.add_parser('render')
     p.add_argument('project')

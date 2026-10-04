@@ -1,7 +1,7 @@
 """End to end in a project folder: script -> storyboard -> voice -> timeline -> render -> mix -> package.
 
 Project folder:
-  project.json        settings (language, voice, speed, director, workers, credit, recording)
+  project.json        settings (language, voice, speed, director, workers, credit, recording, optional voice_server)
   script.<ext>        the source script
   recording.<ext>     optional: your own reading of the script, used as the narration
   pronounce.txt       optional: word = respelling, for spoken words only
@@ -19,7 +19,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import PRODUCT, ingest, library, script, styles, voice
+from . import PRODUCT, ingest, library, script, styles, voice, voice_server
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
@@ -116,7 +116,8 @@ def set_recording(project_dir: Path, source) -> dict:
 def narrate(project_dir: Path, progress=None) -> dict:
     """Synthesize (or reuse cached) clips for every beat (takeaways first say what their notes show). With a
     recording in project.json the clips are cut from it instead, guided by the synthesized ones. Writes read-aloud.txt:
-    what to read to narrate the video yourself."""
+    what to read to narrate the video yourself. An explicit voice_server setting sends the spoken text to that
+    server instead of loading Kokoro, unless the project uses a recording."""
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
@@ -128,11 +129,23 @@ def narrate(project_dir: Path, progress=None) -> dict:
     text = project_dir / READ_ALOUD                 # what to read to narrate it yourself (the Studio shows the same)
     text.write_text(''.join(f'{n}. {line["text"]}\n' for n, line in enumerate(read_aloud(project_dir), 1)),
                     encoding='utf-8')
-    voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
+    server = None
+    if 'voice_server' in cfg and not cfg.get('recording'):
+        spec = cfg['voice_server']
+        if not isinstance(spec, dict):
+            raise voice_server.VoiceServerError('The project voice_server setting should contain an address and model.')
+        server = voice_server.Server(spec.get('url', ''), spec.get('model', ''), spec.get('voice', ''))
+        server.key = voice_server.api_key()
+    else:
+        voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
-        clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
-                                           cfg['speed'], lexicon)
+        if server:
+            clips[beat['id']] = voice_server.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', server,
+                                                      cfg['speed'], lexicon)
+        else:
+            clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
+                                               cfg['speed'], lexicon)
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
@@ -208,6 +221,8 @@ def finish(project_dir: Path) -> dict:
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
     publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
+            voice_source=voice_server.describe(cfg['voice_server'], lang)
+            if cfg.get('voice_server') and not cfg.get('recording') else None,
             size=(720, 1280) if aspect == '9:16' else (1280, 720))
     contact_sheet(tl, video, build / 'contact-sheet.jpg', size=size)
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
