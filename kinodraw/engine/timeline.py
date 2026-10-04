@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 from . import captions as cap
+from . import skin
 from .storyboard import normalize
 
 FPS = 30
@@ -39,6 +40,15 @@ def layout(episode, lang, clips, pauses=None, credit=True):
     pauses[beat_id] = seconds of silence after that beat (pacing)."""
     pauses = pauses or {}
     episode = normalize(episode)
+    cue_options = {}
+    look_skin = skin.for_look(episode.get('look'))
+    if look_skin.textured and lang in ('en', 'zh'):
+        def fits(text, lang):
+            lines, size = skin.caption_layout(text, lang, look_skin)
+            kind = 'en_caption' if lang == 'en' else 'zh_caption'
+            return len(lines) <= 2 and all(skin._run_width(line, kind, size, look_skin.fonts) <= 1640
+                                          for line in lines)
+        cue_options['fits'] = fits
     beats = episode['beats']
     chapters = {c['id']: c for c in episode['chapters']}
     cursor = 0.
@@ -78,7 +88,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         def char_time(pos, ct=ct):
             return ct[min(max(pos, 0), len(ct) - 1)] if ct else 0.
         for a, b, text in cap.cues_for_beat(beat['spoken'][lang], beat['display'][lang], lang, char_time,
-                                           clip['speech'] - .15):
+                                           clip['speech'] - .15, **cue_options):
             capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text})
         cursor = end
     tail = END_CARD + (CREDIT if credit else 0.)
