@@ -133,6 +133,31 @@ def test_other_devices_are_told_to_open_the_page_on_a_computer():
     assert raw.index('id="other-device"') < raw.index('id="download"')
 
 
+def test_analytics_and_search_verification_wait_for_the_owners_codes():
+    """Placeholder analytics and verification must never make a request from the published page."""
+    raw = SITE.read_text(encoding='utf-8')
+    comments = re.findall(r'<!--(.*?)-->', raw, re.S)
+    live = re.sub(r'<!--.*?-->', '', raw, flags=re.S)
+    for marker in ('cloudflareinsights', 'google-site-verification'):
+        assert marker in raw and marker not in live
+        assert any(marker in comment and comment.lstrip().startswith('TODO(J):') for comment in comments)
+    assert not re.search(r'<script\b[^>]*\bsrc\s*=', live)
+
+
+def test_website_privacy_names_the_cookieless_counter_and_server_logs():
+    """Visitors need to know that visit counts and hosting logs exist even without cookies."""
+    raw = (SITE.parent / 'privacy.html').read_text(encoding='utf-8')
+    text = ' '.join(html.unescape(re.sub(r'<[^>]+>', ' ', raw)).split())
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    assert any(all(words in sentence for words in ('Cloudflare Web Analytics', 'cookie', 'GitHub Pages', 'IP address'))
+               for sentence in sentences)
+    assert 'The app, the site and KinoDraw Cloud have no ads, no analytics' not in text
+    assert not any('no analytics' in clause and re.search(r'\b(?:site|website)\b', clause)
+                   for sentence in sentences for clause in sentence.split(';'))
+    assert 'Last updated October 4, 2026' in text
+    assert "GitHub's API for the latest release" in text
+    assert 'cloudflareinsights' not in raw and 'google-site-verification' not in raw
+
 
 
 def test_the_download_script_stores_nothing_on_the_visitors_device():
