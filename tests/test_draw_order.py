@@ -143,7 +143,7 @@ def test_nonadjacent_move_keeps_missing_triggers_at_the_right_place(tmp_path):
     assert [v['id'] for v in (note, cluster, last)] == ['note', 'c', 'a']
     assert note['trigger'] == {'en': 'pots'}
     assert cluster['trigger'] == {'en': 'safe'}
-    assert 'trigger' not in cluster['items'][0]
+    assert cluster['items'][0]['trigger'] == {'en': 'pots'}   # taken on the way past, as two clicks would
     assert 'trigger' not in last
     assert 'trigger' not in last['items'][0]          # the last place's doodle had no words of its own
     assert last['items'][1]['trigger'] == {'en': 'safe'}   # nothing there to take: keeps its own words
@@ -378,3 +378,92 @@ def test_the_studio_offers_moves_only_for_pictures_the_server_moves():
     js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
     listed = re.search(r"^const SLOT_TYPES = \[(.*?)\];", js, re.M)[1]
     assert sorted(re.findall(r"'(\w+)'", listed)) == sorted(scenes.SLOT_BUILDERS)
+
+
+def _run_picker_js(script):
+    """Run the Studio's pickDoodle and reorderPicture together, with the upload and the move replies held back."""
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    source = ''.join(re.search(rf'^async function {name}\(.*?^}}', js, re.S | re.M)[0] + '\n'
+                     for name in ('reorderPicture', 'pickDoodle'))
+    stage = '''
+const els = {}, toasts = [];
+const $ = (sel) => (els[sel] = els[sel] || { textContent: '', disabled: false, inert: false, innerHTML: '',
+  classList: { add() {}, remove() {}, toggle() {} }, querySelectorAll: () => [] });
+const held = {};
+const api = (url) => {
+  for (const kind of ['reorder', 'filename']) if (url.includes(kind)) return new Promise((r) => { held[kind] = r; });
+  return Promise.resolve([]);
+};
+const toast = (msg) => toasts.push(msg), renderBoard = () => {}, showBeatPreview = () => {}, loadNarrator = () => {};
+const modal = () => $('#modal-body'), closeModal = () => {}, esc = (s) => s, doodleSrc = (id) => id;
+const document = { querySelector: () => null };
+let current = 'A', dirty = false;
+let board = { project: 'A', lang: 'en', beats: [{ id: 'b1', visuals: [{ items: [{ doodle: 'old' }] }] }] };
+const T = 't';
+function markDirty() { dirty = true; }
+const tick = () => new Promise((r) => setTimeout(r, 0));
+async function upload() {                       // the user picks a file in Choose a doodle, then closes the picker
+  const it = board.beats[0].visuals[0].items[0];
+  pickDoodle('q', (id) => { it.doodle = id; markDirty(); renderBoard(); });
+  $('#picture-file').onchange({ target: { files: [{ name: 'mine.png', size: 10 }], value: '' } });
+  await tick();
+}
+const shown = () => ({ doodle: board.beats[0].visuals[0].items[0].doodle, dirty, told: toasts.length > 0 });
+const moved = () => ({ ok: true, storyboard: { project: 'A', lang: 'en', beats: [{ id: 'b1', visuals: [{ items: [{ doodle: 'old' }] }] }] } });
+'''
+    out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True).stdout
+    return json.loads(out)
+
+
+def test_an_upload_still_lands_when_no_move_is_saving():
+    result = _run_picker_js('''
+(async () => {
+  await upload();
+  held.filename({ id: 'my_upload' }); await tick();
+  console.log(JSON.stringify(shown()));
+})();''')
+    assert result == {'doodle': 'my_upload', 'dirty': True, 'told': False}
+
+
+@pytest.mark.parametrize('order', ['upload during the move', 'upload after the move'])
+def test_an_upload_that_finishes_around_a_move_is_never_lost_silently(order):
+    """The picker sits outside #main, so its upload can finish while a move saves or after the move replaced the board."""
+    result = _run_picker_js(f'''
+(async () => {{
+  await upload();
+  const pending = reorderPicture('b1', 1, 0); await tick();
+  if ({json.dumps(order)} === 'upload during the move') {{ held.filename({{ id: 'my_upload' }}); await tick(); }}
+  held.reorder(moved()); await pending;
+  if ({json.dumps(order)} === 'upload after the move') {{ held.filename({{ id: 'my_upload' }}); await tick(); }}
+  console.log(JSON.stringify({{ ...shown(), toasts }}));
+}})();''')
+    # The board shown is the saved one (no swap pretending to be saved, no swap into a board no longer shown),
+    # and the user is told the picture is waiting in Your pictures.
+    assert {k: result[k] for k in ('doodle', 'dirty', 'told')} == {'doodle': 'old', 'dirty': False, 'told': True}
+    assert 'Your pictures' in result['toasts'][-1]
+
+
+def test_a_move_far_away_keeps_every_doodle_word_and_equals_the_same_clicks(tmp_path):
+    """The route accepts any target; it moves one place at a time, like clicking the arrows, so no words are lost."""
+    project = tmp_path / 'Honey'
+    board, beat_id = _mixed_board(tmp_path)
+    visuals = _beat(board, beat_id)['visuals']
+    visuals[1] = {'id': 'mid', 'type': 'cluster', 'trigger': {'en': 'safe'},
+                  'items': [{'doodle': 'narrator_wave', 'trigger': {'en': 'safe'}}]}
+    visuals[2]['items'].append({'doodle': 'narrator_explain', 'trigger': {'en': 'eat'}})
+    original = deepcopy(board)
+
+    def words(b):
+        return sorted(json.dumps(it.get('trigger'), sort_keys=True)
+                      for v in _beat(b, beat_id)['visuals'] for it in v.get('items', []))
+    moved = server.move_picture(board, beat_id, 0, 2)
+    assert words(moved) == words(original)                       # {"en": "honey", "es": "miel"} survives
+    assert moved == server.move_picture(server.move_picture(board, beat_id, 0, 1), beat_id, 1, 2)
+    assert validate(moved, project)['ok']
+    assert server.move_picture(moved, beat_id, 2, 0) == original
+    assert board == original

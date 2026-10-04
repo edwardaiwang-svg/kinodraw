@@ -499,13 +499,15 @@ def move_picture(board: dict, beat_id: str, visual: int, to: int, item: int | No
 
         def doodles(v):
             return v.get('items', []) if v.get('type') == 'cluster' else []
-        timing = [(v.get('trigger'), [it.get('trigger') for it in doodles(v)]) for v in visuals]
-        visuals.insert(to, visuals.pop(visual))
-        for v, (trigger, item_triggers) in zip(visuals, timing):
-            set_trigger(v, trigger)
-            # Doodles beyond the ones this place had keep their own words, so moving back restores them.
-            for it, item_trigger in zip(doodles(v), item_triggers):
-                set_trigger(it, item_trigger)
+        step = 1 if to > visual else -1
+        for at in range(visual, to, step):          # one place at a time, like the arrows: no doodle loses its words
+            timing = [(v.get('trigger'), [it.get('trigger') for it in doodles(v)]) for v in visuals]
+            visuals.insert(at + step, visuals.pop(at))
+            for v, (trigger, item_triggers) in zip(visuals, timing):
+                set_trigger(v, trigger)
+                # Doodles beyond the ones this place had keep their own words, so moving back restores them.
+                for it, item_trigger in zip(doodles(v), item_triggers):
+                    set_trigger(it, item_trigger)
     return moved
 
 
