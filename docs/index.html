@@ -224,7 +224,7 @@ function kinodrawPlatform(ua, uaData, touchPoints) {
   const platforms = { Windows: 'windows', macOS: 'macos', Linux: 'linux',
     'Chrome OS': 'other', 'Chromium OS': 'other', Android: 'other', iOS: 'other' };
   const fromData = uaData?.mobile === true ? 'other' : Object.prototype.hasOwnProperty.call(platforms, uaData?.platform) ? platforms[uaData.platform] : null;
-  return fromUA === null || fromData === fromUA ? fromData : fromUA;
+  return fromData === 'other' || fromUA === null || fromData === fromUA ? fromData : fromUA;
 }
 
 (async () => {
