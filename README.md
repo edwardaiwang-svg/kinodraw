@@ -102,7 +102,7 @@ See [docs/architecture.md](docs/architecture.md) and [the storyboard format](doc
 
 ## Privacy
 
-Offline mode sends nothing anywhere unless you choose your own voice server. With KinoDraw Cloud or your own key, only the text of one section at a time (plus doodle names) goes to the AI provider. KinoDraw Cloud does not store script text. With Settings > Voice server on (or TTS_BACKEND=openai_compatible), the text of each part of the script goes to the server you entered, and nothing else does. The request includes the model and voice names and an API key if entered; Test and Hear it send one sample sentence. To offer the server's voices as choices, KinoDraw also asks it for its list of voice names, sending only the model name (and the API key for that address, if any). Your own recordings stay on this computer. See the [privacy policy](docs/privacy.html).
+Offline mode sends nothing anywhere unless you choose your own voice server. With KinoDraw Cloud or your own key, only the text of one section at a time (plus doodle names) goes to the AI provider. KinoDraw Cloud does not store script text. With Settings > Voice server on (or TTS_BACKEND=openai_compatible), the text of each part of the script goes to the server you entered, and nothing else does. The request includes the model and voice names and an API key if entered; Test and Hear it send one sample sentence. To offer the server's voices as choices, KinoDraw also asks it for its list of voice names when you press Test and, while the setting is on, each time Settings, New video or a Narrator tab opens, sending only the model name (and the API key for that address, if any). Your own recordings stay on this computer. See the [privacy policy](docs/privacy.html).
 
 ## Licences
 

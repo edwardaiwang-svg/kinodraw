@@ -55,8 +55,9 @@
       <label>Language <select id="lang"><option value="">Detect</option><option value="en">English</option><option value="es">Español</option><option value="zh">中文</option></select></label>
       <div id="voice-wrap">
         <label id="voice-label" for="voice">Voice</label><div class="row"><select id="voice"></select>
-          <input id="server-voice" class="hidden" maxlength="80" list="server-voices"><datalist id="server-voices"></datalist>
+          <input id="server-voice" class="hidden" maxlength="80">
           <button id="voice-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button></div>
+        <select id="server-voice-pick" class="hidden" aria-label="Voices your server lists"></select>
         <div id="server-voice-note" class="muted"></div>
         <div id="speed-wrap"></div>
       </div>

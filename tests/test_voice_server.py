@@ -36,7 +36,7 @@ def isolated_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(tempfile, 'tempdir', str(tmp_path))
     monkeypatch.setattr(providers, 'SAVED', tmp_path / 'saved-keys.json')
     monkeypatch.setattr(studio_server, 'CONFIG', tmp_path / 'studio.json')
-    monkeypatch.setattr(voice_server, 'api_key', lambda *a: None)
+    monkeypatch.setattr(voice_server, 'api_key', lambda *a, **k: None)
 
 
 @pytest.fixture
@@ -336,7 +336,7 @@ def test_startup_lists_saved_key_names_without_keychain_reads(monkeypatch):
     import keyring
     monkeypatch.setattr(keyring, 'get_password', lambda *a, **k: pytest.fail('startup read keychain'))
     monkeypatch.setattr(providers, 'api_key', lambda *a: pytest.fail('startup read provider key'))
-    monkeypatch.setattr(voice_server, 'api_key', lambda *a: pytest.fail('startup read speech key'))
+    monkeypatch.setattr(voice_server, 'api_key', lambda *a, **k: pytest.fail('startup read speech key'))
     studio_server._save_config({'voice_server': {'on': True, 'url': 'http://127.0.0.1:1234/v1', 'model': 'm', 'voice': ''}})
     monkeypatch.setattr(providers, 'saved', lambda: {'voice-server:http://127.0.0.1:1234'})
     state = studio_server.state()
@@ -737,7 +737,7 @@ def test_voice_list_reads_each_known_server_shape(voice_lists, shape):
     assert found['source'] == path
     assert requests[0]['path'] == '/v1/audio/voices?model=test-model'           # the common endpoint first, with the model
     assert requests[-1]['path'].split('?')[0] == path                            # stops at the first list
-    assert all(r['authorization'] == 'Bearer test-token' for r in requests)
+    assert all(r['authorization'] == ('Bearer test-token' if r['path'].startswith('/v1/') else None) for r in requests)
 
 
 @pytest.mark.parametrize('routes,hint', [
@@ -766,12 +766,45 @@ def test_an_unreachable_server_gives_a_reason_not_an_error(monkeypatch):
     assert found['voices'] == [] and found['source'] is None and "couldn't reach" in found['message']
 
 
-def test_openai_has_no_list_endpoint_so_its_documented_voices_are_offered_without_asking(monkeypatch):
+TTS1 = ['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']
+
+
+@pytest.mark.parametrize('model,voices', [('gpt-4o-mini-tts', sorted(TTS1 + ['ballad', 'verse', 'marin', 'cedar'])),
+                                          ('tts-1', TTS1), ('tts-1-hd', TTS1)])   # OpenAI's TTS guide, "Voice options"
+def test_openai_has_no_list_endpoint_so_its_documented_voices_are_offered_without_asking(monkeypatch, model, voices):
     attempts = socket_guard(monkeypatch)
-    found = voice_server.list_voices(voice_server.Server('https://api.openai.com/v1', 'gpt-4o-mini-tts', key='test-token'))
-    assert [v['id'] for v in found['voices']] == sorted(['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx',
-                                                         'sage', 'shimmer', 'verse', 'marin', 'cedar'])
+    found = voice_server.list_voices(voice_server.Server('https://api.openai.com/v1', model, key='test-token'))
+    assert [v['id'] for v in found['voices']] == voices
     assert found['source'] == 'known list' and attempts == []
+
+
+def test_the_key_goes_only_to_voice_list_paths_under_the_address_entered(voice_lists):
+    url, requests = voice_lists({'/api/voices': (200, {'voices': ['kobo']})})
+    found = voice_server.list_voices(voice_server.Server(url + '/v1', 'test-model', key='test-token'))
+    assert [v['id'] for v in found['voices']] == ['kobo']
+    assert [(r['path'].split('?')[0], r['authorization']) for r in requests] == [(VOICES, 'Bearer test-token'),
+        ('/v1/voices', 'Bearer test-token'), ('/audio/voices', None), ('/api/voices', None)]
+    url, requests = voice_lists({'/audio/voices': (401, {'detail': 'no key'})})    # keyless outside /v1: not a refusal
+    found = voice_server.list_voices(voice_server.Server(url + '/v1', 'test-model', key='test-token'))
+    assert found['message'] == voice_server.NO_LIST and len(requests) == 4
+    url, requests = voice_lists({'/api/voices': (200, {'voices': ['kobo']})})     # entered without /v1: all under it
+    voice_server.list_voices(voice_server.Server(url, 'test-model', key='test-token'))
+    assert all(r['authorization'] == 'Bearer test-token' for r in requests)
+
+
+def test_the_studio_never_sends_an_unbound_tts_api_key_to_a_typed_address(studio_http, voice_lists, monkeypatch):
+    import keyring
+    monkeypatch.setattr(keyring, 'get_password', lambda service, name: None)
+    monkeypatch.setattr(voice_server, 'api_key', API_KEY)
+    monkeypatch.setenv('TTS_API_KEY', 'test-env-token')                         # TTS_API_BASE unset
+    assert API_KEY('http://127.0.0.1:1234/v1') == 'test-env-token'              # the CLI's own pair still works
+    assert API_KEY('http://127.0.0.1:1234/v1', env_without_base=False) is None
+    url, requests = voice_lists({VOICES: (200, {'voices': ['tara']})})
+    assert studio_http('/api/voice-server/voices', {'url': url + '/v1', 'model': 'test-model'})[0] == 200
+    assert requests and all(r['authorization'] is None for r in requests)
+    monkeypatch.setenv('TTS_API_BASE', url + '/v1')                            # bound to this address: it goes there
+    assert studio_http('/api/voice-server/voices', {'url': url + '/v1', 'model': 'test-model'})[0] == 200
+    assert requests[-1]['authorization'] == 'Bearer test-env-token'
 
 
 def test_the_voice_list_route_never_saves_and_sends_a_key_only_to_its_own_address(studio_http, voice_lists, monkeypatch):

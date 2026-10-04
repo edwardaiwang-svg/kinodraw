@@ -212,7 +212,7 @@ def _server_key(body: dict) -> str | None:
 
 def test_voice_server(body: dict) -> dict:
     spec = _server_config(body)
-    key = _server_key(body) or voice_server.api_key(spec['url'])     # only a key saved for this very address
+    key = _server_key(body) or voice_server.api_key(spec['url'], env_without_base=False)   # this address's key only
     cache = paths.cache_dir() / 'voice-server-tests'
     cache.mkdir(parents=True, exist_ok=True)
     # A Test always contacts the server so changed credentials and connectivity are checked too.
@@ -228,7 +228,7 @@ def voice_server_voices(body: dict) -> dict:
     """The voices the server in the Settings fields offers (nothing is saved); its key only if saved for that very
     address, or typed in Settings now."""
     spec = _server_config(body)
-    key = _server_key(body) or voice_server.api_key(spec['url'])
+    key = _server_key(body) or voice_server.api_key(spec['url'], env_without_base=False)
     return voice_server.list_voices(voice_server.Server(**spec, key=key))
 
 
@@ -332,7 +332,7 @@ def make_video(name: str) -> dict:
     def job(progress):
         server = apply_video_settings(path)
         if server:
-            server.key = voice_server.api_key(server.url)
+            server.key = voice_server.api_key(server.url, env_without_base=False)
         clips = pipeline.narrate(path, progress, server=server)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)

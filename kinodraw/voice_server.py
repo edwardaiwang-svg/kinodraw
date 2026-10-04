@@ -156,6 +156,8 @@ def speech(server: Server, text: str, speed: float) -> bytes:
 # OpenAI's speech API has no voice list to ask; these are the built-in voices its API reference documents.
 OPENAI_VOICES = ('alloy', 'ash', 'ballad', 'cedar', 'coral', 'echo', 'fable', 'marin', 'nova', 'onyx', 'sage', 'shimmer',
                  'verse')
+# tts-1 and tts-1-hd take only these (OpenAI's text-to-speech guide, "Voice options").
+OPENAI_TTS1_VOICES = ('alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer')
 NO_LIST = 'This server did not list its voices. Type the voice name your server expects.'
 
 
@@ -186,31 +188,36 @@ def _voice_list(data) -> list[dict]:
 def list_voices(server: Server) -> dict:
     """The voices the server offers, as {'voices': [{id, name}], 'source': the path that listed them, 'message'}.
     Asks the endpoints servers use, most common first, a few seconds each, and stops at the first list; sends only
-    the model name (and the server's own key). A server without a list gets an empty one and a reason, never an error,
-    since any name can still be typed."""
+    the model name, and the server's key only to paths under the address entered (a gateway may route the rest
+    elsewhere). A server without a list gets an empty one and a reason, never an error, since any name can still be
+    typed."""
     address = origin(server.url)
 
     def none(message):
         return {'voices': [], 'source': None, 'message': message}
 
     if urlsplit(address).hostname == 'api.openai.com':
-        return {'voices': [{'id': v, 'name': v} for v in OPENAI_VOICES], 'source': 'known list',
+        names = OPENAI_TTS1_VOICES if server.model.startswith('tts-1') else OPENAI_VOICES
+        return {'voices': [{'id': v, 'name': v} for v in names], 'source': 'known list',
                 'message': "OpenAI's built-in voices (its API has no list to ask)."}
     try:
-        headers = {'Accept': 'application/json', **_auth(server)}
+        keyed = {'Accept': 'application/json', **_auth(server)}
     except VoiceServerError as error:
         return none(str(error))
     v1 = endpoint(server.url).removesuffix('/audio/speech')
     root = v1.removesuffix('/v1')
+    entered = urlsplit(server.url).path.rstrip('/').removesuffix('/audio/speech') + '/'
     probes = dict.fromkeys((f'{v1}/audio/voices?{urlencode({"model": server.model})}', f'{v1}/voices',   # most servers;
                             f'{root}/audio/voices', f'{root}/api/voices'))    # Chatterbox, edge-tts; no /v1; AllTalk
     for url in probes:
+        with_key = urlsplit(url).path.startswith(entered)
+        headers = keyed if with_key else {'Accept': 'application/json'}
         try:
             with net.urlopen_here(urllib.request.Request(url, headers=headers), timeout=3) as response:
                 data = response.read(4_000_000)
         except urllib.error.HTTPError as error:
             error.close()
-            if error.code in (401, 403):                                  # stop guessing: it wants a (different) key
+            if error.code in (401, 403) and (with_key or not server.key):    # stop guessing: it wants a (different) key
                 return none(f'Your voice server at {address} ' + ('refused the API key when asked for its voices.'
                             if server.key else 'needs an API key to list its voices.')
                             + ' Enter its key, or type the voice name your server expects.')
@@ -336,9 +343,11 @@ def key_name(url: str) -> str:
     return f'voice-server:{origin(url)}'
 
 
-def api_key(url: str) -> str | None:
-    """The key saved for this server's origin, else TTS_API_KEY when it belongs to this server (TTS_API_BASE unset or
-    the same origin). Read only when the server is about to be asked for speech; never a key saved for another one."""
+def api_key(url: str, env_without_base: bool = True) -> str | None:
+    """The key saved for this server's origin, else TTS_API_KEY when it belongs to this server (the same origin as
+    TTS_API_BASE, or TTS_API_BASE unset and env_without_base: the CLI's own pair with --voice-server; the Studio, whose
+    address is typed in Settings, passes False). Read only when the server is about to be asked; never a key saved
+    for another one."""
     try:
         import keyring
         key = keyring.get_password(paths.APP, key_name(url))
@@ -352,7 +361,7 @@ def api_key(url: str) -> str | None:
             return key if origin(base) == origin(url) else None
         except VoiceServerError:
             return None
-    return key or None
+    return (key or None) if env_without_base else None
 
 
 def save_key(url: str, key: str):

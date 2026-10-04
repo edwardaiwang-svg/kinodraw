@@ -83,20 +83,32 @@ async function playServerSample(name, button) {     // Settings > Voice server r
     await sampleAudio.play();
   } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
 }
-let savedVoices = null;          // the saved server's voice list, asked once until Settings change
+let savedVoices = null;          // the saved server's voice list, asked once until Settings change (a failure is not kept)
 function serverVoices(fields) {     // the voices a server lists (POST /api/voice-server/voices); never throws
   return api('/api/voice-server/voices', { method: 'POST', body: JSON.stringify(fields) })
     .catch((e) => ({ voices: [], source: null, message: e.message }));
 }
-function offerVoices(found, list, note) {   // the list's names become choices; any other name can still be typed
-  list.innerHTML = found.voices.map((v) => `<option value="${esc(v.id)}"${v.name !== v.id ? ` label="${esc(v.name)}"` : ''}></option>`).join('');
-  if (note) note.textContent = found.voices.length ? '' : found.message;
+// The picker lists every voice whatever the box holds (a datalist would hide all but the typed one); any name can
+// still be typed. Only the picker's latest ask fills it, so a slow answer from another address never replaces it.
+function offerVoices(asked, pick, note, input) {
+  pick.asked = asked;
+  asked.then((found) => {
+    if (!pick.isConnected || pick.asked !== asked) return;
+    pick.innerHTML = `<option value="">Choose one of ${found.voices.length} voices…</option>`
+      + found.voices.map((v) => `<option value="${esc(v.id)}">${esc(v.name !== v.id ? `${v.name} (${v.id})` : v.id)}</option>`).join('');
+    pick.classList.toggle('hidden', !found.voices.length);
+    pick.onchange = () => { if (pick.value) { input.value = pick.value; input.dispatchEvent(new Event('input')); } pick.value = ''; };
+    note.textContent = found.voices.length ? '' : found.message;
+  });
 }
-function offerSavedVoices(list, note) {      // New video and Narrator: the voices of the server saved in Settings
+function offerSavedVoices(pick, note, input) {      // New video and Narrator: the voices of the server saved in Settings
   const server = STATE.voice_server, key = `${server.url}\n${server.model}`;
-  if (savedVoices?.key !== key) savedVoices = { key, found: serverVoices({ url: server.url, model: server.model }) };
-  const asked = savedVoices;
-  asked.found.then((found) => { if (list.isConnected && savedVoices === asked) offerVoices(found, list, note); });
+  if (savedVoices?.key !== key) {
+    const asked = { key, found: serverVoices({ url: server.url, model: server.model }) };
+    savedVoices = asked;
+    asked.found.then((found) => { if (!found.voices.length && savedVoices === asked) savedVoices = null; });   // ask again next time
+  }
+  offerVoices(savedVoices.found, pick, note, input);
 }
 const voiceMeta = (id, server) => (STATE.voice_server?.on      // with Settings > Voice server on, it reads every video
   ? `voice server (${server || STATE.voice_server.voice || STATE.voice_server.model})` : `voice ${voiceName(id)}`);
@@ -169,7 +181,7 @@ function syncNewVoice() {      // New video: with Settings > Voice server on, th
   $('#voice').classList.toggle('hidden', !!server.on); input.classList.toggle('hidden', !server.on);
   input.placeholder = server.voice || 'the server’s default';
   label.textContent = server.on ? 'Server voice (optional)' : 'Voice'; label.htmlFor = server.on ? 'server-voice' : 'voice';
-  if (!server.on) $('#server-voice-note').textContent = '';
+  if (!server.on) { $('#server-voice-note').textContent = ''; $('#server-voice-pick').classList.add('hidden'); }
 }
 
 function showNew() {
@@ -188,7 +200,7 @@ function showNew() {
     : playSample(voiceLang(), voiceSel.value, $('#speed').value, e.currentTarget));
   $('#server-voice').oninput = syncNewVoice;
   syncNewVoice();
-  if (STATE.voice_server?.on) offerSavedVoices($('#server-voices'), $('#server-voice-note'));
+  if (STATE.voice_server?.on) offerSavedVoices($('#server-voice-pick'), $('#server-voice-note'), $('#server-voice'));
   const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
   document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
   dirSel.innerHTML = directorOptions(STATE.default_director);
@@ -603,9 +615,9 @@ function renderNarrator(name, info, choice = info.narrator) {
     box.innerHTML = `${pick}<form id="n-voice-form">
       <div class="grid"><div><label for="${server ? 'n-server-voice' : 'n-voice'}">${server ? 'Server voice (optional)' : 'Voice'}</label><div class="row">
         <select id="n-voice"${server ? ' class="hidden"' : ''}>${voiceOptions(info.lang, info.voice)}</select>
-        ${server ? `<input id="n-server-voice" maxlength="80" list="n-server-voices" value="${esc(info.server_voice)}" placeholder="${esc(server.voice || 'the server’s default')}"><datalist id="n-server-voices"></datalist>` : ''}
+        ${server ? `<input id="n-server-voice" maxlength="80" value="${esc(info.server_voice)}" placeholder="${esc(server.voice || 'the server’s default')}">` : ''}
         <button id="n-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button>
-      </div>${server ? '<div id="n-server-voice-note" class="muted"></div>' : ''}</div><div>${speedRow('n-speed')}</div></div>
+      </div>${server ? '<select id="n-server-voice-pick" class="hidden" aria-label="Voices your server lists"></select><div id="n-server-voice-note" class="muted"></div>' : ''}</div><div>${speedRow('n-speed')}</div></div>
       <label>Pronunciations <textarea id="n-pronounce" rows="4" placeholder="GIF = jif&#10;Nguyen = win"></textarea></label>
       <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling. All-caps words like WHO and mixed-case ones like iPhone match only as typed; others match in any case.</p>
       <button id="n-save" type="submit" class="primary" disabled>Save voice settings</button></form>`;
@@ -645,7 +657,7 @@ function renderNarrator(name, info, choice = info.narrator) {
     const form = $('#n-voice-form', box), select = $('#n-voice', form), slider = $('#n-speed', form);
     const pronounce = $('#n-pronounce', form), save = $('#n-save', form), serverVoice = $('#n-server-voice', form);
     bindSpeed('n-speed');
-    if (serverVoice) offerSavedVoices($('#n-server-voices', form), $('#n-server-voice-note', form));
+    if (serverVoice) offerSavedVoices($('#n-server-voice-pick', form), $('#n-server-voice-note', form), serverVoice);
     $('#n-play', form).onclick = (e) => (serverVoice ? playServerSample(serverVoice.value.trim(), e.currentTarget)
       : playSample(info.lang, select.value, slider.value, e.currentTarget));
     api(`/api/projects/${encodeURIComponent(name)}/voice`).then((settings) => {
@@ -710,10 +722,11 @@ function showSettings() {
       <span>Read scripts with my own OpenAI-compatible voice server (off: the built-in voice, on this computer)</span></label>
       <div class="grid"><label for="vs-url">Address<input id="vs-url" placeholder="http://localhost:8880/v1" value="${esc(voiceServer.url)}"></label>
         <label for="vs-model">Model<input id="vs-model" value="${esc(voiceServer.model)}"></label>
-        <label for="vs-voice">Voice (optional)<input id="vs-voice" list="vs-voices" value="${esc(voiceServer.voice)}"><datalist id="vs-voices"></datalist></label>
+        <label for="vs-voice">Voice (optional)<input id="vs-voice" value="${esc(voiceServer.voice)}"></label>
         <label for="vs-key">API key (optional)<input id="vs-key" type="password" autocomplete="new-password"></label></div>
+      <select id="vs-voice-pick" class="hidden" aria-label="Voices your server lists"></select>
       <div id="vs-voice-note" class="muted"></div>
-      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else; Test and Hear it send it one sample sentence. To offer its voices as choices, KinoDraw also asks the server for its list of voice names, sending only the model name (and your key for this address, if any). Your own recordings stay on this computer. Your key is kept in your keychain for this address and sent only to it.
+      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else; Test and Hear it send it one sample sentence. To offer its voices as choices, KinoDraw also asks the server for its list of voice names when you press Test and, while this is on, each time Settings, New video or a Narrator tab opens, sending only the model name (and your key for this address, if any). Your own recordings stay on this computer. Your key is kept in your keychain for this address and sent only to it.
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><button id="vs-save" class="small">Save</button><button id="vs-test" class="small">Test</button></div>
       <div id="vs-result" class="muted" role="status" aria-live="polite"></div></section>
@@ -744,9 +757,8 @@ function showSettings() {
   };
   keyHint();
   $('#vs-url', body).oninput = keyHint;
-  const voiceList = $('#vs-voices', body), voiceNote = $('#vs-voice-note', body);
-  const askVoices = () => serverVoices(serverFields()).then((found) => { if (voiceList.isConnected) offerVoices(found, voiceList, voiceNote); });
-  if (voiceServer.on && voiceServer.url && voiceServer.model) offerSavedVoices(voiceList, voiceNote);
+  const voicePick = $('#vs-voice-pick', body), voiceNote = $('#vs-voice-note', body), voiceInput = $('#vs-voice', body);
+  if (voiceServer.on && voiceServer.url && voiceServer.model) offerSavedVoices(voicePick, voiceNote, voiceInput);
   $('#vs-save', body).onclick = async () => {
     const result = $('#vs-result', body); serverBusy(true); result.textContent = 'Saving…';
     try {
@@ -756,15 +768,15 @@ function showSettings() {
       $('#vs-key', body).value = '';
       keyHint();
       result.textContent = 'Saved.';
-      if (STATE.voice_server.on) offerSavedVoices(voiceList, voiceNote);
+      if (STATE.voice_server.on) offerSavedVoices(voicePick, voiceNote, voiceInput);
       if (current) loadNarrator(current);
-      else { syncNewVoice(); if (STATE.voice_server.on && $('#server-voices')) offerSavedVoices($('#server-voices'), $('#server-voice-note')); }
+      else { syncNewVoice(); if (STATE.voice_server.on && $('#server-voice-pick')) offerSavedVoices($('#server-voice-pick'), $('#server-voice-note'), $('#server-voice')); }
     } catch (e) { result.textContent = e.message; }
     finally { serverBusy(false); }
   };
   $('#vs-test', body).onclick = async () => {
     const result = $('#vs-result', body); serverBusy(true); result.textContent = 'Testing…';
-    askVoices();                           // also offer the voices it lists, even if this voice fails
+    offerVoices(serverVoices(serverFields()), voicePick, voiceNote, voiceInput);   // its voices, even if this one fails
     try {
       const test = await api('/api/voice-server/test', { method: 'POST', body: JSON.stringify(serverFields()) });
       result.innerHTML = `<p>${esc(test.message)}</p><audio controls preload="none" src="/api/voice-server/test.wav?token=${encodeURIComponent(T)}&t=${Date.now()}"></audio>`;
