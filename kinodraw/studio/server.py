@@ -213,7 +213,7 @@ def _server_key(body: dict) -> str | None:
 
 def test_voice_server(body: dict) -> dict:
     spec = _server_config(body)
-    key = _server_key(body) or voice_server.api_key(spec['url'])     # only a key saved for this very address
+    key = _server_key(body) or voice_server.api_key(spec['url'], env_without_base=False)   # this address's key only
     cache = paths.cache_dir() / 'voice-server-tests'
     cache.mkdir(parents=True, exist_ok=True)
     # A Test always contacts the server so changed credentials and connectivity are checked too.
@@ -223,6 +223,14 @@ def test_voice_server(body: dict) -> dict:
         (cache / 'last.wav').write_bytes(clip.wav.read_bytes())
     return {'ok': True, 'seconds': clip.duration,
             'message': f'It works: {clip.duration:.1f} seconds of speech from your voice server.'}
+
+
+def voice_server_voices(body: dict) -> dict:
+    """The voices the server in the Settings fields offers (nothing is saved); its key only if saved for that very
+    address, or typed in Settings now."""
+    spec = _server_config(body)
+    key = _server_key(body) or voice_server.api_key(spec['url'], env_without_base=False)
+    return voice_server.list_voices(voice_server.Server(**spec, key=key))
 
 
 def apply_video_settings(path: Path) -> voice_server.Server | None:
@@ -325,7 +333,7 @@ def make_video(name: str) -> dict:
     def job(progress):
         server = apply_video_settings(path)
         if server:
-            server.key = voice_server.api_key(server.url)
+            server.key = voice_server.api_key(server.url, env_without_base=False)
         clips = pipeline.narrate(path, progress, server=server)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)
@@ -820,6 +828,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(save_voice_server(self._body()))
         if p == ['voice-server', 'test'] and method == 'POST':
             return self._json(test_voice_server(self._body()))
+        if p == ['voice-server', 'voices'] and method == 'POST':
+            return self._json(voice_server_voices(self._body()))
         if p == ['voice-server', 'test.wav'] and method == 'GET':
             return self._file(paths.cache_dir() / 'voice-server-tests' / 'last.wav', 'audio/wav')
         if len(p) == 4 and p[0] == 'voices' and p[3] == 'sample' and method == 'GET':

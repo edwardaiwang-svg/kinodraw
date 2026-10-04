@@ -36,7 +36,7 @@ def isolated_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(tempfile, 'tempdir', str(tmp_path))
     monkeypatch.setattr(providers, 'SAVED', tmp_path / 'saved-keys.json')
     monkeypatch.setattr(studio_server, 'CONFIG', tmp_path / 'studio.json')
-    monkeypatch.setattr(voice_server, 'api_key', lambda *a: None)
+    monkeypatch.setattr(voice_server, 'api_key', lambda *a, **k: None)
 
 
 @pytest.fixture
@@ -336,7 +336,7 @@ def test_startup_lists_saved_key_names_without_keychain_reads(monkeypatch):
     import keyring
     monkeypatch.setattr(keyring, 'get_password', lambda *a, **k: pytest.fail('startup read keychain'))
     monkeypatch.setattr(providers, 'api_key', lambda *a: pytest.fail('startup read provider key'))
-    monkeypatch.setattr(voice_server, 'api_key', lambda *a: pytest.fail('startup read speech key'))
+    monkeypatch.setattr(voice_server, 'api_key', lambda *a, **k: pytest.fail('startup read speech key'))
     studio_server._save_config({'voice_server': {'on': True, 'url': 'http://127.0.0.1:1234/v1', 'model': 'm', 'voice': ''}})
     monkeypatch.setattr(providers, 'saved', lambda: {'voice-server:http://127.0.0.1:1234'})
     state = studio_server.state()
@@ -655,3 +655,197 @@ def test_a_malformed_key_is_refused_without_showing_it_or_sending_anything(speec
         voice_server.speech(voice_server.Server(url, 'test-model', key=key), 'Hello.', 1.0)
     assert calls == []
     assert 'test-s' not in str(error.value) and 'API key' in str(error.value)
+
+
+# ------------------------------------------------------------------ the server's own voice list (Settings, New video, Narrator)
+@pytest.fixture
+def voice_lists():
+    """A local server answering GET with each route's (status, JSON); anything else is a 404."""
+    active = []
+
+    def start(routes):
+        requests = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                requests.append({'path': self.path, 'authorization': self.headers.get('Authorization')})
+                status, body = routes.get(self.path) or routes.get(self.path.split('?')[0]) or (404, {'detail': 'Not Found'})
+                data = body if isinstance(body, bytes) else json.dumps(body).encode()
+                self.send_response(status)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        httpd = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        active.append(httpd)
+        return f'http://127.0.0.1:{httpd.server_port}', requests
+
+    yield start
+    for httpd in active:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+VOICES = '/v1/audio/voices'
+SHAPES = {   # each server's answer as its own code builds it (research: voicepicker/voice-list-research.md)
+    'kokoro-fastapi': ({VOICES: (200, {'voices': [{'id': 'af_bella', 'name': 'af_bella', 'overall_grade': 'A'},
+                                                  {'id': 'am_adam', 'name': 'am_adam'}], 'default_voice': 'af_heart'})},
+                       VOICES, [('af_bella', 'af_bella'), ('am_adam', 'am_adam')]),
+    'kokoro-legacy': ({VOICES: (200, {'voices': ['af_bella', 'am_adam']})}, VOICES,
+                      [('af_bella', 'af_bella'), ('am_adam', 'am_adam')]),
+    'qwentts.cpp': ({VOICES: (200, {'voices': [{'name': 'Vivian', 'kind': 'speaker'}, {'name': 'mine', 'kind': 'registered'}]})},
+                    VOICES, [('mine', 'mine'), ('Vivian', 'Vivian')]),
+    'voicestudio': ({VOICES: (200, {'voices': [{'voice_id': 'alloy', 'name': 'Alloy', 'type': 'openai_alias'},
+                                               {'voice_id': 'p-7', 'name': 'Grandpa', 'type': 'profile', 'language': 'en'}],
+                                    'engines': ['kokoro', 'chatterbox']})},
+                    VOICES, [('alloy', 'Alloy'), ('p-7', 'Grandpa')]),
+    'localai': ({VOICES: (200, {'data': [{'model': 'test-model', 'voices': [{'name': 'x', 'language': 'en'}]},
+                                         {'model': 'other', 'voices': [{'name': 'y', 'gender': 'female'}]}]})},
+                VOICES, [('x', 'x'), ('y', 'y')]),
+    'orpheus': ({VOICES: (200, {'status': 'ok', 'voices': ['tara', 'leah']})}, VOICES, [('leah', 'leah'), ('tara', 'tara')]),
+    'chatterbox-travisvn': ({'/v1/voices': (200, {'voices': [{'name': 'Emily', 'aliases': ['em'], 'language': 'en'}], 'count': 1})},
+                            '/v1/voices', [('Emily', 'Emily')]),
+    'chatterbox-devnen': ({VOICES: (200, {'status': 'ok', 'voices': ['x.wav']})}, VOICES, [('x.wav', 'x.wav')]),
+    'speaches': ({VOICES: (200, {'voices': [{'name': 'af_heart', 'language': 'en', 'id': 'af_heart'}], 'object': 'list'})},
+                 VOICES, [('af_heart', 'af_heart')]),
+    'alltalk': ({'/api/voices': (200, {'status': 'success', 'voices': ['female_01.wav', 'male_01.wav']})},
+                '/api/voices', [('female_01.wav', 'female_01.wav'), ('male_01.wav', 'male_01.wav')]),
+    'openai-edge-tts': ({VOICES: (200, {'voices': [{'id': 'alloy', 'name': 'en-US-AvaNeural'}]})}, VOICES,
+                        [('alloy', 'en-US-AvaNeural')]),
+    'mlx-audio': ({VOICES + '?model=test-model': (200, {'object': 'list', 'model': 'test-model',
+                                                        'data': [{'id': 'af_heart', 'name': 'af_heart'}]}),
+                   VOICES: (400, {'detail': 'model is required'})}, VOICES, [('af_heart', 'af_heart')]),
+    'vllm-omni': ({VOICES: (200, {'voices': ['b', 'a'], 'uploaded_voices': [{'name': 'u', 'consent': True}]})}, VOICES,
+                  [('a', 'a'), ('b', 'b')]),
+    'koboldcpp': ({VOICES: (200, {'status': 'ok', 'voices': ['kobo']})}, VOICES, [('kobo', 'kobo')]),
+    'mistral': ({VOICES: (200, {'items': [{'id': 'v1', 'name': 'Voice One'}], 'page': 1})}, VOICES, [('v1', 'Voice One')]),
+    'bare-list': ({'/audio/voices': (200, ['one', 'two', 'one'])}, '/audio/voices', [('one', 'one'), ('two', 'two')]),
+}
+
+
+@pytest.mark.parametrize('shape', SHAPES)
+def test_voice_list_reads_each_known_server_shape(voice_lists, shape):
+    routes, path, expected = SHAPES[shape]
+    url, requests = voice_lists(routes)
+    found = voice_server.list_voices(voice_server.Server(url + '/v1', 'test-model', key='test-token'))
+    assert [(v['id'], v['name']) for v in found['voices']] == expected
+    assert found['source'] == path
+    assert requests[0]['path'] == '/v1/audio/voices?model=test-model'           # the common endpoint first, with the model
+    assert requests[-1]['path'].split('?')[0] == path                            # stops at the first list
+    assert all(r['authorization'] == ('Bearer test-token' if r['path'].startswith('/v1/') else None) for r in requests)
+
+
+@pytest.mark.parametrize('routes,hint', [
+    ({}, 'did not list'),                                                         # openedai-speech: no list endpoint
+    ({'/api/voices': (200, {'status': 'error', 'message': 'not multivoice'})}, 'did not list'),   # AllTalk, one voice
+    ({VOICES: (200, b'<html>nope</html>'), '/v1/voices': (200, {'voices': []})}, 'did not list'),
+    ({VOICES: (200, {'voices': [{'id': 'x\nbad'}, {'language': 'en'}, 'y' * 81, 7]})}, 'did not list'),
+    ({VOICES: (401, {'detail': 'no key'})}, 'API key'),
+    ({VOICES: (500, {'detail': 'broken'}), '/v1/voices': (403, {'detail': 'no key'})}, 'API key'),
+])
+def test_a_server_without_a_usable_list_leaves_typing_the_name(voice_lists, routes, hint):
+    url, requests = voice_lists(routes)
+    found = voice_server.list_voices(voice_server.Server(url, 'test-model'))
+    assert found['voices'] == [] and found['source'] is None and hint in found['message']
+    if hint == 'API key':                                                        # no guessing past a refusal
+        assert requests[-1]['path'].split('?')[0] in (VOICES, '/v1/voices') and len(requests) <= 2
+    else:
+        assert [r['path'].split('?')[0] for r in requests] == [VOICES, '/v1/voices', '/audio/voices', '/api/voices']
+
+
+def test_an_unreachable_server_gives_a_reason_not_an_error(monkeypatch):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    found = voice_server.list_voices(voice_server.Server(f'http://127.0.0.1:{port}', 'test-model'))
+    assert found['voices'] == [] and found['source'] is None and "couldn't reach" in found['message']
+
+
+TTS1 = ['alloy', 'ash', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer']
+
+
+@pytest.mark.parametrize('model,voices', [('gpt-4o-mini-tts', sorted(TTS1 + ['ballad', 'verse', 'marin', 'cedar'])),
+                                          ('tts-1', TTS1), ('tts-1-hd', TTS1)])   # OpenAI's TTS guide, "Voice options"
+def test_openai_has_no_list_endpoint_so_its_documented_voices_are_offered_without_asking(monkeypatch, model, voices):
+    attempts = socket_guard(monkeypatch)
+    found = voice_server.list_voices(voice_server.Server('https://api.openai.com/v1', model, key='test-token'))
+    assert [v['id'] for v in found['voices']] == voices
+    assert found['source'] == 'known list' and attempts == []
+
+
+def test_the_key_goes_only_to_voice_list_paths_under_the_address_entered(voice_lists):
+    url, requests = voice_lists({'/api/voices': (200, {'voices': ['kobo']})})
+    found = voice_server.list_voices(voice_server.Server(url + '/v1', 'test-model', key='test-token'))
+    assert [v['id'] for v in found['voices']] == ['kobo']
+    assert [(r['path'].split('?')[0], r['authorization']) for r in requests] == [(VOICES, 'Bearer test-token'),
+        ('/v1/voices', 'Bearer test-token'), ('/audio/voices', None), ('/api/voices', None)]
+    url, requests = voice_lists({'/audio/voices': (401, {'detail': 'no key'})})    # keyless outside /v1: not a refusal
+    found = voice_server.list_voices(voice_server.Server(url + '/v1', 'test-model', key='test-token'))
+    assert found['message'] == voice_server.NO_LIST and len(requests) == 4
+    url, requests = voice_lists({'/api/voices': (200, {'voices': ['kobo']})})     # entered without /v1: all under it
+    voice_server.list_voices(voice_server.Server(url, 'test-model', key='test-token'))
+    assert all(r['authorization'] == 'Bearer test-token' for r in requests)
+
+
+def test_the_studio_never_sends_an_unbound_tts_api_key_to_a_typed_address(studio_http, voice_lists, monkeypatch):
+    import keyring
+    monkeypatch.setattr(keyring, 'get_password', lambda service, name: None)
+    monkeypatch.setattr(voice_server, 'api_key', API_KEY)
+    monkeypatch.setenv('TTS_API_KEY', 'test-env-token')                         # TTS_API_BASE unset
+    assert API_KEY('http://127.0.0.1:1234/v1') == 'test-env-token'              # the CLI's own pair still works
+    assert API_KEY('http://127.0.0.1:1234/v1', env_without_base=False) is None
+    url, requests = voice_lists({VOICES: (200, {'voices': ['tara']})})
+    assert studio_http('/api/voice-server/voices', {'url': url + '/v1', 'model': 'test-model'})[0] == 200
+    assert requests and all(r['authorization'] is None for r in requests)
+    monkeypatch.setenv('TTS_API_BASE', url + '/v1')                            # bound to this address: it goes there
+    assert studio_http('/api/voice-server/voices', {'url': url + '/v1', 'model': 'test-model'})[0] == 200
+    assert requests[-1]['authorization'] == 'Bearer test-env-token'
+
+
+def test_the_voice_list_route_never_saves_and_sends_a_key_only_to_its_own_address(studio_http, voice_lists, monkeypatch):
+    routes = {VOICES: (200, {'voices': ['tara']})}
+    a, calls_a = voice_lists(routes)
+    b, calls_b = voice_lists(routes)
+    fake_keychain(monkeypatch, a, 'test-token-a')
+    monkeypatch.setattr(voice_server, 'save_key', lambda *a: pytest.fail('listing voices saved a key'))
+    before = studio_server.CONFIG.read_bytes()
+    status, found = studio_http('/api/voice-server/voices', {'url': a + '/v1', 'model': 'test-model'})
+    assert status == 200, found
+    assert found['voices'] == [{'id': 'tara', 'name': 'tara'}] and found['source'] == VOICES and found['message']
+    assert calls_a[-1]['authorization'] == 'Bearer test-token-a'
+    assert studio_http('/api/voice-server/voices', {'url': b, 'model': 'test-model'})[0] == 200
+    assert calls_b and all(call['authorization'] is None for call in calls_b)      # a's key never goes to b
+    assert studio_http('/api/voice-server/voices', {'url': b, 'model': 'test-model', 'key': 'typed-token'})[0] == 200
+    assert calls_b[-1]['authorization'] == 'Bearer typed-token'                     # a key typed in Settings, unsaved
+    assert studio_http('/api/voice-server/voices', {'url': a, 'model': 'test-model'}, token=False)[0] == 403
+    for wrong in ({'url': 'file:///tmp', 'model': 'test-model'}, {'url': a, 'model': ''}):
+        assert studio_http('/api/voice-server/voices', wrong)[0] == 400
+    assert studio_server.CONFIG.read_bytes() == before and len(calls_a) == 1
+
+
+def test_a_redirect_from_the_voice_list_never_carries_the_key_elsewhere(voice_lists):
+    other, elsewhere = voice_lists({VOICES: (200, {'voices': ['stolen']})})
+
+    class Redirect(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header('Location', other + self.path)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+
+    first = ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+    threading.Thread(target=first.serve_forever, daemon=True).start()
+    try:
+        found = voice_server.list_voices(voice_server.Server(f'http://127.0.0.1:{first.server_port}', 'm', key='test-secret'))
+    finally:
+        first.shutdown()
+        first.server_close()
+    assert elsewhere == [] and found['voices'] == []
