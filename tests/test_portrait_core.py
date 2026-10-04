@@ -283,6 +283,7 @@ def test_native_quote_takes_a_whole_screen_and_stays_in_the_board_band(board, tm
     ('en', 'tiny.md', 'Supercalifragilisticexpialidocious'),                 # one word too wide even at 56 px
     ('en', 'tiny.md', 'Antidisestablishmentarianism Explained'),
     ('en', 'tiny.md', 'Honey: https://example.com/products/documentation/honey-facts'),
+    ('zh', 'sleep_zh.md', 'Antidisestablishmentarianism？'),           # a closing mark hangs on a too-wide word
 ])
 def test_native_title_board_and_end_card_show_a_long_title_in_full(lang, source, title, tmp_path):
     ep = script.build(ingest.read(TINY.parent / source))

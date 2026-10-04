@@ -331,7 +331,7 @@ def _portrait_title(ctx, text, size, width, **kw):
     from .vertical import _wrap
     for fitted in range(56, 7, -2):
         wrapped = _wrap(text, ctx.lang, width - 12, lambda s: ctx.width(s, fitted))
-        if len(wrapped) <= 4 or fitted <= 8:
+        if len(wrapped) <= 4 and all(ctx.width(line, fitted) <= width - 12 for line in wrapped) or fitted <= 8:
             return ink.TextDrawing(wrapped, ctx.lang, fitted, fonts=ctx.fonts, **kw)
 
 
