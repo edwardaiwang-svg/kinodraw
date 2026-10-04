@@ -113,7 +113,7 @@ function showNew() {
     $('#model').placeholder = (STATE.models[d] || [])[0] || 'model name';
     $('#director-note').textContent = {
       rules: 'Offline: free and private. Visuals are chosen by matching words to 1,700+ doodles on your computer.',
-      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : 'KinoDraw Cloud AI (GPT-6 Luna) plans each section: free, with no account or API key. Offline keeps everything on this computer.',
+      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : cloudAsks || 'KinoDraw Cloud AI (GPT-6 Luna) plans each section: free, with no account or API key. Offline keeps everything on this computer.',
       openai: STATE.keys.openai ? 'Uses your OpenAI key (about $0.02 per 15-minute video with GPT-6 Luna).' : 'Add your OpenAI key under Settings first.',
       anthropic: STATE.keys.anthropic ? 'Uses your Anthropic key (about $1 per 15-minute video with Opus).' : 'Add your Anthropic key under Settings first.',
       compat: 'Any OpenAI-compatible server (OpenRouter, Groq, a local Ollama…): set the base URL and model.',
@@ -123,8 +123,8 @@ function showNew() {
   dirSel.onchange = async () => {
     note();
     if (dirSel.value === 'cloud' && STATE.cloud_available && !STATE.cloud) {    // nothing goes to the cloud before this
-      try { STATE.cloud = await (STATE.cloud_signed_in ? api('/api/cloud/me') : api('/api/cloud/anonymous', { method: 'POST' })); }
-      catch (e) { STATE.cloud = null; }
+      try { STATE.cloud = await (STATE.cloud_signed_in ? api('/api/cloud/me') : api('/api/cloud/anonymous', { method: 'POST' })); cloudAsks = ''; }
+      catch (e) { STATE.cloud = null; if (e.code === 'sign_in') cloudAsks = e.message; }   // the note and Settings say it asks
       note();
     }
   };
@@ -479,7 +479,7 @@ function renderNarrator(name, info, choice = info.narrator) {
 // ---------------------------------------------------------------- settings
 function showSettings() {
   const cloud = STATE.cloud_available ? `<section><h3>KinoDraw Cloud</h3>
-      <p class="muted">${STATE.cloud_signed_in && STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : cloudAsks ? esc(cloudAsks) : 'Free, with no account or API key. Signing in with your email is optional.'}
+      <p class="muted">${STATE.cloud_signed_in && STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : cloudAsks ? esc(cloudAsks) : STATE.cloud ? 'Free, with no account or API key. Signing in with your email is optional.' : 'Free, with no account or API key, while KinoDraw Cloud allows it; if it asks, sign in with your email here.'}
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><input id="c-email" placeholder="you@example.com" value="${esc(cloudEmail)}"><button id="c-send" class="small">Email me a code</button></div>
       <p id="c-note" class="muted hidden"></p>

@@ -263,3 +263,42 @@ const fetch = async () => reply;
 })();'''
     out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
     assert out == [[False, 0, 0, True], [True, ['Sign in, please.'], 1, None, 'Sign in, please.'], [False]]
+
+
+def test_choosing_cloud_in_the_menu_when_it_asks_for_a_sign_in_never_says_no_account_is_needed():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    js = _js()
+    api = re.search(r'^async function api\(.*?^}', js, re.S | re.M)[0]
+    note = re.search(r'^  const note = \(\) => \{\n.*?^  \};', js, re.S | re.M)[0]
+    pick = re.search(r'^  dirSel\.onchange = async \(\) => \{\n.*?^  \};', js, re.S | re.M)[0]
+    settings = re.search(r"^  const cloud = STATE\.cloud_available \? `.*?` : '';", js, re.S | re.M)[0]
+    stage = '''
+const T = 't', els = {};
+const $ = (sel) => (els[sel] = els[sel] || { textContent: '', placeholder: '', classList: { toggle() {} } });
+const esc = (s) => String(s ?? '');
+const dirSel = { value: 'cloud' }, cloudEmail = '';
+let STATE = { cloud_available: true, cloud_signed_in: false, cloud: null, models: {}, keys: {} }, cloudAsks = '';
+let reply;
+const fetch = async () => reply;
+const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="muted">([^<]*)/)[1].trim(); };
+'''
+    run = stage + api + '\n' + note + '\n' + pick + '''
+(async () => {
+  const out = [settingsText()];
+  for (const [status, body] of [[403, { error: 'Sign in with your email in Settings, or choose Offline.', code: 'sign_in' }],
+                                [200, { plan: 'free', remaining: null, anonymous: true }]]) {
+    reply = { ok: status === 200, statusText: 'x', json: async () => body };
+    STATE.cloud = null;
+    await dirSel.onchange();
+    out.push([els['#director-note'].textContent, settingsText()]);
+  }
+  console.log(JSON.stringify(out));
+})();'''
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    unknown, asks, allowed = out
+    assert 'while KinoDraw Cloud allows it' in unknown                 # Settings before the cloud was asked: no promise
+    assert asks == ['Sign in with your email in Settings, or choose Offline.'] * 2
+    assert allowed == ['KinoDraw Cloud, free plan: unlimited videos (fair use).',
+                       'Free, with no account or API key. Signing in with your email is optional.']
