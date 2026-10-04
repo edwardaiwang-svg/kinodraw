@@ -104,6 +104,10 @@ def speech(server: Server, text: str, speed: float) -> bytes:
     if server.voice:
         body['voice'] = server.voice
     headers = {'Content-Type': 'application/json'}
+    if server.key and not (server.key.isascii() and server.key.isprintable()):
+        raise VoiceServerError('The voice server API key has a line break or another character a key cannot have, '
+                               'so nothing was sent. Enter the key again in Settings > Voice server (TTS_API_KEY '
+                               'in the CLI).')
     if server.key:
         headers['Authorization'] = f'Bearer {server.key}'
     request = urllib.request.Request(endpoint(server.url), data=json.dumps(body).encode(), headers=headers,
@@ -114,10 +118,13 @@ def speech(server: Server, text: str, speed: float) -> bytes:
         return str(text).replace(server.key, '[hidden]') if server.key else str(text)
 
     try:
-        with net.urlopen(request, timeout=180) as response:
+        with net.urlopen_here(request, timeout=180) as response:     # a redirect could carry the key elsewhere
             data = response.read()
     except urllib.error.HTTPError as error:
-        if error.code in (401, 403):
+        if 300 <= error.code < 400:
+            message = (f'Your voice server at {address} answered with a redirect (HTTP {error.code}), which KinoDraw '
+                       'does not follow so your key stays with this address. Enter the address it moves to instead.')
+        elif error.code in (401, 403):
             message = f'Your voice server at {address} refused the API key. It may be missing or wrong.'
         elif error.code == 404:
             message = f'Your voice server at {address} has no /v1/audio/speech endpoint there. Check the address.'

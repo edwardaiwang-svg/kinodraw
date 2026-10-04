@@ -546,3 +546,53 @@ def test_a_key_saved_for_one_server_is_never_sent_to_another(studio_http, speech
     assert 'stop after the voice' in job['error']
     assert len(calls_b) > before and all(call['authorization'] is None for call in calls_b)
     assert len(calls_a) == 1
+
+
+@pytest.mark.parametrize('code', [301, 302, 303, 307, 308])
+def test_a_redirecting_server_never_gets_the_key_carried_to_another_address(code):
+    seen, elsewhere = [], []
+
+    class Elsewhere(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            elsewhere.append((self.command, self.headers.get('Authorization')))
+            self.send_response(200)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+        do_POST = do_GET
+
+    class Redirect(Elsewhere):
+        def do_POST(self):
+            self.rfile.read(int(self.headers['Content-Length']))
+            seen.append(self.headers.get('Authorization'))
+            self.send_response(code)
+            self.send_header('Location', f'http://localhost:{other.server_port}/steal')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+
+    other = ThreadingHTTPServer(('127.0.0.1', 0), Elsewhere)
+    first = ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+    for httpd in (other, first):
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        server = voice_server.Server(f'http://127.0.0.1:{first.server_port}/v1', 'test-model', key='test-secret')
+        with pytest.raises(voice_server.VoiceServerError) as error:
+            voice_server.speech(server, 'Hello.', 1.0)
+    finally:
+        for httpd in (other, first):
+            httpd.shutdown()
+            httpd.server_close()
+    assert seen == ['Bearer test-secret']
+    assert elsewhere == []
+    assert 'redirect' in str(error.value) and 'test-secret' not in str(error.value)
+
+
+@pytest.mark.parametrize('key', ['test-secret\ninvalid', 'test-secret\r\nX-Evil: 1', 'test-secret\u2019'])
+def test_a_malformed_key_is_refused_without_showing_it_or_sending_anything(speech_servers, key):
+    url, calls = speech_servers()
+    with pytest.raises(voice_server.VoiceServerError) as error:
+        voice_server.speech(voice_server.Server(url, 'test-model', key=key), 'Hello.', 1.0)
+    assert calls == []
+    assert 'test-s' not in str(error.value) and 'API key' in str(error.value)
