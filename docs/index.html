@@ -4,21 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KinoDraw: free whiteboard animation and explainer video maker, open source</title>
-<meta name="description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta name="description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, works offline on Windows, Mac and Linux.">
 <link rel="canonical" href="https://edwardaiwang-svg.github.io/kinodraw/">
 <link rel="icon" href="media/icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KinoDraw">
 <meta property="og:url" content="https://edwardaiwang-svg.github.io/kinodraw/">
 <meta property="og:title" content="KinoDraw: free whiteboard explainer video maker">
-<meta property="og:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta property="og:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, works offline on Windows, Mac and Linux.">
 <meta property="og:image" content="https://edwardaiwang-svg.github.io/kinodraw/media/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A drawing hand sketches a rainbow beside a cartoon narrator and the sun, in a science video made with KinoDraw">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="KinoDraw: free whiteboard explainer video maker">
-<meta name="twitter:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta name="twitter:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, works offline on Windows, Mac and Linux.">
 <meta name="twitter:image" content="https://edwardaiwang-svg.github.io/kinodraw/media/og.png">
 <meta name="twitter:image:alt" content="A drawing hand sketches a rainbow beside a cartoon narrator and the sun, in a science video made with KinoDraw">
 <!-- TODO(J): paste the token from the Cloudflare dashboard (Web Analytics → add site) in place of
@@ -70,7 +70,7 @@
   .first-open ol { padding-left: 24px; margin: 10px 0; }
   .first-open li { margin: 0 0 12px; }
   .first-open li::marker { font-family: 'Playpen', sans-serif; color: var(--orange); font-weight: 700; }
-  .shot.todo { border: 2px dashed var(--orange); border-radius: 12px; padding: 14px; margin-top: 8px; color: var(--orange); font-size: 14px; background: #fff; }
+  img.shot { display: block; width: 100%; max-width: 520px; height: auto; margin-top: 10px; border: 2px solid var(--ink); border-radius: 12px; }
   @media (max-width: 760px) { header { grid-template-columns: 1fr; padding-top: 32px; } .narrator { max-width: 200px; } }
 </style>
 </head>
@@ -80,7 +80,7 @@
     <div>
       <h1>Kino<span>Draw</span></h1>
       <p class="lead">Turn any script into a hand-drawn whiteboard explainer video, on your own computer.
-        Free and open source, no watermark, works offline. In English and 中文.</p>
+        Free and open source, no watermark (just a 2-second end card you can turn off), works offline. In English and 中文.</p>
       <p id="other-device" hidden><b>KinoDraw runs on Mac, Windows and Linux computers.</b>
         Open this page on one of those computers to download it.</p>
       <a class="btn primary" id="download" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Download</a>
@@ -114,17 +114,26 @@
       <p>KinoDraw isn't notarized by Apple yet, so the first time you open it, macOS stops it. You approve it once:</p>
       <ol>
         <li>Unzip the download, drag <b>KinoDraw</b> to Applications and double-click it. macOS says it can't
-          check the app for malware. Close that message (don't move the app to the Trash).
-          <!-- TODO(J): replace the box below with a real screenshot of the blocked-app message, e.g.
-               <img src="media/mac-open-1.png" alt="..."> taken on your own Mac from a browser-downloaded copy. -->
-          <div class="shot todo">TODO (J): screenshot of the message macOS shows when you first open the app.</div></li>
-        <li>Choose Apple menu → <b>System Settings</b>, then click <b>Privacy &amp; Security</b> in the sidebar.
-          (You may need to scroll down.)</li>
-        <li>Go to <b>Security</b> and click <b>Open Anyway</b>. This button is available for about an hour after you
-          try to open the app; if it isn't there, double-click the app again first.
-          <!-- TODO(J): real screenshot of the Security section with the Open Anyway button (media/mac-open-3.png). -->
-          <div class="shot todo">TODO (J): screenshot of Privacy &amp; Security with the Open Anyway button.</div></li>
-        <li>Enter your login password, then click <b>OK</b>. From then on it opens with a double-click, like any app.</li>
+          check the app for malware. Click <b>Done</b> (don't move the app to the Trash).
+          <img class="shot" src="media/mac-open-1.jpg" width="670" height="500" loading="lazy"
+            alt="The message &quot;KinoDraw.app Not Opened&quot;, with the Done button circled"></li>
+        <li>Choose Apple menu → <b>System Settings</b>, then scroll the sidebar on the left down.
+          <img class="shot" src="media/mac-open-2.jpg" width="1090" height="1185" loading="lazy"
+            alt="System Settings, with an arrow showing to scroll the left sidebar down"></li>
+        <li>Click <b>Privacy &amp; Security</b>, then scroll the right side down to the <b>Security</b> section.
+          <img class="shot" src="media/mac-open-3.jpg" width="1090" height="1185" loading="lazy"
+            alt="Privacy &amp; Security circled in the sidebar, with an arrow showing to scroll the right side down"></li>
+        <li>Next to "KinoDraw.app was blocked to protect your Mac", click <b>Open Anyway</b>. This button is available
+          for about an hour after you try to open the app; if it isn't there, double-click the app again first.
+          <img class="shot" src="media/mac-open-4.jpg" width="1040" height="665" loading="lazy"
+            alt="The Security section, with the Open Anyway button circled"></li>
+        <li>macOS asks once more: click <b>Open Anyway</b> again.
+          <img class="shot" src="media/mac-open-5.jpg" width="1040" height="720" loading="lazy"
+            alt="The question &quot;Open KinoDraw.app?&quot;, with the Open Anyway button circled"></li>
+        <li>Touch the Touch ID key, or click <b>Use Password…</b> and enter your login password. KinoDraw opens, and
+          from then on it opens with a double-click, like any app.
+          <img class="shot" src="media/mac-open-6.jpg" width="1040" height="720" loading="lazy"
+            alt="The Touch ID request, with the Use Password button circled"></li>
       </ol>
       <p class="small">These are Apple's own steps (<a href="https://support.apple.com/guide/mac-help/mh40617/mac">Open an
         app by overriding security settings</a>). Right-click → Open no longer skips this on macOS Sequoia and later.

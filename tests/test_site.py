@@ -27,6 +27,19 @@ def test_the_first_mac_open_is_a_numbered_box_with_apples_steps():
         assert Path(SITE.parent, re.search(r'src="([^"]+)"', img).group(1)).is_file()
 
 
+
+def test_every_mac_first_open_step_shows_its_screenshot():
+    """0.2.0's page was ready to go out with two dashed "TODO (J): screenshot" boxes where the Open Anyway pictures belong."""
+    raw = SITE.read_text(encoding='utf-8')
+    assert 'class="shot todo"' not in raw
+    mac = re.search(r'<div class="first-open" data-os="macos">.*?</ol>', raw, re.S).group(0)
+    steps = re.findall(r'<li>.*?</li>', mac, re.S)
+    assert len(steps) == 6
+    for n, step in enumerate(steps, 1):
+        img = re.search(r'<img class="shot" src="([^"]+)"[^>]*alt="([^"]+)"', step, re.S)
+        assert img and img.group(1) == f'media/mac-open-{n}.jpg', n
+        assert Path(SITE.parent, img.group(1)).stat().st_size < 300_000      # light enough for a phone
+
 def test_link_previews_and_search_engines_get_a_title_description_and_image():
     """v0.1.6's page had only <title>Doodle Studio</title>: shared links showed a bare URL."""
     raw = SITE.read_text(encoding='utf-8')

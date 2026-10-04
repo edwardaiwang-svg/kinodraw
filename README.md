@@ -1,7 +1,7 @@
 # KinoDraw
 
 **Turn any script into a hand-drawn whiteboard explainer video, on your own computer.** Free and open source,
-no watermark, works offline on Windows, macOS and Linux.
+no watermark (just a 2-second end card you can turn off), works offline on Windows, macOS and Linux.
 
 *KinoDraw was called Doodle Studio before version 0.2.0.*
 
@@ -20,7 +20,7 @@ Paste a script and KinoDraw produces a finished MP4. A drawing hand sketches car
 **App:** download *KinoDraw* for Windows, macOS (Apple silicon, M1 or newer) or Linux from [Releases](../../releases) and open it. The first video downloads the voice model (about 190 MB per language) and the doodle search model (about 70 MB), once, checksum-verified, showing megabytes and percent as it goes.
 
 The app isn't notarized by Apple or signed for Windows yet, so the first launch needs one approval:
-- **macOS:** unzip, drag *KinoDraw* to Applications and open it. When macOS blocks it, go to System Settings → Privacy & Security and click **Open Anyway**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine "/Applications/KinoDraw.app"` once.
+- **macOS:** unzip, drag *KinoDraw* to Applications and open it. When macOS blocks it, go to System Settings → Privacy & Security and click **Open Anyway**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine "/Applications/KinoDraw.app"` once. Step by step, with pictures: [first time opening on a Mac](https://edwardaiwang-svg.github.io/kinodraw/#first-open).
 - **Windows:** unzip and run *KinoDraw.exe* in the *KinoDraw* folder. If SmartScreen appears, click **More info** → **Run anyway**.
 - **Linux:** unpack and run *KinoDraw/KinoDraw*.
 
@@ -90,7 +90,7 @@ Offline mode sends nothing anywhere. With KinoDraw Cloud or your own key, only t
 ## Licences
 
 - **Code:** MIT ([LICENSE](LICENSE)).
-- **Original doodles, narrator and drawing hand:** CC BY 4.0.
+- **Original doodles, narrator and drawing hand:** CC BY 4.0 ([LICENSES/ASSETS.md](LICENSES/ASSETS.md)).
 - **Everything else** (fonts, emoji, music, voice model, libraries) keeps its own licence; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **Your videos are yours.** No attribution is required, though "Made with KinoDraw" is appreciated. Videos end with a
   2-second "Made with KinoDraw" credit that you can switch off (Settings → Videos, or `kinodraw make --no-credit`).
