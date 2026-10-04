@@ -17,7 +17,7 @@ import urllib.request
 import wave
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import imageio_ffmpeg
 import numpy as np
@@ -100,17 +100,21 @@ class Server:
         self.voice = self.voice.strip()
 
 
+def _auth(server: Server) -> dict:
+    if not server.key:
+        return {}
+    if not (server.key.isascii() and server.key.isprintable()):
+        raise VoiceServerError('The voice server API key has a line break or another character a key cannot have, '
+                               'so nothing was sent. Enter the key again in Settings > Voice server (TTS_API_KEY '
+                               'in the CLI).')
+    return {'Authorization': f'Bearer {server.key}'}
+
+
 def speech(server: Server, text: str, speed: float) -> bytes:
     body = {'model': server.model, 'input': text, 'response_format': 'wav', 'speed': speed}
     if server.voice:
         body['voice'] = server.voice
-    headers = {'Content-Type': 'application/json'}
-    if server.key and not (server.key.isascii() and server.key.isprintable()):
-        raise VoiceServerError('The voice server API key has a line break or another character a key cannot have, '
-                               'so nothing was sent. Enter the key again in Settings > Voice server (TTS_API_KEY '
-                               'in the CLI).')
-    if server.key:
-        headers['Authorization'] = f'Bearer {server.key}'
+    headers = {'Content-Type': 'application/json', **_auth(server)}
     request = urllib.request.Request(endpoint(server.url), data=json.dumps(body).encode(), headers=headers,
                                      method='POST')
     address = origin(server.url)
@@ -147,6 +151,83 @@ def speech(server: Server, text: str, speed: float) -> bytes:
     if not data:
         raise VoiceServerError(f'Your voice server at {address} answered with no audio.')
     return data
+
+
+# OpenAI's speech API has no voice list to ask; these are the built-in voices its API reference documents.
+OPENAI_VOICES = ('alloy', 'ash', 'ballad', 'cedar', 'coral', 'echo', 'fable', 'marin', 'nova', 'onyx', 'sage', 'shimmer',
+                 'verse')
+NO_LIST = 'This server did not list its voices. Type the voice name your server expects.'
+
+
+def _voice_list(data) -> list[dict]:
+    """[{id, name}] from the shapes servers answer with: a list under voices, data, items or voice_names (or the body
+    itself), of names or of objects naming the voice by id, voice_id, voice, name or filename; LocalAI groups them by
+    model. The id is what speech requests send; the name is only for showing."""
+    items = data
+    if isinstance(data, dict):
+        items = next((data[k] for k in ('voices', 'data', 'items', 'voice_names') if isinstance(data.get(k), list)), [])
+    if not isinstance(items, list):
+        return []
+    found = {}
+    for item in items:
+        if isinstance(item, dict) and isinstance(item.get('voices'), list):
+            found.update({v['id']: v for v in _voice_list(item['voices']) if v['id'] not in found})
+            continue
+        name = item
+        if isinstance(item, dict):
+            item = next((item[k] for k in ('id', 'voice_id', 'voice', 'name', 'filename') if isinstance(item.get(k), str)
+                         and item[k].strip()), None)
+            name = name.get('name') if isinstance(name.get('name'), str) and name['name'].strip() else item
+        if isinstance(item, str) and 0 < len(item.strip()) <= 80 and item.isprintable() and item.strip() not in found:
+            found[item.strip()] = {'id': item.strip(), 'name': name.strip()[:80] if name.isprintable() else item.strip()}
+    return sorted(found.values(), key=lambda v: (v['id'].casefold(), v['id']))
+
+
+def list_voices(server: Server) -> dict:
+    """The voices the server offers, as {'voices': [{id, name}], 'source': the path that listed them, 'message'}.
+    Asks the endpoints servers use, most common first, a few seconds each, and stops at the first list; sends only
+    the model name (and the server's own key). A server without a list gets an empty one and a reason, never an error,
+    since any name can still be typed."""
+    address = origin(server.url)
+
+    def none(message):
+        return {'voices': [], 'source': None, 'message': message}
+
+    if urlsplit(address).hostname == 'api.openai.com':
+        return {'voices': [{'id': v, 'name': v} for v in OPENAI_VOICES], 'source': 'known list',
+                'message': "OpenAI's built-in voices (its API has no list to ask)."}
+    try:
+        headers = {'Accept': 'application/json', **_auth(server)}
+    except VoiceServerError as error:
+        return none(str(error))
+    v1 = endpoint(server.url).removesuffix('/audio/speech')
+    root = v1.removesuffix('/v1')
+    probes = dict.fromkeys((f'{v1}/audio/voices?{urlencode({"model": server.model})}', f'{v1}/voices',   # most servers;
+                            f'{root}/audio/voices', f'{root}/api/voices'))    # Chatterbox, edge-tts; no /v1; AllTalk
+    for url in probes:
+        try:
+            with net.urlopen_here(urllib.request.Request(url, headers=headers), timeout=3) as response:
+                data = response.read(4_000_000)
+        except urllib.error.HTTPError as error:
+            error.close()
+            if error.code in (401, 403):                                  # stop guessing: it wants a (different) key
+                return none(f'Your voice server at {address} ' + ('refused the API key when asked for its voices.'
+                            if server.key else 'needs an API key to list its voices.')
+                            + ' Enter its key, or type the voice name your server expects.')
+            continue                                                      # 404, 405, 501, a redirect: try the next
+        except http.client.HTTPException:
+            continue
+        except (urllib.error.URLError, OSError) as error:
+            return none(f"KinoDraw couldn't reach your voice server at {address} "
+                        f'({getattr(error, "reason", error)}). Type the voice name your server expects.')
+        try:
+            voices = _voice_list(json.loads(data))
+        except ValueError:                                                # not JSON (or not text)
+            continue
+        if voices:
+            return {'voices': voices, 'source': urlsplit(url).path,
+                    'message': f'{len(voices)} voice{"s" if len(voices) != 1 else ""} from your server.'}
+    return none(NO_LIST)
 
 
 def decode(data: bytes) -> np.ndarray:
