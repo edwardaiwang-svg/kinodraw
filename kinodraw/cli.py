@@ -15,7 +15,8 @@
   kinodraw setup [--lang en zh]                 download the voice models once
   kinodraw doodles "rocket launch" [--lang en]  search the doodle library
   kinodraw login you@example.com                KinoDraw Cloud (free plan: AI-directed videos, no API key needed)
-  kinodraw key set openai|anthropic|compat|voice-server   store your own API key in the OS keychain
+  kinodraw key set openai|anthropic|compat      store your own API key in the OS keychain
+  kinodraw key set voice-server --url URL       ... the key of your voice server (sent only to that address)
   kinodraw key set command                      store a command to use as the director (Advanced)
 
 Directors: --director rules (offline, free) | cloud | openai | anthropic | compat (--base-url, --model)
@@ -75,15 +76,14 @@ def cmd_new(args):
 def cmd_voice(args):
     from . import pipeline, voice_server
     project, recording = Path(args.project), getattr(args, 'recording', None)
-    try:
-        cfg = pipeline.settings(project)
-        spec = _server_settings(args, cfg.get('voice_server'))
-        if spec is not None:
-            if spec is False:
-                cfg.pop('voice_server', None)
-            else:
-                cfg['voice_server'] = spec
+    try:                                              # this computer's flags and TTS_* variables, never the project's
+        spec, server = _server_settings(args), None
+        if spec is False:
+            cfg = pipeline.settings(project)
+            cfg.pop('voice_server', None)
             pipeline._save(project / 'project.json', cfg)
+        elif spec:
+            server = voice_server.Server(**spec, key=voice_server.api_key(spec['url']))
     except voice_server.VoiceServerError as error:
         sys.exit(f'\n{error}')
     if recording and recording.lower() != 'none' and not Path(recording).is_file():
@@ -92,7 +92,7 @@ def cmd_voice(args):
         pipeline.set_recording(project, None if recording.lower() == 'none' else recording)
     t = _stage('voice')
     try:
-        clips = pipeline.narrate(project, _progress)
+        clips = pipeline.narrate(project, _progress, server=server)
     except (pipeline.voice.RecordingError, voice_server.VoiceServerError) as error:
         sys.exit(f'\n{error}')
     tl = pipeline.build_audio(project, clips)
@@ -195,7 +195,20 @@ def cmd_login(args):
 
 def cmd_key(args):
     import getpass
+    import os
     from .director.llm.providers import save_key
+    if args.provider == 'voice-server':              # a key belongs to one server address and is sent only there
+        from . import voice_server
+        url = args.url or os.environ.get('TTS_API_BASE')
+        if not url:
+            sys.exit('Say which server the key is for: kinodraw key set voice-server --url http://localhost:8880/v1')
+        try:
+            where = voice_server.origin(url)
+        except voice_server.VoiceServerError as error:
+            sys.exit(str(error))
+        voice_server.save_key(url, getpass.getpass(f'API key for {where} (hidden): ').strip())
+        print(f'  saved to the OS keychain; it is sent only to {where}')
+        return
     if args.provider == 'command':
         save_key('command', input('command line: ').strip())
     else:
@@ -238,13 +251,14 @@ def _settings(args):
         spec = _server_settings(args)
     except VoiceServerError as error:
         sys.exit(f'\n{error}')
-    if spec:
-        out['voice_server'] = spec
+    if spec:                                          # the project keeps the voice's names; the address stays here
+        out['voice_server'] = {'model': spec['model'], 'voice': spec['voice']}
     return out
 
 
-def _server_settings(args, current=None):
-    """Resolve CLI defaults once; the pipeline uses only the project's explicit choice."""
+def _server_settings(args):
+    """This computer's voice server from the flags, else the TTS_* variables: {url, model, voice}, None (the built-in
+    voice) or False (--voice-server none). A project's own settings never supply the address."""
     import os
     from . import voice_server
     url, model, name = (getattr(args, key, None) for key in ('voice_server', 'server_model', 'server_voice'))
@@ -253,10 +267,9 @@ def _server_settings(args, current=None):
             raise voice_server.VoiceServerError('--voice-server none is for an existing project: kinodraw voice PROJECT.')
         return False
     if any(value is not None for value in (url, model, name)):
-        current = current or {}
-        cfg = {'url': url if url is not None else os.environ.get('TTS_API_BASE') or current.get('url', ''),
-               'model': model if model is not None else os.environ.get('TTS_MODEL') or current.get('model', ''),
-               'voice': name if name is not None else os.environ.get('TTS_VOICE') or current.get('voice', '')}
+        cfg = {'url': url if url is not None else os.environ.get('TTS_API_BASE') or '',
+               'model': model if model is not None else os.environ.get('TTS_MODEL') or '',
+               'voice': name if name is not None else os.environ.get('TTS_VOICE') or ''}
     else:
         cfg = voice_server.from_env()
         if cfg is None:
@@ -330,6 +343,7 @@ def main(argv=None):
     p = sub.add_parser('key')
     p.add_argument('action', choices=['set'])
     p.add_argument('provider', choices=['openai', 'anthropic', 'compat', 'command', 'voice-server'])
+    p.add_argument('--url', help='voice-server only: the server the key is for (default TTS_API_BASE)')
     p.set_defaults(func=cmd_key)
     p = sub.add_parser('studio')
     p.add_argument('--browser', action='store_true', help='use the web browser instead of a window')

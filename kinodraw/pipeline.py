@@ -113,11 +113,12 @@ def set_recording(project_dir: Path, source) -> dict:
     return cfg
 
 
-def narrate(project_dir: Path, progress=None) -> dict:
+def narrate(project_dir: Path, progress=None, server: voice_server.Server | None = None) -> dict:
     """Synthesize (or reuse cached) clips for every beat (takeaways first say what their notes show). With a
     recording in project.json the clips are cut from it instead, guided by the synthesized ones. Writes read-aloud.txt:
-    what to read to narrate the video yourself. An explicit voice_server setting sends the spoken text to that
-    server instead of loading Kokoro, unless the project uses a recording."""
+    what to read to narrate the video yourself. ``server``: this computer's own voice server setting (the Studio's or
+    the CLI's, never the project's), which reads the beats instead of Kokoro unless the project uses a recording; the
+    project then records its model and voice. A project that records a server voice is never narrated without one."""
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
@@ -129,14 +130,15 @@ def narrate(project_dir: Path, progress=None) -> dict:
     text = project_dir / READ_ALOUD                 # what to read to narrate it yourself (the Studio shows the same)
     text.write_text(''.join(f'{n}. {line["text"]}\n' for n, line in enumerate(read_aloud(project_dir), 1)),
                     encoding='utf-8')
-    server = None
-    if 'voice_server' in cfg and not cfg.get('recording'):
-        spec = cfg['voice_server']
-        if not isinstance(spec, dict):
-            raise voice_server.VoiceServerError('The project voice_server setting should contain an address and model.')
-        server = voice_server.Server(spec.get('url', ''), spec.get('model', ''), spec.get('voice', ''))
-        server.key = voice_server.api_key()
-    else:
+    if cfg.get('recording'):
+        server = None                               # your own voice: the guides are Kokoro's, on this computer
+    elif server:
+        if cfg.get('voice_server') != voice_server.record(server):
+            cfg['voice_server'] = voice_server.record(server)
+            _save(project_dir / 'project.json', cfg)
+    elif 'voice_server' in cfg:                     # never a silent switch to Kokoro, never the project's own address
+        raise voice_server.VoiceServerError(voice_server.NOT_ON)
+    if not server:
         voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
@@ -230,12 +232,14 @@ def finish(project_dir: Path) -> dict:
     return qa
 
 
-def make(source, project_dir: Path, direct=None, progress=None, **settings_) -> dict:
-    """Script to finished video. ``direct(project_dir)`` adds visuals to storyboard.json (rules or LLM)."""
+def make(source, project_dir: Path, direct=None, progress=None, server: voice_server.Server | None = None,
+         **settings_) -> dict:
+    """Script to finished video. ``direct(project_dir)`` adds visuals to storyboard.json (rules or LLM); ``server``:
+    your own voice server (see narrate)."""
     new_project(source, project_dir, **settings_)
     if direct:
         direct(project_dir)
-    clips = narrate(project_dir, progress)
+    clips = narrate(project_dir, progress, server)
     build_audio(project_dir, clips)
     render(project_dir)
     return finish(project_dir)

@@ -35,7 +35,7 @@ def isolated_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(tempfile, 'tempdir', str(tmp_path))
     monkeypatch.setattr(providers, 'SAVED', tmp_path / 'saved-keys.json')
     monkeypatch.setattr(studio_server, 'CONFIG', tmp_path / 'studio.json')
-    monkeypatch.setattr(voice_server, 'api_key', lambda: None)
+    monkeypatch.setattr(voice_server, 'api_key', lambda *a: None)
 
 
 @pytest.fixture
@@ -109,8 +109,10 @@ def project(tmp_path, **cfg):
 def test_pipeline_decodes_real_server_audio_and_times_every_caption(tmp_path, monkeypatch, speech_servers, fmt, suffix):
     url, requests = speech_servers(fmt)
     no_kokoro(monkeypatch)
-    folder = project(tmp_path, voice_server={'url': url + suffix, 'model': 'test-model', 'voice': 'test-voice'}, speed=1.07)
-    clips = pipeline.narrate(folder)
+    folder = project(tmp_path, speed=1.07)
+    server = voice_server.Server(url + suffix, 'test-model', 'test-voice')
+    clips = pipeline.narrate(folder, server=server)
+    assert pipeline.settings(folder)['voice_server'] == {'model': 'test-model', 'voice': 'test-voice'}   # no address
     board = pipeline.storyboard(folder)
     assert set(clips) == {beat['id'] for beat in board['beats']}
     assert len(requests) == len(clips)
@@ -134,7 +136,7 @@ def test_pipeline_decodes_real_server_audio_and_times_every_caption(tmp_path, mo
         assert request['body']['speed'] == 1.07
         assert request['body']['input'] in [beat['spoken']['en'] for beat in board['beats']]
     count = len(requests)
-    repeated = pipeline.narrate(folder)
+    repeated = pipeline.narrate(folder, server=server)
     assert len(requests) == count
     assert {key: clip.wav for key, clip in repeated.items()} == {key: clip.wav for key, clip in clips.items()}
 
@@ -204,9 +206,9 @@ def test_invalid_saved_server_config_never_uses_kokoro(tmp_path, monkeypatch, cf
 def test_failed_server_never_falls_back_to_kokoro(tmp_path, monkeypatch, speech_servers, status, fmt):
     url, calls = speech_servers(fmt, status)
     no_kokoro(monkeypatch)
-    folder = project(tmp_path, voice_server={'url': url, 'model': 'test-model'})
+    folder = project(tmp_path)
     with pytest.raises(voice_server.VoiceServerError) as exc:
-        pipeline.narrate(folder)
+        pipeline.narrate(folder, server=voice_server.Server(url, 'test-model'))
     assert calls
     message = str(exc.value)
     assert 'Settings' in message and 'Voice server' in message
@@ -224,9 +226,9 @@ def test_refused_connection_is_actionable_and_does_not_fall_back(tmp_path, monke
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         url = f'http://127.0.0.1:{sock.getsockname()[1]}'
-    folder = project(tmp_path, voice_server={'url': url, 'model': 'test-model'})
+    folder = project(tmp_path)
     with pytest.raises(voice_server.VoiceServerError, match='Voice server'):
-        pipeline.narrate(folder)
+        pipeline.narrate(folder, server=voice_server.Server(url, 'test-model'))
 
 
 @pytest.mark.parametrize('url', ['', 'ftp://x', 'file:///etc/passwd', 'localhost:8880', 'http://', 'http://user:password@localhost',
@@ -259,7 +261,7 @@ def test_default_pipeline_stays_offline_and_keeps_positional_synthesize_contract
 
 
 def test_recording_uses_local_guides_even_with_server_config(tmp_path, monkeypatch):
-    folder = project(tmp_path, voice_server={'url': 'http://127.0.0.1:1', 'model': 'test-model'}, recording='recording.wav')
+    folder = project(tmp_path, voice_server={'model': 'test-model', 'voice': ''}, recording='recording.wav')
     seen = []
     monkeypatch.setattr(voice_server, 'synthesize', lambda *a, **k: pytest.fail('recording used server'))
     monkeypatch.setattr(voice, 'ensure_models', lambda *a: seen.append('models'))
@@ -267,6 +269,7 @@ def test_recording_uses_local_guides_even_with_server_config(tmp_path, monkeypat
     expected = {'recorded': voice.Clip(Path('recording.wav'), 1, [0])}
     monkeypatch.setattr(voice, 'from_recording', lambda *a: expected)
     assert pipeline.narrate(folder) is expected and seen == ['models']
+    assert pipeline.narrate(folder, server=voice_server.Server('http://127.0.0.1:1', 'test-model')) is expected
 
 
 @pytest.fixture
@@ -301,11 +304,15 @@ def test_startup_lists_saved_key_names_without_keychain_reads(monkeypatch):
     monkeypatch.setattr(keyring, 'get_password', lambda *a, **k: pytest.fail('startup read keychain'))
     monkeypatch.setattr(providers, 'api_key', lambda *a: pytest.fail('startup read provider key'))
     monkeypatch.setattr(voice_server, 'api_key', lambda *a: pytest.fail('startup read speech key'))
-    monkeypatch.setattr(providers, 'saved', lambda: {'voice-server'})
+    studio_server._save_config({'voice_server': {'on': True, 'url': 'http://127.0.0.1:1234/v1', 'model': 'm', 'voice': ''}})
+    monkeypatch.setattr(providers, 'saved', lambda: {'voice-server:http://127.0.0.1:1234'})
     state = studio_server.state()
-    assert state['voice_server'] == {'on': False, 'url': '', 'model': '', 'voice': '', 'key_saved': True}
-    monkeypatch.setattr(providers, 'saved', lambda: set())
-    assert studio_server.state()['voice_server']['key_saved'] is False
+    assert state['voice_server'] == {'on': True, 'url': 'http://127.0.0.1:1234/v1', 'model': 'm', 'voice': '',
+                                     'key_saved': True}
+    monkeypatch.setattr(providers, 'saved', lambda: {'voice-server:http://127.0.0.1:4321', 'voice-server'})
+    assert studio_server.state()['voice_server']['key_saved'] is False      # a key for another address is not this one's
+    studio_server._save_config({})
+    assert studio_server.state()['voice_server'] == {'on': False, 'url': '', 'model': '', 'voice': '', 'key_saved': False}
 
 
 def test_api_key_is_read_only_when_requested_and_env_is_the_fallback(monkeypatch):
@@ -314,29 +321,33 @@ def test_api_key_is_read_only_when_requested_and_env_is_the_fallback(monkeypatch
     monkeypatch.setenv('TTS_API_KEY', 'test-env-token')
     monkeypatch.setattr(keyring, 'get_password', lambda service, name: (calls.append((service, name)), None)[1])
     assert calls == []
-    assert API_KEY() == 'test-env-token'
-    assert calls == [(paths.APP, 'voice-server')]
-    monkeypatch.setattr(keyring, 'get_password', lambda *a: 'test-saved-token')
-    assert API_KEY() == 'test-saved-token'
+    assert API_KEY('http://127.0.0.1:1234/v1') == 'test-env-token'           # TTS_API_BASE unset: the CLI's own pair
+    assert calls == [(paths.APP, 'voice-server:http://127.0.0.1:1234')]
+    monkeypatch.setenv('TTS_API_BASE', 'http://127.0.0.1:1234/v1')
+    assert API_KEY('http://127.0.0.1:1234') == 'test-env-token'
+    assert API_KEY('http://127.0.0.1:4321/v1') is None                        # TTS_API_KEY belongs to TTS_API_BASE
+    monkeypatch.setattr(keyring, 'get_password', lambda service, name: 'test-saved-token'
+                        if name == 'voice-server:http://127.0.0.1:4321' else None)
+    assert API_KEY('http://127.0.0.1:4321/v1') == 'test-saved-token'
 
 
 def test_studio_saves_only_valid_config_and_keys_stay_private(studio_http, speech_servers, monkeypatch):
     url, calls = speech_servers()
     saved = []
-    monkeypatch.setattr(voice_server, 'save_key', lambda key: saved.append(key))
+    monkeypatch.setattr(voice_server, 'save_key', lambda *a: saved.append(a))
     body = {'on': True, 'url': url, 'model': 'test-model', 'voice': 'test-voice', 'key': 'test-token'}
     status, info = studio_http('/api/voice-server', body)
     assert status == 200, info
     cfg = studio_server._config()
     assert cfg['voice_server']['url'] == url and cfg['voice_server']['model'] == 'test-model'
     assert cfg['voice_server']['voice'] == 'test-voice' and cfg['voice_server']['on'] is True
-    assert saved == ['test-token'] and not calls
+    assert saved == [(url, 'test-token')] and not calls
     assert 'test-token' not in studio_server.CONFIG.read_text()
     assert 'test-token' not in json.dumps(info)
     for update in ({**body, 'url': 'file:///tmp/speech'}, {**body, 'model': ''},
-                   {**body, 'on': False, 'url': 'ftp://x'}):
+                   {**body, 'on': False, 'url': 'ftp://x'}, {**body, 'on': False, 'url': ''}):
         assert studio_http('/api/voice-server', update)[0] == 400
-        assert studio_server._config() == cfg and saved == ['test-token']
+        assert studio_server._config() == cfg and saved == [(url, 'test-token')]
 
 
 def test_studio_test_plays_real_audio_without_saving_settings(studio_http, speech_servers, monkeypatch):
@@ -367,13 +378,14 @@ def test_studio_settings_apply_credit_server_voice_and_off_to_existing_project(t
     folder = project(tmp_path)
     studio_server._save_config({'credit': False, 'voice_server': {
         'on': True, 'url': 'http://127.0.0.1:1234', 'model': 'test-model', 'voice': 'server-choice'}})
-    studio_server.apply_video_settings(folder)
+    server = studio_server.apply_video_settings(folder)
     cfg = pipeline.settings(folder)
     assert cfg['credit'] is False
-    assert cfg['voice_server']['voice'] == 'server-choice'
+    assert cfg['voice_server'] == {'model': 'test-model', 'voice': 'server-choice'}
+    assert (server.url, server.model, server.voice) == ('http://127.0.0.1:1234', 'test-model', 'server-choice')
     assert cfg['voice'] == voice.LANGS['en']['voice']
     studio_server._save_config({'credit': True, 'voice_server': {'on': False}})
-    studio_server.apply_video_settings(folder)
+    assert studio_server.apply_video_settings(folder) is None
     cfg = pipeline.settings(folder)
     assert cfg['credit'] is True and 'voice_server' not in cfg
 
@@ -400,8 +412,7 @@ def test_project_server_voice_is_saved_through_http_and_builtin_choices_stay_val
                                           ('es', 'creador', 'Kokoro')])
 def test_published_credits_describe_server_and_preserve_local_and_own_voice(tmp_path, monkeypatch, lang, own, kokoro):
     folder = tmp_path / 'Video'
-    board = pipeline.new_project(TEXT, folder, lang=lang, voice_server={
-        'url': 'http://127.0.0.1:1234', 'model': 'test-model', 'voice': 'test-voice'})
+    board = pipeline.new_project(TEXT, folder, lang=lang, voice_server={'model': 'test-model', 'voice': 'test-voice'})
     build = folder / 'build'
     build.mkdir()
     for ext in ('srt', 'vtt'):
@@ -440,24 +451,98 @@ def test_cli_new_uses_env_defaults_and_explicit_server_overrides(tmp_path, monke
     monkeypatch.setenv('TTS_VOICE', 'env-voice')
     a, b = tmp_path / 'A', tmp_path / 'B'
     cli.main(['new', TEXT, '-o', str(a), '--director', 'rules'])
-    assert pipeline.settings(a)['voice_server'] == {
-        'url': 'http://127.0.0.1:1234/v1', 'model': 'env-model', 'voice': 'env-voice'}
+    assert pipeline.settings(a)['voice_server'] == {'model': 'env-model', 'voice': 'env-voice'}   # never the address
     cli.main(['new', TEXT, '-o', str(b), '--director', 'rules', '--voice-server', 'http://127.0.0.1:4321',
               '--server-model', 'explicit-model', '--server-voice', 'explicit-voice'])
-    cfg = pipeline.settings(b)['voice_server']
-    assert cfg['url'] == 'http://127.0.0.1:4321' and cfg['model'] == 'explicit-model' and cfg['voice'] == 'explicit-voice'
+    assert pipeline.settings(b)['voice_server'] == {'model': 'explicit-model', 'voice': 'explicit-voice'}
     with pytest.raises(SystemExit):
         cli.main(['new', TEXT, '-o', str(tmp_path / 'Bad'), '--director', 'rules',
                   '--voice-server', 'file:///tmp/speech', '--server-model', 'test-model'])
 
 
 def test_cli_voice_none_removes_saved_server_and_key_provider_is_available(tmp_path, monkeypatch):
-    folder = project(tmp_path, voice_server={'url': 'http://127.0.0.1:1', 'model': 'test-model'})
+    folder = project(tmp_path, voice_server={'model': 'test-model', 'voice': ''})
     seen = []
-    monkeypatch.setattr(pipeline, 'narrate', lambda path, *a: (seen.append(pipeline.settings(path)), {})[1])
+    monkeypatch.setattr(pipeline, 'narrate', lambda path, *a, **k: (seen.append(pipeline.settings(path)), {})[1])
     monkeypatch.setattr(pipeline, 'build_audio', lambda *a: {'duration': 1, 'captions': []})
     cli.main(['voice', str(folder), '--voice-server', 'none'])
     assert 'voice_server' not in pipeline.settings(folder) and 'voice_server' not in seen[0]
     monkeypatch.setattr(cli, 'cmd_key', lambda args: seen.append(args.provider))
     cli.main(['key', 'set', 'voice-server'])
     assert seen[-1] == 'voice-server'
+
+
+# ------------------------------------------------------------------ security: only this computer chooses the server
+def fake_keychain(monkeypatch, url, key):
+    """A keychain holding ``key`` for the server at ``url`` (under the old single name and the per-address one)."""
+    import keyring
+    store = {(paths.APP, 'voice-server'): key, (paths.APP, f'voice-server:{url}'): key}
+    monkeypatch.setattr(keyring, 'set_password', lambda service, name, value: store.__setitem__((service, name), value))
+    monkeypatch.setattr(keyring, 'get_password', lambda service, name: store.get((service, name)))
+    monkeypatch.setattr(voice_server, 'api_key', API_KEY)
+    return store
+
+
+def socket_guard(monkeypatch):
+    attempts = []
+
+    def connect(sock, address):
+        attempts.append(address)
+        raise ConnectionRefusedError('test guard: no network')
+    monkeypatch.setattr(socket.socket, 'connect', connect)
+    return attempts
+
+
+def test_a_project_that_names_a_server_contacts_nothing_while_this_computers_setting_is_off(tmp_path, monkeypatch,
+                                                                                            speech_servers):
+    """A project from someone else whose project.json names a server (with a key saved on this computer for that very
+    server) never sends the script or the key anywhere: only this computer's setting chooses the server."""
+    url, requests = speech_servers()
+    fake_keychain(monkeypatch, url, 'test-token-saved-here')
+    folder = project(tmp_path, voice_server={'url': url, 'model': 'test-model', 'voice': 'test-voice'})
+    attempts = socket_guard(monkeypatch)
+    with pytest.raises(voice_server.VoiceServerError) as exc:
+        pipeline.narrate(folder)
+    with pytest.raises(SystemExit) as cli_exit:
+        cli.main(['voice', str(folder)])
+    assert attempts == [] and requests == []
+    for message in (str(exc.value), str(cli_exit.value)):
+        assert 'nothing was sent' in message and 'Settings > Voice server' in message and '--voice-server none' in message
+    studio_server._save_config({'voice_server': {'on': False, 'url': url, 'model': 'test-model'}})
+    monkeypatch.setattr(voice, 'ensure_models', lambda *a: None)
+    monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('local.wav'), 1., [0.] * len(text)))
+    server = studio_server.apply_video_settings(folder)           # what Make video does first: Settings decide
+    assert server is None and 'voice_server' not in pipeline.settings(folder)
+    assert pipeline.narrate(folder, server=server)
+    assert attempts == [] and requests == []
+
+
+def _wait_job(call, job, seconds=20):
+    import time
+    for _ in range(int(seconds / .05)):
+        info = call(f'/api/jobs/{job}')[1]
+        if info['state'] in ('done', 'failed'):
+            return info
+        time.sleep(.05)
+    raise AssertionError(f'job {job} did not finish')
+
+
+def test_a_key_saved_for_one_server_is_never_sent_to_another(studio_http, speech_servers, monkeypatch):
+    a, calls_a = speech_servers()
+    b, calls_b = speech_servers()
+    fake_keychain(monkeypatch, 'http://127.0.0.1:1', 'unused')
+    status, info = studio_http('/api/voice-server', {'on': True, 'url': a, 'model': 'test-model', 'key': 'test-token-a'})
+    assert status == 200, info
+    assert studio_http('/api/voice-server/test', {'url': a, 'model': 'test-model'})[0] == 200
+    assert calls_a[-1]['authorization'] == 'Bearer test-token-a'
+    assert studio_http('/api/voice-server/test', {'url': b, 'model': 'test-model'})[0] == 200     # Test with another address
+    assert calls_b[-1]['authorization'] is None
+    assert studio_http('/api/voice-server', {'on': True, 'url': b, 'model': 'test-model'})[0] == 200   # address changed
+    pipeline.new_project(TEXT, studio_http.root / 'Video', lang='en')
+    no_kokoro(monkeypatch)
+    monkeypatch.setattr(pipeline, 'build_audio', lambda *a: (_ for _ in ()).throw(RuntimeError('stop after the voice')))
+    before = len(calls_b)
+    job = _wait_job(studio_http, studio_http('/api/projects/Video/make', {})[1]['job'])
+    assert 'stop after the voice' in job['error']
+    assert len(calls_b) > before and all(call['authorization'] is None for call in calls_b)
+    assert len(calls_a) == 1

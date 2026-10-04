@@ -189,7 +189,10 @@ def save_voice_server(body: dict) -> dict:
     spec = _server_config(body, on)
     key = _server_key(body)
     if key:
-        voice_server.save_key(key)
+        if not spec['url']:
+            raise voice_server.VoiceServerError('Enter the voice server address with its API key: '
+                                                'the key is kept for that address and sent only there.')
+        voice_server.save_key(spec['url'], key)
     cfg = _config()
     cfg['voice_server'] = {'on': on, **spec}
     _save_config(cfg)
@@ -205,7 +208,7 @@ def _server_key(body: dict) -> str | None:
 
 def test_voice_server(body: dict) -> dict:
     spec = _server_config(body)
-    key = _server_key(body) or voice_server.api_key()
+    key = _server_key(body) or voice_server.api_key(spec['url'])     # only a key saved for this very address
     cache = paths.cache_dir() / 'voice-server-tests'
     cache.mkdir(parents=True, exist_ok=True)
     # A Test always contacts the server so changed credentials and connectivity are checked too.
@@ -217,17 +220,20 @@ def test_voice_server(body: dict) -> dict:
             'message': f'It works: {clip.duration:.1f} seconds of speech from your voice server.'}
 
 
-def apply_video_settings(path: Path) -> dict:
-    """Apply Studio choices to the next video, including a project's optional server voice override."""
+def apply_video_settings(path: Path) -> voice_server.Server | None:
+    """Apply this computer's Studio choices to the project's next video: the credit, and the voice server (the
+    Settings address and model, with the project's own server voice name if it has one). Returns that server, or None
+    for the built-in voice; a project's own settings never choose the address."""
     cfg, studio = pipeline.settings(path), _config()
     cfg['credit'] = studio.get('credit', True)
-    spec = studio.get('voice_server', {})
+    spec, server = studio.get('voice_server', {}), None
     if spec.get('on'):
-        cfg['voice_server'] = _server_config({**spec, 'voice': cfg.get('server_voice') or spec.get('voice', '')})
+        server = voice_server.Server(**_server_config({**spec, 'voice': cfg.get('server_voice') or spec.get('voice', '')}))
+        cfg['voice_server'] = voice_server.record(server)
     else:
         cfg.pop('voice_server', None)
     pipeline._save(path / 'project.json', cfg)
-    return cfg
+    return server
 
 
 def create_project(body: dict) -> dict:
@@ -288,8 +294,10 @@ def make_video(name: str) -> dict:
     path = _project(name)
 
     def job(progress):
-        apply_video_settings(path)
-        clips = pipeline.narrate(path, progress)
+        server = apply_video_settings(path)
+        if server:
+            server.key = voice_server.api_key(server.url)
+        clips = pipeline.narrate(path, progress, server=server)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)
         progress('render', 0, 1)
@@ -588,14 +596,18 @@ def state() -> dict:
     from ..director.llm import cloud
     from ..director.llm.providers import SUGGESTED, saved
     names = saved()                    # names only: opening the app never reads the keychain (no macOS prompt)
+    server = {'on': False, 'url': '', 'model': '', 'voice': '',
+              **{k: v for k, v in _config().get('voice_server', {}).items() if k in ('on', 'url', 'model', 'voice')}}
+    try:                                              # a key is saved for one address: is there one for this one?
+        server['key_saved'] = bool(server['url']) and voice_server.key_name(server['url']) in names
+    except voice_server.VoiceServerError:
+        server['key_saved'] = False
     signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(paths.getenv('KINODRAW_CLOUD_TOKEN')))
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
-            'voice_server': {'on': False, 'url': '', 'model': '', 'voice': '',
-                             **{k: v for k, v in _config().get('voice_server', {}).items()
-                                if k in ('on', 'url', 'model', 'voice')}, 'key_saved': 'voice-server' in names},
+            'voice_server': server,
             'credit': _config().get('credit', True), 'product': PRODUCT['name'],
             'models': SUGGESTED,
             'formats': [{'value': '16:9', 'label': 'Landscape 16:9 (YouTube)'},

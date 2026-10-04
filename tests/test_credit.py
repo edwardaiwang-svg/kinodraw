@@ -56,7 +56,7 @@ def test_the_studio_switch_is_remembered_and_applies_to_the_next_video(tmp_path,
     pipeline.new_project(TINY, tmp_path / 'videos' / 'Honey')
     seen = {}
 
-    def narrate(path, progress=None):
+    def narrate(path, progress=None, server=None):
         seen['credit'] = pipeline.settings(path)['credit']
         raise RuntimeError('stop here')
     monkeypatch.setattr(pipeline, 'narrate', narrate)

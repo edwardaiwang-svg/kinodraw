@@ -223,7 +223,7 @@ def test_a_recording_of_something_else_says_which_sentences_were_not_found(studi
 
 
 def test_a_failed_video_explains_itself_without_python_words(studio, monkeypatch):
-    def narrate(*a):
+    def narrate(*a, **k):
         raise ValueError('Your recording skips the part that says "Bees work hard". Read the whole script.')
     monkeypatch.setattr(pipeline, 'narrate', narrate)
     job = _wait(studio, studio('/api/projects/Honey/make', {})[1]['job'])

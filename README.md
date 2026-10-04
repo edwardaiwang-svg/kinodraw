@@ -78,7 +78,7 @@ export TTS_MODEL=qwen-tts
 kinodraw make my-script.md -o "My Video"
 ```
 
-You can also pass `--voice-server URL --server-model NAME --server-voice NAME` to `make`, `new` or `voice`, and store its key with `kinodraw key set voice-server`. To return an existing project to the built-in voice, run `kinodraw voice "My Video" --voice-server none` and unset the `TTS_*` variables for future projects.
+You can also pass `--voice-server URL --server-model NAME --server-voice NAME` to `make`, `new` or `voice`, and store its key with `kinodraw key set voice-server --url URL`. A key is kept for the address it was saved for and sent only there; only your own settings choose the server, never a project file someone sends you. To return an existing project to the built-in voice, run `kinodraw voice "My Video" --voice-server none` and unset the `TTS_*` variables for future projects.
 
 ## How it works
 

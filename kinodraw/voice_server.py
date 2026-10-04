@@ -1,4 +1,9 @@
-"""Opt-in narration from the creator's own OpenAI-compatible speech server."""
+"""Opt-in narration from the creator's own OpenAI-compatible speech server.
+
+Only this computer's own setting chooses the server (the Studio's Settings > Voice server, or the CLI's flags and TTS_*
+variables): a project records which model and voice narrated it, never an address to contact, so a project someone
+sends you cannot make KinoDraw send your script or your key anywhere. A saved API key belongs to the address
+(scheme://host:port) it was saved for and is sent only there."""
 from __future__ import annotations
 
 import hashlib
@@ -69,9 +74,11 @@ def _normalized(url: str) -> str:
     return urlunsplit((parts.scheme.lower(), host, parts.path, '', ''))
 
 
-def _address(url: str) -> str:
+def origin(url: str) -> str:
+    """scheme://host[:port] of a server address: what a saved key is bound to."""
     parts = urlsplit(_normalized(url))
     return f'{parts.scheme}://{parts.netloc}'
+
 
 
 @dataclass
@@ -101,7 +108,7 @@ def speech(server: Server, text: str, speed: float) -> bytes:
         headers['Authorization'] = f'Bearer {server.key}'
     request = urllib.request.Request(endpoint(server.url), data=json.dumps(body).encode(), headers=headers,
                                      method='POST')
-    address = _address(server.url)
+    address = origin(server.url)
 
     def safe(text):
         return str(text).replace(server.key, '[hidden]') if server.key else str(text)
@@ -229,20 +236,44 @@ def from_env(environ=os.environ) -> dict | None:
             'voice': environ.get('TTS_VOICE') or ''}
 
 
-def api_key() -> str | None:
+def key_name(url: str) -> str:
+    """The keychain entry for the key of the server at ``url``: one per origin."""
+    return f'voice-server:{origin(url)}'
+
+
+def api_key(url: str) -> str | None:
+    """The key saved for this server's origin, else TTS_API_KEY when it belongs to this server (TTS_API_BASE unset or
+    the same origin). Read only when the server is about to be asked for speech; never a key saved for another one."""
     try:
         import keyring
-        key = keyring.get_password(paths.APP, 'voice-server')
+        key = keyring.get_password(paths.APP, key_name(url))
         if key:
             return key
     except Exception:                                    # no keychain backend on a headless computer
         pass
-    return os.environ.get('TTS_API_KEY') or None
+    key, base = os.environ.get('TTS_API_KEY'), os.environ.get('TTS_API_BASE')
+    if key and base:
+        try:
+            return key if origin(base) == origin(url) else None
+        except VoiceServerError:
+            return None
+    return key or None
 
 
-def save_key(key: str):
+def save_key(url: str, key: str):
     from .director.llm import providers
-    providers.save_key('voice-server', key)
+    providers.save_key(key_name(url), key)
+
+
+def record(server: Server) -> dict:
+    """What a project keeps about the server voice that narrated it (for its credit): names only, no address."""
+    return {'model': server.model, 'voice': server.voice}
+
+
+NOT_ON = ('This project is set to be read by a voice server, but this computer\'s voice server setting is off, so '
+          'nothing was sent. A project never chooses the server itself: to use yours, turn on Settings > Voice server '
+          'in the Studio, or in the CLI set TTS_BACKEND=openai_compatible with TTS_API_BASE and TTS_MODEL (or pass '
+          '--voice-server and --server-model).')
 
 
 def describe(cfg: dict, lang: str = 'en') -> str:

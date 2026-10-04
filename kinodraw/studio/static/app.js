@@ -612,8 +612,8 @@ function showSettings() {
       <div class="grid"><label for="vs-url">Address<input id="vs-url" placeholder="http://localhost:8880/v1" value="${esc(voiceServer.url)}"></label>
         <label for="vs-model">Model<input id="vs-model" value="${esc(voiceServer.model)}"></label>
         <label for="vs-voice">Voice (optional)<input id="vs-voice" value="${esc(voiceServer.voice)}"></label>
-        <label for="vs-key">API key (optional)<input id="vs-key" type="password" placeholder="${voiceServer.key_saved ? 'saved in your keychain' : 'Optional'}" autocomplete="new-password"></label></div>
-      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else. Voice samples (Hear it) and your own recordings stay on this computer.
+        <label for="vs-key">API key (optional)<input id="vs-key" type="password" autocomplete="new-password"></label></div>
+      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else. Voice samples (Hear it) and your own recordings stay on this computer. Your key is kept in your keychain for this address and sent only to it.
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><button id="vs-save" class="small">Save</button><button id="vs-test" class="small">Test</button></div>
       <div id="vs-result" class="muted" role="status" aria-live="polite"></div></section>
@@ -640,13 +640,21 @@ function showSettings() {
   const serverFields = () => ({ url: $('#vs-url', body).value, model: $('#vs-model', body).value,
     voice: $('#vs-voice', body).value, ...($('#vs-key', body).value ? { key: $('#vs-key', body).value } : {}) });
   const serverBusy = (busy) => { $('#vs-save', body).disabled = busy; $('#vs-test', body).disabled = busy; };
+  const keyHint = () => {                // a saved key belongs to one address: another address asks for its key again
+    let same = false;
+    try { same = new URL($('#vs-url', body).value.trim()).origin === new URL(STATE.voice_server.url).origin; } catch { same = false; }
+    $('#vs-key', body).placeholder = STATE.voice_server.key_saved && same ? 'saved in your keychain for this address'
+      : STATE.voice_server.key_saved ? 'a new address needs its own key (if it uses one)' : 'Optional';
+  };
+  keyHint();
+  $('#vs-url', body).oninput = keyHint;
   $('#vs-save', body).onclick = async () => {
     const result = $('#vs-result', body); serverBusy(true); result.textContent = 'Saving…';
     try {
       await api('/api/voice-server', { method: 'POST', body: JSON.stringify({ on: $('#vs-on', body).checked, ...serverFields() }) });
       await refreshState();
       $('#vs-key', body).value = '';
-      $('#vs-key', body).placeholder = STATE.voice_server.key_saved ? 'saved in your keychain' : 'Optional';
+      keyHint();
       result.textContent = 'Saved.';
       if (current) loadNarrator(current);
     } catch (e) { result.textContent = e.message; }
