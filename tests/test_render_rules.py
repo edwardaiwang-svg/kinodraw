@@ -194,3 +194,40 @@ def test_pacing_lets_the_hand_finish_instead_of_skipping(tmp_path):
     assert pauses and all(0 < s <= render.PAUSE_MAX for s in pauses.values())
     assert len(skipped(paced)) < max(1, len(skipped(rushed))), (skipped(rushed), skipped(paced))
     assert not skipped(paced), skipped(paced)
+
+
+SKY = '''# Why the Sky Is Blue
+
+Look up on a clear afternoon and the sky is a deep, bright blue. But sunlight itself looks white. So where does the blue come from?
+
+## Sunlight is a mix of colors
+
+White sunlight is really every color of the rainbow traveling together. A prism splits it apart into red, orange, yellow, green, blue and violet. Each color is a wave, and blue waves are much shorter than red ones.
+
+## Air scatters short waves
+
+When sunlight hits the tiny molecules of nitrogen and oxygen in the air, the short blue waves bounce off in every direction. Red and yellow light mostly passes straight through. That scattered blue light reaches your eyes from all over the sky, so the whole sky glows blue.
+
+## Sunsets turn red
+
+At sunset, the light travels through much more air to reach you. Almost all the blue is scattered away before it arrives, and the reds and oranges are what is left. That is why evenings glow orange and pink.
+'''
+
+
+def test_takeaway_notes_keep_their_face_and_pictures(tmp_path):
+    """With the built-in voice (faster than reading rate) every takeaway note of a stranger's first video lost the
+    narrator's face and the section's pictures beside it ("skipped 4 visual(s) ... margins:s1, note:s1:3")."""
+    board = RulesDirector('en').direct(script.build(ingest.read(SKY)))
+    clips = tl.synthetic_clips(board, 'en')
+    for c in clips.values():                         # the built-in voice reads at about 2.9 words a second
+        c['speech'] *= .82
+        c['char_times'] = [t * .82 for t in c['char_times']]
+    timing = tl.layout(board, 'en', clips, render.pacing(board, 'en', clips, tmp_path))
+    prod = render.Production(board, timing, 'en', tmp_path)
+    dropped = sorted({e.group for e in prod.ctx.elements if e.skipped})
+    assert not dropped, dropped
+    for tr in timing['transitions']:
+        note = prod.notes[tr['section']]
+        assert len(note['els']) == 4 and all(e.end <= tr['hold_end'] - render.NOTE_READ + 1e-6 for e in note['els'])
+        assert tr['hold_end'] - tr['speech_end'] <= render.PAUSE_MAX + tl.take_hold(
+            next(b for b in board['beats'] if b['id'] == tr['take_beat']), 'en') + 1e-6

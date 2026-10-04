@@ -127,8 +127,9 @@ def arrow_polys(x0, y0, x1, y1, head=18, bend=0.):
     return [pts, [left, (ex, ey), right]]
 
 
-def build_cluster(v, beat, box, ctx):
-    """1-3 doodles, each in its own equal share of the box; labels never leave their share."""
+def build_cluster(v, beat, box, ctx, max_dur=None):
+    """1-3 doodles, each in its own equal share of the box; labels never leave their share. ``max_dur``: the
+    longest a doodle takes to draw (a quick sketch)."""
     x0, y0, w, h = box
     items = v.get('items', [])[:3]
     n = max(1, len(items))
@@ -143,7 +144,7 @@ def build_cluster(v, beat, box, ctx):
     for i, it in enumerate(items):
         t = ctx.time_of(beat, it.get('trigger')) if it.get('trigger') else base
         cx = x0 + share * (i + .5)
-        dr = ctx.doodle(it['doodle'], (d, d))
+        dr = ctx.doodle(it['doodle'], (d, d), **({'max_dur': max_dur} if max_dur else {}))
         el = ctx.add(dr, cx - dr.size[0] / 2, y0 + (h - label_h - dr.size[1]) / 2 + 4, t, group=v.get('id', ''))
         parts = [el]
         if it.get('label'):

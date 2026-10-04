@@ -235,7 +235,7 @@ class Scheduler:
         self.camera = camera
         self.g = geometry
 
-    def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE):
+    def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE, keep_optional=False):
         """Place every element in time and move the camera.
 
         ``cuts[k] = (t, L, 'cut' | 'pan')`` brings the camera to stretch k (a page, or a run of
@@ -244,7 +244,8 @@ class Scheduler:
         a time. A unit plays at natural speed when it can finish before the next unit's trigger
         and the next page change; otherwise the whole unit speeds up just enough (<= max_rate),
         so the board keeps pace with the narration without scribbling. (Pacing measures with
-        ``max_rate=1`` and no skipping: how long every drawing would really take.)
+        ``max_rate=1`` and no skipping, ``keep_optional`` decoration included: how long every drawing would
+        really take.)
         """
         cam, g = self.camera, self.g
         for _ in range(3):                                  # a drawing that follows another is never due before it
@@ -309,7 +310,7 @@ class Scheduler:
                     pos = (e.x + e.w, e.y + e.h / 2)
             window = max(.1, min(nxt, page_change, deadline) - start - .1)
             rate = 1.0 if natural <= window else min(max_rate, natural / window)
-            if all(e.optional for e in els) and start + natural / rate > deadline:
+            if all(e.optional for e in els) and start + natural / rate > deadline and not keep_optional:
                 for e in els:                               # decoration that cannot all fit: none of it
                     dropped.add(e.group or id(e))
                     e.skipped = True
@@ -357,6 +358,8 @@ class Scheduler:
                 holds_page = end > page_change + cut_grace
                 misses = e.deadline is not None and end > e.deadline
                 fresh = key not in started                  # a visual is judged when it would start
+                if keep_optional and e.optional:
+                    misses = False
                 if not e.essential and ((fresh and (late or holds_page or misses)) or (e.optional and misses)):
                     dropped.add(key)                        # too late to help: skip it, never pop it in
                     e.skipped = True
