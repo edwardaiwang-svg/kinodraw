@@ -13,7 +13,7 @@ import resvg_py
 from PIL import ImageDraw
 
 from kinodraw import PRODUCT, director, numbers, pipeline, script, styles
-from kinodraw.engine import auto_scenes, captions, render as renderer, timeline, vertical
+from kinodraw.engine import auto_scenes, captions, render as renderer, skin, timeline, vertical
 from kinodraw.engine.collage import promo, ui_kit
 
 FIX = Path(__file__).parent / 'fixtures'
@@ -184,6 +184,19 @@ class TextRecorder:
         monkeypatch.setattr(resvg_py, 'svg_to_bytes', svg)
         for module in (captions, vertical):
             monkeypatch.setattr(module, 'caption_image', self.caption_wrapper(module.caption_image))
+        # Pixel Quest and Mosaic letter their 16:9 captions on their own panel instead of the outline caption,
+        # one glyph per draw call: record each lettered line whole, not character by character.
+        monkeypatch.setattr(skin, '_caption_panel', self.caption_wrapper(skin._caption_panel))
+        real_runs = skin._draw_runs
+
+        def runs(draw, text, *args, **kwargs):
+            (self.stack[-1] if self.stack else self.other).append(str(text))
+            self.stack.append([])
+            try:
+                return real_runs(draw, text, *args, **kwargs)
+            finally:
+                self.stack.pop()
+        monkeypatch.setattr(skin, '_draw_runs', runs)
 
     def caption_wrapper(self, real):
         @wraps(real)
