@@ -212,6 +212,16 @@ def test_the_cli_makes_a_cloud_directed_storyboard_without_kinodraw_login(fake_c
     assert 'sign in' not in capsys.readouterr().out.lower()
 
 
+def test_kinodraw_cloud_id_prints_the_id_to_ask_for_its_data_to_be_deleted(fake_cloud, keychain, capsys):
+    from kinodraw import cli
+    cli.main(['cloud-id'])
+    assert 'no KinoDraw Cloud ID on this computer' in capsys.readouterr().out and not cloud.INSTALL_ID.exists()
+    providers.make_provider('cloud')
+    cli.main(['cloud-id'])
+    out = capsys.readouterr().out
+    assert cloud.install_id() in out and 'privacy@doodlecloud.org' in out
+
+
 # ------------------------------------------------------------------ Studio
 @pytest.fixture
 def studio(fake_cloud, keychain, tmp_path, monkeypatch):
@@ -238,12 +248,14 @@ def test_the_studio_offers_cloud_with_no_sign_in_and_still_starts_offline(studio
     state = studio('/api/state')[1]
     assert state['cloud_available'] and not state['cloud_signed_in'] and state['default_director'] == 'rules'
     assert seen == []                                                     # nothing leaves before Cloud is chosen
+    assert state['install_id'] is None                                   # no ID is made before Cloud is chosen
     status, reply = studio('/api/cloud/anonymous', 'POST')
-    assert status == 200 and reply == {k: v for k, v in ISSUED.items() if k != 'token'}
+    assert status == 200 and reply == {k: v for k, v in ISSUED.items() if k != 'token'} | {'install_id': cloud.install_id()}
     assert 'anon-token-1' not in json.dumps(reply)
     status, reply = studio('/api/cloud/anonymous', 'POST')               # the kept token, checked with the cloud
     assert status == 200 and reply['anonymous'] and _paths(seen) == ['/v1/anonymous', '/v1/me']
-    assert not studio('/api/state')[1]['cloud_signed_in']
+    state = studio('/api/state')[1]
+    assert not state['cloud_signed_in'] and state['install_id'] == cloud.install_id()      # Settings shows it
 
 
 def test_the_studio_shows_the_sign_in_when_the_cloud_asks_for_it(studio, fake_cloud, keychain):
@@ -264,7 +276,7 @@ def test_the_studio_replaces_a_kept_token_this_cloud_does_not_know(studio, fake_
     keychain[('KinoDraw', 'cloud-anon-token')] = 'stale'
     _stale(replies, '/v1/me')
     status, reply = studio('/api/cloud/anonymous', 'POST')
-    assert status == 200 and reply == {k: v for k, v in ISSUED.items() if k != 'token'}
+    assert status == 200 and reply == {k: v for k, v in ISSUED.items() if k != 'token'} | {'install_id': cloud.install_id()}
     assert _paths(seen) == ['/v1/me', '/v1/anonymous'] and keychain == {('KinoDraw', 'cloud-anon-token'): 'anon-token-1'}
 
 
@@ -344,3 +356,21 @@ const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="
     assert asks == ['Sign in with your email in Settings, or choose Offline.'] * 2
     assert allowed == ['KinoDraw Cloud, free plan: unlimited videos (fair use).',
                        'Free, with no account or API key. Signing in with your email is optional.']
+
+
+def test_settings_shows_the_installation_id_once_kinodraw_cloud_was_used():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    settings = re.search(r"^  const cloud = STATE\.cloud_available \? `.*?` : '';", _js(), re.S | re.M)[0]
+    run = """
+const esc = (s) => String(s ?? ''), cloudEmail = '', cloudAsks = '', out = [];
+for (const STATE of [{ cloud_available: true, cloud: null, install_id: null },
+                     { cloud_available: true, cloud: { plan: 'free', remaining: null, install_id: 'a1' }, install_id: null },
+                     { cloud_available: true, cloud: null, install_id: 'b2' }]) {
+  """ + settings + """
+  out.push((cloud.match(/This installation's ID: <code>(\\w+)<\\/code>.*?privacy@doodlecloud\\.org/) || [null, null])[1]);
+}
+console.log(JSON.stringify(out));"""
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    assert out == [None, 'a1', 'b2']

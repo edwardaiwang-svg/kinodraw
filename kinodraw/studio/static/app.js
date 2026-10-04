@@ -481,6 +481,7 @@ function showSettings() {
   const cloud = STATE.cloud_available ? `<section><h3>KinoDraw Cloud</h3>
       <p class="muted">${STATE.cloud_signed_in && STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : cloudAsks ? esc(cloudAsks) : STATE.cloud ? 'Free, with no account or API key. Signing in with your email is optional.' : 'Free, with no account or API key, while KinoDraw Cloud allows it; if it asks, sign in with your email here.'}
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
+      ${STATE.install_id || STATE.cloud?.install_id ? `<p class="muted">This installation's ID: <code>${esc(STATE.install_id || STATE.cloud.install_id)}</code>. To delete what KinoDraw Cloud keeps for it, email it to privacy@doodlecloud.org.</p>` : ''}
       <div class="row"><input id="c-email" placeholder="you@example.com" value="${esc(cloudEmail)}"><button id="c-send" class="small">Email me a code</button></div>
       <p id="c-note" class="muted hidden"></p>
       <div class="row" style="margin-top:6px"><input id="c-code" placeholder="6-digit code"><button id="c-verify" class="small">Sign in</button></div></section>` : '';

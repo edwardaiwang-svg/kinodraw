@@ -41,3 +41,13 @@ def test_the_privacy_page_names_every_host_the_app_downloads_from():
     hosts = {urlparse(url).hostname for url, *_ in voice.FILES.values()} | {urlparse(match.HF).hostname}
     page = _page()
     assert all(names[host] in page for host in hosts)            # KeyError: a new host the page does not name
+
+
+def test_the_privacy_page_says_how_to_delete_kinodraw_cloud_data_without_a_sign_in():
+    """Anonymous KinoDraw Cloud use stores an install ID: the page names where the app shows it."""
+    from kinodraw import cli
+    from kinodraw.studio import server
+    page = _page()
+    assert 'Settings > KinoDraw Cloud' in page and 'kinodraw cloud-id' in page and 'privacy@doodlecloud.org' in page
+    assert 'kinodraw cloud-id' in cli.__doc__ and "This installation's ID" in (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    assert 'with or without a sign-in, is not meant for children under 13' in page

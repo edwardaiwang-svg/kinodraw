@@ -22,6 +22,11 @@ USER_AGENT = 'KinoDraw (+https://github.com/edwardaiwang-svg/kinodraw)'
 INSTALL_ID = paths.data_dir() / 'install-id'
 
 
+def kept_install_id() -> str | None:
+    """The ID, only if KinoDraw Cloud was ever used here (shown so its data can be deleted); never makes one."""
+    return INSTALL_ID.read_text(encoding='utf-8').strip() if INSTALL_ID.exists() else None
+
+
 def install_id() -> str:
     if not INSTALL_ID.exists():
         INSTALL_ID.parent.mkdir(parents=True, exist_ok=True)

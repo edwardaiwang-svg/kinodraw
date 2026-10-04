@@ -403,7 +403,8 @@ def state() -> dict:
     signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(paths.getenv('KINODRAW_CLOUD_TOKEN')))
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
-            'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
+            'cloud': None, 'install_id': cloud.kept_install_id(),     # shown in Settings, to ask for its data to be deleted
+            'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
             'credit': _config().get('credit', True), 'product': PRODUCT['name'],
             'models': SUGGESTED,
@@ -567,7 +568,7 @@ class Handler(BaseHTTPRequestHandler):
         if p == ['cloud', 'anonymous'] and method == 'POST':     # KinoDraw Cloud chosen with no email sign-in
             from ..director.llm import cloud
             try:
-                return self._json(cloud.anonymous())
+                return self._json(cloud.anonymous() | {'install_id': cloud.install_id()})   # Settings shows the ID
             except cloud.SignInNeeded as error:          # open access is off: 0.2.0's sign-in prompt, in the cloud's words
                 return self._json({'error': error.sentence or SIGN_IN, 'code': 'sign_in'}, 403)
         if p == ['cloud', 'signup'] and method == 'POST':
