@@ -890,7 +890,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(cloud.me())
         if p == ['cloud', 'signup'] and method == 'POST':
             from ..director.llm import cloud
-            return self._json(cloud.signup(self._body()['email']))
+            try:
+                return self._json(cloud.signup(self._body()['email']))
+            except cloud.EmailUnavailable as error:     # the page shows this sentence and keeps Offline in view
+                return self._json({'error': str(error), 'code': 'email_unavailable'}, 503)
         if p == ['cloud', 'verify'] and method == 'POST':
             from ..director.llm import cloud
             b = self._body()
