@@ -235,6 +235,17 @@ async function openProject(name, tab = null) {
       toast('Format saved. Make video to render it.');
     } catch (e) { $('#p-format').value = p.settings.aspect || '16:9'; toast(e.message, 6000); }
   };
+  const credit = $('#p-credit');
+  credit.checked = p.credit;
+  credit.nextElementSibling.textContent = `"Made with ${STATE.product}" end card`;
+  credit.parentElement.title = `Ends the video with a 2-second "Made with ${STATE.product}" card. Untick to leave it off this video.`;
+  credit.onchange = async () => {
+    try {
+      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/credit`, { method: 'POST', body: JSON.stringify({ credit: credit.checked }) });
+      p.credit = cfg.credit;
+      toast(`End card ${p.credit ? 'on' : 'off'}. Make video to apply it.`);
+    } catch (e) { credit.checked = p.credit; toast(e.message, 6000); }
+  };
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (needsCloudSignIn($('#p-director').value)) return;
@@ -599,8 +610,6 @@ function showSettings() {
       <div class="row"><select id="k-prov" style="width:auto"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="compat">OpenAI-compatible</option><option value="command">Command</option></select>
       <input id="k-key" type="password" placeholder="sk-…"><button id="k-save" class="small">Save</button></div>
       <p class="muted">Saved: ${esc(Object.entries(STATE.keys).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none')}</p>` : ''}</section>
-    <section><h3>Videos</h3><label class="row"><input id="s-credit" type="checkbox" style="width:auto"${STATE.credit ? ' checked' : ''}>
-      <span>End each video with a 2-second "Made with ${esc(STATE.product)}" credit</span></label></section>
     <section><h3>Projects folder</h3><div class="row"><input id="s-root" value="${esc(STATE.projects_root)}"><button id="s-save" class="small">Save</button></div></section>
     <section><h3>Voices</h3><p class="muted">${LANG_NAMES.en}: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · ${LANG_NAMES.zh}: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'} · ${LANG_NAMES.es}: ${STATE.models_ready.es ? 'ready' : 'downloads on first use (~190 MB)'}</p></section></div>`);
   $('#c-email', body)?.addEventListener('input', (e) => { cloudEmail = e.target.value.trim(); });
@@ -617,10 +626,6 @@ function showSettings() {
       toast(r.remaining === null ? 'Signed in: unlimited videos (fair use)' : `Signed in: ${r.remaining} videos left this month`); await refreshState(); closeModal(); refreshDirectorMenus(); }
     catch (e) { toast(e.message, 6000); }
   });
-  $('#s-credit', body).onchange = async (e) => {
-    try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ credit: e.target.checked }) }); await refreshState(); }
-    catch (err) { toast(err.message, 6000); }
-  };
   $('#s-adv', body).onchange = async (e) => {
     try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ advanced: e.target.checked }) });
       await refreshState(); refreshDirectorMenus(); closeModal(); showSettings(); }

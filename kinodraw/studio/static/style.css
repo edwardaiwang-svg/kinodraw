@@ -62,6 +62,8 @@ label.file input { display: none; }
 .project-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .actions select { width: auto; }
+.actions label.check { flex-direction: row; gap: 6px; align-items: center; white-space: nowrap; }
+.actions label.check input { width: auto; }
 .tabs { display: flex; gap: 6px; margin: 18px 0 10px; }
 .tabs button { border-radius: 12px 12px 0 0; border-bottom: none; background: transparent; }
 .tabs button.on { background: var(--card); }
