@@ -70,14 +70,24 @@ def test_a_mac_visitor_is_told_the_mac_app_needs_apple_silicon():
         assert words in text, words
 
 
-def test_the_visitors_own_computer_is_detected():
-    """Phones and Chromebooks need a computer; a UA override must still pick the visitor's chosen desktop."""
+def _check_platform_rows(rows, prelude=''):
     node = shutil.which('node')
     if not node:
         pytest.skip('node is not installed')
     raw = SITE.read_text(encoding='utf-8')
     function = re.search(r'function kinodrawPlatform\(ua, uaData, touchPoints\) \{.*?^\}', raw, re.S | re.M)
     assert function, 'no pure platform detector'
+    program = prelude + function.group(0) + '\nconst rows = ' + json.dumps(rows) + ';\n'
+    program += 'console.log(JSON.stringify(rows.map(([ua, data, touch]) => kinodrawPlatform(ua, data ?? undefined, touch))));'
+    run = subprocess.run([node, '-e', program], capture_output=True, text=True, check=True)
+    results = json.loads(run.stdout)
+    assert len(results) == len(rows)
+    for row, result in zip(rows, results):
+        assert result == row[3], row
+
+
+def test_the_visitors_own_computer_is_detected():
+    """Phones and Chromebooks need a computer; desktop UA overrides still win over conflicting desktop data."""
     mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
     windows = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     linux = 'Mozilla/5.0 (X11; Linux x86_64)'
@@ -114,13 +124,23 @@ def test_the_visitors_own_computer_is_detected():
         ('', {'mobile': True}, 0, 'other'),
         (windows, {'platform': 'macOS'}, 0, 'windows'),
     ]
-    program = function.group(0) + '\nconst rows = ' + json.dumps(rows) + ';\n'
-    program += 'console.log(JSON.stringify(rows.map(([ua, data, touch]) => kinodrawPlatform(ua, data ?? undefined, touch))));'
-    run = subprocess.run([node, '-e', program], capture_output=True, text=True, check=True)
-    results = json.loads(run.stdout)
-    assert len(results) == len(rows)
-    for row, result in zip(rows, results):
-        assert result == row[3], row
+    _check_platform_rows(rows)
+
+
+def test_old_browsers_without_object_hasown_still_get_their_computer_first():
+    """Older browsers detect computers without Object.hasOwn, including safe handling of inherited keys."""
+    mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    windows = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    linux = 'Mozilla/5.0 (X11; Linux x86_64)'
+    rows = [
+        (mac + ' AppleWebKit/605.1.15 Version/14.1 Safari/605.1.15', None, 0, 'macos'),
+        (windows + ' Chrome/90.0 Safari/537.36', {'platform': 'Windows', 'mobile': False}, 0, 'windows'),
+        (linux + ' Firefox/90.0', None, 0, 'linux'),
+        ('', {'platform': 'constructor'}, 0, None),
+    ]
+    _check_platform_rows(rows, 'delete Object.hasOwn;\n')
+    script = re.search(r'<script>(.*?)</script>', SITE.read_text(encoding='utf-8'), re.S).group(1)
+    assert 'Object.hasOwn' not in script
 
 
 def test_other_devices_are_told_to_open_the_page_on_a_computer():
