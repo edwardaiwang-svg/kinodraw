@@ -231,6 +231,38 @@ def test_refused_connection_is_actionable_and_does_not_fall_back(tmp_path, monke
         pipeline.narrate(folder, server=voice_server.Server(url, 'test-model'))
 
 
+@pytest.mark.parametrize('reply', [lambda auth: b'XYZ ' + auth + b'\r\n\r\n',
+                                   lambda auth: b'HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\nRIFF',
+                                   lambda auth: b'HTTP/1.1 500 Oops\r\nContent-Length: 100000\r\n\r\nfail'],
+                         ids=['bad-status-line-echoing-key', 'cut-off-body', 'cut-off-error-body'])
+def test_broken_server_response_is_a_clear_error_without_the_key(reply):
+    sock = socket.socket()
+    sock.bind(('127.0.0.1', 0))
+    sock.listen(1)
+
+    def answer():
+        conn, _ = sock.accept()
+        with conn:
+            data = b''
+            while b'\r\n\r\n' not in data:
+                data += conn.recv(65536)
+            head, _, body = data.partition(b'\r\n\r\n')
+            lines = head.split(b'\r\n')
+            length = int(next(l for l in lines if l.lower().startswith(b'content-length')).split(b':')[1])
+            while len(body) < length:
+                body += conn.recv(65536)
+            auth = next(l for l in lines if l.lower().startswith(b'authorization')).split(b': ', 1)[1]
+            conn.sendall(reply(auth))
+        sock.close()
+
+    threading.Thread(target=answer, daemon=True).start()
+    server = voice_server.Server(f'http://127.0.0.1:{sock.getsockname()[1]}/v1', 'test-model', key='test-secret')
+    with pytest.raises(voice_server.VoiceServerError) as exc:
+        voice_server.speech(server, 'hello', 1.0)
+    message = str(exc.value)
+    assert 'test-secret' not in message and 'voice server' in message and 'Voice server' in message
+
+
 @pytest.mark.parametrize('url', ['', 'ftp://x', 'file:///etc/passwd', 'localhost:8880', 'http://', 'http://user:password@localhost',
                                 'http://localhost?secret=value', 'http://localhost#fragment'])
 def test_invalid_base_urls_are_rejected_before_any_network(url, monkeypatch):

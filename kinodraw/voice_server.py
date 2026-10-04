@@ -7,6 +7,7 @@ sends you cannot make KinoDraw send your script or your key anywhere. A saved AP
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
 import subprocess
@@ -129,10 +130,16 @@ def speech(server: Server, text: str, speed: float) -> bytes:
         elif error.code == 404:
             message = f'Your voice server at {address} has no /v1/audio/speech endpoint there. Check the address.'
         else:
-            detail = safe(error.read().decode(errors='replace'))[:200]
+            try:
+                detail = safe(error.read().decode(errors='replace'))[:200]
+            except (http.client.HTTPException, OSError):
+                detail = 'its answer was cut off'
             message = f'Your voice server at {address} failed (HTTP {error.code}: {detail}).'
         error.close()
         raise VoiceServerError(message) from None
+    except http.client.HTTPException as error:                    # a broken status line or a cut-off answer
+        raise VoiceServerError(f'Your voice server at {address} sent a broken or cut-off answer '
+                               f'({type(error).__name__}). Check that it is running properly.') from None
     except (urllib.error.URLError, OSError, TimeoutError) as error:
         reason = safe(getattr(error, 'reason', error))
         raise VoiceServerError(f"KinoDraw couldn't reach your voice server at {address} ({reason}). "
