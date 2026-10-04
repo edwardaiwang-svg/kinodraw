@@ -223,3 +223,53 @@ def test_manifest_records_only_explicit_portrait(tmp_path, monkeypatch, portrait
     assert ('portrait' in manifest) == (portrait is not None)
     if portrait is not None:
         assert manifest['portrait'] == portrait
+
+
+def _overlap(a, b):
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def test_native_takeaway_note_sits_below_the_title_band(native):
+    assert native.prod.notes
+    for note in native.prod.notes.values():
+        nx, ny, nw, nh = note['bbox']
+        assert ny >= PORTRAIT.board_band[1] and ny + nh <= PORTRAIT.board_band[3]
+        assert nx - note['x'] >= PORTRAIT.cell_x0 and nx - note['x'] + nw <= PORTRAIT.cell_x0 + PORTRAIT.cell_w
+
+
+def test_native_pinned_notes_and_check_marks_leave_card_text_readable(native):
+    prod = native.prod
+    pinned = [(sec, note) for sec, note in prod.notes.items() if 'pin_xy' in note]
+    assert pinned
+    for sec, note in pinned:
+        card = prod.cards[sec]
+        px, py = note['pin_xy']
+        mw, mh = note['mini_size']
+        mini = (px, py - 14, px + mw, py + mh)
+        cx, cy, cw, chh = card['box']
+        assert cx <= px and px + mw <= cx + cw and cy <= py - 14 and py + mh <= cy + chh
+        written = [b for b in map(auto.ink_bbox, card['els']) if b]
+        assert written and not any(_overlap(mini, b) for b in written), sec
+        t = next(tr for tr in prod.tl['transitions'] if tr['section'] == sec)['end'] - .05
+        checks = [e for e in prod.els if e.fixed and e.start is not None and abs(e.start - (note['t_pin'] + .05)) < 1e-6
+                  and cx <= e.x < cx + cw and cy <= e.y < cy + chh]
+        assert checks and all(not _overlap((e.x, e.y, e.x + e.w, e.y + e.h), b) for e in checks for b in written + [mini])
+        assert t > note['t_pin']
+
+
+def test_native_quote_takes_a_whole_screen_and_stays_in_the_board_band(board, tmp_path):
+    ep = json.loads(json.dumps(board))
+    beat = next(b for b in ep['beats'] if b['chapter'] == next(c['id'] for c in ep['chapters'] if c['kind'] == 'section')
+                and b.get('kind') != 'take')
+    text = ('Bees visit millions of flowers to make one jar of honey, and every one of those visits also carries '
+            'pollen from plant to plant across the whole meadow, all summer long, without a single day off.')
+    beat['visuals'] = [{'type': 'quote', 'id': f'q{k}', 'who': {'en': 'A beekeeper who has kept hives for forty years'},
+                        'text': {'en': text}} for k in range(2)]           # a second quote would take the lower row
+    clips = timeline.synthetic_clips(ep, 'en')
+    prod = render.make_production(ep, timeline.layout(ep, 'en', clips), 'en', tmp_path, aspect='9:16',
+                                  portrait='native').prod
+    for k in range(2):
+        quote = [e for e in prod.ctx.elements if e.group == f'q{k}' and isinstance(e.drawing, ink.TextDrawing)]
+        assert len(quote) == 3                                        # the mark, the words and who said them
+        words = [e for e in quote if e.y >= PORTRAIT.rows[0][0]]
+        assert words and max(e.y + e.h for e in words) <= PORTRAIT.rows[1][1], k

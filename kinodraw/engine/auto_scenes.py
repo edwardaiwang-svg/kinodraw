@@ -14,6 +14,7 @@ UI_DEFAULTS = {
     'zh': {'agenda': '本期内容', 'takeaway': '本节要点', 'sign': '', 'thanks': '感谢收看'},
 }
 MAX_SECTIONS = 8
+CARD_STRIP = .3      # portrait agenda cards keep this share of their width, on the right, for the pinned note
 
 
 def ui(ep, lang):
@@ -390,14 +391,17 @@ def build_agenda_portrait(ctx, chapters, beats, x0):
         first = len(ctx.elements)
         number = _portrait_text(ctx, str(ch['number']), 64 if cols == 1 else (50 if n == 4 else 40),
                                 90, lines=1, color=col)
-        label = _portrait_text(ctx, ctx.T(ch['label']), 44 if cols == 1 else 36, cw - 130,
+        text_w = cw - int(cw * CARD_STRIP)              # the right strip takes the takeaway's mini note later
+        label = _portrait_text(ctx, ctx.T(ch['label']), 44 if cols == 1 else 36, text_w - 110,
                                lines=1, min_size=36, color=col)
         cursor = cy + 12
         ctx.add(number, cx + 20, cursor, t)
         ctx.add(label, cx + 110, cursor, t)
         cursor += max(number.size[1], label.size[1]) + 8
-        head = _portrait_text(ctx, ctx.T(ch['title']), 44 if cols == 1 else (40 if n == 4 else 34), cw - 40,
-                              lines=2, min_size=30, pace=1.6)
+        head_size = 44 if cols == 1 else (40 if n == 4 else 34)
+        head = _portrait_text(ctx, ctx.T(ch['title']), head_size, text_w - 20, lines=2, min_size=30, pace=1.6)
+        if cursor + head.size[1] > cy + chh - 8:      # a short compact card: one line, shortened, never past its edge
+            head = _portrait_text(ctx, ctx.T(ch['title']), head_size, text_w - 20, lines=1, min_size=30, pace=1.6)
         ctx.add(head, cx + 20, cursor, t)
         cards[ch['id']] = {'box': (cx, cy, cw, chh), 'color': col, 'els': ctx.elements[first:]}
     return cards
@@ -449,7 +453,7 @@ def build_take_note_portrait(ctx, beat, chapter, x0, t, t_label=None, t_head=Non
     strings = ui(ctx.ep, ctx.lang)
     col = ink.SECTION_COLORS[chapter['color']]
     nw, nh = g.cell_w, 600
-    nx, ny = x0 + g.cell_x0, g.text_safe[0][1] + 42
+    nx, ny = x0 + g.cell_x0, g.board_band[1] + 10     # in the board band: the chapter title stays above it
     els = [ctx.add(sticky(ctx, nw, nh, tape=col), nx, ny, t, essential=True)]
     y = ny + 32
     label = _portrait_text(ctx, strings['takeaway'], 44, nw - 64, lines=1, min_size=44, color=col)

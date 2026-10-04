@@ -118,7 +118,7 @@ class Production:
                     if vt == 'cluster' and len(v.get('items', [])) >= 3 and size == 'slot':
                         size = 'wide'
                     if vt == 'quote':
-                        size = 'wide'
+                        size = 'wide' if self.g.name == 'landscape' else 'tall'   # a quote needs a whole portrait screen
                     if size == 'wide':
                         box, _ = self.layout.wide()
                     elif size == 'tall':
@@ -305,14 +305,23 @@ class Production:
             nx, ny, nw, nh = note['bbox']
             iw, ih = int(nw) + 4, int(nh) + 4
             cx, cy, cw, chh = card['box']
-            mw = int(min(cw - 90, (chh - 150) * iw / ih))
-            mh = int(ih * mw / iw)
-            px, py = cx + (cw - mw) / 2, cy + chh - mh - 34
+            if self.g.name == 'portrait':                 # in the card's right strip, above its check mark
+                strip = int(cw * auto.CARD_STRIP)
+                s = min((strip - 16) / iw, (chh - 112) / ih)
+                mw, mh = int(iw * s), int(ih * s)
+                px, py = cx + cw - strip + (strip - mw) / 2, cy + 28
+            else:
+                mw = int(min(cw - 90, (chh - 150) * iw / ih))
+                mh = int(ih * mw / iw)
+                px, py = cx + (cw - mw) / 2, cy + chh - mh - 34
             note.update(pin_xy=(px, py), mini_size=(mw, mh), t_pin=t_c)
             ctx.add(auto.pin(ctx), px + mw / 2 - 22, py - 14, t_c, fixed=True, hand=False)
             # The check mark goes where nothing is written on the card.
             taken = [b for b in map(auto.ink_bbox, card.get('els', [])) if b] + [(px, py - 14, px + mw, py + mh)]
-            size, pos = auto.check_spot(card['box'], taken, (150, 120, 96) if chh >= 600 else (90, 72, 60))
+            if self.g.name == 'portrait':
+                size, pos = 60, (cx + cw - strip + (strip - 60) / 2, cy + chh - 72)
+            else:
+                size, pos = auto.check_spot(card['box'], taken, (150, 120, 96) if chh >= 600 else (90, 72, 60))
             ctx.add(auto.check_mark(ctx, size=size), pos[0], pos[1], t_c + .05, fixed=True)
             if nxt in self.cards:
                 circ, pos = auto.circle_around(ctx, self.cards[nxt]['box'], self.cards[nxt]['color'])
