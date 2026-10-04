@@ -31,7 +31,8 @@
 
   <h2>The offline director: nothing leaves your computer</h2>
   <p>With the offline director you need no account. Unless you choose your own voice server (below), your scripts,
-    projects, narration and videos stay on your computer. The app only downloads its voice model (from GitHub; the Chinese voice also needs a small settings file
+    projects, narration and videos stay on your computer; Style &gt; "Choose for me" then picks the style on your
+    computer too, from words in your script. The app only downloads its voice model (from GitHub; the Chinese voice also needs a small settings file
     from Hugging Face) and its doodle-search model (from Hugging Face) the first time they are needed. Those downloads
     send nothing about you beyond what any download does: GitHub and Hugging Face see your IP address. (Before version
     0.2.0, if Hugging Face could not be reached, the Chinese doodle-search model came from Google Cloud Storage
@@ -43,12 +44,15 @@
     <tr><th>Where</th><th>What</th><th>Why</th></tr>
     <tr><td>KinoDraw Cloud (api.doodlecloud.org, run by KinoDraw)</td><td>your email, a random ID for this
       installation of the app, then each section's sentences, the video and section titles, the language, short
-      phrases the offline draft picked from the sentences, and the names of candidate doodles</td><td>to
-      sign you in, count your free videos, and ask GPT-6 Luna for picture suggestions</td></tr>
+      phrases the offline draft picked from the sentences, and the names of candidate doodles; with Style &gt; "Choose
+      for me", once per new video, the title, the section headings and the first 600 characters of the script, its
+      language and format, and the names of the styles it can use</td><td>to
+      sign you in, count your free videos, and ask GPT-6 Luna for picture suggestions and a style</td></tr>
     <tr><td>Resend (email delivery)</td><td>your email address and a 6-digit sign-in code</td><td>to email you the
       code</td></tr>
-    <tr><td>OpenAI (GPT-6 Luna), through KinoDraw Cloud</td><td>the same sentences, titles, language and doodle names</td><td>to
-      suggest pictures; OpenAI's API terms apply</td></tr>
+    <tr><td>OpenAI (GPT-6 Luna), through KinoDraw Cloud</td><td>the same sentences, titles, language and doodle names
+      (and, for "Choose for me", the same headings, opening text, format and style names)</td><td>to
+      suggest pictures and a style; OpenAI's API terms apply</td></tr>
     <tr><td>Cloudflare (hosting)</td><td>ordinary request data, such as your IP address; the service's request logs
       keep it for 3 days</td><td>to run the service, fix errors and limit abuse</td></tr>
   </table>
@@ -64,7 +68,9 @@
   <p>If you turn on Settings &gt; Advanced directors and choose "My OpenAI key", "My Anthropic key" or
     "OpenAI-compatible server", the app sends the same section request (sentences, titles, language, picked phrases
     and candidate doodle names) straight from your computer to that provider with your key: OpenAI, Anthropic, or the
-    server address you entered. KinoDraw Cloud is not involved, and that provider's own terms and privacy policy apply.
+    server address you entered. With Style &gt; "Choose for me", it also sends that provider one style request per new
+    video (the title, the section headings and the first 600 characters of the script, its language and format, and the
+    names of the styles it can use). KinoDraw Cloud is not involved, and that provider's own terms and privacy policy apply.
     With "My own command", the app hands the request to the program you chose on your computer; where it goes from
     there is up to that program. Your keys and command are kept in your system's keychain, never in project
     files.</p>

@@ -14,6 +14,7 @@ Paste a script and KinoDraw produces a finished MP4. A drawing hand sketches car
 - **It explains, not just decorates.** Numbers become big stats and 100-square grids, dates become timelines, "X is called Y" becomes a sticky-note definition, and quotes become quote cards. Every section ends with a takeaway note that pins onto the agenda.
 - **Everything is editable.** Swap any doodle, fix a label, retitle a section, preview a frame, then make the video.
 - **Optional AI director.** It can plan the visuals with GPT-6 Luna or Claude: through KinoDraw Cloud (free plan, no key needed), or with your own OpenAI, Anthropic or OpenAI-compatible key.
+- **Style: Choose for me.** The video's director picks the style (whiteboard, chalkboard, notebook, Pixel Quest, Mosaic, or a paper-collage promo when you name a product) and says why: KinoDraw Cloud's GPT-6 Luna, your own AI key, or, offline, word rules on your computer. It only picks a style that works in the format you chose.
 
 ## Install
 
@@ -102,7 +103,7 @@ See [docs/architecture.md](docs/architecture.md) and [the storyboard format](doc
 
 ## Privacy
 
-Offline mode sends nothing anywhere unless you choose your own voice server. With KinoDraw Cloud or your own key, only the text of one section at a time (plus doodle names) goes to the AI provider. KinoDraw Cloud does not store script text. With Settings > Voice server on (or TTS_BACKEND=openai_compatible), the text of each part of the script goes to the server you entered, and nothing else does. The request includes the model and voice names and an API key if entered; Test and Hear it send one sample sentence, and your own recordings stay on this computer. See the [privacy policy](docs/privacy.html).
+Offline mode sends nothing anywhere unless you choose your own voice server. With KinoDraw Cloud or your own key, only the text of one section at a time (plus doodle names) goes to the AI provider; with Style > Choose for me, one more request per new video sends the title, the section headings and the first 600 characters of the script (with its language and format) so the AI can pick the style. Offline, Choose for me picks on your computer. KinoDraw Cloud does not store script text. With Settings > Voice server on (or TTS_BACKEND=openai_compatible), the text of each part of the script goes to the server you entered, and nothing else does. The request includes the model and voice names and an API key if entered; Test and Hear it send one sample sentence, and your own recordings stay on this computer. See the [privacy policy](docs/privacy.html).
 
 ## Licences
 
