@@ -64,7 +64,7 @@ class Production:
         scenes.load_page_plugins()
         self.layout = Layout()
         self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir, self.skin)
-        self.camera = Camera()
+        self.camera = Camera(locked=self.skin.locked_camera)
         self.cuts, self.stock, self.modes = [], [], []
         self.cut_marks = []            # index of the first element drawn on each cut's stretch
         self.cards, self.notes, self.pages = {}, {}, {}
@@ -433,6 +433,11 @@ class Production:
         return e._last_pen
 
     def board_frame(self, t):
+        if self.camera.locked:
+            wipe = self.camera.wipe_at(t)
+            if wipe is not None:
+                from_L, to_L, u = wipe
+                return skins.wipe(self.view(t, from_L, hand=False), self.view(t, to_L, hand=False), u, self.skin)
         return self.view(t, self.camera.at(t))
 
     def stock_frame(self, t, a, clip):
@@ -457,12 +462,17 @@ class Production:
         elif kind in ('pullback', 'fly', 'agenda'):
             frame = self._transition(t, kind, p, a, b)
         elif kind == 'zoom':
-            frame = self._zoom(t, p, a, b)
+            if self.camera.locked:
+                frame = skins.wipe(self.view(a - .01, self.agenda_x, hand=False), self.board_frame(t),
+                                   (t - a) / (b - a), self.skin)
+            else:
+                frame = self._zoom(t, p, a, b)
         elif kind == 'fade_in':
             u = ease((t - a) / (b - a))
             src = self.view(t, self.agenda_x, hand=False)
             dst = self.board_frame(t)
-            frame = Image.blend(src, dst, u)
+            frame = (skins.wipe(src, dst, (t - a) / (b - a), self.skin) if self.camera.locked
+                     else Image.blend(src, dst, u))
         else:
             frame = self.board_frame(t)
         if self.vertical:
@@ -490,7 +500,8 @@ class Production:
         if kind == 'pullback':
             u = ease((t - a) / (b - a))
             board = self.view(tr['hold_end'] - .01, note['x'], hand=False)
-            frame = Image.blend(board, agenda, u)
+            frame = (skins.wipe(board, agenda, (t - a) / (b - a), self.skin) if self.camera.locked
+                     else Image.blend(board, agenda, u))
             ink.paste(frame, note['image'], sx, sy)
             return frame
         if kind == 'fly':

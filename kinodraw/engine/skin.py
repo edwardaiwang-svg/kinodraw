@@ -66,6 +66,10 @@ class Skin:
         return self.material != 'none'
 
     @property
+    def locked_camera(self) -> bool:
+        return self.textured
+
+    @property
     def plain(self) -> bool:
         return self.lines == self.fills == 'identity' and self.grain == 'none' and self.material == 'none'
 
@@ -150,6 +154,17 @@ class Skin:
         if doodle and self.fills == 'pencil':
             alpha = alpha * _hatch(a.shape[:2], x, y)
         return Image.fromarray(np.dstack([rgb, alpha]).round().clip(0, 255).astype(np.uint8), 'RGBA')
+
+
+def wipe(old, new, u, skin):
+    """Reveal the new board from the left, easing in whole material cells."""
+    u = min(1., max(0., u))
+    cell = skin.margs.get('cell', 8 if skin.material == 'pixel' else 14)
+    edge = old.width if u == 1. else min(old.width, round(old.width * (u * u * (3 - 2 * u)) / cell) * cell)
+    frame = old.copy()
+    if edge:
+        frame.paste(new.crop((0, 0, edge, old.height)), (0, 0))
+    return frame
 
 
 def _wcag(rgb):
