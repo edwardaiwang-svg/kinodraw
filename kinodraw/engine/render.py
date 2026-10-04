@@ -53,6 +53,9 @@ def ease(u):
 
 
 class Production:
+    vertical = False               # set by vertical.Vertical: the frame is the board alone, laid out in 9:16 there
+    size = SIZE
+
     def __init__(self, episode, tline, lang, project_dir, relaxed=False):
         """``relaxed``: schedule every drawing at natural speed and skip nothing (pacing measures with it)."""
         self.ep, self.tl, self.lang = normalize(episode), tline, lang
@@ -457,6 +460,8 @@ class Production:
             frame = Image.blend(src, dst, u)
         else:
             frame = self.board_frame(t)
+        if self.vertical:
+            return frame
         if chrome and not self._in_title(t):
             self._chrome(frame, t)
         self._caption(frame, t)
@@ -546,13 +551,21 @@ class Production:
         ink.paste(frame, img, (SIZE[0] - img.width) / 2, 1046 - img.height)
 
 
-def make_production(episode, tline, lang, project_dir, relaxed=False):
+def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9'):
     """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
-    A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does."""
+    A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does. ``aspect`` '9:16'
+    lays each frame out for Shorts: the board in the middle, its section title above and big captions below."""
     if drawable(episode.get('look') or 'whiteboard') == 'collage':
         from .collage.render import CollageProduction
-        return CollageProduction(episode, tline, lang, project_dir, relaxed=relaxed)
-    return Production(episode, tline, lang, project_dir, relaxed=relaxed)
+        prod = CollageProduction(episode, tline, lang, project_dir, relaxed=relaxed)
+    else:
+        prod = Production(episode, tline, lang, project_dir, relaxed=relaxed)
+    if aspect == '9:16':
+        from .vertical import Vertical
+        return Vertical(prod)
+    if aspect != '16:9':
+        raise ValueError(f'unknown aspect {aspect!r} (16:9 or 9:16)')
+    return prod
 
 
 def pacing(episode, lang, clips, project_dir, rounds=3) -> dict:
@@ -661,7 +674,7 @@ def chip_image(ch, lang, fonts=ink.FONTS):
     key = (text, ch.get('color'), lang, fonts)     # by what it shows: one process may render several videos
     if key not in _chip_cache:
         from PIL import ImageDraw
-        f = ink.font('ui' if lang == 'en' else 'zh_caption', 32, fonts)
+        f = ink.font('ui' if lang in ('en', 'es') else 'zh_caption', 32, fonts)
         w = int(f.getlength(text)) + 44
         img = Image.new('RGBA', (w, 52), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
@@ -679,6 +692,9 @@ def chip_image(ch, lang, fonts=ink.FONTS):
 def source_line(ch, lang):
     sp = ch.get('speaker')
     if ch['kind'] == 'section' and sp and sp.get('show'):
+        if lang == 'es':
+            return (f"Fuente: {sp['name'].get('es', sp['name'].get('en', ''))} · "
+                    f"{sp['show'].get('es', sp['show'].get('en', ''))}, {sp['date'].get('es', sp['date'].get('en', ''))}")
         return (f"Source: {sp['name']['en']} · {sp['show']['en']}, {sp['date']['en']}" if lang == 'en'
                 else f"来源：{sp['name']['zh']} · {sp['show']['zh']}，{sp['date']['zh']}")
     return (ch.get('source') or {}).get(lang)
@@ -695,14 +711,15 @@ def load(args):
 
 def build(episode, tline, args):
     t0 = time.time()
-    prod = make_production(episode, tline, args.lang, args.project)
+    prod = make_production(episode, tline, args.lang, args.project, aspect=args.aspect)
     print(json.dumps({'elements': len(prod.els), 'warnings': prod.warnings[:40], 'n_warnings': len(prod.warnings),
                       'build_s': round(time.time() - t0, 1), 'duration': tline['duration']}, ensure_ascii=False), flush=True)
     return prod
 
 
 def encode(prod, start, n, output, crf):
-    proc = subprocess.Popen([FFMPEG, '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', '1920x1080',
+    w, h = prod.size
+    proc = subprocess.Popen([FFMPEG, '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}',
                              '-r', str(FPS), '-i', '-', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', str(crf),
                              '-pix_fmt', 'yuv420p', '-threads', '2', '-movflags', '+faststart', str(output)],
                             stdin=subprocess.PIPE)
@@ -717,14 +734,15 @@ def encode(prod, start, n, output, crf):
         sys.exit('ffmpeg failed')
 
 
-def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20):
+def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20, aspect='16:9'):
     """Render ``n`` frames as ``workers`` frame-aligned segments in child processes, then join them losslessly."""
     bounds = [round(n * i / workers) for i in range(workers + 1)]
     seg_dir = output.parent / f'.{output.stem}.segments'
     seg_dir.mkdir(parents=True, exist_ok=True)
     worker = [sys.executable, '--render-worker'] if getattr(sys, 'frozen', False) else \
         [sys.executable, '-m', 'kinodraw.engine.render']       # a packaged app has no `python -m`
-    base = worker + ['--project', str(project), '--episode', str(episode), '--lang', lang, '--crf', str(crf)] + \
+    base = worker + ['--project', str(project), '--episode', str(episode), '--lang', lang, '--crf', str(crf),
+                     '--aspect', aspect] + \
         (['--timeline', str(timeline)] if timeline else ['--synthetic'])
     segs = [seg_dir / f'{i:02d}.mp4' for i in range(workers)]
     procs = [subprocess.Popen(base + ['--start', repr(start + bounds[i] / FPS), '--frames',
@@ -745,7 +763,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--project', required=True, help='project folder (photos/, doodles/, stock/)')
     ap.add_argument('--episode', required=True)
-    ap.add_argument('--lang', required=True, choices=['en', 'zh'])
+    ap.add_argument('--lang', required=True, choices=['en', 'zh', 'es'])
     ap.add_argument('--timeline')
     ap.add_argument('--synthetic', action='store_true')
     ap.add_argument('--output')
@@ -756,6 +774,7 @@ def main(argv=None):
     ap.add_argument('--stills')
     ap.add_argument('--preview-dir')
     ap.add_argument('--crf', type=int, default=20)
+    ap.add_argument('--aspect', default='16:9', choices=['16:9', '9:16'], help='9:16: vertical, for Shorts')
     args = ap.parse_args(argv)
     if not (args.stills or args.output):
         sys.exit('--output or --stills required')
@@ -776,7 +795,7 @@ def main(argv=None):
     t1 = time.time()
     if args.workers > 1:
         warnings = render_segments(args.project, args.episode, args.lang, args.timeline, args.start, n, output,
-                                   args.workers, args.crf)
+                                   args.workers, args.crf, args.aspect)
     else:
         prod = build(episode, tline, args)
         encode(prod, args.start, n, output, args.crf)
@@ -789,7 +808,7 @@ def main(argv=None):
         inputs[str(Path(args.timeline))] = sha(args.timeline)
     manifest = {'output': str(output), 'sha256': sha(output), 'frames': n, 'fps': FPS, 'start': args.start,
                 'duration': n / FPS, 'language': args.lang, 'synthetic_timing': bool(args.synthetic),
-                'workers': args.workers, 'inputs': inputs, 'warnings': warnings,
+                'workers': args.workers, 'aspect': args.aspect, 'inputs': inputs, 'warnings': warnings,
                 'render_seconds': round(time.time() - t1, 1)}
     Path(str(output) + '.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'wrote {output} ({n} frames) in {time.time() - t1:.0f}s')

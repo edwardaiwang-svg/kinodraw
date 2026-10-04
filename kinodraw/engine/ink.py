@@ -18,7 +18,7 @@ from typing import NamedTuple
 import numpy as np
 import resvg_py
 import svgelements
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 from scipy import ndimage
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets'
@@ -57,7 +57,7 @@ def font(kind: str, size: int, fonts: Fonts = FONTS) -> ImageFont.FreeTypeFont:
 
 
 def hand_font(lang: str, size: int, fonts: Fonts = FONTS):
-    return font('en_hand' if lang == 'en' else 'zh_hand', size, fonts)
+    return font('en_hand' if lang in ('en', 'es') else 'zh_hand', size, fonts)
 
 
 @lru_cache(maxsize=8)
@@ -69,7 +69,7 @@ def _cmap(path: str, index: int):
 
 def font_runs(text: str, lang: str, size: int, fonts: Fonts = FONTS):
     """Split text into (substring, font) runs; missing glyphs fall back to the other hand font, then the caption font."""
-    primary = 'en_hand' if lang == 'en' else 'zh_hand'
+    primary = 'en_hand' if lang in ('en', 'es') else 'zh_hand'
     order = [primary, 'zh_hand' if primary == 'en_hand' else 'en_hand', 'zh_caption']
     runs = []
     for ch in text:
@@ -250,8 +250,7 @@ def _sample(path: svgelements.Path, scale: float, ox: float, oy: float, step=3.0
 def _svg_layers(svg_path: str, box_w: int, box_h: int):
     text = Path(svg_path).read_text(encoding='utf-8')
     doc = svgelements.SVG.parse(io.StringIO(text), reify=True)
-    vb = doc.viewbox
-    vw, vh = (vb.width, vb.height) if vb is not None else (float(doc.width), float(doc.height))
+    vw, vh = float(doc.width), float(doc.height)    # svgelements already maps the viewBox onto width x height
     scale = min(box_w / vw, box_h / vh)
     out_w, out_h = max(1, round(vw * scale)), max(1, round(vh * scale))
     color = Image.open(io.BytesIO(resvg_py.svg_to_bytes(svg_string=text, width=out_w, height=out_h))).convert('RGBA')
@@ -292,6 +291,68 @@ def svg_drawing(svg_path, box, speed=700., min_dur=.8, max_dur=2.0) -> PathDrawi
                           speed=speed, min_dur=min_dur, max_dur=max_dur)
     drawing.doodle = True                    # a picture with its own colours (a skin restyles its fills)
     return drawing
+
+
+class RevealDrawing:
+    """An own picture coloured in along a soft edge, with the hand following it."""
+
+    own = True
+
+    def __init__(self, image: Image.Image, speed=375., min_dur=.8, max_dur=2.2):
+        self.image = image.convert('RGBA')
+        self.size = self.image.size
+        self.draw_time = max(min_dur, min(max_dur, self.size[0] / speed))
+        self.duration = self.draw_time + .05
+        self.alpha = np.asarray(self.image.getchannel('A'), np.float32)
+        self._xs = np.arange(self.size[0], dtype=np.float32)
+        self._cache_e, self._cache_result = None, None
+
+    def state(self, elapsed):
+        if elapsed < 0:
+            return None, None, False
+        if elapsed >= self.draw_time:
+            return self.image, None, False
+        if elapsed == self._cache_e:
+            return self._cache_result
+        width, height = self.size
+        feather = 24.
+        edge = -feather + (width + feather) * elapsed / self.draw_time
+        ramp = np.clip((edge - self._xs + feather) / feather, 0, 1)
+        out = self.image.copy()
+        out.putalpha(Image.fromarray((self.alpha * ramp[None, :]).astype(np.uint8)))
+        zig = 1 - abs(2 * ((elapsed * 2.5) % 1) - 1)
+        pen = (max(0., min(float(width), edge)), height * (.12 + .76 * zig))
+        self._cache_e = elapsed
+        self._cache_result = out, pen, True
+        return self._cache_result
+
+
+@lru_cache(maxsize=64)
+def _picture_image(path: str, mtime_ns: int, size_bytes: int, box_w: int, box_h: int):
+    with Image.open(path) as source:
+        image = ImageOps.exif_transpose(source).convert('RGBA')
+    scale = min(box_w / image.width, box_h / image.height, 2.)
+    size = max(1, round(image.width * scale)), max(1, round(image.height * scale))
+    return image.resize(size, Image.Resampling.LANCZOS)
+
+
+def picture_drawing(path, box, speed=375., min_dur=.8, max_dur=2.2):
+    """Trace an own SVG's outlines, or wipe a fitted raster in its original colours."""
+    path = Path(path)
+    try:
+        if path.suffix.lower() == '.svg':
+            drawing = svg_drawing(path, box, speed=speed, min_dur=min_dur, max_dur=max_dur)
+            if drawing.polys and drawing.line.getbbox():
+                drawing.own = True
+                return drawing
+            image = drawing.color
+        else:
+            stat = path.stat()
+            image = _picture_image(str(path), stat.st_mtime_ns, stat.st_size, int(box[0]), int(box[1]))
+        return RevealDrawing(image, speed=speed, min_dur=min_dur, max_dur=max_dur)
+    except Exception:
+        raise ValueError(f'KinoDraw couldn’t open the picture “{path.name}”. Save it again as a PNG or JPG '
+                         'and upload it again.') from None
 
 
 def stroke_drawing(size, polylines, color=INK, width=6, fill=None, closed_fill=None,
@@ -513,8 +574,8 @@ class TextDrawing:
 def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
     """Greedy wrap for board text (whole words; CJK per character)."""
     f = hand_font(lang, size, fonts) if kind == 'hand' else \
-        font('en_caption' if lang == 'en' else 'zh_caption', size, fonts)
-    units = re.findall(r'\S+\s*', text) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
+        font('en_caption' if lang in ('en', 'es') else 'zh_caption', size, fonts)
+    units = re.findall(r'\S+\s*', text) if lang in ('en', 'es') else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
     lines, cur = [], ''
     for u in units:
         trial = cur + u
@@ -523,7 +584,7 @@ def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
                 cur = trial
                 continue
             lines.append(cur.rstrip())
-            cur = u.lstrip() if lang == 'en' else u
+            cur = u.lstrip() if lang in ('en', 'es') else u
         else:
             cur = trial
     if cur.strip():
@@ -577,8 +638,8 @@ def circle_points(cx, cy, rx, ry, start=-math.pi / 2, turns=1.0, n=90, wobble=0.
 
 # ------------------------------------------------------------------------ hand
 class Hand:
-    """J's drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no forearm)
-    into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
+    """A photographed drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no
+    forearm) into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
     'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil."""
 
     def __init__(self, tool='marker'):

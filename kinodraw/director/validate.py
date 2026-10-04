@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from ..engine.storyboard import DIALS, KINDS
-from ..library import banned, resolve
+from ..library import OWN, _missing_picture, banned, own_path, resolve
 from .annotate import ROLES, SCENES, _words
 
 SLOT_TYPES = {'cluster', 'quote', 'glossary', 'stat'}
@@ -19,6 +19,7 @@ PAGE_TYPES = {'ladder', 'bars', 'coins', 'grid100', 'lanes', 'range', 'zones', '
               'split', 'calendar'}
 OTHER_TYPES = {'emphasis', 'stock'}
 EN_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’)])|—')
+ES_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’»)])|—')
 ZH_PUNCT = re.compile(r'[，。；：？！、—]')
 MAX_SECTIONS = 8
 BRAND_KEYS = ('name', 'url', 'cta')
@@ -103,8 +104,8 @@ def _doodles(value):
 def validate(board: dict, project_dir: Path | None = None) -> dict:
     lang = board.get('lang')
     errors, warnings = [], []
-    if lang not in ('en', 'zh'):
-        return {'ok': False, 'errors': [f'lang must be en or zh, got {lang!r}'], 'warnings': []}
+    if lang not in ('en', 'zh', 'es'):
+        return {'ok': False, 'errors': [f'lang must be en, zh or es, got {lang!r}'], 'warnings': []}
     for dial, values in DIALS.items():
         if dial in board and board[dial] not in values:
             errors.append(f'{dial} must be one of {", ".join(values)}, got {board[dial]!r}')
@@ -141,7 +142,7 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
         if c.get('id') not in order:
             errors.append(f"chapter {c.get('id')} has no beats")
     visual_ids = set()
-    punct = EN_PUNCT if lang == 'en' else ZH_PUNCT
+    punct = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
     for b in beats:
         bid = b.get('id')
         spoken = (b.get('spoken') or {}).get(lang, '')
@@ -163,7 +164,7 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
             head = ((b.get('take') or {}).get('headline') or {}).get(lang, '')
             if not head:
                 errors.append(f'{bid}: take beat without a headline')
-            elif len(head.split() if lang == 'en' else head) > (16 if lang == 'en' else 30):
+            elif len(head.split() if lang in ('en', 'es') else head) > (16 if lang in ('en', 'es') else 30):
                 warnings.append(f'{bid}: long takeaway headline')
         for v in b.get('visuals') or []:
             vid, vtype = v.get('id'), v.get('type')
@@ -178,6 +179,14 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
                 if phrase and phrase not in (ref.get('spoken') or {}).get(lang, ''):
                     errors.append(f'{bid}/{vid} {where}: trigger {phrase!r} is not in the spoken text')
             for did in _doodles(v):
+                if did.startswith(OWN):
+                    try:
+                        path = own_path(did, project_dir)
+                        if not path.is_file():
+                            errors.append(f'{bid}/{vid}: {_missing_picture(path)}')
+                    except ValueError as error:
+                        errors.append(f'{bid}/{vid}: {error}')
+                    continue
                 if resolve(did, project_dir) is None:
                     errors.append(f'{bid}/{vid}: doodle {did!r} not found')
                 elif did in banned()['doodles']:

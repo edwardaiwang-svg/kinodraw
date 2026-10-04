@@ -9,6 +9,7 @@ from . import ink
 from .scenes import SOFT_INK, mix, sticky
 
 UI_DEFAULTS = {
+    'es': {'agenda': 'Lo que veremos', 'takeaway': 'IDEA CLAVE', 'sign': '', 'thanks': '¡Gracias por ver!'},
     'en': {'agenda': "What we'll cover", 'takeaway': 'KEY TAKEAWAY', 'sign': '', 'thanks': 'Thanks for watching'},
     'zh': {'agenda': '本期内容', 'takeaway': '本节要点', 'sign': '', 'thanks': '感谢收看'},
 }
@@ -178,6 +179,8 @@ def photo_credit(project_dir, photo, lang):
     if not meta or not meta.exists():
         return ''
     line = json.loads(meta.read_text(encoding='utf-8')).get('credit_line', '')
+    if lang == 'es' and line.startswith('Still: '):
+        return 'Imagen: ' + line[len('Still: '):]
     if lang == 'zh' and line.startswith('Still: '):
         return '画面：' + line[len('Still: '):]
     return line
@@ -207,7 +210,7 @@ def build_take_note(ctx, beat, chapter, x0, t, t_label=None, t_head=None):
     els = [ctx.add(sticky(ctx, nw, nh, tape=col), nx, ny, t, essential=True)]
     label = ctx.text(strings['takeaway'], 44, color=col)
     els.append(ctx.add(label, nx + 50, ny + 48, max(t, t_label or t), essential=True))
-    head = ctx.text(ctx.T(beat['take']['headline']), 76 if ctx.lang == 'en' else 80,
+    head = ctx.text(ctx.T(beat['take']['headline']), 76 if ctx.lang in ('en', 'es') else 80,
                     max_w=nw - (330 if face else 100), max_lines=3, min_size=52, pace=.9)
     written = ctx.add(head, nx + 50, ny + 48 + label.size[1] + 22, max(t, t_head or t), essential=True)
     els.append(written)
@@ -246,7 +249,7 @@ def build_end_card(ctx, x0, t):
     return els
 
 
-CREDIT_LINE = {'en': 'Made with {name}', 'zh': '由 {name} 制作'}
+CREDIT_LINE = {'en': 'Made with {name}', 'zh': '由 {name} 制作', 'es': 'Hecho con {name}'}
 
 
 def build_credit(ctx, x0, t):

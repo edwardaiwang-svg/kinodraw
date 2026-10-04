@@ -27,14 +27,27 @@ class Section:
 @dataclass
 class Document:
     title: str
-    lang: str                                   # 'en' or 'zh'
+    lang: str                                   # 'en', 'zh' or 'es'
     preamble: list[str] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
 
 
 def detect_lang(text: str) -> str:
     letters = [c for c in text if c.isalpha()]
-    return 'zh' if letters and sum(bool(CJK.match(c)) for c in letters) / len(letters) > .3 else 'en'
+    if letters and sum(bool(CJK.match(c)) for c in letters) / len(letters) > .3:
+        return 'zh'
+    words = re.findall(r'[^\W\d_]+', text)
+    spanish = set('el la los las de del que y en un una es por con para se no su al lo como más pero sus le ya o '
+                  'este esta son también'.split())
+    english = set('the and of to is in that it for was on are with as this be by you'.split())
+    # English borrows Spanish names (El Niño, La Niña, José, México): capitalised words do not count as Spanish,
+    # nor does an article that starts one ('El' before 'Niño'); ¿ ¡ are Spanish only.
+    caps = [w[0].isupper() for w in words] + [False]
+    es = (sum(w.lower() in spanish and not (caps[i] and caps[i + 1]) for i, w in enumerate(words))
+          + sum(len(re.findall(r'[áéíóúüñ]', w)) for i, w in enumerate(words) if not caps[i])
+          + 2 * len(re.findall(r'[¿¡]', text)))
+    en = sum(w.lower() in english for w in words)
+    return 'es' if es >= 2 and es > 2 * en + 1 else 'en'
 
 
 def read(source: str | Path, title: str | None = None) -> Document:

@@ -1,0 +1,1358 @@
+{
+  "version": 1,
+  "lang": "zh",
+  "title": {
+    "zh": "为什么我们需要睡觉？"
+  },
+  "narrator": "narrator",
+  "chapters": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": {
+        "zh": "为什么我们需要睡觉？"
+      },
+      "title": {
+        "zh": ""
+      }
+    },
+    {
+      "id": "preamble",
+      "kind": "board",
+      "label": {
+        "zh": "开场"
+      },
+      "title": {
+        "zh": ""
+      }
+    },
+    {
+      "id": "agenda",
+      "kind": "agenda",
+      "label": {
+        "zh": "本期内容"
+      },
+      "title": {
+        "zh": ""
+      }
+    },
+    {
+      "id": "s1",
+      "kind": "section",
+      "label": {
+        "zh": "第1部分"
+      },
+      "title": {
+        "zh": "大脑的清洁工"
+      }
+    },
+    {
+      "id": "s2",
+      "kind": "section",
+      "label": {
+        "zh": "第2部分"
+      },
+      "title": {
+        "zh": "记忆的整理师"
+      }
+    },
+    {
+      "id": "s3",
+      "kind": "section",
+      "label": {
+        "zh": "第3部分"
+      },
+      "title": {
+        "zh": "睡多久才够？"
+      }
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "label": {
+        "zh": "总结"
+      },
+      "title": {
+        "zh": ""
+      }
+    }
+  ],
+  "beats": [
+    {
+      "id": "b001",
+      "chapter": "intro",
+      "kind": "title",
+      "display": {
+        "zh": "今天的主题：为什么我们需要睡觉？"
+      },
+      "spoken": {
+        "zh": "今天的主题：为什么我们需要睡觉？"
+      },
+      "visuals": [],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            16
+          ],
+          "role": "hook",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "需要睡觉",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "需要睡觉"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b002",
+      "chapter": "preamble",
+      "kind": "narration",
+      "display": {
+        "zh": "人的一生大约有三分之一的时间在睡觉。很多人觉得睡觉是在浪费时间，但科学家发现，睡眠其实是大脑和身体最忙碌的维修时间。"
+      },
+      "spoken": {
+        "zh": "人的一生大约有三分之一的时间在睡觉。很多人觉得睡觉是在浪费时间，但科学家发现，睡眠其实是大脑和身体最忙碌的维修时间。"
+      },
+      "visuals": [
+        {
+          "id": "b002v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sleep_bed",
+              "label": {
+                "zh": "睡眠"
+              },
+              "trigger": {
+                "zh": "睡眠"
+              }
+            },
+            {
+              "doodle": "brain_side",
+              "label": {
+                "zh": "大脑"
+              },
+              "trigger": {
+                "zh": "大脑"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "睡眠"
+          }
+        },
+        {
+          "id": "b002v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_magnifier"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            18
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "时间在睡觉",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "时间在睡觉"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            18,
+            58
+          ],
+          "role": "problem",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "维修时间",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "维修时间",
+              "科学家发现",
+              "浪费时间"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b003",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "本期我们聊三件事。第一，大脑的清洁工。"
+      },
+      "spoken": {
+        "zh": "本期我们聊三件事。第一，大脑的清洁工。"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b004",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "第二，记忆的整理师。"
+      },
+      "spoken": {
+        "zh": "第二，记忆的整理师。"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b005",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "最后，睡多久才够？"
+      },
+      "spoken": {
+        "zh": "最后，睡多久才够？"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b006",
+      "chapter": "s1",
+      "kind": "opener",
+      "display": {
+        "zh": "第1部分：大脑的清洁工。"
+      },
+      "spoken": {
+        "zh": "第一部分：大脑的清洁工。"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            12
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "大脑的清洁工",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "大脑的清洁工"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b007",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "zh": "白天，大脑工作时会产生很多代谢废物。研究发现，人在深度睡眠时，脑细胞之间的空隙会变大，脑脊液像清洁工一样把这些废物冲走。"
+      },
+      "spoken": {
+        "zh": "白天，大脑工作时会产生很多代谢废物。研究发现，人在深度睡眠时，脑细胞之间的空隙会变大，脑脊液像清洁工一样把这些废物冲走。"
+      },
+      "visuals": [
+        {
+          "id": "b007v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "brain_side",
+              "label": {
+                "zh": "大脑"
+              },
+              "trigger": {
+                "zh": "大脑"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "大脑"
+          }
+        },
+        {
+          "id": "b007v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "magnifier_report",
+              "label": {
+                "zh": "研究"
+              },
+              "trigger": {
+                "zh": "研究"
+              }
+            },
+            {
+              "doodle": "cell",
+              "label": {
+                "zh": "细胞"
+              },
+              "trigger": {
+                "zh": "细胞"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "研究"
+          }
+        },
+        {
+          "id": "b007v2",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sleep_bed",
+              "label": {
+                "zh": "睡眠"
+              },
+              "trigger": {
+                "zh": "睡眠"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "睡眠"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            18
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "代谢废物",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "代谢废物",
+              "白天"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            18,
+            60
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "废物冲走",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "废物冲走",
+              "空隙会变大",
+              "睡眠时",
+              "研究发现"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b008",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "zh": "如果长期睡不够，这些废物就会越积越多。一些科学家认为，这可能和老年痴呆等疾病有关。"
+      },
+      "spoken": {
+        "zh": "如果长期睡不够，这些废物就会越积越多。一些科学家认为，这可能和老年痴呆等疾病有关。"
+      },
+      "visuals": [
+        {
+          "id": "b008v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_mosquito",
+              "label": {
+                "zh": "疾病"
+              },
+              "trigger": {
+                "zh": "疾病"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "疾病"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            19
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "越积越多",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "越积越多",
+              "睡不够"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            19,
+            41
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "疾病有关",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "疾病有关",
+              "科学家认为"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b009",
+      "chapter": "s1",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：如果长期睡不够，这些废物就会越积越多。"
+      },
+      "spoken": {
+        "zh": "本节要点：如果长期睡不够，这些废物就会越积越多。"
+      },
+      "visuals": [
+        {
+          "id": "b009v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "cell"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b009v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "magnifier_report"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "zh": "如果长期睡不够，这些废物就会越积越多。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            24
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "越积越多",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "越积越多",
+              "睡不够"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b010",
+      "chapter": "s2",
+      "kind": "opener",
+      "display": {
+        "zh": "第2部分：记忆的整理师。"
+      },
+      "spoken": {
+        "zh": "第二部分：记忆的整理师。"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            12
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "整理师",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "整理师"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b011",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "zh": "睡眠也在帮我们整理记忆。白天学到的新知识，会在夜里被大脑重新播放，从临时存储转移到长期记忆里。"
+      },
+      "spoken": {
+        "zh": "睡眠也在帮我们整理记忆。白天学到的新知识，会在夜里被大脑重新播放，从临时存储转移到长期记忆里。"
+      },
+      "visuals": [
+        {
+          "id": "b011v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sleep_bed",
+              "label": {
+                "zh": "睡眠"
+              },
+              "trigger": {
+                "zh": "睡眠"
+              }
+            },
+            {
+              "doodle": "brain_side",
+              "label": {
+                "zh": "记忆"
+              },
+              "trigger": {
+                "zh": "记忆"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "睡眠"
+          }
+        },
+        {
+          "id": "b011v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "video_play",
+              "label": {
+                "zh": "播放"
+              },
+              "trigger": {
+                "zh": "播放"
+              }
+            },
+            {
+              "doodle": "memory_chip",
+              "label": {
+                "zh": "存储"
+              },
+              "trigger": {
+                "zh": "存储"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "播放"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            12
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "整理记忆",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "整理记忆"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            12,
+            47
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "长期记忆里",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "长期记忆里",
+              "重新播放",
+              "新知识"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b012",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "zh": "实验显示，学完新内容后睡一觉的人，第二天的考试成绩往往比熬夜复习的人更好。所以考试前熬夜，其实并不划算。"
+      },
+      "spoken": {
+        "zh": "实验显示，学完新内容后睡一觉的人，第二天的考试成绩往往比熬夜复习的人更好。所以考试前熬夜，其实并不划算。"
+      },
+      "visuals": [
+        {
+          "id": "b012v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "flask_bubbling",
+              "label": {
+                "zh": "实验"
+              },
+              "trigger": {
+                "zh": "实验"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "实验"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            37
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "人更好",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "人更好",
+              "睡一觉的人",
+              "实验显示"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            37,
+            52
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "并不划算",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "并不划算",
+              "前熬夜"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b013",
+      "chapter": "s2",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：睡眠也在帮我们整理记忆。"
+      },
+      "spoken": {
+        "zh": "本节要点：睡眠也在帮我们整理记忆。"
+      },
+      "visuals": [
+        {
+          "id": "b013v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "brain_side"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b013v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sleep_bed"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "zh": "睡眠也在帮我们整理记忆。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            17
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "整理记忆",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "整理记忆"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b014",
+      "chapter": "s3",
+      "kind": "opener",
+      "display": {
+        "zh": "第3部分：睡多久才够？"
+      },
+      "spoken": {
+        "zh": "第三部分：睡多久才够？"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            11
+          ],
+          "role": "question",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "才够",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "才够"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b015",
+      "chapter": "s3",
+      "kind": "narration",
+      "display": {
+        "zh": "一般来说，成年人每晚需要7到9个小时的睡眠，青少年需要8到10个小时。可是调查显示，超过30%的成年人经常睡不够。"
+      },
+      "spoken": {
+        "zh": "一般来说，成年人每晚需要七到九个小时的睡眠，青少年需要八到十个小时。可是调查显示，超过百分之三十的成年人经常睡不够。"
+      },
+      "visuals": [
+        {
+          "id": "b015v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sleep_bed",
+              "label": {
+                "zh": "睡眠"
+              },
+              "trigger": {
+                "zh": "睡眠"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "睡眠"
+          }
+        },
+        {
+          "id": "b015p",
+          "type": "grid100",
+          "title": {
+            "zh": "30%的成年人"
+          },
+          "filled": 30,
+          "legend": [
+            {
+              "text": {
+                "zh": "成年人"
+              },
+              "kind": "filled"
+            }
+          ],
+          "trigger": {
+            "zh": "百分之三十"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            35
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "7到9个小时",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "7到9个小时",
+              "8到10个小时",
+              "个小时",
+              "小时的睡眠"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            35,
+            57
+          ],
+          "role": "number",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "30%",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "30%",
+              "睡不够",
+              "调查显示"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b016",
+      "chapter": "s3",
+      "kind": "narration",
+      "display": {
+        "zh": "想要睡得好，可以试试这几个方法：每天固定时间起床，睡前一小时少看手机，下午以后少喝咖啡。"
+      },
+      "spoken": {
+        "zh": "想要睡得好，可以试试这几个方法：每天固定时间起床，睡前一小时少看手机，下午以后少喝咖啡。"
+      },
+      "visuals": [
+        {
+          "id": "b016v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "alarm_clock",
+              "label": {
+                "zh": "起床"
+              },
+              "trigger": {
+                "zh": "起床"
+              }
+            },
+            {
+              "doodle": "coffee_cup",
+              "label": {
+                "zh": "咖啡"
+              },
+              "trigger": {
+                "zh": "咖啡"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "起床"
+          }
+        },
+        {
+          "id": "b016v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_no_mobile_phones",
+              "label": {
+                "zh": "手机"
+              },
+              "trigger": {
+                "zh": "手机"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "手机"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            44
+          ],
+          "role": "list",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "少喝咖啡",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "少喝咖啡",
+              "少看手机",
+              "时间起床",
+              "几个方法"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b017",
+      "chapter": "s3",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：可是调查显示，超过30%的成年人经常睡不够。"
+      },
+      "spoken": {
+        "zh": "本节要点：可是调查显示，超过百分之三十的成年人经常睡不够。"
+      },
+      "visuals": [
+        {
+          "id": "b017v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "alarm_clock"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b017v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "coffee_cup"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "zh": "可是调查显示，超过30%的成年人经常睡不够。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            27
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "30%",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "30%",
+              "睡不够",
+              "调查显示"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b018",
+      "chapter": "outro",
+      "kind": "narration",
+      "display": {
+        "zh": "睡眠不是浪费时间，而是给大脑和身体充电。今晚早点睡，就是对明天的自己最好的投资。"
+      },
+      "spoken": {
+        "zh": "睡眠不是浪费时间，而是给大脑和身体充电。今晚早点睡，就是对明天的自己最好的投资。"
+      },
+      "visuals": [
+        {
+          "id": "b018v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sleep_bed",
+              "label": {
+                "zh": "睡眠"
+              },
+              "trigger": {
+                "zh": "睡眠"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "睡眠"
+          }
+        },
+        {
+          "id": "b018v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "brain_side",
+              "label": {
+                "zh": "大脑"
+              },
+              "trigger": {
+                "zh": "大脑"
+              }
+            },
+            {
+              "doodle": "battery_charge",
+              "label": {
+                "zh": "充电"
+              },
+              "trigger": {
+                "zh": "充电"
+              }
+            }
+          ],
+          "relation": "plus",
+          "trigger": {
+            "zh": "大脑"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            20
+          ],
+          "role": "problem",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "身体充电",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "身体充电",
+              "不是浪费时间"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            20,
+            40
+          ],
+          "role": "end_line",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "最好的投资",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "最好的投资",
+              "早点睡"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b019",
+      "chapter": "outro",
+      "kind": "closing",
+      "display": {
+        "zh": "感谢收看！"
+      },
+      "spoken": {
+        "zh": "感谢收看！"
+      },
+      "visuals": [
+        {
+          "id": "b019v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_wave"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            5
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "感谢收看",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "感谢收看"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    }
+  ]
+}

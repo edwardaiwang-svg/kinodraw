@@ -14,7 +14,7 @@ import numpy as np
 from . import ink
 from .board import COL, Element, Layout
 from .skin import WHITEBOARD
-from ..library import MISSING, resolve
+from ..library import MISSING, OWN, _missing_picture, own_path, resolve
 
 HERE = Path(__file__).resolve().parent
 PAPER_NOTE = (255, 241, 118)
@@ -78,6 +78,11 @@ class Ctx:
         return ink.wrap_words(s, self.lang, size, max_w, fonts=self.fonts)
 
     def doodle(self, did, box, **kw):
+        if did.startswith(OWN):
+            path = own_path(did, self.project_dir)
+            if not path.is_file():
+                raise ValueError(_missing_picture(path))
+            return ink.picture_drawing(path, box, **kw)
         return ink.svg_drawing(resolve(did, self.project_dir) or MISSING, box, **kw)
 
     def strokes(self, size, polylines, color=None, width=6, fills=None, **kw):
@@ -165,7 +170,7 @@ def build_quote(v, beat, box, ctx):
     t = ctx.time_of(beat, v.get('trigger'))
     mark = ctx.text('“', 150, color=ctx.color)
     ctx.add(mark, x0 - 6, y0 - 34, t)
-    body = ctx.text(ctx.T(v.get('text')), 46 if ctx.lang == 'en' else 48, max_w=w - 110, max_lines=4, pace=1.25)
+    body = ctx.text(ctx.T(v.get('text')), 46 if ctx.lang in ('en', 'es') else 48, max_w=w - 110, max_lines=4, pace=1.25)
     bel = ctx.add(body, x0 + 90, y0 + 20, t)
     who = ctx.text('— ' + ctx.T(v.get('who')), 38, color=ctx.color, max_w=w - 110, max_lines=1)
     wel = ctx.add(who, x0 + 90, y0 + 30 + body.size[1], t)
@@ -193,7 +198,7 @@ def build_glossary(v, beat, box, ctx):
     note = ctx.add(sticky(ctx, nw, nh, tape=ctx.color), nx, ny, t)
     term = ctx.text(ctx.T(v.get('term')), 46, max_w=nw - 60, max_lines=1, color=ctx.color, min_size=34)
     tel = ctx.add(term, nx + 28, ny + 34, t)
-    body = ctx.text(ctx.T(v.get('text')), 36 if ctx.lang == 'en' else 38, max_w=nw - 60, max_lines=4, pace=1.4, min_size=28)
+    body = ctx.text(ctx.T(v.get('text')), 36 if ctx.lang in ('en', 'es') else 38, max_w=nw - 60, max_lines=4, pace=1.4, min_size=28)
     bel = ctx.add(body, nx + 28, ny + 40 + term.size[1], t)
     ctx.register(v.get('id'), 'all', [note, tel, bel])
     ctx.register(v.get('id'), 0, [note])
@@ -296,7 +301,7 @@ def build_ladder(v, beat, box, ctx):
     ys = [plot_bot - (math.log10(v_) - lo) / (hi - lo) * (plot_bot - plot_top) for v_ in vals]
     axis = ctx.strokes((40, plot_bot - plot_top + 40), [[(20, 10), (20, plot_bot - plot_top + 30)]], color=SOFT_INK, width=4)
     ctx.add(axis, left - 70, plot_top - 20, t0)
-    note = ctx.text('log scale' if ctx.lang == 'en' else '对数刻度', 28, color=SOFT_INK)
+    note = ctx.text({'en': 'log scale', 'es': 'escala logarítmica', 'zh': '对数刻度'}[ctx.lang], 28, color=SOFT_INK)
     ctx.add(note, left - 88, plot_bot + 22, t0)
     prev = None
     for i, s in enumerate(stops):
@@ -399,7 +404,7 @@ def build_table(v, beat, box, ctx):
     if st:
         ts = ctx.time_of(beat, st.get('trigger')) if st.get('trigger') else t0 + 1
         r = int(st.get('row', len(rows) - 1))
-        text = ctx.text(ctx.T(st.get('text')).upper() if ctx.lang == 'en' else ctx.T(st.get('text')), 36,
+        text = ctx.text(ctx.T(st.get('text')).upper() if ctx.lang in ('en', 'es') else ctx.T(st.get('text')), 36,
                         color=(229, 57, 53), max_w=520, max_lines=2, align='center')
         sw, sh = text.size[0] + 40, text.size[1] + 24
         box_pts = [(4, 4), (sw - 4, 4), (sw - 4, sh - 4), (4, sh - 4), (4, 4)]

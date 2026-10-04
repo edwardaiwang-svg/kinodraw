@@ -40,7 +40,7 @@ import numpy as np
 from .. import numbers, script
 from ..engine.storyboard import normalize
 from ..library import banned
-from .match import EN_STOP, Hit, Matcher, _model, _normalize, catalog_vectors, singular
+from .match import EN_STOP, ES_STOP, Hit, Matcher, _model, _normalize, catalog_vectors, es_gloss, singular
 
 # A literal keyword hit counts in proportion to how well the doodle agrees with its sentence (ramp lo..hi).
 # Hand-tagged bespoke keywords are reliable; emoji keywords are noisy, so they must agree more.
@@ -112,8 +112,44 @@ NARRATOR_CUES = [
     ('explain', {'en': r'\b(remember|key|important|lesson|means|in short)\b', 'zh': r'记住|关键|重要|意味着|总之'}),
 ]
 
+AGREE['es'] = AGREE['en']
+MEANING_ONLY['es'], MEANING_STRONG['es'] = MEANING_ONLY['en'], MEANING_STRONG['en']
+LABEL_MAX['es'] = 22
+CAUSE['es'] = r'\b(porque|por eso|así que|causa|provoca|hace que|por lo tanto|debido a)\b'
+CONTRAST['es'] = r'\b(en lugar de|en vez de|comparado con|frente a|a diferencia de)\b'
+PLUS['es'] = r'\b(y|con|más)\b'
+LIST_GAP['es'] = re.compile(r'^\s*(?:,\s*(?:(?:y|e|o|u)\s+)?|\s+(?:y|e|o|u)\s+)'
+                            r'(?:(?:el|la|los|las|un|una|unos|unas|algunos|muchos|sus)\s+)?$', re.I)
+# These sets compare English glosses, just as the picture index does.
+GENERIC['es'], PHENOMENA['es'] = GENERIC['en'], PHENOMENA['en']
+ES_EMOJI_ALSO = {'fl_honeybee': {'bee'}, 'fl_honey_pot': {'honey'}, 'fl_blossom': {'flower'}}
+IDIOMS['es'] = re.compile(r'\b(en realidad|de hecho|por supuesto|por ejemplo|en otras palabras|al mismo tiempo|'
+                          r'en general|en particular|a cargo de|en términos de|por lo menos|a veces|tener sentido)\b', re.I)
+PEOPLE_OF['es'] = re.compile(r'\b(?:equipo|grupo|clase|familia|comunidad|generación|multitud|pareja|banda)\s+de\s+'
+                             r'(?:(?:los|las|unos|unas)\s+)?$', re.I)
+NEGATION['es'] = re.compile(r'\b(?:no|sin|nunca|ni|ningún|ninguna)\s+(?:(?:un|una|el|la|los|las)\s+)?$', re.I)
+ES_LABEL_STOP = ES_STOP | set('es son era eran fue fueron será serán está están estaba estaban'.split())
+ES_PREPS = set('a ante bajo con contra de del desde durante en entre hacia hasta para por según sin sobre tras'.split())
+ES_DETERMINERS = set('el la los las un una unos unas este esta estos estas ese esa esos esas su sus nuestro '
+                      'nuestra cada todo toda todos todas algún alguna algunos algunas'.split())
+ES_AUX = set('es son era eran fue fueron será serán está están estaba estaban ha han había habían puede pueden'.split())
+ES_CONNECTIVES = set('cuando mientras y e donde después antes porque entonces que quien quienes'.split())
+ES_VERBS = set('hay tiene tienen hace hacen usa usan produce producen forma forman crea crean lleva llevan '
+               'necesita necesitan contiene contienen'.split())   # end a noun phrase read backwards
+ES_PAST = set('inventó inventaron creó crearon construyó construyeron descubrió descubrieron escribió escribieron '
+              'publicó publicaron vendió vendieron comenzó comenzaron llegó llegaron cambió cambiaron nació nacieron '
+              'fundó fundaron hizo hicieron dio dieron enseñó enseñaron usó usaron producían imprimían'.split())
+for (pose, cues), words in zip(NARRATOR_CUES, (
+        r'\b(riesgo|peligro|peligroso|problema|preocupación|miedo|amenaza|crisis|error|advertencia)\b',
+        r'\b(éxito|logró|buena noticia|ganó|funciona|mejor)\b',
+        r'\b(investigación|estudio|estudios|evidencia|investiga\w*|descubr\w*)\b',
+        r'\b(recuerda|recuerden|clave|importante|lección|significa|en resumen)\b')):
+    cues['es'] = words
 
-def singular_words(phrase: str) -> set:
+
+def singular_words(phrase: str, lang: str = 'en') -> set:
+    if lang == 'es':
+        phrase = es_gloss(phrase)
     return {w.rstrip('s') for w in re.findall(r'[a-z]+', phrase) if w not in EN_STOP} if phrase.isascii() else set()
 
 
@@ -128,7 +164,8 @@ class RulesDirector:
         self.pics = pic_vecs[[at[i] for i in self.ids]]
         self.topic: dict = {}                                   # chapter -> rank of every picture for its subject
         self.pictures: dict = {}                                # word -> the picture it got first
-        self.banned_words = {singular(w) if lang == 'en' else w for w in banned()['words'].get(lang, ())}
+        self.banned_words = {singular(w) if lang in ('en', 'es') else w
+                             for w in banned()['words'].get('en' if lang == 'es' else lang, ())}
 
     # ------------------------------------------------------------ entry point
     def direct(self, board: dict) -> dict:
@@ -207,7 +244,7 @@ class RulesDirector:
                 spots = [(h.start, h.start + len(h.phrase)) for h in group]
                 hits = [h for h in hits if not (h.phrase and any(a <= h.start < b or h.start <= a < h.start + len(h.phrase)
                                                                  for a, b in spots))]
-                used_words |= singular_words(' '.join(h.phrase.lower() for h in group))
+                used_words |= singular_words(' '.join(h.phrase.lower() for h in group), self.lang)
                 recent.extend(h.id for h in group)
                 drawn |= {h.id for h in group}
                 budget -= 1
@@ -220,13 +257,13 @@ class RulesDirector:
                     if budget <= 0 or (sweep == 0 and k in taken):
                         continue
                     local = [h for h in hits if a <= h.start < b and h.id not in drawn
-                             and not singular_words((h.phrase or '').lower()) & used_words]
+                             and not singular_words((h.phrase or '').lower(), self.lang) & used_words]
                     if not local:
                         continue
                     group = self._pair(text, local, [pos for pos, _ in planned])
                     hits = [h for h in hits if h not in group]
                     drawn |= {h.id for h in group}
-                    used_words |= singular_words(' '.join((g.phrase or '').lower() for g in group))
+                    used_words |= singular_words(' '.join((g.phrase or '').lower() for g in group), self.lang)
                     items = [self._item(h.id, self._label(h.phrase),
                                         self._spoken(norm, h.phrase or self._lead(text, h.start), h.start))
                              for h in group]
@@ -240,7 +277,7 @@ class RulesDirector:
                             self.pictures.setdefault(self._key(h.phrase), h.id)
                             section = heroes.setdefault(beat['chapter'], {})
                             section[h.id] = max(section.get(h.id, 0), h.score)
-            if (not planned and since_narrator >= 2) or (since_narrator >= 5 and budget > 0):
+            if (not planned and (self.lang == 'es' or since_narrator >= 2)) or (since_narrator >= 5 and budget > 0):
                 pose = self._narrator_pose(text) or ('explain' if not planned else None)
                 if pose:
                     planned.append((len(text), self._cluster(beat, [self._item(f'narrator_{pose}')], len(planned))))
@@ -258,7 +295,7 @@ class RulesDirector:
     def _budget(self, text: str) -> int:
         """About one visual per 9 English words or 20 Chinese characters (1-5 per beat)."""
         size = script.size(text, self.lang)
-        return max(1, min(5, round(size / (9 if self.lang == 'en' else 20))))
+        return max(1, min(5, round(size / (9 if self.lang != 'zh' else 20))))
 
     def _item(self, doodle, label=None, trigger=None):
         item = {'doodle': doodle}
@@ -292,9 +329,11 @@ class RulesDirector:
     def _label(self, phrase):
         if not phrase or len(phrase) > LABEL_MAX[self.lang]:
             return None
-        return phrase[:1].upper() + phrase[1:] if self.lang == 'en' else phrase
+        return phrase[:1].upper() + phrase[1:] if self.lang != 'zh' else phrase
 
     def _sentence_vectors(self, sentences):
+        if self.lang == 'es':
+            sentences = [es_gloss(s) for s in sentences]
         return _normalize(np.array(list(_model(self.lang).embed(sentences)), np.float32))
 
     def _concepts(self, text, recent, chapter, listing=False) -> list[Hit]:
@@ -322,7 +361,7 @@ class RulesDirector:
                     continue                          # "global warming" is one idea: not "global" on its own
                 if NEGATION[self.lang].search(plain[max(0, a - 24):a]):
                     continue                          # "no engine": there is nothing to draw
-                if plain[b:b + 1] == '-' and self.lang == 'en':
+                if plain[b:b + 1] == '-' and self.lang != 'zh':
                     continue                          # "oil-based ink": a describing word, not a thing
                 if PEOPLE_OF[self.lang].search(plain[max(0, a - 32):a]) and not self._shows_people(hit.id):
                     continue                          # "a team of printers" are people, not machines
@@ -356,7 +395,8 @@ class RulesDirector:
             if listing:
                 continue
             lead = len(self._lead(sentence, 0))       # a meaning-only doodle is drawn on the first words
-            words = {w[:5] for w in re.findall(r'[a-z]{4,}', sentence.lower()) if w not in EN_STOP}
+            words = {w[:5] for w in re.findall(r'[a-z]{4,}',
+                     es_gloss(sentence) if self.lang == 'es' else sentence.lower()) if w not in EN_STOP}
             sims = self.vecs @ vec
             for i in np.argsort(-sims)[:3]:
                 did = self.ids[i]
@@ -396,7 +436,7 @@ class RulesDirector:
     def _shares(self, did, words):
         """Does the drawing's description share a word with the sentence (first five letters, English)?
         Chinese has no word gaps to compare, so only strong meaning-only matches are drawn there."""
-        if self.lang != 'en':
+        if self.lang == 'zh':
             return False
         return bool(words & {w[:5] for w in re.findall(r'[a-z]{4,}', self.matcher.entries[did].get('desc', '').lower())})
 
@@ -406,12 +446,14 @@ class RulesDirector:
 
     def _banned(self, key):
         """A word that never gets a picture (church, Germany, scientists...)."""
-        if self.lang == 'en':
+        if self.lang != 'zh':
             return any(w in self.banned_words for w in key.split())
         return any(w in key for w in self.banned_words)
 
     # ---------------------------------------------------------- meaning rules
     def _key(self, phrase):
+        if self.lang == 'es':
+            return es_gloss(phrase)
         return ' '.join(singular(w) for w in re.findall(r"[a-z0-9']+", phrase.lower())) if self.lang == 'en' \
             else phrase.strip()
 
@@ -438,14 +480,15 @@ class RulesDirector:
         entry = self.matcher.entries[did]
         on_topic = self.topic[chapter][self.pos[did]] <= TOPIC_RANK
         if entry['set'] == 'fluent':
-            return on_topic and (self.lang != 'en' or not phrase or self._is_head(did, phrase))
+            return on_topic and (self.lang == 'zh' or not phrase or self._is_head(did, phrase))
         return on_topic or (bool(phrase) and self._names(did, phrase))
 
     def _names(self, did, phrase):
         """The words say what the drawing shows: they are in its description (Chinese: among its first
         tags, since descriptions are English)."""
         entry = self.matcher.entries[did]
-        if self.lang == 'en':
+        if self.lang != 'zh':
+            phrase = es_gloss(phrase) if self.lang == 'es' else phrase
             shown = {singular(w) for w in re.findall(r'[a-z]+', entry.get('desc', '').lower())}
             words = [singular(w) for w in re.findall(r'[a-z]+', phrase.lower()) if w not in EN_STOP]
             return bool(words) and all(w in shown for w in words)
@@ -456,7 +499,12 @@ class RulesDirector:
         'ferris wheel' is a Ferris wheel: 'wheels' alone may not call it up; 'Ferris wheel' may."""
         name = re.split(r'\b(?:at|with|of|in|on|for|from|to|and|or)\b', self.matcher.entries[did].get('desc', '').lower())[0]
         words = re.findall(r'[a-z]+', name)
+        phrase = es_gloss(phrase) if self.lang == 'es' else phrase
         said = [singular(w) for w in re.findall(r'[a-z]+', phrase.lower())]
+        if self.lang == 'es' and not said:
+            return False
+        if self.lang == 'es' and said[-1] in ES_EMOJI_ALSO.get(did, ()):
+            return True
         if said and said[-1] in EMOJI_ALSO.get(did, ()):
             return True
         if not words or singular(words[-1]) != said[-1]:
@@ -479,19 +527,21 @@ class RulesDirector:
 
     def _inside(self, key, term):
         """Are the words of ``key`` part of ``term``?"""
-        return set(key.split()) <= set(term.split()) if self.lang == 'en' else key in term
+        if self.lang == 'es' and (not key or not term):
+            return False
+        return set(key.split()) <= set(term.split()) if self.lang != 'zh' else key in term
 
     def _pair(self, text, hits, taken=()):
         """The best hit, plus a second nearby hit about something else (never two takes on one phrase, and
         never across another picture said between them: the board would have to go back for it)."""
         first = hits[0]
         for other in hits[1:4]:
-            if not (other.phrase and first.phrase) or abs(other.start - first.start) >= (90 if self.lang == 'en' else 40):
+            if not (other.phrase and first.phrase) or abs(other.start - first.start) >= (90 if self.lang != 'zh' else 40):
                 continue
             if any(min(first.start, other.start) < pos < max(first.start, other.start) for pos in taken):
                 continue
             a, b = first.phrase.lower(), other.phrase.lower()
-            if a in b or b in a or singular_words(a) & singular_words(b):
+            if a in b or b in a or singular_words(a, self.lang) & singular_words(b, self.lang):
                 continue
             return sorted([first, other], key=lambda h: h.start)
         return [first]
@@ -503,8 +553,10 @@ class RulesDirector:
             words = [w for w in jieba.lcut(rest.lstrip('%％的个 ')) if re.match(r'[\u4e00-\u9fff]', w)]
             return words[0] if words else ''
         words = []
-        for w in re.findall(r"[A-Za-z][\w'-]*", rest[:60]):
-            if w.lower() in LABEL_STOP or len(words) == 3:
+        stop = ES_LABEL_STOP if self.lang == 'es' else LABEL_STOP
+        pattern = r"[^\W\d_][\w'-]*" if self.lang == 'es' else r"[A-Za-z][\w'-]*"
+        for w in re.findall(pattern, rest[:60]):
+            if w.lower() in stop or len(words) == 3:
                 if words:
                     break
                 continue
@@ -526,18 +578,22 @@ class RulesDirector:
 
     # ------------------------------------------------------------ detectors
     def _quote(self, beat, text, norm, recent):
-        m = re.search(r'[“"「]([^”"」]{12,})[”"」]', text)
-        if not m or (self.lang == 'en' and len(m.group(1).split()) < 5):
+        pattern = r'[«“"]([^»”"]{12,})[»”"]' if self.lang == 'es' else r'[“"「]([^”"」]{12,})[”"」]'
+        m = re.search(pattern, text)
+        if not m or (self.lang != 'zh' and len(m.group(1).split()) < 5):
             return None
         quote = m.group(1).strip()
-        if len(quote) > (110 if self.lang == 'en' else 44):
+        if len(quote) > (110 if self.lang != 'zh' else 44):
             return None
         who = re.search(r'([A-Z][a-z]+(?: [A-Z][a-z]+){0,2}) (?:said|says|wrote|writes|argued|told)', text) \
             if self.lang == 'en' else re.search(r'([一-鿿A-Za-z]{2,8})(?:说|写道|表示)', text)
+        if self.lang == 'es':
+            who = re.search(r'([A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+(?: [A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+){0,2}) '
+                            r'(?:dijo|dice|escribió|escribe|preguntó|respondió|afirmó)', text)
         v = {'id': f"{beat['id']}q", 'type': 'quote', 'text': {self.lang: quote}, 'size': 'wide'}
         if who:
             v['who'] = {self.lang: who.group(1)}
-        trig = self._spoken(norm, quote[:24] if self.lang == 'en' else quote[:8])
+        trig = self._spoken(norm, quote[:24] if self.lang != 'zh' else quote[:8])
         if trig:
             v['trigger'] = {self.lang: trig}
         return v, m.start()
@@ -554,6 +610,28 @@ class RulesDirector:
             if not words or words[-1] in ('is', 'are', 'was', 'were', 'be', 'been'):
                 return None                                # 'this process is called X': the definition is elsewhere
             gloss = ' '.join(words)
+        elif self.lang == 'es':
+            # 'roca fundida llamada magma' only: 'X se llama Y' is 'X is called Y', the definition is elsewhere
+            m = re.search(r'\b((?:(?:un|una|el|la) )?[^\W\d_][\w-]*(?: [^\W\d_][\w-]*){0,3}) '
+                          r'(?:llamado|llamada|llamados|llamadas|conocido como|conocida como) '
+                          r'(?:(?:un|una|el|la) )?([^\W\d_][\w-]*(?: [^\W\d_][\w-]*){0,2})\b', text)
+            if not m:
+                return None
+            stop = ES_AUX | ES_PREPS | ES_DETERMINERS | ES_CONNECTIVES | ES_VERBS
+            words, term = [], []
+            for w in reversed(m.group(1).split()):         # the noun phrase right before 'llamada'
+                if w.lower() in stop:
+                    if w.lower() in ('un', 'una') and words:   # 'un tubo' reads as a definition
+                        words.insert(0, w)
+                    break
+                words.insert(0, w)
+            for w in m.group(2).split():                   # 'tallo que lleva' -> 'tallo'
+                if w.lower() in stop:
+                    break
+                term.append(w)
+            if not words or not term:
+                return None
+            term, gloss = ' '.join(term), ' '.join(words)
         else:
             m = re.search(r'([一-鿿]{2,12})(?:叫做|称为|被称为|叫作)([一-鿿A-Za-z]{2,8})', text)
             if not m:
@@ -570,17 +648,25 @@ class RulesDirector:
         """One salient number: 'X% of Y' becomes a 100-square grid, anything else a big stat."""
         pct = re.search(r'(\d+(?:\.\d+)?)\s?%\s+of\s+(?:the\s+)?([a-z][\w-]*(?: [a-z][\w-]*)?)' if self.lang == 'en'
                         else r'(\d+(?:\.\d+)?)\s?[%％]的([一-鿿]{2,6})', text)
-        if pct and 1 <= float(pct.group(1)) <= 99:
+        if self.lang == 'es':
+            pct = re.search(rf'(?<![\d.,])({numbers.ES_NUM})\s?%\s+(?:de\s+(?:(?:los|las|el|la)\s+)?|del\s+)'
+                            r'([^\W\d_][\w-]*(?: [^\W\d_][\w-]*)?)', text)   # the whole '1.025,5', never '025,5'
+        if pct and 1 <= _pct_value(pct.group(1), self.lang) <= 99:
             value = pct.group(0).split('of')[0].strip() if self.lang == 'en' else pct.group(1) + '%'
-            label = pct.group(2) if self.lang == 'en' else self._noun_after(text[pct.end(1):])
-            if self.lang == 'en':                     # "27% of trips are made ..." -> "trips"
+            if self.lang == 'es':
+                value = text[pct.start():text.index('%', pct.end(1)) + 1]
+            label = pct.group(2) if self.lang != 'zh' else self._noun_after(text[pct.end(1):])
+            if self.lang != 'zh':                     # "27% of trips are made ..." -> "trips"
                 words = label.split()
-                while len(words) > 1 and words[-1] in AUX | PREPS | DETERMINERS:
+                stop = ES_AUX | ES_PREPS | ES_DETERMINERS | ES_CONNECTIVES if self.lang == 'es' else AUX | PREPS | DETERMINERS
+                while len(words) > 1 and words[-1] in stop:
                     words.pop()
                 label = ' '.join(words)
             title = f'{value} of {label}' if self.lang == 'en' else f'{value}的{label}'
+            if self.lang == 'es':
+                title = text[pct.start():pct.start(2) + len(label)]
             v = {'id': f"{beat['id']}p", 'type': 'grid100', 'title': {self.lang: title},
-                 'filled': round(float(pct.group(1))),
+                 'filled': round(_pct_value(pct.group(1), self.lang)),
                  'legend': [{'text': {self.lang: label}, 'kind': 'filled'}]}
             trig = self._spoken(norm, value)
             if trig:
@@ -589,9 +675,17 @@ class RulesDirector:
         num = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?'
         pattern = (rf'(?:\$|€|£)?{num}(?:\s?(?:%|×|(?:percent|million|billion|trillion|thousand|bn|m|x)\b))?'
                    if self.lang == 'en' else rf'{num}\s?(?:%|％|万亿|亿|万|千|倍)?')
+        if self.lang == 'es':                      # '3,5%', '3.000 años' as numbers.normalize_es reads them
+            num = f'(?:{numbers.ES_NUM})'
+            pattern = rf'(?:\$|€|£)?{num}(?:\s?(?:%|×|(?:por ciento|mil|millón|millones|billón|billones|veces|x)\b))?'
         for m in re.finditer(pattern, text):
             token = m.group(0).strip()
             digits = re.sub(r'[^\d.]', '', token)
+            if self.lang == 'es':
+                digits = re.sub(r'[^\d.,]', '', token)
+                digits = digits.replace('.', '') if re.fullmatch(r'\d{1,3}(?:\.\d{3})+(?:,\d+)?', digits) \
+                    else digits.replace(',', '') if re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', digits) else digits
+                digits = digits.replace(',', '.')
             if not digits or digits == '.':
                 continue
             is_year = re.fullmatch(r'1[1-9]\d\d|20\d\d', token) is not None
@@ -620,21 +714,29 @@ class RulesDirector:
         """Who or what a dated clause is about: a named person or group first, else the clause's subject."""
         if self.lang == 'zh':
             return self._event_label_zh(sentence, date)
+        preps = ES_PREPS if self.lang == 'es' else PREPS
+        dets = ES_DETERMINERS | ES_CONNECTIVES if self.lang == 'es' else DETERMINERS
+        auxs = ES_AUX if self.lang == 'es' else AUX
+        past = ES_PAST if self.lang == 'es' else PAST
+        stops = ES_STOP if self.lang == 'es' else EN_STOP
+        connectives = ES_CONNECTIVES if self.lang == 'es' else CONNECTIVES
+        suffix = ('ado', 'ido', 'aron', 'ieron') if self.lang == 'es' else ('ed',)
+        word = r"[^\W\d_][\w'’-]*" if self.lang == 'es' else r"[A-Za-z][\w'’-]*"
         at = sentence.find(date)
         parts = [(m.start(), m.group(0)) for m in re.finditer(r'[^,;:()]+', sentence)]
         k = next((i for i, (s, p) in enumerate(parts) if s <= at < s + len(p)), 0)
-        words = re.findall(r"[A-Za-z][\w'’-]*", parts[k][1].replace(date, ' '))
+        words = re.findall(word, parts[k][1].replace(date, ' '))
         used = k
-        if all(w.lower() in PREPS | DETERMINERS for w in words) and k + 1 < len(parts):
-            words = re.findall(r"[A-Za-z][\w'’-]*", parts[k + 1][1])    # "By 1500, printing presses were ..."
+        if all(w.lower() in preps | dets for w in words) and k + 1 < len(parts):
+            words = re.findall(word, parts[k + 1][1])    # "By 1500, printing presses were ..."
             used = k + 1
         subject = []                                  # the words before the clause's verb or first preposition
         for i, w in enumerate(words):
             low = w.lower()
-            if low in AUX or low in PREPS or (subject and (low.endswith('ed') or low in PAST)):
+            if low in auxs or low in preps or (subject and (low.endswith(suffix) or low in past)):
                 break
             subject.append(w)
-        names = [w for w in subject if w[0].isupper() and w.lower() not in DETERMINERS | EN_STOP]
+        names = [w for w in subject if w[0].isupper() and w.lower() not in dets | stops]
         if names:                                     # "Martin Luther's arguments" -> "Martin Luther"
             first = subject.index(names[0])
             run = [names[0]]
@@ -647,8 +749,8 @@ class RulesDirector:
                 label = re.sub(r"['’]s$", '', ' '.join(run))
                 return label if len(label) <= LABEL_MAX['en'] else label.split()[-1]
         if used + 1 < len(parts):                     # "The fix came in 1885, when John Kemp Starley sold ..."
-            nxt = re.findall(r"[A-Za-z][\w'’-]*", parts[used + 1][1])
-            while nxt and nxt[0].lower() in CONNECTIVES:
+            nxt = re.findall(word, parts[used + 1][1])
+            while nxt and nxt[0].lower() in connectives:
                 nxt = nxt[1:]
             run = []
             for w in nxt:
@@ -656,24 +758,24 @@ class RulesDirector:
                     break
                 run.append(w)
             after = nxt[len(run)].lower() if len(run) < len(nxt) else ''
-            if run and run[0].lower() not in DETERMINERS | EN_STOP and (not after or after in AUX | PAST
-                                                                          or after.endswith('ed')):
+            if run and run[0].lower() not in dets | stops and (not after or after in auxs | past
+                                                                          or after.endswith(suffix)):
                 label = re.sub(r"['’]s$", '', ' '.join(run))
                 return label if len(label) <= LABEL_MAX['en'] else label.split()[-1]
         det = subject[0].lower() if subject else ''
-        content = [w for w in subject if w.lower() not in DETERMINERS and not w.isdigit()]
-        if len(content) == 1 and det in ('every', 'each'):
+        content = [w for w in subject if w.lower() not in dets and not w.isdigit()]
+        if self.lang == 'en' and len(content) == 1 and det in ('every', 'each'):
             content = [content[0] + 's']              # "every book" -> "books"
         if len(content) == 1:                         # "every book in Europe was copied by hand"
             rest = words[len(subject):]
-            aux = next((i for i, w in enumerate(rest) if w.lower() in AUX), None)
-            if aux is not None and aux + 1 < len(rest) and rest[aux + 1].lower().endswith(('ed', 'en')):
+            aux = next((i for i, w in enumerate(rest) if w.lower() in auxs), None)
+            if aux is not None and aux + 1 < len(rest) and rest[aux + 1].lower().endswith(('ado', 'ido') if self.lang == 'es' else ('ed', 'en')):
                 content += rest[aux + 1:aux + 4]
         label = ' '.join(content[:4])
         while len(label) > LABEL_MAX['en'] and ' ' in label:
             label = label.rsplit(' ', 1)[0]
         if not label:
-            hit = next((h for h in self.matcher.lexical(sentence) if self._key(h.phrase) not in GENERIC['en']), None)
+            hit = next((h for h in self.matcher.lexical(sentence) if self._key(h.phrase) not in GENERIC[self.lang]), None)
             label = hit.phrase if hit else ''
         return label[:1].upper() + label[1:]
 
@@ -720,7 +822,8 @@ class RulesDirector:
         for b in beats:
             text = b['display'][lang]
             for m in re.finditer(r'(?<!\d)(1[1-9]\d\d|20\d\d)(?:s)?(?!\d)', text):
-                if re.search(r'\b(?:before|until|till|prior to)\s+(?:the\s+)?$', text[max(0, m.start() - 16):m.start()], re.I) \
+                if re.search(r'\b(?:antes de|hasta)\s+(?:los?\s+)?$' if lang == 'es' else
+                             r'\b(?:before|until|till|prior to)\s+(?:the\s+)?$', text[max(0, m.start() - 16):m.start()], re.I) \
                         or re.match(r'年?(?:之前|以前)', text[m.end():]):
                     continue                          # "Before the 1450s, ...": nothing happens at that date
                 sentence = next((s for s in script.sentences(text, lang) if m.group(0) in s), text)
@@ -752,3 +855,14 @@ class RulesDirector:
         for b in beats[a:z + 1]:
             held[b['id']] = (spoken[0][4] if b is anchor else -1, spoken[-1][4] if b is last else 10 ** 6)
         return anchor['id'], page, held
+
+
+def _pct_value(token: str, lang: str) -> float:
+    """'3,5' -> 3.5 and '1.025,5' -> 1025.5 in Spanish, as numbers.normalize_es reads them."""
+    if lang != 'es':
+        return float(token)
+    if re.fullmatch(r'\d{1,3}(?:\.\d{3})+(?:,\d+)?', token):
+        token = token.replace('.', '')
+    elif re.fullmatch(r'\d{1,3}(?:,\d{3})+(?:\.\d+)?', token):
+        token = token.replace(',', '')
+    return float(token.replace(',', '.'))

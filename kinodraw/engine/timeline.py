@@ -29,7 +29,7 @@ TAKE_PREROLL = 2.0        # pan to the takeaway page and lay the note down befor
 
 def take_hold(beat, lang):
     head = (beat.get('take') or {}).get('headline', {}).get(lang, '')
-    if lang == 'en':
+    if lang in ('en', 'es'):
         return max(3.0, len(head.split()) / 3.0)
     return max(3.0, len(re.findall(r'[一-鿿A-Za-z0-9]', head)) / 6.0)
 
@@ -121,7 +121,7 @@ def synthetic_clips(episode, lang):
     clips = {}
     for beat in episode['beats']:
         text = beat['spoken'][lang]
-        if lang == 'en':
+        if lang in ('en', 'es'):
             seconds = max(2.0, len(text.split()) / 2.45)
         else:
             seconds = max(2.0, len(re.findall(r'[一-鿿]', text)) / 4.4 + len(re.findall(r'[A-Za-z]+', text)) * .25)
