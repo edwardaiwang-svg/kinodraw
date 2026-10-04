@@ -120,7 +120,7 @@ def chat(prod, stage):
     left, top, right, bottom = ui.screen_box()
     ox, oy = px - phone_img.width / 2, py - phone_img.height / 2
     y, count, lines = oy + top * scale + 6, 0, 0
-    names = ['Max', 'Lara', 'Tim', 'Aisha', 'Sem']
+    names = ui.NAMES
     for k, s in enumerate(stage.sentences):
         m = re.search(r'\d+', s.text)
         if s.role in ('question', 'hook') or s.scene == 'chaos':
