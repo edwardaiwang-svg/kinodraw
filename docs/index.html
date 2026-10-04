@@ -4,23 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KinoDraw: free whiteboard animation and explainer video maker, open source</title>
-<meta name="description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta name="description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, works offline on Windows, Mac and Linux.">
 <link rel="canonical" href="https://edwardaiwang-svg.github.io/kinodraw/">
 <link rel="icon" href="media/icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="KinoDraw">
 <meta property="og:url" content="https://edwardaiwang-svg.github.io/kinodraw/">
 <meta property="og:title" content="KinoDraw: free whiteboard explainer video maker">
-<meta property="og:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta property="og:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, works offline on Windows, Mac and Linux.">
 <meta property="og:image" content="https://edwardaiwang-svg.github.io/kinodraw/media/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A drawing hand sketches a rainbow beside a cartoon narrator and the sun, in a science video made with KinoDraw">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="KinoDraw: free whiteboard explainer video maker">
-<meta name="twitter:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, no watermark, works offline on Windows, Mac and Linux.">
+<meta name="twitter:description" content="Turn a script into a hand-drawn whiteboard explainer video with a natural voice. Free and open source, works offline on Windows, Mac and Linux.">
 <meta name="twitter:image" content="https://edwardaiwang-svg.github.io/kinodraw/media/og.png">
 <meta name="twitter:image:alt" content="A drawing hand sketches a rainbow beside a cartoon narrator and the sun, in a science video made with KinoDraw">
+<!-- TODO(J): paste the token from the Cloudflare dashboard (Web Analytics → add site) in place of
+     YOUR_CLOUDFLARE_TOKEN and remove the comment marks around the script.
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "YOUR_CLOUDFLARE_TOKEN"}'></script>
+-->
+<!-- TODO(J): replace YOUR_SEARCH_CONSOLE_CODE with the Google Search Console verification code and remove the comment marks.
+<meta name="google-site-verification" content="YOUR_SEARCH_CONSOLE_CODE">
+-->
 <style>
   @font-face { font-family: 'Playpen'; src: url('media/PlaypenSans-Bold.ttf'); font-weight: 700; font-display: swap; }
   :root { --paper: #eceae4; --ink: #1b1b1b; --soft: #55606a; --orange: #f57c00; --blue: #1e6fd9; --green: #2e9d4f; --card: #fbfaf6; }
@@ -54,7 +61,7 @@
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 2.5px solid var(--ink); border-radius: 14px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 14px; border-bottom: 1.5px solid #d8d4ca; }
   th { font-family: 'Playpen', sans-serif; }
-  code { background: #fff; border: 1.5px solid #d8d4ca; border-radius: 8px; padding: 2px 6px; font-size: 15px; }
+  code { background: #fff; border: 1.5px solid #d8d4ca; border-radius: 8px; padding: 2px 6px; font-size: 15px; overflow-wrap: anywhere; word-break: break-word; }
   pre { background: #1b1b1b; color: #f5f2ea; border-radius: 14px; padding: 16px; overflow-x: auto; font-size: 15px; }
   footer { padding: 36px 0 60px; color: var(--soft); font-size: 14px; }
   .first-open { background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px; padding: 18px 22px; box-shadow: 0 6px 0 var(--orange); }
@@ -63,7 +70,7 @@
   .first-open ol { padding-left: 24px; margin: 10px 0; }
   .first-open li { margin: 0 0 12px; }
   .first-open li::marker { font-family: 'Playpen', sans-serif; color: var(--orange); font-weight: 700; }
-  .shot.todo { border: 2px dashed var(--orange); border-radius: 12px; padding: 14px; margin-top: 8px; color: var(--orange); font-size: 14px; background: #fff; }
+  img.shot { display: block; width: 100%; max-width: 520px; height: auto; margin-top: 10px; border: 2px solid var(--ink); border-radius: 12px; }
   @media (max-width: 760px) { header { grid-template-columns: 1fr; padding-top: 32px; } .narrator { max-width: 200px; } }
 </style>
 </head>
@@ -73,15 +80,17 @@
     <div>
       <h1>Kino<span>Draw</span></h1>
       <p class="lead">Turn any script into a hand-drawn whiteboard explainer video, on your own computer.
-        Free and open source, no watermark, works offline. In English and 中文.</p>
+        Free and open source, no watermark (just a 2-second end card you can turn off), works offline. In English and 中文.</p>
+      <p id="other-device" hidden><b>KinoDraw runs on Mac, Windows and Linux computers.</b>
+        Open this page on one of those computers to download it.</p>
       <a class="btn primary" id="download" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Download</a>
       <a class="btn" href="https://github.com/edwardaiwang-svg/kinodraw">Source on GitHub</a>
       <p class="small"><span id="also">For</span> <span id="platforms"><a data-os="windows" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Windows</a><span> · </span><a data-os="macos" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">macOS (Apple silicon, M1 or newer)</a><span> · </span><a data-os="linux" href="https://github.com/edwardaiwang-svg/kinodraw/releases/latest">Linux</a></span>.
         No account and no API key needed for the offline director.<br>
         <b>Opening it the first time takes one extra approval: <a href="#first-open">see how</a>.</b><br>
         It opens on a finished example video. Your own first video downloads the voice (about 190 MB) and the doodle
-        search (about 70 MB), once, then takes about a minute. The 2-second "Made with KinoDraw" end credit can be
-        switched off.<br>
+        search (about 70 MB), once, then takes about a minute. Every finished video ends with a short "Made with KinoDraw" card,
+        on by default; one click in the Studio turns it off (or <code>kinodraw make --no-credit</code>).<br>
         KinoDraw was called Doodle Studio before version 0.2.0. Close Doodle Studio first: KinoDraw moves your Doodle
         Studio projects, settings and voice over the first time it opens.</p>
     </div>
@@ -105,17 +114,26 @@
       <p>KinoDraw isn't notarized by Apple yet, so the first time you open it, macOS stops it. You approve it once:</p>
       <ol>
         <li>Unzip the download, drag <b>KinoDraw</b> to Applications and double-click it. macOS says it can't
-          check the app for malware. Close that message (don't move the app to the Trash).
-          <!-- TODO(J): replace the box below with a real screenshot of the blocked-app message, e.g.
-               <img src="media/mac-open-1.png" alt="..."> taken on your own Mac from a browser-downloaded copy. -->
-          <div class="shot todo">TODO (J): screenshot of the message macOS shows when you first open the app.</div></li>
-        <li>Choose Apple menu → <b>System Settings</b>, then click <b>Privacy &amp; Security</b> in the sidebar.
-          (You may need to scroll down.)</li>
-        <li>Go to <b>Security</b> and click <b>Open Anyway</b>. This button is available for about an hour after you
-          try to open the app; if it isn't there, double-click the app again first.
-          <!-- TODO(J): real screenshot of the Security section with the Open Anyway button (media/mac-open-3.png). -->
-          <div class="shot todo">TODO (J): screenshot of Privacy &amp; Security with the Open Anyway button.</div></li>
-        <li>Enter your login password, then click <b>OK</b>. From then on it opens with a double-click, like any app.</li>
+          check the app for malware. Click <b>Done</b> (don't move the app to the Trash).
+          <img class="shot" src="media/mac-open-1.jpg" width="670" height="500" loading="lazy"
+            alt="The message &quot;KinoDraw.app Not Opened&quot;, with the Done button circled"></li>
+        <li>Choose Apple menu → <b>System Settings</b>, then scroll the sidebar on the left down.
+          <img class="shot" src="media/mac-open-2.jpg" width="1090" height="1185" loading="lazy"
+            alt="System Settings, with an arrow showing to scroll the left sidebar down"></li>
+        <li>Click <b>Privacy &amp; Security</b>, then scroll the right side down to the <b>Security</b> section.
+          <img class="shot" src="media/mac-open-3.jpg" width="1090" height="1185" loading="lazy"
+            alt="Privacy &amp; Security circled in the sidebar, with an arrow showing to scroll the right side down"></li>
+        <li>Next to "KinoDraw.app was blocked to protect your Mac", click <b>Open Anyway</b>. This button is available
+          for about an hour after you try to open the app; if it isn't there, double-click the app again first.
+          <img class="shot" src="media/mac-open-4.jpg" width="1040" height="665" loading="lazy"
+            alt="The Security section, with the Open Anyway button circled"></li>
+        <li>macOS asks once more: click <b>Open Anyway</b> again.
+          <img class="shot" src="media/mac-open-5.jpg" width="1040" height="720" loading="lazy"
+            alt="The question &quot;Open KinoDraw.app?&quot;, with the Open Anyway button circled"></li>
+        <li>Touch the Touch ID key, or click <b>Use Password…</b> and enter your login password. KinoDraw opens, and
+          from then on it opens with a double-click, like any app.
+          <img class="shot" src="media/mac-open-6.jpg" width="1040" height="720" loading="lazy"
+            alt="The Touch ID request, with the Use Password button circled"></li>
       </ol>
       <p class="small">These are Apple's own steps (<a href="https://support.apple.com/guide/mac-help/mh40617/mac">Open an
         app by overriding security settings</a>). Right-click → Open no longer skips this on macOS Sequoia and later.
@@ -207,13 +225,23 @@ kinodraw studio          # the app window</pre>
 <script>
 // The visitor's own computer comes first: the Download button starts its installer from the latest release, and the
 // other platforms stay one click away. Without JavaScript (or on a phone) every link opens the Releases page.
+function kinodrawPlatform(ua, uaData, touchPoints) {
+  const ipad = /Mac/.test(ua) && touchPoints > 1;
+  const fromUA = /Android|iPhone|iPad/.test(ua) || ipad || /CrOS/.test(ua) ? 'other'
+    : /Win/.test(ua) ? 'windows' : /Mac/.test(ua) ? 'macos' : /Linux|X11/.test(ua) ? 'linux' : null;
+  const platforms = { Windows: 'windows', macOS: 'macos', Linux: 'linux',
+    'Chrome OS': 'other', 'Chromium OS': 'other', Android: 'other', iOS: 'other' };
+  const fromData = uaData?.mobile === true ? 'other' : Object.prototype.hasOwnProperty.call(platforms, uaData?.platform) ? platforms[uaData.platform] : null;
+  return fromData === 'other' || fromUA === null || fromData === fromUA ? fromData : fromUA;
+}
+
 (async () => {
-  const ua = navigator.userAgent;
-  const ipad = /Mac/.test(ua) && navigator.maxTouchPoints > 1;
-  const os = /Android|iPhone|iPad/.test(ua) || ipad ? null
-    : /Win/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null;
-  if (!os) return;
-  const key = os.toLowerCase();
+  const key = kinodrawPlatform(navigator.userAgent, navigator.userAgentData, navigator.maxTouchPoints);
+  if (!key) return;
+  if (key === 'other') {
+    document.getElementById('other-device').hidden = false;
+    return;
+  }
   const mine = document.querySelector(`#platforms a[data-os="${key}"]`);
   (mine.previousElementSibling || mine.nextElementSibling)?.remove();         // its " · " separator
   mine.remove();
@@ -225,11 +253,13 @@ kinodraw studio          # the app window</pre>
   const box = document.querySelector(`#first-open [data-os="${key}"]`);
   box.parentNode.insertBefore(box, box.parentNode.firstElementChild);           // its first-open steps first
   const btn = document.getElementById('download');
+  const os = { windows: 'Windows', macos: 'Mac', linux: 'Linux' }[key];
+  btn.textContent = 'Download for ' + os + (mac ? ' (Apple silicon)' : '');
   try {
     const r = await fetch('https://api.github.com/repos/edwardaiwang-svg/kinodraw/releases/latest');
     const assets = (await r.json()).assets;
     const pick = (k) => assets.find(a => a.name.includes('-' + k + '.'));          // KinoDraw-v0.2.0-windows.zip ...
-    if (pick(key)) [btn.href, btn.textContent] = [pick(key).browser_download_url, 'Download for ' + os + (mac ? ' (Apple silicon)' : '')];
+    if (pick(key)) btn.href = pick(key).browser_download_url;
     document.querySelectorAll('#platforms a').forEach(a => { if (pick(a.dataset.os)) a.href = pick(a.dataset.os).browser_download_url; });
   } catch (e) {}
 })();

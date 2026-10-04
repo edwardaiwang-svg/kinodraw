@@ -1,6 +1,6 @@
 # Third-party notices
 
-KinoDraw's own code is MIT-licensed. Its original doodles, narrator character and drawing hand are CC BY 4.0. The components below keep their own licences.
+KinoDraw's own code is MIT-licensed. Its original doodles, narrator character and drawing hand are CC BY 4.0 ([LICENSES/ASSETS.md](LICENSES/ASSETS.md)). The components below keep their own licences.
 
 The packaged apps on the Releases page also contain GPL components (FFmpeg built with x264/x265, espeak-ng and phonemizer), so each packaged app as a whole is distributed under the GNU General Public License, version 3 ([LICENSES/GPL-3.0.txt](LICENSES/GPL-3.0.txt)). KinoDraw's own source code stays MIT on its own; see "GPL components and source" below.
 
