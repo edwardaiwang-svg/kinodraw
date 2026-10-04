@@ -165,7 +165,7 @@ def voice_settings(name: str, body: dict | None = None) -> dict:
             pronounce.unlink(missing_ok=True)
         cfg.update(settings)
     return {'lang': cfg['lang'], 'voice': cfg['voice'], 'speed': cfg['speed'],
-            'server_voice': cfg.get('server_voice', ''),
+            **({'server_voice': cfg['server_voice']} if 'server_voice' in cfg else {}),   # only with a server voice
             'pronounce': pronounce.read_text(encoding='utf-8') if pronounce.exists() else ''}
 
 
