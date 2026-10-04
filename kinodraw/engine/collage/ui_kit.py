@@ -24,10 +24,12 @@ INK, PAPER, NAVY, TEAL, ORANGE, GREEN = '#1B1B1B', '#FBF7EE', '#2F3A6B', '#3E8E8
 
 LABELS = {  # fixed interface words, per language
     'en': {'continue': 'Continue →', 'in': "I'm in!", 'out': "Can't make it", 'going': '{n} of {m} going',
-           'min': 'min. {n}', 'free': 'FREE', 'on': "IT'S ON!", 'you_in': '✓ You\'re in!', 'script': 'Script'},
+           'min': 'min. {n}', 'free': 'FREE', 'on': "IT'S ON!", 'you_in': '✓ You\'re in!', 'script': 'Script',
+           'title': 'Title'},
     'zh': {'continue': '继续 →', 'in': '我参加！', 'out': '去不了', 'going': '{m}人中{n}人参加', 'min': '至少{n}人',
            'free': '免费', 'on': '成了！', 'you_in': '✓ 已报名', 'script': '脚本'},
 }
+NAMES = ['Max', 'Lara', 'Tim', 'Aisha', 'Sem']   # who writes in the chat scenes (the same in every language)
 CHATTER = {  # decorative group-chat lines for problem scenes (a fixed bank, picked by seed)
     'en': ['Saturday?', 'Hello...??', 'who else is coming?', 'maybe', 'can I bring someone?', 'could we do Sunday?',
            "can't do Saturday", 'what are we doing?', 'sorry, only just saw this!', 'wait, what\'s the plan?',

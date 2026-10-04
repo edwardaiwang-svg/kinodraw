@@ -15,6 +15,7 @@ from .elements import Burst, Confetti, Counter, Piece, Stroke, Swap, Tap, Typed,
 
 W, H = 1920, 1080
 STAGE_X = 1180                      # centre of the action; the puppet stands on the left
+SEATS, MINIMUM = 8, 6               # the sign-up demo's fixed seat count and minimum, the same in every video
 URL = re.compile(r'\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|nl|io|app|org|net|co|ai|dev|me|so|xyz|studio|cn|de|uk|fr)\b',
                  re.I)
 TIME = re.compile(r'\bin (\d+) (seconds?|minutes?|mins?|secs?)\b', re.I)
@@ -120,7 +121,7 @@ def chat(prod, stage):
     left, top, right, bottom = ui.screen_box()
     ox, oy = px - phone_img.width / 2, py - phone_img.height / 2
     y, count, lines = oy + top * scale + 6, 0, 0
-    names = ['Max', 'Lara', 'Tim', 'Aisha', 'Sem']
+    names = ui.NAMES
     for k, s in enumerate(stage.sentences):
         m = re.search(r'\d+', s.text)
         if s.role in ('question', 'hook') or s.scene == 'chaos':
@@ -302,7 +303,7 @@ def _rsvp(prod, s):
 def threshold(prod, stage):
     els = []
     lab = ui.LABELS[prod.lang]
-    total, minimum = 8, 6
+    total, minimum = SEATS, MINIMUM
     first = stage.sentences[0]
     title = prod.brand.get('name') or prod.ep['title'][prod.lang]
     card = ui.raster(ui._doc(1060, 470, '<rect x="6" y="6" width="1048" height="458" rx="16" fill="#FBF7EE" '
