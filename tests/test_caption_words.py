@@ -21,7 +21,11 @@ SOURCES = {('explain', 'en'): 'tiny.md', ('explain', 'zh'): 'stick_wall_zh.md',
            ('explain', 'es'): 'miel_es.md', ('promo', 'en'): 'promo_tiny.md'}
 # The collage's fixed interface words, chat names and decorative chat bank are constants of the look,
 # never derived from or rewriting the script. Keep this exception visible in one named constant.
-INTERFACE_FRAME_WORDS = (ui_kit.LABELS, ui_kit.CHATTER, ui_kit.NAMES)
+# ('sec', 'min'): collage/promo.py shortens "in 20 seconds" to a "20 sec!" stopwatch badge.
+INTERFACE_FRAME_WORDS = (ui_kit.LABELS, ui_kit.CHATTER, ui_kit.NAMES, ('sec', 'min'))
+# Beat visual keys that hold narration cue words, not labels: never on-screen vocabulary.
+NOT_FRAME_WORDS = {'trigger'}
+CJK = re.compile('[\u3400-\u4dbf\u4e00-\u9fff\U00020000-\U000323af]+')
 CASES = [(look, lang, aspect) for look in styles.looks(ready=True)
          for lang in look['languages'] for aspect in ('16:9', '9:16')]
 
@@ -45,10 +49,6 @@ def tokens(text, lang):
     return out + ([run] if run else [])
 
 
-def normalized(text, lang):
-    return ('' if lang == 'zh' else ' ').join(tokens(text, lang))
-
-
 def contiguous(needle, haystack):
     return any(haystack[i:i + len(needle)] == needle for i in range(len(haystack) - len(needle) + 1))
 
@@ -65,26 +65,31 @@ def check_tokens(actual, expected, lang, context):
 def check_caption_words(board, tl, lang, source, context):
     display = ' '.join(b['display'][lang] for b in board['beats'])
     check_tokens(' '.join(c['text'] for c in tl['captions']), display, lang, context + ' caption words')
-    source_tokens = tokens(re.sub(r'(?m)^\s*#+\s*', '', source), lang)
     for beat in board['beats']:
         text = beat['display'][lang]
         assert beat['spoken'][lang] == numbers.normalize(text, lang).spoken, f'{context}: spoken {beat["id"]}'
-        if beat['kind'] == 'narration':
-            assert contiguous(tokens(text, lang), source_tokens), f'{context}: rewritten script {beat["id"]}: {text!r}'
+    # The narration beats, in order, are the script's body word for word: nothing reordered, dropped or repeated.
+    body = '\n'.join(line for line in source.splitlines() if not re.match(r'\s*#', line))
+    said = ' '.join(b['display'][lang] for b in board['beats'] if b['kind'] == 'narration')
+    check_tokens(said, body, lang, context + ' rewritten script')
 
 
-def strings(value, lang):
+def strings(value, lang, localized=False):
+    """Every string in value, in lang only. localized=True keeps only text written per language
+    ({'en': ...}), so ids, kinds and asset names ('b006n', 'stat', 'nyc_skyline') are not frame words."""
     if isinstance(value, str):
-        yield value
+        if not localized:
+            yield value
     elif isinstance(value, dict):
         if value and set(value) <= set(script.TEXT):
             yield from strings(value.get(lang, ''), lang)
         else:
-            for v in value.values():
-                yield from strings(v, lang)
+            for k, v in value.items():
+                if k not in NOT_FRAME_WORDS:
+                    yield from strings(v, lang, localized)
     elif isinstance(value, (list, tuple)):
         for v in value:
-            yield from strings(v, lang)
+            yield from strings(v, lang, localized)
 
 
 def frame_slots(board, lang, interface=False):
@@ -94,21 +99,26 @@ def frame_slots(board, lang, interface=False):
             slots.extend(strings(chapter.get(key, {}), lang))
     for beat in board['beats']:
         for key in ('visuals', 'take'):
-            slots.extend(strings(beat.get(key, {}), lang))
+            slots.extend(strings(beat.get(key, {}), lang, localized=True))
     fixed = list(strings(script.TEXT[lang], lang)) + list(PRODUCT.values()) + [auto_scenes.CREDIT_LINE[lang]]
     if interface:
         for bank in INTERFACE_FRAME_WORDS:
             fixed.extend(strings(bank[lang] if isinstance(bank, dict) else bank, lang))
-    return slots + [re.sub(r'\{[^}]*\}', '', s) for s in fixed]
+    return slots + [re.sub(r'\{[^}]*\}', ' ', s) for s in fixed]
 
 
 def check_drawn_words(text, slots, narration, lang, context):
     ts = tokens(text, lang)
     vocab = {t for s in slots for t in tokens(s, lang)}
-    missing = [t for t in ts if not t.isdigit() and t not in vocab]
-    norm = normalized(text, lang)
-    quoted = norm and (any(norm in normalized(s, lang) for s in slots)
-                       or norm in normalized(narration, lang))
+    said = tokens(narration, lang)
+    # A number passes when stated in a slot or the narration, or as a figure number or a counter
+    # no larger than the largest number stated there (a badge rolling up to "40 messages").
+    ceiling = max([int(t) for t in vocab.union(said) if t.isdigit()] + [0])
+    missing = [t for t in ts if t not in vocab and not (t.isdigit() and int(t) <= ceiling)]
+    if lang == 'zh':          # one character is not a word: each run of Chinese must be part of one slot's run
+        runs = [r for s in slots for r in CJK.findall(unicodedata.normalize('NFKC', s))]
+        missing += [r for r in CJK.findall(unicodedata.normalize('NFKC', text)) if not any(r in p for p in runs)]
+    quoted = ts and (any(contiguous(ts, tokens(s, lang)) for s in slots) or contiguous(ts, said))
     assert not missing or quoted, f'{context}: non-caption {text!r}; unmatched tokens {missing!r}'
 
 
@@ -225,7 +235,8 @@ def test_every_look_keeps_caption_and_frame_words(look, lang, aspect, tmp_path, 
     times = {(c['start'] + c['end']) / 2 for c in tl['captions']}
     times.update(t for c in tl['chapters'] for t in (c['start'] + .5, (c['start'] + c['end']) / 2))
     times.update(((tl['end_card']['start'] + tl['end_card']['end']) / 2, tl['duration'] - 1 / 30))
-    shows = getattr(prod, 'show_captions', True)   # the 16:9 collage burns in no captions unless the board asks
+    # 9:16 always sets captions under the board; the 16:9 collage burns in none unless the board asks.
+    shows = aspect == '9:16' or getattr(base, 'show_captions', True)
     errors = []
     for t in sorted(times):
         recorder.calls.clear()
@@ -264,6 +275,30 @@ def test_checkers_reject_missing_swapped_and_invented_words():
         check_drawn_caption(['Gutenberg invented printing press.'], {'text': text}, 'en', 'probe')
     with pytest.raises(AssertionError, match='rewritten script'):
         check_caption_words(board, {'captions': [{'text': text}]}, 'en', 'Gutenberg built a press.', 'probe')
+    two = 'First sentence. Second sentence.'
+    for beats in (['Second sentence.', 'First sentence.'], ['First sentence.'],
+                  ['First sentence.', 'First sentence.', 'Second sentence.']):
+        board = {'beats': [{'id': f'b{i}', 'kind': 'narration', 'display': {'en': b},
+                            'spoken': {'en': numbers.normalize(b, 'en').spoken}} for i, b in enumerate(beats)]}
+        with pytest.raises(AssertionError, match='rewritten script'):    # reordered, omitted, repeated
+            check_caption_words(board, {'captions': [{'text': ' '.join(beats)}]}, 'en', '# Title\n' + two, 'probe')
+
+
+def test_frame_words_reject_ids_invented_numbers_and_shuffled_chinese():
+    board = {'chapters': [], 'beats': [{'visuals': [{'id': 'b006n', 'type': 'stat', 'doodle': 'nyc_skyline',
+                                                     'label': {'en': 'Must eat'}}]}]}
+    slots = frame_slots(board, 'en')
+    check_drawn_words('Must eat', slots, '', 'en', 'probe')
+    for leak in ('b006n stat', 'nyc skyline'):
+        with pytest.raises(AssertionError, match='unmatched'):
+            check_drawn_words(leak, slots, '', 'en', 'probe')
+    check_drawn_words('Part 3 of 1450', ['Part of'], 'Printed in 1450.', 'en', 'probe')
+    with pytest.raises(AssertionError, match='999999'):
+        check_drawn_words('999999', ['Part 1'], 'Printed in 1450.', 'en', 'probe')
+    zh_slots = ['第 部分', '钱', '今天的事', '我们要看']
+    check_drawn_words('第1部分 · 钱', zh_slots, '一共2部分', 'zh', 'probe')
+    with pytest.raises(AssertionError, match='unmatched'):
+        check_drawn_words('我们今天要看的事', zh_slots, '', 'zh', 'probe')
 
 
 def test_tokens_and_slots_keep_language_and_order():
