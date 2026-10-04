@@ -5,6 +5,7 @@ import socket
 import sys
 import threading
 import time
+from types import SimpleNamespace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -209,3 +210,23 @@ def test_readme_and_privacy_page_say_what_choose_for_me_sends():
     for page in (root / 'README.md', root / 'docs' / 'privacy.html'):
         text = ' '.join(page.read_text(encoding='utf-8').split())
         assert 'Choose for me' in text and f'first {style.EXCERPT} characters' in text, page.name
+
+
+def test_kinodraw_cloud_does_not_choose_for_a_spanish_script(studio, fake_cloud):
+    es = ('# Las fracciones\n\nUna fracción es parte de un todo.\n\n## Sumar\n\n'
+          'Para sumar fracciones, busca un denominador común.\n\n## Fin\n\nYa está.\n')
+    _, _, cfg, _ = studio(director='cloud', text=es, title='Fracciones', lang='es')
+    assert fake_cloud.seen == []                                # nothing sent, nothing metered, as the visuals director
+    pick = cfg['style_pick']
+    assert pick['by'] == 'rules' and 'English and Chinese videos only' in pick['note'], pick
+
+
+def test_emoji_text_fits_the_cloud_limits_and_a_split_emoji_in_the_reason_saves():
+    long = 'We ship the new app today 🎉 ' * 40                 # KinoDraw Cloud counts an emoji as 2 (JavaScript)
+    doc = SimpleNamespace(title=long, preamble=[long], sections=[SimpleNamespace(heading=long, paragraphs=[long])])
+    sent = style.request(doc, 'en', '16:9', [])
+    units = lambda s: len(s.encode('utf-16-le')) // 2
+    assert units(sent['excerpt']) <= style.EXCERPT and units(sent['title']) <= 120 and units(sent['headings'][0]) <= 120
+    assert units(sent['excerpt']) >= style.EXCERPT - 1 and sent['excerpt'].startswith('We ship')   # cut, not dropped
+    reason = style._clip('A launch party \ud83c')               # a reason the server cut through an emoji
+    assert reason == 'A launch party' and reason.encode('utf-8')

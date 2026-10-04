@@ -22,6 +22,7 @@ AUTO = 'auto'
 EXCERPT = 600
 MAX_HEADINGS = 20
 REASON_MAX = 120
+_LANG = {'en': 'English', 'zh': 'Chinese', 'es': 'Spanish'}
 BY = {'rules': 'the offline word rules', 'cloud': 'KinoDraw Cloud AI', 'openai': 'your OpenAI key',
       'anthropic': 'your Anthropic key', 'compat': 'your OpenAI-compatible server', 'command': 'your command'}
 
@@ -81,14 +82,26 @@ def _describe(entry: dict) -> str:
     tones = [t for t in fit.get('tone', []) if t != 'any']
     if tones:
         parts.append(f"{' or '.join(tones)} tone")
-    return '; '.join(parts)[:160]
+    return _cut('; '.join(parts), 160)
 
 
 def request(doc, lang: str, aspect: str, offered: list[dict]) -> dict:
     """What the AI sees: the title, headings, the script's first EXCERPT characters, language, format, options."""
     body = ' '.join(' '.join([*doc.preamble, *(p for s in doc.sections for p in s.paragraphs)]).split())
-    return {'language': lang, 'title': doc.title[:120], 'headings': [s.heading[:120] for s in doc.sections][:MAX_HEADINGS],
-            'excerpt': body[:EXCERPT], 'format': aspect, 'options': offered}
+    return {'language': lang, 'title': _cut(doc.title, 120),
+            'headings': [_cut(s.heading, 120) for s in doc.sections][:MAX_HEADINGS],
+            'excerpt': _cut(body, EXCERPT), 'format': aspect, 'options': offered}
+
+
+def _cut(text: str, n: int) -> str:
+    """The longest start of ``text`` that is at most ``n`` UTF-16 units, as KinoDraw Cloud counts (an emoji is 2);
+    it refuses longer text with a 413."""
+    units = 0
+    for i, ch in enumerate(text):
+        units += 2 if ord(ch) > 0xFFFF else 1
+        if units > n:
+            return text[:i]
+    return text
 
 
 def offline(doc, ids: list[str], lang: str) -> dict:
@@ -128,7 +141,11 @@ def choose(doc, mode: str, lang: str, aspect: str, brand: dict | None = None, mo
     from .llm.providers import ProviderError, Usage, make_provider
     usage = Usage()
     try:
-        answer = make_provider(mode, model, base_url).pick_style(request(doc, lang, aspect, offered), usage)
+        provider = make_provider(mode, model, base_url)
+        if lang not in getattr(provider, 'languages', (lang,)):     # as the visuals director: nothing sent, nothing metered
+            return _done(local, 'rules', f'{BY.get(mode, mode)} chooses for {" and ".join(_LANG[c] for c in provider.languages)} '
+                                         f'videos only; {BY["rules"]} chose')
+        answer = provider.pick_style(request(doc, lang, aspect, offered), usage)
     except (ProviderError, ValueError) as error:
         return _done(local, 'rules', f'{BY.get(mode, mode)} could not choose ({error}); {BY["rules"]} chose')
     if answer['style'] not in ids:
@@ -149,5 +166,5 @@ def _done(pick: dict, by: str, note: str | None = None, cost: float | None = Non
 
 
 def _clip(text: str, n: int = REASON_MAX) -> str:
-    text = ' '.join(str(text or '').split())
+    text = ' '.join(re.sub('[\ud800-\udfff]', '', str(text or '')).split())   # a lone half of an emoji cannot be saved
     return text if len(text) <= n else text[:n - 1].rsplit(' ', 1)[0] + '…'
