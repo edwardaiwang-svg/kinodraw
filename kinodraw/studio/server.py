@@ -143,6 +143,12 @@ def _voice_settings(lang: str, voice_id, speed) -> dict:
     return {'voice': voice_id, 'speed': speed}
 
 
+def _server_voice_name(name) -> str:
+    if not isinstance(name, str) or len(name) > 80:
+        raise ValueError('The server voice name should be text, up to 80 characters.')
+    return name.strip()
+
+
 def voice_settings(name: str, body: dict | None = None) -> dict:
     """Read or save the project's voice, speed and pronunciations."""
     path = _project(name)
@@ -151,10 +157,7 @@ def voice_settings(name: str, body: dict | None = None) -> dict:
     if body is not None:
         settings = _voice_settings(cfg['lang'], body.get('voice'), body.get('speed'))
         if _config().get('voice_server', {}).get('on') and 'server_voice' in body:
-            name_ = body['server_voice']
-            if not isinstance(name_, str) or len(name_) > 80:
-                raise ValueError('The server voice name should be text, up to 80 characters.')
-            settings['server_voice'] = name_.strip()
+            settings['server_voice'] = _server_voice_name(body['server_voice'])
         text = body.get('pronounce', '')
         if not isinstance(text, str):
             raise ValueError('Pronunciations should be text: word = how to say it.')
@@ -252,6 +255,9 @@ def create_project(body: dict) -> dict:
     settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
     settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
     settings.update(credit=True, credit_chosen=True)                         # the end card starts on, whatever 0.2.0 said
+    if _config().get('voice_server', {}).get('on') and body.get('server_voice'):
+        if chosen := _server_voice_name(body['server_voice']):               # blank = the Settings voice
+            settings['server_voice'] = chosen
 
     def job(progress):
         progress('storyboard', 0, 1)

@@ -6,6 +6,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.request
 import wave
@@ -439,6 +440,32 @@ def test_project_server_voice_is_saved_through_http_and_builtin_choices_stay_val
         assert studio_http('/api/projects/Video/voice', update, method='PUT')[0] == 400
         assert pipeline.settings(folder) == saved
 
+
+
+def test_new_video_takes_a_server_voice_only_while_the_server_is_on(studio_http, monkeypatch):
+    monkeypatch.setattr(studio_server.director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
+    cfg = studio_server._config()
+    cfg['voice_server'] = {'on': True, 'url': 'http://127.0.0.1:1234', 'model': 'test-model', 'voice': 'default-choice'}
+    studio_server._save_config(cfg)
+
+    def create(title, **body):
+        status, created = studio_http('/api/projects', {'text': TEXT, 'title': title, **body})
+        assert status == 200, created
+        job = studio_server.JOBS.get(created['job'])
+        deadline = time.monotonic() + 10
+        while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:
+            time.sleep(.02)
+        assert job['state'] == 'done', job['error']
+        return pipeline.settings(studio_http.root / created['project'])
+
+    chosen = create('Chosen', server_voice=' project-choice ')
+    assert chosen['server_voice'] == 'project-choice' and chosen['voice'] == voice.LANGS['en']['voice']
+    assert 'server_voice' not in create('Blank', server_voice='')           # blank = the Settings voice
+    for wrong in ('x' * 81, ['wrong']):
+        assert studio_http('/api/projects', {'text': TEXT, 'title': 'Wrong', 'server_voice': wrong})[0] == 400
+    cfg['voice_server']['on'] = False
+    studio_server._save_config(cfg)
+    assert 'server_voice' not in create('Off', server_voice='project-choice')
 
 @pytest.mark.parametrize('lang,own,kokoro', [('en', "creator's own", 'Kokoro'), ('zh', '作者本人', 'Kokoro'),
                                           ('es', 'creador', 'Kokoro')])

@@ -72,6 +72,19 @@ async function playSample(lang, id, speed, button) {      // the first sample of
     await sampleAudio.play();
   } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
 }
+async function playServerSample(name, button) {     // Settings > Voice server reads one test sentence aloud
+  const server = STATE.voice_server, label = button.textContent;
+  button.disabled = true; button.textContent = 'Loading…';
+  try {
+    await api('/api/voice-server/test', { method: 'POST', body: JSON.stringify({ url: server.url, model: server.model, voice: name || server.voice }) });
+    sampleAudio?.pause();
+    sampleAudio = new Audio(`/api/voice-server/test.wav?token=${encodeURIComponent(T)}&t=${Date.now()}`);
+    sampleAudio.onerror = () => toast('Could not play this sample.', 6000);
+    await sampleAudio.play();
+  } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
+}
+const voiceMeta = (id, server) => (STATE.voice_server?.on      // with Settings > Voice server on, it reads every video
+  ? `voice server (${server || STATE.voice_server.voice || STATE.voice_server.model})` : `voice ${voiceName(id)}`);
 
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
 async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
@@ -131,6 +144,18 @@ function scriptLang(text) {      // same rule as kinodraw/ingest.py detect_lang:
   return es >= 2 && es > 2 * en + 1 ? 'es' : 'en';
 }
 
+function syncNewVoice() {      // New video: with Settings > Voice server on, the server reads the script
+  const title = $('#nv-ai-title');
+  if (!title) return;
+  const server = STATE.voice_server || {}, input = $('#server-voice'), label = $('#voice-label');
+  title.textContent = server.on ? 'Voice server' : 'Built-in voice';
+  $('#nv-ai-note').textContent = server.on ? `Your voice server (${input.value.trim() || server.voice || server.model}) reads your script`
+    : 'A natural AI voice reads your script';
+  $('#voice').classList.toggle('hidden', !!server.on); input.classList.toggle('hidden', !server.on);
+  input.placeholder = server.voice || 'the server’s default';
+  label.textContent = server.on ? 'Server voice (optional)' : 'Voice'; label.htmlFor = server.on ? 'server-voice' : 'voice';
+}
+
 function showNew() {
   current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-new').content.cloneNode(true));
@@ -143,7 +168,10 @@ function showNew() {
   fillVoices();
   $('#speed-wrap').innerHTML = speedRow('speed');
   bindSpeed('speed');
-  $('#voice-play').onclick = (e) => playSample(voiceLang(), voiceSel.value, $('#speed').value, e.currentTarget);
+  $('#voice-play').onclick = (e) => (STATE.voice_server?.on ? playServerSample($('#server-voice').value.trim(), e.currentTarget)
+    : playSample(voiceLang(), voiceSel.value, $('#speed').value, e.currentTarget));
+  $('#server-voice').oninput = syncNewVoice;
+  syncNewVoice();
   const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
   document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
   dirSel.innerHTML = directorOptions(STATE.default_director);
@@ -198,7 +226,8 @@ function showNew() {
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
         speed: Number($('#speed').value),
         director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story, aspect: $('#format').value,
-        motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' ? brand : null };
+        motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' ? brand : null,
+        ...(STATE.voice_server?.on ? { server_voice: $('#server-voice').value.trim() } : {}) };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
       const res = await watch(job, 'Creating the storyboard');
       const whole = wholeVideoOffline(res);
@@ -220,7 +249,7 @@ async function openProject(name, tab = null) {
   board = p.storyboard;
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
-  $('#p-meta').textContent = `${board.beats.length} beats · ${LANG_NAMES[p.lang]}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${voiceName(p.settings.voice)}`}`;
+  $('#p-meta').textContent = `${board.beats.length} beats · ${LANG_NAMES[p.lang]}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : voiceMeta(p.settings.voice, p.settings.server_voice)}`;
   $('#p-format').innerHTML = formatOptions(p.settings.aspect || '16:9');
   $('#p-format').onchange = async () => {
     try {
@@ -546,20 +575,20 @@ function renderNarrator(name, info, choice = info.narrator) {
   const box = $('#tab-narrator');
   if (!box || current !== name) return;
   const own = choice === 'own', check = info.check;
+  const server = STATE.voice_server?.on ? STATE.voice_server : null;     // Settings > Voice server reads the script
   const pick = `<div class="narrator-pick">
     <span class="pick-label">Narrator</span>
-    <label class="seg"><input type="radio" name="n-pick" value="builtin"${own ? '' : ' checked'}><b>Built-in voice</b>
-      <small>${STATE.voice_server?.on ? `Your voice server (${esc(info.server_voice || STATE.voice_server.voice || STATE.voice_server.model)}) reads your script` : `A natural AI voice (${esc(voiceName(info.voice))}) reads your script`}</small></label>
+    <label class="seg"><input type="radio" name="n-pick" value="builtin"${own ? '' : ' checked'}><b>${server ? 'Voice server' : 'Built-in voice'}</b>
+      <small>${server ? `Your voice server (${esc(info.server_voice || server.voice || server.model)}) reads your script` : `A natural AI voice (${esc(voiceName(info.voice))}) reads your script`}</small></label>
     <label class="seg"><input type="radio" name="n-pick" value="own"${own ? ' checked' : ''}><b>My own voice</b>
       <small>You read the script aloud; every drawing follows your voice</small></label></div>`;
   if (!own) {
     box.innerHTML = `${pick}<form id="n-voice-form">
-      <div class="grid"><div><label for="n-voice">Voice</label><div class="row">
-        <select id="n-voice">${voiceOptions(info.lang, info.voice)}</select>
+      <div class="grid"><div><label for="${server ? 'n-server-voice' : 'n-voice'}">${server ? 'Server voice (optional)' : 'Voice'}</label><div class="row">
+        <select id="n-voice"${server ? ' class="hidden"' : ''}>${voiceOptions(info.lang, info.voice)}</select>
+        ${server ? `<input id="n-server-voice" maxlength="80" value="${esc(info.server_voice)}" placeholder="${esc(server.voice || 'the server’s default')}">` : ''}
         <button id="n-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button>
       </div></div><div>${speedRow('n-speed')}</div></div>
-      ${STATE.voice_server?.on ? `<label for="n-server-voice">Server voice (optional)<input id="n-server-voice" value="${esc(info.server_voice)}" placeholder="${esc(STATE.voice_server.voice)}"></label>
-      <p class="muted">Hear it plays a built-in voice sample on this computer.</p>` : ''}
       <label>Pronunciations <textarea id="n-pronounce" rows="4" placeholder="GIF = jif&#10;Nguyen = win"></textarea></label>
       <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling. All-caps words like WHO and mixed-case ones like iPhone match only as typed; others match in any case.</p>
       <button id="n-save" type="submit" class="primary" disabled>Save voice settings</button></form>`;
@@ -591,7 +620,7 @@ function renderNarrator(name, info, choice = info.narrator) {
         const next = await api(`/api/projects/${encodeURIComponent(name)}/narrator`, { method: 'POST', body: JSON.stringify({ narrator: r.value }) });
         toast(r.value === 'own' ? 'Your video will be narrated in your own voice' : 'Your video will use the built-in voice');
         renderNarrator(name, next);
-        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : `voice ${voiceName(next.voice)}`}`);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : voiceMeta(next.voice, next.server_voice)}`);
       } else renderNarrator(name, info, r.value);
     } catch (e) { toast(e.message, 6000); }
   }));
@@ -599,7 +628,8 @@ function renderNarrator(name, info, choice = info.narrator) {
     const form = $('#n-voice-form', box), select = $('#n-voice', form), slider = $('#n-speed', form);
     const pronounce = $('#n-pronounce', form), save = $('#n-save', form), serverVoice = $('#n-server-voice', form);
     bindSpeed('n-speed');
-    $('#n-play', form).onclick = (e) => playSample(info.lang, select.value, slider.value, e.currentTarget);
+    $('#n-play', form).onclick = (e) => (serverVoice ? playServerSample(serverVoice.value.trim(), e.currentTarget)
+      : playSample(info.lang, select.value, slider.value, e.currentTarget));
     api(`/api/projects/${encodeURIComponent(name)}/voice`).then((settings) => {
       if (!form.isConnected) return;
       select.value = settings.voice; slider.value = settings.speed; slider.oninput();
@@ -615,7 +645,7 @@ function renderNarrator(name, info, choice = info.narrator) {
         info.voice = settings.voice;
         info.server_voice = settings.server_voice;
         renderNarrator(name, info);
-        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` voice ${voiceName(settings.voice)}`);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${voiceMeta(settings.voice, settings.server_voice)}`);
         toast('Saved');
       } catch (err) { toast(err.message, 6000); }
       finally { save.disabled = false; }
@@ -664,7 +694,7 @@ function showSettings() {
         <label for="vs-model">Model<input id="vs-model" value="${esc(voiceServer.model)}"></label>
         <label for="vs-voice">Voice (optional)<input id="vs-voice" value="${esc(voiceServer.voice)}"></label>
         <label for="vs-key">API key (optional)<input id="vs-key" type="password" autocomplete="new-password"></label></div>
-      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else. Voice samples (Hear it) and your own recordings stay on this computer. Your key is kept in your keychain for this address and sent only to it.
+      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else; Test and Hear it send it one sample sentence. Your own recordings stay on this computer. Your key is kept in your keychain for this address and sent only to it.
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><button id="vs-save" class="small">Save</button><button id="vs-test" class="small">Test</button></div>
       <div id="vs-result" class="muted" role="status" aria-live="polite"></div></section>
@@ -704,6 +734,7 @@ function showSettings() {
       keyHint();
       result.textContent = 'Saved.';
       if (current) loadNarrator(current);
+      else syncNewVoice();
     } catch (e) { result.textContent = e.message; }
     finally { serverBusy(false); }
   };

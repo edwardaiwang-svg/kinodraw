@@ -45,8 +45,8 @@
     </div>
     <div class="narrator-pick">
       <span class="pick-label">Narrator</span>
-      <label class="seg"><input type="radio" name="narrator" value="builtin" checked><b>Built-in voice</b>
-        <small>A natural AI voice reads your script</small></label>
+      <label class="seg"><input type="radio" name="narrator" value="builtin" checked><b id="nv-ai-title">Built-in voice</b>
+        <small id="nv-ai-note">A natural AI voice reads your script</small></label>
       <label class="seg"><input type="radio" name="narrator" value="own"><b>My own voice</b>
         <small>You read the script aloud; every drawing follows your voice</small></label>
     </div>
@@ -54,7 +54,8 @@
       <label>Title <input id="title" placeholder="from the script"></label>
       <label>Language <select id="lang"><option value="">Detect</option><option value="en">English</option><option value="es">Español</option><option value="zh">中文</option></select></label>
       <div id="voice-wrap">
-        <label for="voice">Voice</label><div class="row"><select id="voice"></select>
+        <label id="voice-label" for="voice">Voice</label><div class="row"><select id="voice"></select>
+          <input id="server-voice" class="hidden" maxlength="80">
           <button id="voice-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button></div>
         <div id="speed-wrap"></div>
       </div>
