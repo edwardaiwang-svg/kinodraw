@@ -188,8 +188,10 @@ def test_the_end_credit_is_disclosed_and_can_be_switched_off():
     """A video maker should know about the default closing card before downloading."""
     raw = SITE.read_text(encoding='utf-8')
     text = ' '.join(html.unescape(re.sub(r'<[^>]+>', ' ', raw)).split())
-    for words in ('Made with KinoDraw', 'on by default', 'one click', 'Studio', 'Settings → Videos', '--no-credit'):
+    for words in ('Made with KinoDraw', 'on by default', 'one click in the Studio turns it off', '--no-credit'):
         assert words in text
+    sentence = next(sentence for sentence in re.split(r'(?<=[.!?])\s+', text) if 'Made with KinoDraw' in sentence)
+    assert 'Settings' not in sentence
     root = SITE.parents[1]
     assert 'id="s-credit"' in (root / 'kinodraw/studio/static/app.js').read_text(encoding='utf-8')
     assert '--no-credit' in (root / 'kinodraw/cli.py').read_text(encoding='utf-8')
