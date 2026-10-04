@@ -159,6 +159,16 @@ def test_website_privacy_names_the_cookieless_counter_and_server_logs():
     assert 'cloudflareinsights' not in raw and 'google-site-verification' not in raw
 
 
+def test_the_end_credit_is_disclosed_and_can_be_switched_off():
+    """A video maker should know about the default closing card before downloading."""
+    raw = SITE.read_text(encoding='utf-8')
+    text = ' '.join(html.unescape(re.sub(r'<[^>]+>', ' ', raw)).split())
+    for words in ('Made with KinoDraw', 'on by default', 'one click', 'Studio', 'Settings → Videos', '--no-credit'):
+        assert words in text
+    root = SITE.parents[1]
+    assert 'id="s-credit"' in (root / 'kinodraw/studio/static/app.js').read_text(encoding='utf-8')
+    assert '--no-credit' in (root / 'kinodraw/cli.py').read_text(encoding='utf-8')
+
 
 def test_the_download_script_stores_nothing_on_the_visitors_device():
     """Choosing a download must not leave cookies or persistent browser data behind."""
