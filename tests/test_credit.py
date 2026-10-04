@@ -73,7 +73,7 @@ def studio(tmp_path, monkeypatch):
 def _make_credit(name, monkeypatch):
     seen = {}
 
-    def narrate(path, progress=None):
+    def narrate(path, progress=None, server=None):
         seen['credit'] = pipeline.settings(path)['credit']
         raise RuntimeError('stop here')
     monkeypatch.setattr(pipeline, 'narrate', narrate)

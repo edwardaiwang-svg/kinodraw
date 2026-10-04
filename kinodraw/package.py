@@ -211,9 +211,9 @@ def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Pa
 
 
 def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, stem: str, project_dir: Path,
-            own_voice: bool = False, size=(1280, 720)):
+            own_voice: bool = False, size=(1280, 720), voice_source: str | None = None):
     """Captions, chapters, transcript, description text and thumbnail next to the video (``own_voice``: narrated
-    with the creator's own recording)."""
+    with the creator's own recording; ``voice_source``: a public description of the server voice, without its address)."""
     for ext in ('srt', 'vtt'):
         shutil.copyfile(build / f'captions.{ext}', folder / f'{stem}.{ext}')
     chapters = [f"{clock(c['start'])} {c['title']}" for c in tl['chapters'] if c['title']]
@@ -227,11 +227,15 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
     (folder / f'{stem}-transcript.md').write_text('\n\n'.join(parts) + '\n', encoding='utf-8')
     voice = ("the creator's own voice" if own_voice else 'Kokoro AI voice') if lang == 'en' else \
         ('作者本人的声音' if own_voice else 'Kokoro AI 语音')
+    if voice_source and not own_voice:
+        voice = voice_source
     credit = (f'Made with {PRODUCT["name"]}. Narration: {voice}. Music: FreePD (CC0).' if lang == 'en' else
               f'由 {PRODUCT["name"]} 制作。旁白：{voice}。音乐：FreePD（CC0）。')
     head = 'Chapters' if lang == 'en' else '章节'
     if lang == 'es':
         voice = 'la voz del creador' if own_voice else 'voz de IA de Kokoro'
+        if voice_source and not own_voice:
+            voice = voice_source
         credit = f'Hecho con {PRODUCT["name"]}. Narración: {voice}. Música: FreePD (CC0).'
         head = 'Capítulos'
     (folder / f'{stem}-description.txt').write_text(

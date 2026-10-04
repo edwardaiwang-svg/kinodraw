@@ -1,7 +1,7 @@
 """End to end in a project folder: script -> storyboard -> voice -> timeline -> render -> mix -> package.
 
 Project folder:
-  project.json        settings (language, voice, speed, director, workers, credit, recording)
+  project.json        settings (language, voice, speed, director, workers, credit, recording, optional voice_server)
   script.<ext>        the source script
   recording.<ext>     optional: your own reading of the script, used as the narration
   pronounce.txt       optional: word = respelling, for spoken words only
@@ -19,7 +19,7 @@ import re
 import shutil
 from pathlib import Path
 
-from . import PRODUCT, ingest, library, script, styles, voice
+from . import PRODUCT, ingest, library, script, styles, voice, voice_server
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
@@ -113,10 +113,12 @@ def set_recording(project_dir: Path, source) -> dict:
     return cfg
 
 
-def narrate(project_dir: Path, progress=None) -> dict:
+def narrate(project_dir: Path, progress=None, server: voice_server.Server | None = None) -> dict:
     """Synthesize (or reuse cached) clips for every beat (takeaways first say what their notes show). With a
     recording in project.json the clips are cut from it instead, guided by the synthesized ones. Writes read-aloud.txt:
-    what to read to narrate the video yourself."""
+    what to read to narrate the video yourself. ``server``: this computer's own voice server setting (the Studio's or
+    the CLI's, never the project's), which reads the beats instead of Kokoro unless the project uses a recording; the
+    project then records its model and voice. A project that records a server voice is never narrated without one."""
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
@@ -128,11 +130,24 @@ def narrate(project_dir: Path, progress=None) -> dict:
     text = project_dir / READ_ALOUD                 # what to read to narrate it yourself (the Studio shows the same)
     text.write_text(''.join(f'{n}. {line["text"]}\n' for n, line in enumerate(read_aloud(project_dir), 1)),
                     encoding='utf-8')
-    voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
+    if cfg.get('recording'):
+        server = None                               # your own voice: the guides are Kokoro's, on this computer
+    elif server:
+        if cfg.get('voice_server') != voice_server.record(server):
+            cfg['voice_server'] = voice_server.record(server)
+            _save(project_dir / 'project.json', cfg)
+    elif 'voice_server' in cfg:                     # never a silent switch to Kokoro, never the project's own address
+        raise voice_server.VoiceServerError(voice_server.NOT_ON)
+    if not server:
+        voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
-        clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
-                                           cfg['speed'], lexicon)
+        if server:
+            clips[beat['id']] = voice_server.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', server,
+                                                      cfg['speed'], lexicon)
+        else:
+            clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
+                                               cfg['speed'], lexicon)
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
@@ -208,6 +223,8 @@ def finish(project_dir: Path) -> dict:
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
     publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
+            voice_source=voice_server.describe(cfg['voice_server'], lang)
+            if cfg.get('voice_server') and not cfg.get('recording') else None,
             size=(720, 1280) if aspect == '9:16' else (1280, 720))
     contact_sheet(tl, video, build / 'contact-sheet.jpg', size=size)
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
@@ -215,12 +232,14 @@ def finish(project_dir: Path) -> dict:
     return qa
 
 
-def make(source, project_dir: Path, direct=None, progress=None, **settings_) -> dict:
-    """Script to finished video. ``direct(project_dir)`` adds visuals to storyboard.json (rules or LLM)."""
+def make(source, project_dir: Path, direct=None, progress=None, server: voice_server.Server | None = None,
+         **settings_) -> dict:
+    """Script to finished video. ``direct(project_dir)`` adds visuals to storyboard.json (rules or LLM); ``server``:
+    your own voice server (see narrate)."""
     new_project(source, project_dir, **settings_)
     if direct:
         direct(project_dir)
-    clips = narrate(project_dir, progress)
+    clips = narrate(project_dir, progress, server)
     build_audio(project_dir, clips)
     render(project_dir)
     return finish(project_dir)

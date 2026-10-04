@@ -25,6 +25,17 @@ def urlopen(request, **kwargs):
     return urllib.request.urlopen(request, context=_context(), **kwargs)
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args):
+        return None                                     # the 3xx answer comes back as an HTTPError instead
+
+
+def urlopen_here(request, **kwargs):
+    """``urlopen`` that never follows a redirect, for requests carrying a key that belongs to this one address."""
+    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=_context()), _NoRedirect)
+    return opener.open(request, **kwargs)
+
+
 def download(files: list[tuple[str, Path, str, int]], progress=None):
     """Fetch each (url, path, sha256, size) that is not on disk yet, checksum-verified, reporting
     ``progress(done, total)`` in bytes over all of them (sizes are known up front, so the total never moves)."""

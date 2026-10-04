@@ -487,7 +487,7 @@ function renderVideo(p) {
   const qa = p.qa ? `<div class="qa ${p.qa.ok ? 'ok' : 'bad'}">${p.qa.ok ? '✓ Checked: every frame decodes, audio matches, chapters embedded.' : `Check: ${esc(p.qa.problems.join('; '))}`}</div>` : '';
   box.innerHTML = `<video controls preload="metadata" poster="${fileSrc(`${stem}-thumbnail.png`)}" src="${fileSrc(video)}"></video>${qa}
     <div class="files">${files.map(([f, l]) => `<a href="${fileSrc(f)}" target="_blank">${l}</a>`).join('')}</div>
-    <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). ${p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
+    <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). ${p.settings.voice_server && !p.settings.recording ? `Narration: ${esc(p.settings.voice_server.voice || p.settings.voice_server.model)} from your voice server.` : p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
 }
 
 // ---------------------------------------------------------------- narrator (your own voice)
@@ -549,7 +549,7 @@ function renderNarrator(name, info, choice = info.narrator) {
   const pick = `<div class="narrator-pick">
     <span class="pick-label">Narrator</span>
     <label class="seg"><input type="radio" name="n-pick" value="builtin"${own ? '' : ' checked'}><b>Built-in voice</b>
-      <small>A natural AI voice (${esc(voiceName(info.voice))}) reads your script</small></label>
+      <small>${STATE.voice_server?.on ? `Your voice server (${esc(info.server_voice || STATE.voice_server.voice || STATE.voice_server.model)}) reads your script` : `A natural AI voice (${esc(voiceName(info.voice))}) reads your script`}</small></label>
     <label class="seg"><input type="radio" name="n-pick" value="own"${own ? ' checked' : ''}><b>My own voice</b>
       <small>You read the script aloud; every drawing follows your voice</small></label></div>`;
   if (!own) {
@@ -558,6 +558,8 @@ function renderNarrator(name, info, choice = info.narrator) {
         <select id="n-voice">${voiceOptions(info.lang, info.voice)}</select>
         <button id="n-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button>
       </div></div><div>${speedRow('n-speed')}</div></div>
+      ${STATE.voice_server?.on ? `<label for="n-server-voice">Server voice (optional)<input id="n-server-voice" value="${esc(info.server_voice)}" placeholder="${esc(STATE.voice_server.voice)}"></label>
+      <p class="muted">Hear it plays a built-in voice sample on this computer.</p>` : ''}
       <label>Pronunciations <textarea id="n-pronounce" rows="4" placeholder="GIF = jif&#10;Nguyen = win"></textarea></label>
       <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling. All-caps words like WHO and mixed-case ones like iPhone match only as typed; others match in any case.</p>
       <button id="n-save" type="submit" class="primary" disabled>Save voice settings</button></form>`;
@@ -595,20 +597,23 @@ function renderNarrator(name, info, choice = info.narrator) {
   }));
   if (!own) {
     const form = $('#n-voice-form', box), select = $('#n-voice', form), slider = $('#n-speed', form);
-    const pronounce = $('#n-pronounce', form), save = $('#n-save', form);
+    const pronounce = $('#n-pronounce', form), save = $('#n-save', form), serverVoice = $('#n-server-voice', form);
     bindSpeed('n-speed');
     $('#n-play', form).onclick = (e) => playSample(info.lang, select.value, slider.value, e.currentTarget);
     api(`/api/projects/${encodeURIComponent(name)}/voice`).then((settings) => {
       if (!form.isConnected) return;
       select.value = settings.voice; slider.value = settings.speed; slider.oninput();
+      if (serverVoice) serverVoice.value = settings.server_voice || '';
       pronounce.value = settings.pronounce; save.disabled = false;
     }).catch((e) => toast(e.message, 6000));
     form.onsubmit = async (e) => {
       e.preventDefault(); save.disabled = true;
       try {
         const settings = await api(`/api/projects/${encodeURIComponent(name)}/voice`, { method: 'PUT',
-          body: JSON.stringify({ voice: select.value, speed: Number(slider.value), pronounce: pronounce.value }) });
+          body: JSON.stringify({ voice: select.value, speed: Number(slider.value), pronounce: pronounce.value,
+            ...(serverVoice ? { server_voice: serverVoice.value } : {}) }) });
         info.voice = settings.voice;
+        info.server_voice = settings.server_voice;
         renderNarrator(name, info);
         $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` voice ${voiceName(settings.voice)}`);
         toast('Saved');
@@ -640,6 +645,7 @@ function renderNarrator(name, info, choice = info.narrator) {
 
 // ---------------------------------------------------------------- settings
 function showSettings() {
+  const voiceServer = STATE.voice_server || { on: false, url: '', model: '', voice: '', key_saved: false };
   const cloud = STATE.cloud_available ? `<section><h3>KinoDraw Cloud</h3>
       <p class="muted">${STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : '5 free AI-directed videos a month. No API key needed.'}
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
@@ -652,6 +658,16 @@ function showSettings() {
       <div class="row"><select id="k-prov" style="width:auto"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="compat">OpenAI-compatible</option><option value="command">Command</option></select>
       <input id="k-key" type="password" placeholder="sk-…"><button id="k-save" class="small">Save</button></div>
       <p class="muted">Saved: ${esc(Object.entries(STATE.keys).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none')}</p>` : ''}</section>
+    <section><h3>Voice server</h3><label class="row"><input id="vs-on" type="checkbox" style="width:auto"${voiceServer.on ? ' checked' : ''}>
+      <span>Read scripts with my own OpenAI-compatible voice server (off: the built-in voice, on this computer)</span></label>
+      <div class="grid"><label for="vs-url">Address<input id="vs-url" placeholder="http://localhost:8880/v1" value="${esc(voiceServer.url)}"></label>
+        <label for="vs-model">Model<input id="vs-model" value="${esc(voiceServer.model)}"></label>
+        <label for="vs-voice">Voice (optional)<input id="vs-voice" value="${esc(voiceServer.voice)}"></label>
+        <label for="vs-key">API key (optional)<input id="vs-key" type="password" autocomplete="new-password"></label></div>
+      <p class="muted">When this is on, the text of each part of your script is sent to the server you enter, and nothing else. Voice samples (Hear it) and your own recordings stay on this computer. Your key is kept in your keychain for this address and sent only to it.
+        <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
+      <div class="row"><button id="vs-save" class="small">Save</button><button id="vs-test" class="small">Test</button></div>
+      <div id="vs-result" class="muted" role="status" aria-live="polite"></div></section>
     <section><h3>Projects folder</h3><div class="row"><input id="s-root" value="${esc(STATE.projects_root)}"><button id="s-save" class="small">Save</button></div></section>
     <section><h3>Voices</h3><p class="muted">${LANG_NAMES.en}: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · ${LANG_NAMES.zh}: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'} · ${LANG_NAMES.es}: ${STATE.models_ready.es ? 'ready' : 'downloads on first use (~190 MB)'}</p></section></div>`);
   $('#c-email', body)?.addEventListener('input', (e) => { cloudEmail = e.target.value.trim(); });
@@ -668,6 +684,37 @@ function showSettings() {
       toast(r.remaining === null ? 'Signed in: unlimited videos (fair use)' : `Signed in: ${r.remaining} videos left this month`); await refreshState(); closeModal(); refreshDirectorMenus(); }
     catch (e) { toast(e.message, 6000); }
   });
+  const serverFields = () => ({ url: $('#vs-url', body).value, model: $('#vs-model', body).value,
+    voice: $('#vs-voice', body).value, ...($('#vs-key', body).value ? { key: $('#vs-key', body).value } : {}) });
+  const serverBusy = (busy) => { $('#vs-save', body).disabled = busy; $('#vs-test', body).disabled = busy; };
+  const keyHint = () => {                // a saved key belongs to one address: another address asks for its key again
+    let same = false;
+    try { same = new URL($('#vs-url', body).value.trim()).origin === new URL(STATE.voice_server.url).origin; } catch { same = false; }
+    $('#vs-key', body).placeholder = STATE.voice_server.key_saved && same ? 'saved for this address'
+      : STATE.voice_server.key_saved ? 'enter this address’s key' : 'Optional';
+  };
+  keyHint();
+  $('#vs-url', body).oninput = keyHint;
+  $('#vs-save', body).onclick = async () => {
+    const result = $('#vs-result', body); serverBusy(true); result.textContent = 'Saving…';
+    try {
+      await api('/api/voice-server', { method: 'POST', body: JSON.stringify({ on: $('#vs-on', body).checked, ...serverFields() }) });
+      await refreshState();
+      $('#vs-key', body).value = '';
+      keyHint();
+      result.textContent = 'Saved.';
+      if (current) loadNarrator(current);
+    } catch (e) { result.textContent = e.message; }
+    finally { serverBusy(false); }
+  };
+  $('#vs-test', body).onclick = async () => {
+    const result = $('#vs-result', body); serverBusy(true); result.textContent = 'Testing…';
+    try {
+      const test = await api('/api/voice-server/test', { method: 'POST', body: JSON.stringify(serverFields()) });
+      result.innerHTML = `<p>${esc(test.message)}</p><audio controls preload="none" src="/api/voice-server/test.wav?token=${encodeURIComponent(T)}&t=${Date.now()}"></audio>`;
+    } catch (e) { result.textContent = e.message; }
+    finally { serverBusy(false); }
+  };
   $('#s-adv', body).onchange = async (e) => {
     try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ advanced: e.target.checked }) });
       await refreshState(); refreshDirectorMenus(); closeModal(); showSettings(); }

@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .. import PRODUCT, director, paths, pipeline, styles, voice
+from .. import PRODUCT, director, paths, pipeline, styles, voice, voice_server
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
 from ..package import sha
@@ -150,6 +150,11 @@ def voice_settings(name: str, body: dict | None = None) -> dict:
     pronounce = path / pipeline.PRONOUNCE
     if body is not None:
         settings = _voice_settings(cfg['lang'], body.get('voice'), body.get('speed'))
+        if _config().get('voice_server', {}).get('on') and 'server_voice' in body:
+            name_ = body['server_voice']
+            if not isinstance(name_, str) or len(name_) > 80:
+                raise ValueError('The server voice name should be text, up to 80 characters.')
+            settings['server_voice'] = name_.strip()
         text = body.get('pronounce', '')
         if not isinstance(text, str):
             raise ValueError('Pronunciations should be text: word = how to say it.')
@@ -161,7 +166,75 @@ def voice_settings(name: str, body: dict | None = None) -> dict:
             pronounce.unlink(missing_ok=True)
         cfg.update(settings)
     return {'lang': cfg['lang'], 'voice': cfg['voice'], 'speed': cfg['speed'],
+            **({'server_voice': cfg['server_voice']} if 'server_voice' in cfg else {}),   # only with a server voice
             'pronounce': pronounce.read_text(encoding='utf-8') if pronounce.exists() else ''}
+
+
+def _server_config(body: dict, on: bool = True) -> dict:
+    url = body.get('url') or ''
+    model = body.get('model') or ''
+    name = body.get('voice') or ''
+    if not all(isinstance(value, str) for value in (url, model, name)):
+        raise voice_server.VoiceServerError('The voice server address, model and voice name should be text.')
+    url, model, name = url.strip(), model.strip(), name.strip()
+    if url:
+        url = voice_server.check_url(url)
+    if on:
+        server = voice_server.Server(url, model, name)
+        url, model, name = server.url, server.model, server.voice
+    return {'url': url, 'model': model, 'voice': name}
+
+
+def save_voice_server(body: dict) -> dict:
+    on = bool(body.get('on'))
+    spec = _server_config(body, on)
+    key = _server_key(body)
+    if key:
+        if not spec['url']:
+            raise voice_server.VoiceServerError('Enter the voice server address with its API key: '
+                                                'the key is kept for that address and sent only there.')
+        voice_server.save_key(spec['url'], key)
+    cfg = _config()
+    cfg['voice_server'] = {'on': on, **spec}
+    _save_config(cfg)
+    return state()['voice_server']
+
+
+def _server_key(body: dict) -> str | None:
+    key = body.get('key') or ''
+    if not isinstance(key, str):
+        raise voice_server.VoiceServerError('The voice server API key should be text.')
+    return key.strip() or None
+
+
+def test_voice_server(body: dict) -> dict:
+    spec = _server_config(body)
+    key = _server_key(body) or voice_server.api_key(spec['url'])     # only a key saved for this very address
+    cache = paths.cache_dir() / 'voice-server-tests'
+    cache.mkdir(parents=True, exist_ok=True)
+    # A Test always contacts the server so changed credentials and connectivity are checked too.
+    with tempfile.TemporaryDirectory(dir=cache) as tmp:
+        clip = voice_server.synthesize('Hi! I can read your script aloud, just like this.', 'en', Path(tmp),
+                                       voice_server.Server(**spec, key=key))
+        (cache / 'last.wav').write_bytes(clip.wav.read_bytes())
+    return {'ok': True, 'seconds': clip.duration,
+            'message': f'It works: {clip.duration:.1f} seconds of speech from your voice server.'}
+
+
+def apply_video_settings(path: Path) -> voice_server.Server | None:
+    """Apply this computer's Studio choices to the project's next video: the credit, and the voice server (the
+    Settings address and model, with the project's own server voice name if it has one). Returns that server, or None
+    for the built-in voice; a project's own settings never choose the address."""
+    cfg, studio = pipeline.settings(path), _config()
+    cfg['credit'] = project_credit(path, cfg)   # the project's own end-card box (project_credit)
+    spec, server = studio.get('voice_server', {}), None
+    if spec.get('on'):
+        server = voice_server.Server(**_server_config({**spec, 'voice': cfg.get('server_voice') or spec.get('voice', '')}))
+        cfg['voice_server'] = voice_server.record(server)
+    else:
+        cfg.pop('voice_server', None)
+    pipeline._save(path / 'project.json', cfg)
+    return server
 
 
 def create_project(body: dict) -> dict:
@@ -243,11 +316,10 @@ def make_video(name: str) -> dict:
     path = _project(name)
 
     def job(progress):
-        cfg = pipeline.settings(path)
-        # The project's own choice (project_credit).
-        cfg['credit'] = project_credit(path, cfg)
-        (path / 'project.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
-        clips = pipeline.narrate(path, progress)
+        server = apply_video_settings(path)
+        if server:
+            server.key = voice_server.api_key(server.url)
+        clips = pipeline.narrate(path, progress, server=server)
         progress('timeline', 0, 1)
         pipeline.build_audio(path, clips)
         progress('render', 0, 1)
@@ -276,6 +348,7 @@ def narrator(name: str) -> dict:
     take = take if take and take.is_file() else None
     digest = sha(take) if take else None
     return {'narrator': 'own' if cfg.get('recording') else 'builtin', 'voice': cfg['voice'], 'lang': cfg['lang'],
+            'server_voice': cfg.get('server_voice', ''),
             'take': take.name if take else None, 'lines': lines, 'check': _check(path, digest, lines),
             'changed': _changed(path, digest, lines)}
 
@@ -595,11 +668,18 @@ def state() -> dict:
     from ..director.llm import cloud
     from ..director.llm.providers import SUGGESTED, saved
     names = saved()                    # names only: opening the app never reads the keychain (no macOS prompt)
+    server = {'on': False, 'url': '', 'model': '', 'voice': '',
+              **{k: v for k, v in _config().get('voice_server', {}).items() if k in ('on', 'url', 'model', 'voice')}}
+    try:                                              # a key is saved for one address: is there one for this one?
+        server['key_saved'] = bool(server['url']) and voice_server.key_name(server['url']) in names
+    except voice_server.VoiceServerError:
+        server['key_saved'] = False
     signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(paths.getenv('KINODRAW_CLOUD_TOKEN')))
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
+            'voice_server': server,
             'product': PRODUCT['name'],
             'models': SUGGESTED,
             'formats': [{'value': '16:9', 'label': 'Landscape 16:9 (YouTube)'},
@@ -729,6 +809,12 @@ class Handler(BaseHTTPRequestHandler):
     def _api(self, method, p, q):
         if p == ['state'] and method == 'GET':
             return self._json(state())
+        if p == ['voice-server'] and method == 'POST':
+            return self._json(save_voice_server(self._body()))
+        if p == ['voice-server', 'test'] and method == 'POST':
+            return self._json(test_voice_server(self._body()))
+        if p == ['voice-server', 'test.wav'] and method == 'GET':
+            return self._file(paths.cache_dir() / 'voice-server-tests' / 'last.wav', 'audio/wav')
         if len(p) == 4 and p[0] == 'voices' and p[3] == 'sample' and method == 'GET':
             settings = _voice_settings(p[1], p[2], q.get('speed', 1.0))
             return self._file(voice.preview(settings['voice'], p[1], settings['speed']), 'audio/wav')
