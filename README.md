@@ -9,7 +9,7 @@ Paste a script and KinoDraw produces a finished MP4. A drawing hand sketches car
 
 ![KinoDraw making a video](docs/media/hero.gif)
 
-- **Works offline and for free.** Voice, drawing and video are all made locally. No account and no API key needed.
+- **Works offline and for free.** Voice, drawing and video are all made locally. No account and no API key needed. (You can also point it at your own voice server.)
 - **1,760+ doodles.** It ships 279 original drawings in one bold outlined style (plus a recurring narrator character) and 1,483 Microsoft Fluent Emoji redrawn to match.
 - **It explains, not just decorates.** Numbers become big stats and 100-square grids, dates become timelines, "X is called Y" becomes a sticky-note definition, and quotes become quote cards. Every section ends with a takeaway note that pins onto the agenda.
 - **Everything is editable.** Swap any doodle, fix a label, retitle a section, preview a frame, then make the video.
@@ -17,7 +17,7 @@ Paste a script and KinoDraw produces a finished MP4. A drawing hand sketches car
 
 ## Install
 
-**App:** download *KinoDraw* for Windows, macOS (Apple silicon, M1 or newer) or Linux from [Releases](../../releases) and open it. The first video downloads the voice model (about 190 MB per language) and the doodle search model (about 70 MB), once, checksum-verified, showing megabytes and percent as it goes.
+**App:** download *KinoDraw* for Windows, macOS (Apple silicon, M1 or newer) or Linux from [Releases](../../releases) and open it. The first video downloads the doodle search model (about 70 MB) and, when using the built-in voice, the voice model (about 190 MB per language), once, checksum-verified, showing megabytes and percent as it goes.
 
 The app isn't notarized by Apple or signed for Windows yet, so the first launch needs one approval:
 - **macOS:** unzip, drag *KinoDraw* to Applications and open it. When macOS blocks it, go to System Settings → Privacy & Security and click **Open Anyway**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine "/Applications/KinoDraw.app"` once.
@@ -49,7 +49,7 @@ Plain text, Markdown or a .docx file works.
 
 | Director | Cost | Notes |
 |---|---|---|
-| **Offline** (always available) | free | Matches the words of each sentence to the doodle library on your computer. Nothing leaves your machine. |
+| **Offline** (always available) | free | Matches the words of each sentence to the doodle library on your computer. The visual plan stays on your machine. |
 | **KinoDraw Cloud** | free: 5 videos a month | GPT-6 Luna plans each section. No key needed; sign in with an email code. Paid plans with more videos and Claude Opus 5.5 come later. |
 | **Your OpenAI key** (Advanced) | about $0.02 per 15-min video | Default `gpt-6-luna`. In the app, turn on Settings → Advanced directors to see these last four options. |
 | **Your Anthropic key** | about $1 per 15-min video | `claude-opus-5`, `claude-opus-5-5`, or the cheaper `claude-haiku-4-5`. |
@@ -62,6 +62,23 @@ AI answers are always checked by code before use:
 - numbers, dates and quotes must appear in your script.
 
 Any beat that fails keeps the offline plan. Keys are stored in your system keychain.
+
+## Your own voice server (optional)
+
+The built-in voice is the default. To use an OpenAI-compatible voice server you already run, open Studio → Settings → Voice server, enter its address and model, optionally its voice and API key, and press **Test**. Turn on **Read scripts with my own OpenAI-compatible voice server** and press **Save**. In a project's Narrator tab, you can choose a server voice for that video; **Hear it** still plays the built-in local sample. Your own recordings stay local and take priority over the server.
+
+For the command line:
+
+```bash
+export TTS_BACKEND=openai_compatible
+export TTS_API_BASE=http://localhost:8080/v1
+export TTS_MODEL=qwen-tts
+# Optional: export TTS_VOICE=your-voice
+# Optional: export TTS_API_KEY=your-key
+kinodraw make my-script.md -o "My Video"
+```
+
+You can also pass `--voice-server URL --server-model NAME --server-voice NAME` to `make`, `new` or `voice`, and store its key with `kinodraw key set voice-server`. To return an existing project to the built-in voice, run `kinodraw voice "My Video" --voice-server none` and unset the `TTS_*` variables for future projects.
 
 ## How it works
 
@@ -85,7 +102,7 @@ See [docs/architecture.md](docs/architecture.md) and [the storyboard format](doc
 
 ## Privacy
 
-Offline mode sends nothing anywhere. With KinoDraw Cloud or your own key, only the text of one section at a time (plus doodle names) goes to the AI provider. KinoDraw Cloud does not store script text.
+Offline mode sends nothing anywhere unless you choose your own voice server. With KinoDraw Cloud or your own key, only the text of one section at a time (plus doodle names) goes to the AI provider. KinoDraw Cloud does not store script text. With Settings > Voice server on (or TTS_BACKEND=openai_compatible), the text of each part of the script goes to the server you entered, and nothing else does. The request includes the model and voice names and an API key if entered; voice samples and your own recordings stay on this computer. See the [privacy policy](docs/privacy.html).
 
 ## Licences
 

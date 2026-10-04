@@ -24,14 +24,14 @@
 <div class="wrap">
   <p class="small"><a href="./">KinoDraw</a></p>
   <h1>Privacy policy</h1>
-  <p class="small">Last updated October 2, 2026. This covers the KinoDraw app (called Doodle Studio before version 0.2.0) and its KinoDraw Cloud AI director.
+  <p class="small">Last updated October 4, 2026. This covers the KinoDraw app (called Doodle Studio before version 0.2.0), its KinoDraw Cloud AI director and the optional voice server.
     The Chrome extension for teachers has <a href="classroom/privacy.html">its own policy</a>.</p>
   <p>KinoDraw turns a script you write into a hand-drawn video on your own computer. The app, the site and KinoDraw
     Cloud have no ads, no analytics and no tracking, and nothing about you is ever sold.</p>
 
   <h2>The offline director: nothing leaves your computer</h2>
-  <p>With the offline director you need no account. Your scripts, projects, narration and videos stay on your
-    computer. The app only downloads its voice model (from GitHub; the Chinese voice also needs a small settings file
+  <p>With the offline director you need no account. Unless you choose your own voice server (below), your scripts,
+    projects, narration and videos stay on your computer. The app only downloads its voice model (from GitHub; the Chinese voice also needs a small settings file
     from Hugging Face) and its doodle-search model (from Hugging Face) the first time they are needed. Those downloads
     send nothing about you beyond what any download does: GitHub and Hugging Face see your IP address. (Before version
     0.2.0, if Hugging Face could not be reached, the Chinese doodle-search model came from Google Cloud Storage
@@ -69,6 +69,13 @@
     there is up to that program. Your keys and command are kept in your system's keychain, never in project
     files.</p>
 
+  <h2>Your own voice server (optional)</h2>
+  <p>This is off by default: the built-in voice reads your script on this computer. If you turn on
+    Settings &gt; Voice server, the app sends each beat's text (the words to be spoken), the model and voice names, and your API key if you
+    entered one directly to the server address you choose, and nothing else. KinoDraw does not run that server or
+    see those requests; the server's own terms and privacy policy apply. Your key is stored in your system's
+    keychain, never in project files. Voice samples (Hear it) and your own recordings stay on your computer.</p>
+
   <h2>This website</h2>
   <p>This site is hosted on GitHub Pages, so GitHub sees your IP address when you visit. Its Download button asks
     GitHub's API for the latest release so it can offer the file for your computer. The site has no other scripts and
@@ -80,7 +87,7 @@
 
   <h2>Children</h2>
   <p>KinoDraw Cloud accounts are not meant for children under 13. Anyone can use the offline director, which needs no
-    account and sends nothing.</p>
+    account and sends nothing unless you choose your own voice server.</p>
 
   <h2>Changes and contact</h2>
   <p>If this policy changes, this page and its date change with it. Questions:
