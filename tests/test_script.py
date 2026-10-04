@@ -169,3 +169,12 @@ def test_a_section_title_that_makes_a_claim_is_its_main_point():
     takes = [b['take']['headline']['en'] for b in board['beats'] if b['kind'] == 'take']
     assert takes == ['White sunlight is really every color of the rainbow traveling together.',
                      'Air scatters short waves.', 'Sunsets turn red.']
+
+
+def test_a_chinese_agenda_counts_two_things_as_liang():
+    """A two-part Chinese script opened its agenda with "本期我们聊二件事", which no Chinese speaker says."""
+    board = script.build(ingest.read('# 关于蜂蜜的两件事\n\n蜂蜜是人类至今还在吃的最古老的食物之一。\n\n## 它不会变质\n\n'
+                                     '考古学家发现过三千多年前的蜂蜜罐，里面的蜂蜜仍然可以吃。\n\n## 蜜蜂很辛苦\n\n'
+                                     '为了酿一罐蜂蜜，蜜蜂要拜访大约两百万朵花。'))
+    agenda = [b['display']['zh'] for b in board['beats'] if b['kind'] == 'agenda']
+    assert agenda[0] == '本期我们聊两件事。第一，它不会变质。', agenda

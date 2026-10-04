@@ -249,7 +249,8 @@ def build(doc: Document, story: str = 'explain') -> dict:
         chapters.append({'id': 'agenda', 'kind': 'agenda', 'label': {lang: T['agenda_label']}, 'title': {lang: ''}})
         for k, s in enumerate(sections):
             t = sentence_of(s.heading, lang)
-            text = (T['agenda_first'].format(t=t, n=ZH_NUM[len(sections)] if len(sections) <= 10 else len(sections))
+            n = '两' if len(sections) == 2 else ZH_NUM[len(sections)] if len(sections) <= 10 else len(sections)
+            text = (T['agenda_first'].format(t=t, n=n)   # 两件事 (two things), never 二件事
                     if k == 0 else T['agenda_last'].format(t=t) if k == len(sections) - 1
                     else T['agenda_mid'][min(k - 1, len(T['agenda_mid']) - 1)].format(t=t))
             beat('agenda', 'agenda', text, music=True)
