@@ -33,6 +33,7 @@ WIPE_SECONDS = PAN_SECONDS
 STALE = 3.0                        # max seconds between a visual's words and its first stroke
 CUT_GRACE = 1.5                    # max seconds a page change waits for unfinished drawing
 SETTLE = .35                       # the camera leaves a page this long after its last stroke
+KEEP_UP = 2.5                      # a unit hurries (up to max_rate) so none of its drawings starts later than this
 
 
 @dataclass(eq=False)
@@ -310,6 +311,18 @@ class Scheduler:
                     pos = (e.x + e.w, e.y + e.h / 2)
             window = max(.1, min(nxt, page_change, deadline) - start - .1)
             rate = 1.0 if natural <= window else min(max_rate, natural / window)
+            # Keep up with the words: when the hand would reach a drawing more than KEEP_UP after it is said
+            # (the second picture of "sunlight hits the tiny molecules", queued behind the first), the whole
+            # unit speeds up just enough, never past max_rate.
+            off, pos = 0., last_pen
+            for e in els:
+                if e.hand and not self._gone(e, dropped):
+                    off += .12 if pos is None else min(.3, .08 + math.dist(pos, (e.x, e.y)) / 5000)
+                    due = max(e.trigger, e.after.end if e.after is not None and e.after.start is not None else 0.)
+                    if start + off / rate - due > KEEP_UP:
+                        rate = min(max_rate, max(rate, off / max(.05, due + KEEP_UP - start)))
+                    off += e.drawing.duration
+                    pos = (e.x + e.w, e.y + e.h / 2)
             if all(e.optional for e in els) and start + natural / rate > deadline and not keep_optional:
                 for e in els:                               # decoration that cannot all fit: none of it
                     dropped.add(e.group or id(e))

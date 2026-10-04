@@ -196,6 +196,26 @@ def test_pacing_lets_the_hand_finish_instead_of_skipping(tmp_path):
     assert not skipped(paced), skipped(paced)
 
 
+class _Stub:
+    """A drawing that only has a size and a length."""
+    def __init__(self, seconds, size=(200, 200)):
+        self.duration, self.size = seconds, size
+
+
+def test_a_picture_queued_behind_another_keeps_up_with_its_words():
+    """A stranger's first video drew "sunlight hits the tiny molecules" as sun, label, molecule, label at natural
+    speed with nothing else due for 14 s: the molecule's label started 5.8 s after its word."""
+    from kinodraw.engine.board import KEEP_UP, Camera, Element, Scheduler
+    els = [Element(_Stub(2.28), 100 + 220 * k, 300, 10.0, group='cluster') for k in range(2)]
+    els = [x for e in els for x in (e, Element(_Stub(.85, (200, 40)), e.x, 520, 10.0, group='cluster'))]
+    later = Element(_Stub(1.0), 900, 300, 24.0, group='next')            # the next picture is 14 s away
+    Scheduler(Camera()).run(els + [later], [(0.0, 0.0, 'cut')])
+    lag = [e.start - e.trigger for e in els]
+    assert max(lag) <= KEEP_UP + .5, lag                                 # within the 2x speed limit
+    assert all(e.rate <= 2.0 for e in els)
+    assert els[2].start - els[2].trigger <= KEEP_UP, lag                 # the second picture itself is in time
+
+
 SKY = '''# Why the Sky Is Blue
 
 Look up on a clear afternoon and the sky is a deep, bright blue. But sunlight itself looks white. So where does the blue come from?
