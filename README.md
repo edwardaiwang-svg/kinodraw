@@ -93,4 +93,4 @@ Offline mode sends nothing anywhere. With KinoDraw Cloud or your own key, only t
 - **Original doodles, narrator and drawing hand:** CC BY 4.0.
 - **Everything else** (fonts, emoji, music, voice model, libraries) keeps its own licence; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **Your videos are yours.** No attribution is required, though "Made with KinoDraw" is appreciated. Videos end with a
-  2-second "Made with KinoDraw" credit that you can switch off (Settings → Videos, or `kinodraw make --no-credit`).
+  2-second "Made with KinoDraw" credit that you can switch off (untick "Made with KinoDraw" end card next to Make video, or `kinodraw make --no-credit`).

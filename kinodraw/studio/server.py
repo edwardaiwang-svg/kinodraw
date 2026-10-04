@@ -177,6 +177,7 @@ def create_project(body: dict) -> dict:
     settings = {k: body[k] for k in ('workers',) if body.get(k)}
     settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
     settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
+    settings.update(credit=True, credit_chosen=True)                         # the end card starts on, whatever 0.2.0 said
 
     def job(progress):
         progress('storyboard', 0, 1)
@@ -189,6 +190,26 @@ def create_project(body: dict) -> dict:
         return {'project': name, 'notes': report.get('notes', [])[:20],
                 'cost': None if not usage else usage.cost_usd, 'calls': 0 if not usage else usage.calls}
     return {'job': JOBS.start('create', name, job), 'project': name}
+
+
+def project_credit(path: Path, cfg: dict | None = None) -> bool:
+    if cfg is None:
+        cfg = pipeline.settings(path)
+    # The box's choice; a project that never chose (0.2.0 wrote 'credit' on every make) follows the old
+    # Studio-wide Settings switch, as 0.2.0 did.
+    if cfg.get('credit_chosen'):
+        return cfg.get('credit', True)
+    return _config().get('credit', True)
+
+
+def set_credit(name: str, body: dict) -> dict:
+    if not isinstance(body.get('credit'), bool):
+        raise ValueError('credit must be true or false')
+    path = _project(name)
+    cfg = pipeline.settings(path)
+    cfg.update(credit=body['credit'], credit_chosen=True)
+    pipeline._save(path / 'project.json', cfg)
+    return cfg
 
 
 def set_format(name: str, body: dict) -> dict:
@@ -222,7 +243,8 @@ def make_video(name: str) -> dict:
 
     def job(progress):
         cfg = pipeline.settings(path)
-        cfg['credit'] = _config().get('credit', True)  # the Settings switch applies to every video made from now on
+        # The project's own choice (project_credit).
+        cfg['credit'] = project_credit(path, cfg)
         (path / 'project.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
         clips = pipeline.narrate(path, progress)
         progress('timeline', 0, 1)
@@ -527,7 +549,7 @@ def state() -> dict:
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
-            'credit': _config().get('credit', True), 'product': PRODUCT['name'],
+            'product': PRODUCT['name'],
             'models': SUGGESTED,
             'formats': [{'value': '16:9', 'label': 'Landscape 16:9 (YouTube)'},
                         {'value': '9:16', 'label': 'Vertical 9:16 (Shorts, TikTok, Reels)'}],
@@ -669,7 +691,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(p) == 2 and method == 'GET':
                 path = _project(name)
                 return self._json({**_summary(path), 'storyboard': pipeline.storyboard(path),
-                                   'settings': pipeline.settings(path),
+                                   'settings': pipeline.settings(path), 'credit': project_credit(path),
                                    'qa': json.loads((path / 'build/qa.json').read_text(encoding='utf-8')) if (path / 'build/qa.json').exists() else None})
             if p[2:] == ['storyboard'] and method == 'PUT':
                 return self._json(save_storyboard(name, self._body()))
@@ -679,6 +701,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(redirect(name, self._body()))
             if p[2:] == ['format'] and method == 'POST':
                 return self._json(set_format(name, self._body()))
+            if p[2:] == ['credit'] and method == 'POST':
+                return self._json(set_credit(name, self._body()))
             if p[2:] == ['make'] and method == 'POST':
                 return self._json(make_video(name))
             if p[2:] == ['narrator']:
@@ -732,8 +756,6 @@ class Handler(BaseHTTPRequestHandler):
                 cfg['projects'] = str(Path(b['projects']).expanduser())
             if 'advanced' in b:
                 cfg['advanced'] = bool(b['advanced'])
-            if 'credit' in b:
-                cfg['credit'] = bool(b['credit'])
             _save_config(cfg)
             return self._json({'ok': True, 'projects_root': str(projects_root())})
         return self._json({'error': 'not found'}, 404)
