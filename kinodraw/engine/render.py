@@ -270,6 +270,7 @@ class Production:
         for k, el in enumerate(els):
             el.group = f'note:{cid}' if el.essential else f'note:{cid}:{k}'
             el.deadline = deadline
+            el.beat = beat['id']                           # pacing holds the note until its face is drawn too
         self.notes[cid] = {'els': els, 'bbox': bbox, 'x': xt}
         written = els[2]                                   # the headline (after the note and its label)
         if self.g.name == 'landscape':
@@ -277,8 +278,8 @@ class Production:
             n0 = len(ctx.elements)                             # the margin pair is drawn together or not at all
             for k, v in enumerate(v for v in beat.get('visuals', []) if v.get('size') == 'margin'):
                 if k < 2:
-                    scenes.build_cluster(v, beat, margins[k], ctx)
-            self._tag(n0, f'margins:{cid}', optional=True, deadline=deadline)
+                    scenes.build_cluster(v, beat, margins[k], ctx, max_dur=auto.DECOR_DUR)
+            self._tag(n0, f'margins:{cid}', optional=True, deadline=deadline, beat=beat['id'])
             for el in ctx.elements[n0:]:
                 el.trigger = max(el.trigger, t_note + .02)
                 el.after = el.after or written
@@ -335,8 +336,9 @@ class Production:
         for k in range(len(self.cuts)):
             for el in els[marks[k]:marks[k + 1]]:
                 el.stretch = k
-        if self.relaxed:
-            Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=1.0, stale=math.inf, cut_grace=math.inf)
+        if self.relaxed:                    # how long everything takes: decoration is not dropped for time either
+            Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=1.0, stale=math.inf, cut_grace=math.inf,
+                                               keep_optional=True)
         else:
             Scheduler(self.camera, self.g).run(els, self.cuts)
         skipped = sorted({e.group for e in els if e.skipped})
@@ -656,7 +658,9 @@ def pace_layout(episode, aspect, portrait=None) -> str:
 
 def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, rounds=3) -> dict:
     """Pauses (beat id -> seconds) that let the drawing hand finish each beat's pictures before the next
-    beat is said, instead of rushing or skipping them: at most PAUSE_MAX after any one beat.
+    beat is said, instead of rushing or skipping them: at most PAUSE_MAX after any one beat. A takeaway note,
+    with the narrator's face on it and the section's pictures beside it, is finished NOTE_READ before it is
+    pinned to the agenda.
 
     Every round lays out the timeline with the pauses so far, schedules the drawings at natural speed
     with nothing skipped, and adds the overrun of each beat's drawings past the next beat's start."""
@@ -674,9 +678,13 @@ def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, roun
             if e.beat and e.start is not None and not e.skipped and not e.fixed:
                 ends[e.beat] = max(ends.get(e.beat, 0.), e.end)
         order, changed = timing['beat_order'], False
+        pinned = {tr['take_beat']: tr['hold_end'] for tr in timing['transitions']}
         for k, bid in enumerate(order[:-1]):
             nxt = timing['beats'][order[k + 1]]                 # a takeaway's pre-roll is for its note
-            need = ends.get(bid, -math.inf) + PACE_MARGIN - nxt.get('prep', nxt['start'])
+            if bid in pinned:
+                need = ends.get(bid, -math.inf) + NOTE_READ - pinned[bid]
+            else:
+                need = ends.get(bid, -math.inf) + PACE_MARGIN - nxt.get('prep', nxt['start'])
             room = PAUSE_MAX - pauses.get(bid, 0.)
             if need > .05 and room > .05:
                 pauses[bid] = round(pauses.get(bid, 0.) + min(need, room), 2)

@@ -15,6 +15,8 @@ UI_DEFAULTS = {
 }
 MAX_SECTIONS = 8
 CARD_STRIP = .3      # portrait agenda cards keep this share of their width, on the right, for the pinned note
+DECOR_DUR = 1.0     # a takeaway note's small pictures (the narrator's face, the section's pictures beside it) are
+                    # quick sketches, so they fit in the moments between the headline and the pin
 
 
 def ui(ep, lang):
@@ -217,7 +219,8 @@ def build_take_note(ctx, beat, chapter, x0, t, t_label=None, t_head=None):
     written = ctx.add(head, nx + 50, ny + 48 + label.size[1] + 22, max(t, t_head or t), essential=True)
     els.append(written)
     if face:
-        els.append(ctx.add(ctx.doodle(face, (220, 220)), nx + nw - 250, ny + nh - 260, t + .01, optional=True,
+        els.append(ctx.add(ctx.doodle(face, (220, 220), max_dur=DECOR_DUR), nx + nw - 250, ny + nh - 260, t + .01,
+                           optional=True,
                            after=written))
     if strings['sign']:
         sign = ctx.text(strings['sign'], 44, color=SOFT_INK)

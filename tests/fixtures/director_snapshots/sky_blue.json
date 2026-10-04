@@ -635,10 +635,10 @@
       "chapter": "s2",
       "kind": "take",
       "display": {
-        "en": "Key takeaway: Blue light ends up coming at us from every part of the sky."
+        "en": "Key takeaway: Scattering in the air."
       },
       "spoken": {
-        "en": "Key takeaway: Blue light ends up coming at us from every part of the sky."
+        "en": "Key takeaway: Scattering in the air."
       },
       "visuals": [
         {
@@ -666,7 +666,7 @@
       ],
       "take": {
         "headline": {
-          "en": "Blue light ends up coming at us from every part of the sky."
+          "en": "Scattering in the air."
         }
       },
       "direction": [
@@ -674,19 +674,19 @@
           "i": 0,
           "span": [
             0,
-            73
+            36
           ],
           "role": "tagline",
           "energy": 1,
           "scene": "board",
-          "emphasis": "the sky",
+          "emphasis": "the air",
           "options": {
             "scene": [
               "board"
             ],
             "emphasis": [
-              "the sky",
-              "Blue"
+              "the air",
+              "Scattering"
             ],
             "energy": [
               0,

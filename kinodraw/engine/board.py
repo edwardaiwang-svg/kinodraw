@@ -33,6 +33,7 @@ WIPE_SECONDS = PAN_SECONDS
 STALE = 3.0                        # max seconds between a visual's words and its first stroke
 CUT_GRACE = 1.5                    # max seconds a page change waits for unfinished drawing
 SETTLE = .35                       # the camera leaves a page this long after its last stroke
+KEEP_UP = 2.5                      # a unit hurries (up to max_rate) so none of its drawings starts later than this
 
 
 @dataclass(eq=False)
@@ -235,7 +236,7 @@ class Scheduler:
         self.camera = camera
         self.g = geometry
 
-    def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE):
+    def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE, keep_optional=False):
         """Place every element in time and move the camera.
 
         ``cuts[k] = (t, L, 'cut' | 'pan')`` brings the camera to stretch k (a page, or a run of
@@ -244,7 +245,8 @@ class Scheduler:
         a time. A unit plays at natural speed when it can finish before the next unit's trigger
         and the next page change; otherwise the whole unit speeds up just enough (<= max_rate),
         so the board keeps pace with the narration without scribbling. (Pacing measures with
-        ``max_rate=1`` and no skipping: how long every drawing would really take.)
+        ``max_rate=1`` and no skipping, ``keep_optional`` decoration included: how long every drawing would
+        really take.)
         """
         cam, g = self.camera, self.g
         for _ in range(3):                                  # a drawing that follows another is never due before it
@@ -309,7 +311,19 @@ class Scheduler:
                     pos = (e.x + e.w, e.y + e.h / 2)
             window = max(.1, min(nxt, page_change, deadline) - start - .1)
             rate = 1.0 if natural <= window else min(max_rate, natural / window)
-            if all(e.optional for e in els) and start + natural / rate > deadline:
+            # Keep up with the words: when the hand would reach a drawing more than KEEP_UP after it is said
+            # (the second picture of "sunlight hits the tiny molecules", queued behind the first), the whole
+            # unit speeds up just enough, never past max_rate.
+            off, pos = 0., last_pen
+            for e in els:
+                if e.hand and not self._gone(e, dropped):
+                    off += .12 if pos is None else min(.3, .08 + math.dist(pos, (e.x, e.y)) / 5000)
+                    due = max(e.trigger, e.after.end if e.after is not None and e.after.start is not None else 0.)
+                    if start + off / rate - due > KEEP_UP:
+                        rate = min(max_rate, max(rate, off / max(.05, due + KEEP_UP - start)))
+                    off += e.drawing.duration
+                    pos = (e.x + e.w, e.y + e.h / 2)
+            if all(e.optional for e in els) and start + natural / rate > deadline and not keep_optional:
                 for e in els:                               # decoration that cannot all fit: none of it
                     dropped.add(e.group or id(e))
                     e.skipped = True
@@ -357,6 +371,8 @@ class Scheduler:
                 holds_page = end > page_change + cut_grace
                 misses = e.deadline is not None and end > e.deadline
                 fresh = key not in started                  # a visual is judged when it would start
+                if keep_optional and e.optional:
+                    misses = False
                 if not e.essential and ((fresh and (late or holds_page or misses)) or (e.optional and misses)):
                     dropped.add(key)                        # too late to help: skip it, never pop it in
                     e.skipped = True
