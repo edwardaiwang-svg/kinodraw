@@ -41,7 +41,7 @@ async function api(path, opts = {}) {
   const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
   const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, ...type, ...(opts.headers || {}) } });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.errors?.[0] || data.error || r.statusText);
+  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code });
   return data;
 }
 const doodleSrc = (id) => `/doodle/${encodeURIComponent(id)}.svg?token=${T}${current ? `&project=${encodeURIComponent(current)}` : ''}`;
@@ -733,6 +733,7 @@ function showSettings() {
       <p class="muted">${STATE.cloud ? `Signed in · ${esc(STATE.cloud.plan)} plan · ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${esc(STATE.cloud.remaining)} videos left this month`}` : STATE.cloud_signed_in ? 'Signed in.' : '5 free AI-directed videos a month. No API key needed.'}
         <a href="https://edwardaiwang-svg.github.io/kinodraw/privacy.html" target="_blank">What is sent (privacy)</a></p>
       <div class="row"><input id="c-email" placeholder="you@example.com" value="${esc(cloudEmail)}"><button id="c-send" class="small">Email me a code</button></div>
+      <p id="c-note" class="muted hidden"></p>
       <div class="row" style="margin-top:6px"><input id="c-code" placeholder="6-digit code"><button id="c-verify" class="small">Sign in</button></div></section>` : '';
   const body = modal(`<div class="settings"><h2>Settings</h2>${cloud}
     <section><h3>Advanced directors</h3><label class="row"><input id="s-adv" type="checkbox" style="width:auto"${STATE.advanced ? ' checked' : ''}>
@@ -757,9 +758,13 @@ function showSettings() {
     <section><h3>Voices</h3><p class="muted">${LANG_NAMES.en}: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · ${LANG_NAMES.zh}: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'} · ${LANG_NAMES.es}: ${STATE.models_ready.es ? 'ready' : 'downloads on first use (~190 MB)'}</p></section></div>`);
   $('#c-email', body)?.addEventListener('input', (e) => { cloudEmail = e.target.value.trim(); });
   $('#c-send', body)?.addEventListener('click', async () => {
+    $('#c-note', body).classList.add('hidden');
     try { await api('/api/cloud/signup', { method: 'POST', body: JSON.stringify({ email: $('#c-email', body).value }) });
       toast('Code sent. Check your email (and spam).'); $('#c-code', body).focus(); }
-    catch (e) { toast(e.message, 6000); }
+    catch (e) {
+      if (e.code === 'email_unavailable') { $('#c-note', body).textContent = e.message; $('#c-note', body).classList.remove('hidden'); }   // stays until the next try
+      else toast(e.message, 6000);
+    }
   });
   $('#c-verify', body)?.addEventListener('click', async () => {
     if (!$('#c-email', body).value.trim()) {       // the code belongs to an address: ask for it, don't say "expired"

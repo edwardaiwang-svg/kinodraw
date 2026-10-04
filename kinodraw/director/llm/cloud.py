@@ -37,6 +37,11 @@ def _token() -> str | None:
         return None
 
 
+class EmailUnavailable(ValueError):
+    """KinoDraw Cloud can't send sign-in emails right now (its email provider's limit, for example). The message is the
+    plain sentence to show, with the way to go on offline."""
+
+
 def _call(path: str, body: dict | None = None, token: str | None = None) -> dict:
     if not URL:
         raise ProviderError('KinoDraw Cloud is not available in this build yet; use offline mode or your own key')
@@ -49,9 +54,12 @@ def _call(path: str, body: dict | None = None, token: str | None = None) -> dict
             return json.loads(response.read())
     except urllib.error.HTTPError as error:
         try:
-            detail = json.loads(error.read()).get('error', '')
+            reply = json.loads(error.read())
+            detail = reply.get('error', '')
         except Exception:  # noqa: BLE001
-            detail = ''
+            reply, detail = {}, ''
+        if reply.get('code') == 'email_unavailable' and detail:     # no "KinoDraw Cloud 502:" and no error codes
+            raise EmailUnavailable(detail[0].upper() + detail[1:] + '.') from error
         raise ProviderError(f'KinoDraw Cloud {error.code}: {detail or error.reason}') from error
     except urllib.error.URLError as error:
         raise ProviderError(f'KinoDraw Cloud unreachable: {error.reason}') from error

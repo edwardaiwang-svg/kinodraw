@@ -194,7 +194,10 @@ def cmd_direct(args):
 def cmd_login(args):
     from .director.llm import cloud
     if not args.code:
-        cloud.signup(args.email)
+        try:
+            cloud.signup(args.email)
+        except cloud.EmailUnavailable as error:
+            sys.exit(f'\n{error}')
         print(f'  a 6-digit code was sent to {args.email}; run: kinodraw login {args.email} --code 123456')
         return
     info = cloud.verify(args.email, args.code)
