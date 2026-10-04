@@ -218,8 +218,8 @@ def _settings(args):
     for key in ('voice', 'speed', 'workers', 'aspect'):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
-    if getattr(args, 'no_credit', False):
-        out.update(credit=False, credit_chosen=True)                           # the Studio box shows it too
+    # A new project starts with the end card on, as in the Studio; --no-credit leaves it off. The Studio box shows it.
+    out.update(credit=not getattr(args, 'no_credit', False), credit_chosen=True)
     return out
 
 

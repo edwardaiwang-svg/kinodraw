@@ -35,7 +35,7 @@ def test_the_cli_switch_is_remembered_in_the_project(tmp_path, monkeypatch):
                                                                           **cli._settings(args)))
     cli.main(['new', str(TINY), '-o', str(tmp_path / 'A'), '--no-credit'])
     cli.main(['new', str(TINY), '-o', str(tmp_path / 'B')])
-    assert pipeline.settings(tmp_path / 'A')['credit'] is False and 'credit' not in pipeline.settings(tmp_path / 'B')
+    assert pipeline.settings(tmp_path / 'A')['credit'] is False and pipeline.settings(tmp_path / 'B')['credit'] is True
     monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
     assert server.project_credit(tmp_path / 'A') is False and server.project_credit(tmp_path / 'B') is True  # Studio box
     seen = {}
@@ -174,3 +174,12 @@ def test_the_product_name_and_address_live_in_one_place():
     src = Path(promo.__file__).read_text(encoding='utf-8')
     assert 'KinoDraw' not in src.split('def credit')[1].split('\ndef ')[0]                # so does the collage's
     assert 'KinoDraw' not in Path(package.__file__).read_text(encoding='utf-8')         # so do the metadata and description
+
+
+def test_a_new_cli_project_starts_with_the_end_card_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
+    server._save_config({'projects': str(tmp_path), 'credit': False})         # an old 0.2.0 Settings switch-off
+    monkeypatch.setattr(cli, 'cmd_new', lambda args: pipeline.new_project(Path(args.script), Path(args.out),
+                                                                          **cli._settings(args)))
+    cli.main(['new', str(TINY), '-o', str(tmp_path / 'C')])
+    assert server.project_credit(tmp_path / 'C') is True                      # the Studio box is ticked, as for Studio projects
