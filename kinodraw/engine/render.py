@@ -32,11 +32,12 @@ from . import scenes
 from . import skin as skins
 from . import timeline as tl
 from .storyboard import drawable, normalize
-from .board import COL, PAN_SECONDS, Camera, Layout, Scheduler
+from .board import Camera, Layout, Scheduler
+from .geometry import LANDSCAPE
 
 HERE = Path(__file__).resolve().parent
 FPS = 30
-SIZE = (1920, 1080)
+SIZE = LANDSCAPE.size
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 NOTE_READ = 1.0          # a finished takeaway note stays readable this long before it is pinned
 PAUSE_MAX = 4.0          # the longest pause after a beat while the drawing hand catches up (pacing)
@@ -56,19 +57,24 @@ class Production:
     vertical = False               # set by vertical.Vertical: the frame is the board alone, laid out in 9:16 there
     size = SIZE
 
-    def __init__(self, episode, tline, lang, project_dir, relaxed=False):
+    def __init__(self, episode, tline, lang, project_dir, relaxed=False, geometry=LANDSCAPE):
         """``relaxed``: schedule every drawing at natural speed and skip nothing (pacing measures with it)."""
         self.ep, self.tl, self.lang = normalize(episode), tline, lang
         self.relaxed = relaxed
+        self.g = geometry
+        self.size = geometry.size
+        if geometry.name == 'portrait':
+            self.vertical = True
         self.project_dir = Path(project_dir)
         self.skin = skins.for_look(self.ep.get('look'))       # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
-        self.layout = Layout()
+        self.layout = Layout(self.g)
         self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir, self.skin)
-        self.camera = Camera()
+        self.camera = Camera(self.g)
         self.cuts, self.stock, self.modes = [], [], []
         self.cut_marks = []            # index of the first element drawn on each cut's stretch
         self.cards, self.notes, self.pages = {}, {}, {}
+        self.scene_marks = []         # automatic pages: (world x, screen kind)
         self.agenda_x = None
         self.warnings = []
         self.hand = ink.Hand(self.skin.hand)
@@ -124,8 +130,9 @@ class Production:
                     box, (c0, _) = self.layout.page()
                     # Invisible anchor at the page's left edge, drawn first: the camera pans to the whole
                     # page instead of to whichever column its (centred) title happens to start in.
-                    ctx.add(ink.StaticDrawing(Image.new('RGBA', (3 * COL - 4, 1), (0, 0, 0, 0)), pop=.01), c0 * COL + 2,
-                            100, ctx.time_of(beat, v.get('trigger')), hand=False)
+                    anchor = Image.new('RGBA', (self.g.cols_on_screen * self.g.col - 4, 1), (0, 0, 0, 0))
+                    ctx.add(ink.StaticDrawing(anchor, pop=.01), c0 * self.g.col + 2, self.g.page_box[1] + 16,
+                            ctx.time_of(beat, v.get('trigger')), hand=False)
                     scenes.PAGE_BUILDERS[vt](v, beat, box, ctx)
                 elif vt == 'emphasis':
                     deferred.append(v)
@@ -173,25 +180,27 @@ class Production:
                         self.stock.append((bt['start'], bt['end'], stock.get('clip', kind)))
                     elif kind == 'intro':
                         col = lay.new_page()
-                        lay.reserve(col, col + 2)
-                        x0 = col * COL
+                        lay.reserve(col, col + self.g.cols_on_screen - 1)
+                        x0 = col * self.g.col
                         self.cut(bt['start'], x0, 'cut')
                         n0 = len(ctx.elements)
-                        auto.build_title_board(ctx, b, x0, bt['start'] + .25)
+                        auto.SCENES[self.g.name]['title_board'](ctx, b, x0, bt['start'] + .25)
                         self._tag(n0, 'title', essential=True)
                         self.pages['title'] = x0
+                        self.scene_marks.append((x0, 'title'))
                     else:
                         # outro beat without stock: keep the last board; nothing new.
                         pass
                 continue
             if kind == 'agenda':
                 col = lay.new_page()
-                lay.reserve(col, col + 2)
-                x0 = col * COL
+                lay.reserve(col, col + self.g.cols_on_screen - 1)
+                x0 = col * self.g.col
                 self.agenda_x = x0
+                self.scene_marks.append((x0, 'agenda'))
                 self.cut(cstart, x0, 'pan')
                 n0 = len(ctx.elements)
-                self.cards = auto.build_agenda(ctx, chapters, beats, x0)
+                self.cards = auto.SCENES[self.g.name]['agenda'](ctx, chapters, beats, x0)
                 first = next(c for c in chapters if c['kind'] == 'section')
                 end = next(c['end'] for c in self.tl['chapters'] if c['id'] == cid)
                 self._tag(n0, 'agenda', essential=True, deadline=end - 1.05 - .15)   # cards before the circle
@@ -199,14 +208,15 @@ class Production:
                 ctx.add(circ, pos[0], pos[1], end - 1.05, fixed=True)
                 continue
             col = lay.new_page()
-            x0 = col * COL
+            x0 = col * self.g.col
             self.pages[cid] = x0
             opener_done = 0.0
             if kind == 'section':
-                lay.reserve(col, col + 1)
+                self.scene_marks.append((x0, 'opener'))
+                lay.reserve(col, col + self.g.opener_cols - 1)
                 self.cut(cstart, x0, 'cut')
                 n0 = len(ctx.elements)
-                opener = auto.build_section_opener(ctx, ch, beats[0], x0, cstart + tl.ZOOM_IN + .15)
+                opener = auto.SCENES[self.g.name]['section_opener'](ctx, ch, beats[0], x0, cstart + tl.ZOOM_IN + .15)
                 self._tag(n0, f'opener:{cid}', essential=True)
                 opener_done = cstart + tl.ZOOM_IN + .15 + sum(e.drawing.duration for e in opener if e.hand) * .8
                 self.modes.append((cstart, cstart + tl.ZOOM_IN, 'zoom', {'section': cid}))
@@ -224,15 +234,16 @@ class Production:
         # Closing page, written by the hand like everything else.
         end = self.tl['end_card']
         col = lay.new_page()
-        lay.reserve(col, col + 2)
+        lay.reserve(col, col + self.g.cols_on_screen - 1)
         ctx.chapter, ctx.color = None, ink.NEUTRAL
-        self.cut(end['start'], col * COL, 'pan')
+        self.scene_marks.append((col * self.g.col, 'end'))
+        self.cut(end['start'], col * self.g.col, 'pan')
         n0 = len(ctx.elements)
-        auto.build_end_card(ctx, col * COL, end['start'] + PAN_SECONDS)
+        auto.SCENES[self.g.name]['end_card'](ctx, col * self.g.col, end['start'] + self.g.pan_seconds)
         self._tag(n0, 'endcard', essential=True, deadline=end['end'] - .5)
         if self.tl.get('credit'):                      # "Made with ...", written under it while it is read
             n0 = len(ctx.elements)
-            auto.build_credit(ctx, col * COL, self.tl['credit']['start'] - .8)
+            auto.SCENES[self.g.name]['credit'](ctx, col * self.g.col, self.tl['credit']['start'] - .8)
             self._tag(n0, 'credit', essential=True, deadline=self.tl['credit']['end'] - .3)
         self._transitions()
 
@@ -243,33 +254,35 @@ class Production:
         doodles in the margins are drawn only if they fit before then."""
         ctx, lay, cid = self.ctx, self.layout, ch['id']
         tcol = lay.new_page()
-        lay.reserve(tcol, tcol + 2)
-        xt = tcol * COL
+        lay.reserve(tcol, tcol + self.g.cols_on_screen - 1)
+        xt = tcol * self.g.col
+        self.scene_marks.append((xt, 'take'))
         prep = bt.get('prep', bt['start'])
         self.cut(prep + .1, xt, 'pan')
         tr = next((x for x in self.tl['transitions'] if x['section'] == cid), None)
         deadline = tr['hold_end'] - NOTE_READ if tr else None
-        t_note = prep + .1 + PAN_SECONDS
+        t_note = prep + .1 + self.g.pan_seconds
         spoken = beat['spoken'][self.lang]
         prefix = script.take_text('', self.lang)            # "Key takeaway: " (said before the headline)
         t_label = ctx.time_of(beat, None, 0.)
         t_head = ctx.time_of(beat, {self.lang: spoken[len(prefix):len(prefix) + 24]}) \
             if spoken.startswith(prefix) and len(spoken) > len(prefix) else t_label
-        els, bbox = auto.build_take_note(ctx, beat, ch, xt, t_note, t_label, t_head)
+        els, bbox = auto.SCENES[self.g.name]['take_note'](ctx, beat, ch, xt, t_note, t_label, t_head)
         for k, el in enumerate(els):
             el.group = f'note:{cid}' if el.essential else f'note:{cid}:{k}'
             el.deadline = deadline
         self.notes[cid] = {'els': els, 'bbox': bbox, 'x': xt}
         written = els[2]                                   # the headline (after the note and its label)
-        margins = [(xt + 16, 250, 310, 420), (xt + 1920 - 326, 250, 310, 420)]
-        n0 = len(ctx.elements)                             # the margin pair is drawn together or not at all
-        for k, v in enumerate(v for v in beat.get('visuals', []) if v.get('size') == 'margin'):
-            if k < 2:
-                scenes.build_cluster(v, beat, margins[k], ctx)
-        self._tag(n0, f'margins:{cid}', optional=True, deadline=deadline)
-        for el in ctx.elements[n0:]:
-            el.trigger = max(el.trigger, t_note + .02)
-            el.after = el.after or written
+        if self.g.name == 'landscape':
+            margins = [(xt + 16, 250, 310, 420), (xt + 1920 - 326, 250, 310, 420)]
+            n0 = len(ctx.elements)                             # the margin pair is drawn together or not at all
+            for k, v in enumerate(v for v in beat.get('visuals', []) if v.get('size') == 'margin'):
+                if k < 2:
+                    scenes.build_cluster(v, beat, margins[k], ctx)
+            self._tag(n0, f'margins:{cid}', optional=True, deadline=deadline)
+            for el in ctx.elements[n0:]:
+                el.trigger = max(el.trigger, t_note + .02)
+                el.after = el.after or written
 
     def _transitions(self):
         ctx = self.ctx
@@ -315,9 +328,9 @@ class Production:
             for el in els[marks[k]:marks[k + 1]]:
                 el.stretch = k
         if self.relaxed:
-            Scheduler(self.camera).run(els, self.cuts, max_rate=1.0, stale=math.inf, cut_grace=math.inf)
+            Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=1.0, stale=math.inf, cut_grace=math.inf)
         else:
-            Scheduler(self.camera).run(els, self.cuts)
+            Scheduler(self.camera, self.g).run(els, self.cuts)
         skipped = sorted({e.group for e in els if e.skipped})
         if skipped:
             self.warnings.append(f"skipped {len(skipped)} visual(s) that could not keep pace with the narration: "
@@ -370,9 +383,21 @@ class Production:
                 break
         return 'board', {}, None, None
 
+    def scene_at(self, t):
+        """The scene filling the screen, independent of drawing progress."""
+        kind, params, _, _ = self.mode_at(t)
+        if kind in ('pullback', 'fly', 'agenda'):
+            return 'agenda'
+        if kind == 'zoom':
+            return 'opener'
+        if kind == 'stock':
+            return 'title' if self._in_title(t) else 'end'
+        L = self.camera.at(t)
+        return next((scene for x, scene in self.scene_marks if abs(x - L) <= self.g.col / 2), 'board')
+
     def view(self, t, L, hand=True):
-        frame = self.skin.background().copy()
-        lo, hi = L - 20, L + SIZE[0] + 20
+        frame = self.skin.background(*self.size).copy()
+        lo, hi = L - 20, L + self.size[0] + 20
         for layer in (0, 1):
             for e in self.els:
                 if e.start > t:
@@ -434,12 +459,12 @@ class Production:
         path = self.project_dir / 'stock/MANIFEST.json'
         clips = playlist(json.loads(path.read_text(encoding='utf-8')), clip) if path.exists() else []
         if not clips:
-            return self.skin.background().copy()
+            return self.skin.background(*self.size).copy()
         key = (clip, a)
         if self._stock_reader is None or self._stock_reader.key != key:
             if self._stock_reader:
                 self._stock_reader.close()
-            self._stock_reader = StockReader(clips, a, key)
+            self._stock_reader = StockReader(clips, a, key, self.size)
         return self._stock_reader.frame_at(t)
 
     # ------------------------------------------------------------- frame
@@ -509,10 +534,10 @@ class Production:
         cy = card['box'][1] + card['box'][3] / 2
         agenda = self.view(a - .01, self.agenda_x, hand=False)
         s = 1 + 2.4 * ease(u)
-        w, h = SIZE[0] / s, SIZE[1] / s
-        x0 = min(max(0, cx - w / 2), SIZE[0] - w)
-        y0 = min(max(0, cy - h / 2), SIZE[1] - h)
-        zoomed = agenda.crop((int(x0), int(y0), int(x0 + w), int(y0 + h))).resize(SIZE, Image.BILINEAR)
+        w, h = self.size[0] / s, self.size[1] / s
+        x0 = min(max(0, cx - w / 2), self.size[0] - w)
+        y0 = min(max(0, cy - h / 2), self.size[1] - h)
+        zoomed = agenda.crop((int(x0), int(y0), int(x0 + w), int(y0 + h))).resize(self.size, Image.BILINEAR)
         k = ease((u - .5) / .5)
         if k <= 0:
             return zoomed
@@ -548,7 +573,7 @@ class Production:
         if not (c['start'] <= t < c['end']):
             return
         img = cap.caption_image(c['text'], self.lang, self.skin.fonts, self.skin.caption, self.skin.caption_edge)
-        ink.paste(frame, img, (SIZE[0] - img.width) / 2, 1046 - img.height)
+        ink.paste(frame, img, (self.size[0] - img.width) / 2, 1046 - img.height)
 
 
 def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9'):
@@ -606,7 +631,8 @@ def playlist(manifest, line):
 class StockReader:
     """Sequential decoder over a clip playlist; holds the last frame if the segment outlasts it."""
 
-    def __init__(self, clips, seg_start, key):
+    def __init__(self, clips, seg_start, key, size=SIZE):
+        self.size = size
         self.key, self.seg_start, self.clips = key, seg_start, clips
         self.proc, self.idx, self.last, self.local_t = None, -1, None, 0.
 
@@ -616,7 +642,8 @@ class StockReader:
         path, a, b = self.clips[i]
         self.proc = subprocess.Popen(
             [FFMPEG, '-v', 'error', '-ss', f'{a + local:.3f}', '-i', path, '-t', f'{max(.1, b - a - local):.3f}', '-vf',
-             'scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=30',
+             f'scale={self.size[0]}:{self.size[1]}:force_original_aspect_ratio=increase,'
+             f'crop={self.size[0]}:{self.size[1]},fps=30',
              '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], stdout=subprocess.PIPE)
         self.idx, self.frame_local = i, local - 1 / FPS
 
@@ -631,12 +658,12 @@ class StockReader:
         if i != self.idx or local < self.frame_local:
             self._open(i, max(0., local))
         while self.frame_local + 1e-6 < local or self.last is None:
-            data = self.proc.stdout.read(1920 * 1080 * 3)
-            if len(data) < 1920 * 1080 * 3:
+            data = self.proc.stdout.read(self.size[0] * self.size[1] * 3)
+            if len(data) < self.size[0] * self.size[1] * 3:
                 break
-            self.last = Image.frombytes('RGB', SIZE, data).convert('RGBA')
+            self.last = Image.frombytes('RGB', self.size, data).convert('RGBA')
             self.frame_local += 1 / FPS
-        return (self.last or ink.paper()).copy()
+        return (self.last or ink.paper(*self.size)).copy()
 
     def close(self):
         if self.proc:

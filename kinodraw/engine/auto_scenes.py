@@ -300,3 +300,210 @@ def circle_around(ctx, box, col):
 def pin(ctx, col=(229, 57, 53)):
     pts = ink.circle_points(22, 22, 16, 16, n=40)
     return ctx.strokes((44, 44), [pts], color=ink.INK, width=4, fills=[(pts, col)], max_dur=.25, pop=.1)
+
+
+def _portrait_text(ctx, text, size, width, lines=3, min_size=30, **kw):
+    # TextDrawing adds 6 px of padding on each side of the measured glyphs.
+    wrapped, fitted = ink.fit_text(text, ctx.lang, width - 12, lines, size, min_size=min_size, fonts=ctx.fonts)
+    # At the font floor fit_text may still return extra lines or an overlong word.
+    # Keep the promised line count and safe width rather than writing into the UI.
+    clipped = wrapped[:lines]
+    if len(wrapped) > lines:
+        clipped[-1] += '…'
+    for k, line in enumerate(clipped):
+        if ctx.width(line, fitted) > width - 12:
+            line = line.rstrip('…')
+            while line and ctx.width(line + '…', fitted) > width - 12:
+                line = line[:-1]
+            clipped[k] = line.rstrip() + '…'
+    return ink.TextDrawing(clipped, ctx.lang, fitted, fonts=ctx.fonts, **kw)
+
+
+def _portrait_host(ctx, host, x0, y, t):
+    """Stack a host photo and badge, leaving room for the screen's lower UI."""
+    g = ctx.layout.g
+    left, _, right, bottom = g.text_safe[1]
+    els = []
+    if host.get('photo') and y + 200 <= bottom:
+        els += photo_badge(ctx, host['photo'], 180, x0 + left + 10, y + 10, t)
+        y += 220
+    if host.get('badge'):
+        badge = _portrait_text(ctx, ctx.T(host['badge']), 44, right - left, lines=2, min_size=44)
+        if y + badge.size[1] <= bottom:
+            els.append(ctx.add(badge, x0 + left, y, t))
+            y += badge.size[1] + 20
+    return els, y
+
+
+def build_title_board_portrait(ctx, beat, x0, t):
+    g, ep = ctx.layout.g, ctx.ep
+    left, y, _, _ = g.text_safe[0]
+    width, bottom = g.cell_w, g.text_safe[1][3]
+    title = _portrait_text(ctx, ctx.T(ep.get('title')), 110, width, lines=3, min_size=72)
+    els = [ctx.add(title, x0 + left, y, t)]
+    tw = title.size[0]
+    und = ctx.strokes((tw, 30), [[(6 + i * (tw - 12) / 30, 12 + 5 * math.sin(i / 2.5)) for i in range(31)]],
+                      color=ink.SECTION_COLORS['orange'], width=9, max_dur=.8)
+    els.append(ctx.add(und, x0 + left, y + title.size[1] - 4, t))
+    y += title.size[1] + 40
+    for key, size, color in (('subtitle', 60, ink.SECTION_COLORS['blue']), ('byline', 44, SOFT_INK)):
+        if ep.get(key):
+            text = _portrait_text(ctx, ctx.T(ep[key]), size, width, lines=2, min_size=size, color=color)
+            els.append(ctx.add(text, x0 + left, y, t))
+            y += text.size[1] + 20
+    host, y = _portrait_host(ctx, ep.get('host') or {}, x0, y, t)
+    els += host
+    wave = narrator(ep, 'wave')
+    if wave and y + 390 <= bottom:
+        els.append(ctx.add(ctx.doodle(wave, (260, 390)), x0 + left + (width - 260) / 2, y, t))
+    return els
+
+
+def build_agenda_portrait(ctx, chapters, beats, x0):
+    """Stack agenda cards within the text-safe width; preserve their trigger and mark contracts."""
+    g = ctx.layout.g
+    left, y, _, _ = g.text_safe[0]
+    width, bottom = g.cell_w, g.text_safe[1][3]
+    title = _portrait_text(ctx, ui(ctx.ep, ctx.lang)['agenda'], 72, width, lines=2, min_size=72)
+    ctx.add(title, x0 + left, y, ctx.time_of(beats[0], None))
+    y += title.size[1] + 24
+    secs = [c for c in chapters if c['kind'] == 'section']
+    n = len(secs)
+    if not 1 <= n <= MAX_SECTIONS:
+        raise ValueError(f'{n} sections; the agenda supports 1–{MAX_SECTIONS}')
+    cols = 1 if n <= 3 else 2
+    rows = math.ceil(n / cols)
+    gap = 40 if cols == 2 else 20
+    cw = (width - (cols - 1) * gap) / cols
+    chh = min(260 if n <= 3 else (320 if n == 4 else 220), (bottom - y - (rows - 1) * 20) / rows)
+    cards = {}
+    for k, ch in enumerate(secs):
+        row, column = divmod(k, cols)
+        cx, cy = x0 + left + column * (cw + gap), y + row * (chh + 20)
+        beat = beats[min(k, len(beats) - 1)]
+        trig = ch.get('agenda_trigger')
+        t = ctx.time_of(beat, trig) if trig else ctx.time_of(beat, None) + (.2 if k else 1.4)
+        col = ink.SECTION_COLORS[ch['color']]
+        rect = [(6, 6), (cw - 6, 6), (cw - 6, chh - 6), (6, chh - 6), (6, 6)]
+        ctx.add(ctx.strokes((int(cw), int(chh)), [rect], color=col, width=8,
+                            fills=[(rect[:-1], mix(col, .9))], max_dur=.6), cx, cy, t)
+        first = len(ctx.elements)
+        number = _portrait_text(ctx, str(ch['number']), 64 if cols == 1 else (50 if n == 4 else 40),
+                                90, lines=1, color=col)
+        label = _portrait_text(ctx, ctx.T(ch['label']), 44 if cols == 1 else 36, cw - 130,
+                               lines=1, min_size=36, color=col)
+        cursor = cy + 12
+        ctx.add(number, cx + 20, cursor, t)
+        ctx.add(label, cx + 110, cursor, t)
+        cursor += max(number.size[1], label.size[1]) + 8
+        head = _portrait_text(ctx, ctx.T(ch['title']), 44 if cols == 1 else (40 if n == 4 else 34), cw - 40,
+                              lines=2, min_size=30, pace=1.6)
+        ctx.add(head, cx + 20, cursor, t)
+        cards[ch['id']] = {'box': (cx, cy, cw, chh), 'color': col, 'els': ctx.elements[first:]}
+    return cards
+
+
+def build_section_opener_portrait(ctx, chapter, beat, x0, t):
+    g = ctx.layout.g
+    left, y, _, _ = g.text_safe[0]
+    width, bottom = g.cell_w, g.text_safe[1][3]
+    col = ink.SECTION_COLORS[chapter['color']]
+    big = _portrait_text(ctx, ctx.T(chapter['label']), 150, width, lines=1, min_size=150, color=col)
+    els = [ctx.add(big, x0 + left, y, t)]
+    y += big.size[1] + 8
+    title = _portrait_text(ctx, ctx.T(chapter['title']), 64, width, lines=3, min_size=64)
+    els.append(ctx.add(title, x0 + left, y, t))
+    y += title.size[1] + 20
+    if chapter.get('hook'):
+        hook = _portrait_text(ctx, ctx.T(chapter['hook']), 44, width, lines=2, min_size=44, color=SOFT_INK)
+        els.append(ctx.add(hook, x0 + left, y, t))
+        y += hook.size[1] + 20
+    sp = chapter.get('speaker')
+    if sp:
+        # Measure the whole speaker block before deciding whether its photo fits.
+        details = [_portrait_text(ctx, ctx.T(sp.get(key)), size, width, lines=2, min_size=size, color=color)
+                   for key, size, color in (('name', 44, ink.INK), ('role', 36, col)) if ctx.T(sp.get(key))]
+        show = ' · '.join(ctx.T(sp.get(key)) for key in ('show', 'date') if ctx.T(sp.get(key)))
+        if show:
+            details.append(_portrait_text(ctx, show, 34, width, lines=2, min_size=34, color=SOFT_INK))
+        credit = photo_credit(ctx.project_dir, sp.get('photo', ''), ctx.lang)
+        if credit:
+            details.append(_portrait_text(ctx, credit, 30, width, lines=2, min_size=30, color=SOFT_INK))
+        height = sum(d.size[1] + 12 for d in details)
+        if y + 240 + height <= bottom:
+            els += photo_badge(ctx, sp.get('photo', ''), 220, x0 + left + 10, y + 10, t, color=col, ring_w=9)
+            y += 240
+        for text in details:
+            if y + text.size[1] <= bottom:
+                els.append(ctx.add(text, x0 + left, y, t))
+                y += text.size[1] + 12
+    else:
+        pose = narrator(ctx.ep, 'present')
+        if pose and y + 390 <= bottom:
+            els.append(ctx.add(ctx.doodle(pose, (260, 390)), x0 + left + (width - 260) / 2, y, t))
+    return els
+
+
+def build_take_note_portrait(ctx, beat, chapter, x0, t, t_label=None, t_head=None):
+    g = ctx.layout.g
+    strings = ui(ctx.ep, ctx.lang)
+    col = ink.SECTION_COLORS[chapter['color']]
+    nw, nh = g.cell_w, 600
+    nx, ny = x0 + g.cell_x0, g.text_safe[0][1] + 42
+    els = [ctx.add(sticky(ctx, nw, nh, tape=col), nx, ny, t, essential=True)]
+    y = ny + 32
+    label = _portrait_text(ctx, strings['takeaway'], 44, nw - 64, lines=1, min_size=44, color=col)
+    els.append(ctx.add(label, nx + 32, y, max(t, t_label or t), essential=True))
+    y += label.size[1] + 20
+    head = _portrait_text(ctx, ctx.T(beat['take']['headline']), 72, nw - 64, lines=4, min_size=52, pace=.9)
+    written = ctx.add(head, nx + 32, y, max(t, t_head or t), essential=True)
+    els.append(written)
+    y += head.size[1] + 20
+    face = narrator(ctx.ep, 'head')
+    if face and y + 160 <= ny + nh - 24:
+        els.append(ctx.add(ctx.doodle(face, (160, 160)), nx + nw - 184, ny + nh - 184, t + .01,
+                           optional=True, after=written))
+    return els, (nx, ny, nw, nh + 6)
+
+
+def build_end_card_portrait(ctx, x0, t):
+    g, ep = ctx.layout.g, ctx.ep
+    left, y, _, _ = g.text_safe[0]
+    width, bottom = g.cell_w, g.text_safe[1][3]
+    title = _portrait_text(ctx, ctx.T(ep.get('title')), 100, width, lines=3, min_size=72, align='center', pace=1.8)
+    els = [ctx.add(title, x0 + left + (width - title.size[0]) / 2, y, t)]
+    y += title.size[1] + 24
+    second = ctx.T(ep.get('subtitle')) or ui(ep, ctx.lang)['thanks']
+    sub = _portrait_text(ctx, second, 60, width, lines=2, min_size=60,
+                         color=ink.SECTION_COLORS['blue'], align='center', pace=1.8)
+    els.append(ctx.add(sub, x0 + left + (width - sub.size[0]) / 2, y, t))
+    y += sub.size[1] + 20
+    host, y = _portrait_host(ctx, ep.get('host') or {}, x0, y, t)
+    els += host
+    pose = narrator(ep, 'thumbs')
+    if pose and y + 390 <= bottom:
+        els.append(ctx.add(ctx.doodle(pose, (260, 390), max_dur=1.3), x0 + left + (width - 260) / 2, y, t))
+    return els
+
+
+def build_credit_portrait(ctx, x0, t):
+    from .. import PRODUCT
+    g = ctx.layout.g
+    left, y, right, bottom = g.caption_band
+    made = _portrait_text(ctx, CREDIT_LINE[ctx.lang].format(**PRODUCT), 44, right - left,
+                          lines=2, min_size=44, color=SOFT_INK, pace=1.6)
+    url = ink.TextDrawing([PRODUCT['url']], 'en', 34, color=SOFT_INK, pace=2.5, max_dur=.6, fonts=ctx.fonts)
+    y += (bottom - y - made.size[1] - url.size[1]) / 2
+    center = g.size[0] / 2
+    return [ctx.add(made, x0 + center - made.size[0] / 2, y, t),
+            ctx.add(url, x0 + center - url.size[0] / 2, y + made.size[1], t + made.duration)]
+
+
+SCENES = {
+    'landscape': {'title_board': build_title_board, 'agenda': build_agenda,
+                  'section_opener': build_section_opener, 'take_note': build_take_note,
+                  'end_card': build_end_card, 'credit': build_credit},
+    'portrait': {'title_board': build_title_board_portrait, 'agenda': build_agenda_portrait,
+                 'section_opener': build_section_opener_portrait, 'take_note': build_take_note_portrait,
+                 'end_card': build_end_card_portrait, 'credit': build_credit_portrait},
+}
