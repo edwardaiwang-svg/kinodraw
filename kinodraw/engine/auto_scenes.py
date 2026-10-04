@@ -321,13 +321,18 @@ def _portrait_text(ctx, text, size, width, lines=3, min_size=30, **kw):
 
 
 def _portrait_title(ctx, text, size, width, **kw):
-    """The video's title keeps every word: three lines down to 72 px, else a fourth line down to 56 px."""
+    """The video's title keeps every word: three lines down to 72 px, else a fourth line down to 56 px. A word or
+    link too wide even then is broken across lines (as the letterbox title is), shrinking further only if needed."""
     for lines, floor in ((3, 72), (4, 56)):
         for fitted in range(size, floor - 1, -2):
             wrapped = ctx.wrap(text, fitted, width - 12)   # a Chinese line may hang its closing mark: measure it
             if len(wrapped) <= lines and all(ctx.width(line, fitted) <= width - 12 for line in wrapped):
                 return ink.TextDrawing(wrapped, ctx.lang, fitted, fonts=ctx.fonts, **kw)
-    return _portrait_text(ctx, text, size, width, lines=4, min_size=56, **kw)
+    from .vertical import _wrap
+    for fitted in range(56, 7, -2):
+        wrapped = _wrap(text, ctx.lang, width - 12, lambda s: ctx.width(s, fitted))
+        if len(wrapped) <= 4 or fitted <= 8:
+            return ink.TextDrawing(wrapped, ctx.lang, fitted, fonts=ctx.fonts, **kw)
 
 
 def _portrait_host(ctx, host, x0, y, t):

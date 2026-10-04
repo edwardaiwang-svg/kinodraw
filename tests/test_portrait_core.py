@@ -280,6 +280,9 @@ def test_native_quote_takes_a_whole_screen_and_stays_in_the_board_band(board, tm
 @pytest.mark.parametrize('lang,source,title', [
     ('en', 'tiny.md', 'Why Honey Found in Ancient Egyptian Tombs Is Still Perfectly Safe to Eat Today'),
     ('zh', 'sleep_zh.md', '为什么我们每天晚上都需要睡足八个小时才能保持健康和清醒？'),
+    ('en', 'tiny.md', 'Supercalifragilisticexpialidocious'),                 # one word too wide even at 56 px
+    ('en', 'tiny.md', 'Antidisestablishmentarianism Explained'),
+    ('en', 'tiny.md', 'Honey: https://example.com/products/documentation/honey-facts'),
 ])
 def test_native_title_board_and_end_card_show_a_long_title_in_full(lang, source, title, tmp_path):
     ep = script.build(ingest.read(TINY.parent / source))
