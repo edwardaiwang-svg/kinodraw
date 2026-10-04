@@ -23,7 +23,7 @@ from . import PRODUCT, ingest, library, script, styles, voice
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
-from .package import clock, contact_sheet, encoded_qa, mux, publish, sha
+from .package import clock, contact_sheet, encoded_qa, mux, publish, sha, video_size
 
 ASPECTS = ('16:9', '9:16')
 
@@ -215,6 +215,11 @@ def finish(project_dir: Path) -> dict:
     lang, build = cfg['lang'], project_dir / 'build'
     aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
     size = (1080, 1920) if aspect == '9:16' else (1920, 1080)
+    rendered = video_size(build / 'silent.mp4')
+    if rendered and rendered != size:                 # a format switch saved without a render (`render --stills`)
+        raise ValueError(f'The drawings in build/silent.mp4 are {rendered[0]}x{rendered[1]}, but this project is now '
+                         f'{aspect} ({size[0]}x{size[1]}). Run: kinodraw render "{project_dir}" first, so the other '
+                         'format\'s finished video is not replaced with the wrong picture.')
     tl = _load(build / 'timeline.json')
     mixed = audio.mix(board, tl, build)
     stem = re.sub(r'[\\/:*?"<>|¿¡]+', '', board['title'][lang]).strip()[:80] or 'video'

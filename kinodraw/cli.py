@@ -143,7 +143,10 @@ def cmd_render(args):
 def cmd_finish(args):
     from . import pipeline
     t = _stage('finish')
-    qa = pipeline.finish(Path(args.project))
+    try:
+        qa = pipeline.finish(Path(args.project))
+    except ValueError as error:
+        sys.exit(f'\n{error}')
     print(f"  {'PASS' if qa['ok'] else 'FAIL'} {qa['video']} ({qa['length']}) ({time.time() - t:.0f}s)")
     for p in qa['problems']:
         print('  !', p)

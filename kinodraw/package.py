@@ -58,6 +58,14 @@ def mux(tl: dict, silent: Path, mix: Path, output: Path, lang: str, title: str, 
     partial.replace(output)
 
 
+def video_size(video: Path):
+    """(width, height) of a video from its header alone (no decode), or None when ffmpeg finds no H.264 stream."""
+    err = subprocess.run([FFMPEG, '-hide_banner', '-i', str(video)], capture_output=True, encoding='utf-8',
+                         errors='replace').stderr
+    found = re.search(r'Video: h264.*?(\d{3,4})x(\d{3,4})', err)
+    return (int(found[1]), int(found[2])) if found else None
+
+
 def _probe(video: Path) -> dict:
     """Stream facts from ffmpeg's own report (no ffprobe needed): frame count by full decode."""
     err = subprocess.run([FFMPEG, '-v', 'info', '-i', str(video), '-map', '0:v:0', '-f', 'null', '-'],

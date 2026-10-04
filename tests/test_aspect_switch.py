@@ -135,3 +135,38 @@ def test_set_aspect_only_changes_format_and_rejects_invalid_values(tmp_path):
         pipeline.set_aspect(tmp_path, '4:3')
     assert (tmp_path / 'project.json').read_bytes() == config_bytes
     assert not (tmp_path / 'build').exists()
+
+
+def test_finish_refuses_a_render_made_for_the_other_format(tmp_path, monkeypatch, fake_voice):
+    """`render --aspect 16:9 --stills` saves the format but leaves the vertical render in build/: finish must not
+    write that vertical picture over the finished 16:9 video."""
+    import subprocess
+    from kinodraw import package
+    def encode(prod, start, n, path, crf):            # a real one-second video of the production's size
+        w, h = prod.size
+        subprocess.run([package.FFMPEG, '-y', '-v', 'error', '-f', 'lavfi', '-i', f'color=c=white:s={w}x{h}:d=1',
+                        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(path)], check=True)
+    muxed = []
+    def mux(tl, silent, mixed, video, lang, title, build):
+        muxed.append(video.name)
+        video.write_bytes(f'{video.name} from {silent.name}'.encode())
+    monkeypatch.setattr(pipeline.renderer, 'encode', encode)
+    monkeypatch.setattr(pipeline.audio, 'mix', lambda board, tl, build: build / tl['audio'])
+    monkeypatch.setattr(pipeline, 'mux', mux)
+    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a, **k: {'ok': True, 'problems': []})
+    monkeypatch.setattr(pipeline, 'publish', lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, 'contact_sheet', lambda *a, **k: None)
+
+    project = tmp_path / 'project'
+    assert pipeline.make(TINY, project, workers=1)['ok']
+    title = pipeline.storyboard(project)['title']['en']
+    landscape = project / f'{title}.mp4'
+    kept = landscape.read_bytes()
+    cli.main(['render', str(project), '--aspect', '9:16', '--workers', '1'])
+    cli.main(['finish', str(project)])
+    cli.main(['render', str(project), '--aspect', '16:9', '--stills', '0'])
+    with pytest.raises(SystemExit) as stop:
+        cli.main(['finish', str(project)])
+    assert '1080x1920' in str(stop.value) and 'kinodraw render' in str(stop.value)
+    assert muxed == [f'{title}.mp4', f'{title} (vertical).mp4']
+    assert landscape.read_bytes() == kept
