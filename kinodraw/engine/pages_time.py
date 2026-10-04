@@ -37,7 +37,7 @@ def _block_h(lang, size, n, fonts=ink.FONTS):
 
 def _atoms(s, lang):
     """Wrap units that never split across lines: '$80 → $150', '280 亿', '30 年期', '（≥ 40 亿'."""
-    units = re.findall(r'\S+\s*', s) if lang == 'en' else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", s)
+    units = re.findall(r'\S+\s*', s) if lang in ('en', 'es') else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", s)
     atoms, glue = [], False
     for u in units:
         st = u.strip()
@@ -555,7 +555,7 @@ def build_calendar(v, beat, box, ctx):
         rx, ry = x0 + w - 10 - rail_w, top + 10
         rh = bottom - ry
         note = ctx.add(sticky(ctx, rail_w, rh - 6, tape=ctx.color), rx, ry, tr)
-        head_txt = v.get('open_title') or {'en': 'Also on my list', 'zh': '也在关注'}
+        head_txt = v.get('open_title') or {'en': 'Also on my list', 'zh': '也在关注', 'es': 'También en mi lista'}
         hd = fit(ctx, ctx.T(head_txt), 54, rail_w - 80, max_lines=1, min_size=40, color=ctx.color, pace=1.3)
         he = ctx.add(hd, rx + 40, ry + 46, tr)
         rail = [note, he]

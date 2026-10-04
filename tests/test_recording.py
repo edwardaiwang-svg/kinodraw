@@ -47,7 +47,7 @@ def test_a_project_is_narrated_from_its_recording_once_it_has_one(tmp_path, monk
     assert pipeline.settings(project)['recording'] == 'recording.m4a'
     assert (project / 'recording.m4a').read_bytes() == b'audio'
     beats = [(beat['id'], beat['spoken']['en']) for beat in board['beats']]
-    assert calls == [(project / 'recording.m4a', beats, 'en', project / 'voice', 'af_heart', 1.0)]
+    assert calls == [(project / 'recording.m4a', beats, 'en', project / 'voice', 'af_heart', 1.0, {})]
     out = capsys.readouterr().out                         # which part, and what to do about it
     assert '! b002 ("Honey is one of the oldest foods people still eat.") sounds unlike its text (0.30). Watch that ' \
            'part of the video: if the pictures are out of step with your voice there, record the script again' in out
@@ -325,9 +325,9 @@ def test_a_video_in_your_own_voice_does_not_credit_the_ai_voice(tmp_path, monkey
     (build / 'timeline.json').write_text(json.dumps(tl), encoding='utf-8')
     monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
     for name in ('mux', 'contact_sheet'):
-        monkeypatch.setattr(pipeline, name, lambda *a: None)
-    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a: {'ok': True, 'problems': []})
-    monkeypatch.setattr(package, 'thumbnail', lambda *a: None)
+        monkeypatch.setattr(pipeline, name, lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a, **k: {'ok': True, 'problems': []})
+    monkeypatch.setattr(package, 'thumbnail', lambda *a, **k: None)
 
     def description():
         pipeline.finish(project)

@@ -3,6 +3,7 @@ const T = window.STUDIO_TOKEN;
 const $ = (sel, root = document) => root.querySelector(sel);
 const COLORS = { orange: '#f57c00', blue: '#1e6fd9', green: '#2e9d4f', purple: '#8e24aa', red: '#d32f2f', teal: '#00897b' };
 const CYCLE = Object.keys(COLORS);
+const LANG_NAMES = { en: 'English', zh: '中文', es: 'Español' };
 // The AI director is KinoDraw Cloud: the user's plan decides the model. Directors that use the user's own
 // API key or program appear only when Settings -> Advanced directors is on.
 const DIRECTORS = [['rules', 'Offline (free, private)'], ['cloud', 'KinoDraw Cloud AI (your plan)']];
@@ -42,6 +43,36 @@ function toast(msg, ms = 3500) {
 function modal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.remove('hidden'); return $('#modal-body'); }
 function closeModal() { $('#modal').classList.add('hidden'); }
 
+function voiceName(id) {
+  return Object.values(STATE.voices).flat().find((v) => v.id === id)?.name || id;
+}
+function voiceOptions(lang, selected) {
+  return STATE.voices[lang].map((v) => `<option value="${esc(v.id)}"${v.id === selected ? ' selected' : ''}>${esc(v.name)}</option>`).join('');
+}
+function speedRow(id) {
+  return `<label class="speed" for="${id}">Speed <output id="${id}-label">1.00×</output></label>
+    <div class="row muted speed-row"><span>Slower</span><input id="${id}" type="range" min="0.85" max="1.15" step="0.05" value="1"><span>Faster</span></div>`;
+}
+function bindSpeed(id) {
+  const slider = $(`#${id}`), label = $(`#${id}-label`);
+  slider.oninput = () => { label.textContent = `${Number(slider.value).toFixed(2)}×`; };
+  slider.oninput();
+}
+let sampleAudio = null;
+async function playSample(lang, id, speed, button) {      // the first sample of a voice takes a few seconds
+  const url = `/api/voices/${encodeURIComponent(lang)}/${encodeURIComponent(id)}/sample?speed=${speed}&token=${T}`;
+  const label = button.textContent;
+  button.disabled = true; button.textContent = 'Loading…';
+  try {
+    const r = await fetch(url, { headers: { 'X-Studio-Token': T } });
+    if (!r.ok) throw new Error((await r.json()).error || 'Could not play this sample.');
+    sampleAudio?.pause();
+    sampleAudio = new Audio(url);
+    sampleAudio.onerror = () => toast('Could not play this sample.', 6000);
+    await sampleAudio.play();
+  } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
+}
+
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
 async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
@@ -73,7 +104,7 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
 async function loadProjects() {
   const items = await api('/api/projects');
   $('#projects').innerHTML = items.map((p) => `<a data-name="${esc(p.name)}" class="${p.name === current ? 'on' : ''}">
-    ${esc(p.title)}<small>${p.broken ? 'incomplete' : `${p.lang === 'zh' ? '中文' : 'English'} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
+    ${esc(p.title)}<small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
     || '<div class="muted">No videos yet.</div>';
   $('#projects').querySelectorAll('a').forEach((a) => (a.onclick = () => openProject(a.dataset.name)));
 }
@@ -86,16 +117,33 @@ function showSample() {          // a finished video that ships with the app: pl
 }
 
 // ---------------------------------------------------------------- new video
+function scriptLang(text) {      // same rule as kinodraw/ingest.py detect_lang: Chinese when over 30% of letters are Chinese
+  const letters = text.match(/\p{L}/gu) || [];
+  const chinese = letters.filter((c) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(c)).length;
+  if (letters.length && chinese / letters.length > 0.3) return 'zh';
+  const words = text.match(/\p{L}+/gu) || [];
+  const caps = words.map((w) => w[0] !== w[0].toLowerCase()).concat(false);
+  const spanish = new Set('el la los las de del que y en un una es por con para se no su al lo como más pero sus le ya o este esta son también'.split(' '));
+  const english = new Set('the and of to is in that it for was on are with as this be by you'.split(' '));
+  const es = words.filter((w, i) => spanish.has(w.toLowerCase()) && !(caps[i] && caps[i + 1])).length
+    + words.filter((w, i) => !caps[i]).join(' ').replace(/[^áéíóúüñ]/g, '').length + 2 * (text.match(/[¿¡]/g) || []).length;
+  const en = words.filter((w) => english.has(w.toLowerCase())).length;
+  return es >= 2 && es > 2 * en + 1 ? 'es' : 'en';
+}
+
 function showNew() {
   current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-new').content.cloneNode(true));
   const langSel = $('#lang'), voiceSel = $('#voice'), dirSel = $('#director');
+  const voiceLang = () => langSel.value || scriptLang($('#script').value);
   const fillVoices = () => {
-    const lang = langSel.value || (/[一-鿿]/.test($('#script').value) ? 'zh' : 'en');
-    voiceSel.innerHTML = STATE.voices[lang].map((v) => `<option>${esc(v)}</option>`).join('');
+    voiceSel.innerHTML = voiceOptions(voiceLang());
   };
   langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
   fillVoices();
+  $('#speed-wrap').innerHTML = speedRow('speed');
+  bindSpeed('speed');
+  $('#voice-play').onclick = (e) => playSample(voiceLang(), voiceSel.value, $('#speed').value, e.currentTarget);
   const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
   document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
   dirSel.innerHTML = directorOptions(STATE.default_director);
@@ -136,6 +184,7 @@ function showNew() {
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
   $('#style').innerHTML = STATE.styles.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('');
+  $('#format').innerHTML = formatOptions('16:9');
   $('#style').onchange = () => {            // a promo names its product; the whiteboard ignores Motion
     const collage = $('#style').value === 'collage/promo';
     $('#brand').classList.toggle('hidden', !collage);
@@ -147,7 +196,8 @@ function showNew() {
       const [look, story] = $('#style').value.split('/');
       const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
-        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story,
+        speed: Number($('#speed').value),
+        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story, aspect: $('#format').value,
         motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' ? brand : null };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
       const res = await watch(job, 'Creating the storyboard');
@@ -160,13 +210,31 @@ function showNew() {
 }
 
 // ---------------------------------------------------------------- project
+function formatOptions(selected) {
+  return STATE.formats.map((f) => `<option value="${esc(f.value)}"${f.value === selected ? ' selected' : ''}>${esc(f.label)}</option>`).join('');
+}
+
 async function openProject(name, tab = null) {
   current = name; dirty = false; loadProjects();
   const p = await api(`/api/projects/${encodeURIComponent(name)}`);
   board = p.storyboard;
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
-  $('#p-meta').textContent = `${board.beats.length} beats · ${p.lang === 'zh' ? '中文' : 'English'} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${p.settings.voice}`}`;
+  $('#p-meta').textContent = `${board.beats.length} beats · ${LANG_NAMES[p.lang]}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : `voice ${voiceName(p.settings.voice)}`}`;
+  $('#p-format').innerHTML = formatOptions(p.settings.aspect || '16:9');
+  $('#p-format').onchange = async () => {
+    try {
+      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/format`, { method: 'POST', body: JSON.stringify({ aspect: $('#p-format').value }) });
+      p.settings.aspect = cfg.aspect;
+      const meta = $('#p-meta');
+      meta.textContent = meta.textContent.replace(' · vertical 9:16', '');
+      if (cfg.aspect === '9:16') {
+        const last = meta.textContent.lastIndexOf(' · ');
+        meta.textContent = `${meta.textContent.slice(0, last)} · vertical 9:16${meta.textContent.slice(last)}`;
+      }
+      toast('Format saved. Make video to render it.');
+    } catch (e) { $('#p-format').value = p.settings.aspect || '16:9'; toast(e.message, 6000); }
+  };
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (needsCloudSignIn($('#p-director').value)) return;
@@ -239,6 +307,7 @@ function beatCard(b, ch) {
   el.querySelector('.prev').onclick = () => {
     const img = document.createElement('img');
     img.alt = 'preview';
+    img.onload = () => img.classList.toggle('tall', img.naturalHeight > img.naturalWidth);
     img.src = `/api/projects/${encodeURIComponent(current)}/still?beat=${encodeURIComponent(b.id)}&offset=4&token=${T}`;
     el.querySelector('.preview').replaceChildren(img);
   };
@@ -273,7 +342,24 @@ function visualCard(b, v, i) {
 }
 
 async function pickDoodle(query, onPick) {
-  const body = modal(`<h3>Choose a doodle</h3><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
+  const project = current;
+  const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
+  $('#picture-file', body).onchange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error(`“${file.name}” is too big (over 10 MB). Make it smaller and try again.`);
+      const res = await api(`/api/projects/${encodeURIComponent(project)}/pictures?filename=${encodeURIComponent(file.name)}`, { method: 'POST', body: file });
+      closeModal(); onPick(res.id);
+    } catch (e) { toast(e.message, 6000); }
+    event.target.value = '';
+  };
+  api(`/api/projects/${encodeURIComponent(project)}/pictures`).then((items) => {
+    if (!items.length) return;
+    $('#own-pictures', body).classList.remove('hidden');
+    $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc(d.name)}</div></div>`).join('');
+    $('#own-picks', body).querySelectorAll('.pick').forEach((p) => (p.onclick = () => { closeModal(); onPick(p.dataset.id); }));
+  }).catch((e) => toast(e.message, 6000));
   const run = async () => {
     const items = await api(`/api/doodles?q=${encodeURIComponent($('#q', body).value)}&lang=${board.lang}`);
     $('#picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc((d.desc || d.id).slice(0, 40))}</div></div>`).join('');
@@ -410,11 +496,18 @@ function renderNarrator(name, info, choice = info.narrator) {
   const pick = `<div class="narrator-pick">
     <span class="pick-label">Narrator</span>
     <label class="seg"><input type="radio" name="n-pick" value="builtin"${own ? '' : ' checked'}><b>Built-in voice</b>
-      <small>A natural AI voice (${esc(info.voice)}) reads your script</small></label>
+      <small>A natural AI voice (${esc(voiceName(info.voice))}) reads your script</small></label>
     <label class="seg"><input type="radio" name="n-pick" value="own"${own ? ' checked' : ''}><b>My own voice</b>
       <small>You read the script aloud; every drawing follows your voice</small></label></div>`;
   if (!own) {
-    box.innerHTML = `${pick}<p class="muted">The built-in voice reads exactly what the storyboard says. Press <b>Make video</b> when you’re ready.</p>`;
+    box.innerHTML = `${pick}<form id="n-voice-form">
+      <div class="grid"><div><label for="n-voice">Voice</label><div class="row">
+        <select id="n-voice">${voiceOptions(info.lang, info.voice)}</select>
+        <button id="n-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button>
+      </div></div><div>${speedRow('n-speed')}</div></div>
+      <label>Pronunciations <textarea id="n-pronounce" rows="4" placeholder="GIF = jif&#10;Nguyen = win"></textarea></label>
+      <p class="muted">One per line: word = how to say it. Changes how the voice says a word; captions keep your spelling. All-caps words like WHO and mixed-case ones like iPhone match only as typed; others match in any case.</p>
+      <button id="n-save" type="submit" class="primary" disabled>Save voice settings</button></form>`;
   } else {
     const lines = info.lines.map((l, i) => {
       const mark = check?.missing.includes(i + 1) ? 'miss' : info.changed.includes(i + 1) ? 'changed'
@@ -443,11 +536,34 @@ function renderNarrator(name, info, choice = info.narrator) {
         const next = await api(`/api/projects/${encodeURIComponent(name)}/narrator`, { method: 'POST', body: JSON.stringify({ narrator: r.value }) });
         toast(r.value === 'own' ? 'Your video will be narrated in your own voice' : 'Your video will use the built-in voice');
         renderNarrator(name, next);
-        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : `voice ${next.voice}`}`);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : `voice ${voiceName(next.voice)}`}`);
       } else renderNarrator(name, info, r.value);
     } catch (e) { toast(e.message, 6000); }
   }));
-  if (!own) return;
+  if (!own) {
+    const form = $('#n-voice-form', box), select = $('#n-voice', form), slider = $('#n-speed', form);
+    const pronounce = $('#n-pronounce', form), save = $('#n-save', form);
+    bindSpeed('n-speed');
+    $('#n-play', form).onclick = (e) => playSample(info.lang, select.value, slider.value, e.currentTarget);
+    api(`/api/projects/${encodeURIComponent(name)}/voice`).then((settings) => {
+      if (!form.isConnected) return;
+      select.value = settings.voice; slider.value = settings.speed; slider.oninput();
+      pronounce.value = settings.pronounce; save.disabled = false;
+    }).catch((e) => toast(e.message, 6000));
+    form.onsubmit = async (e) => {
+      e.preventDefault(); save.disabled = true;
+      try {
+        const settings = await api(`/api/projects/${encodeURIComponent(name)}/voice`, { method: 'PUT',
+          body: JSON.stringify({ voice: select.value, speed: Number(slider.value), pronounce: pronounce.value }) });
+        info.voice = settings.voice;
+        renderNarrator(name, info);
+        $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` voice ${voiceName(settings.voice)}`);
+        toast('Saved');
+      } catch (err) { toast(err.message, 6000); }
+      finally { save.disabled = false; }
+    };
+    return;
+  }
   const showProblem = (msg) => { $('#n-result', box).innerHTML = `<div class="result bad"><p>${esc(msg)}</p></div>`; };
   $('#n-file', box).onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
@@ -486,7 +602,7 @@ function showSettings() {
     <section><h3>Videos</h3><label class="row"><input id="s-credit" type="checkbox" style="width:auto"${STATE.credit ? ' checked' : ''}>
       <span>End each video with a 2-second "Made with ${esc(STATE.product)}" credit</span></label></section>
     <section><h3>Projects folder</h3><div class="row"><input id="s-root" value="${esc(STATE.projects_root)}"><button id="s-save" class="small">Save</button></div></section>
-    <section><h3>Voices</h3><p class="muted">English: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · 中文: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'}</p></section></div>`);
+    <section><h3>Voices</h3><p class="muted">${LANG_NAMES.en}: ${STATE.models_ready.en ? 'ready' : 'downloads on first use (~190 MB)'} · ${LANG_NAMES.zh}: ${STATE.models_ready.zh ? 'ready' : 'downloads on first use (~220 MB)'} · ${LANG_NAMES.es}: ${STATE.models_ready.es ? 'ready' : 'downloads on first use (~190 MB)'}</p></section></div>`);
   $('#c-email', body)?.addEventListener('input', (e) => { cloudEmail = e.target.value.trim(); });
   $('#c-send', body)?.addEventListener('click', async () => {
     try { await api('/api/cloud/signup', { method: 'POST', body: JSON.stringify({ email: $('#c-email', body).value }) });

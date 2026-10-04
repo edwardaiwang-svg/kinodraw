@@ -3,6 +3,8 @@
   kinodraw studio                               open the Studio window
   kinodraw make script.md -o MyVideo            script -> finished MP4 (offline rules director)
   kinodraw new script.md -o MyVideo             storyboard only (edit storyboard.json, then continue)
+  kinodraw make script.md -o MyVideo --voice am_michael --speed 1.1 --pronounce words.txt
+                                                ... another voice, faster, with your pronunciations
   kinodraw direct MyVideo                       (re)add visuals to the storyboard
   kinodraw voice MyVideo                        narration + timeline
   kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of MyVideo/read-aloud.txt (none: Kokoro again)
@@ -49,10 +51,18 @@ def _file(script):
 
 
 def cmd_new(args):
-    from . import director, pipeline
+    from . import director, pipeline, voice
+    pronounce = getattr(args, 'pronounce', None)
+    if pronounce:                                     # checked before anything is made
+        try:
+            voice.read_lexicon(Path(pronounce))
+        except (OSError, ValueError) as error:
+            sys.exit(f'--pronounce {pronounce}: {error}')
     t = _stage('storyboard')
     board = pipeline.new_project(_file(args.script) or args.script, Path(args.out),
                                  title=args.title, lang=args.lang, direction=_direction(args), **_settings(args))
+    if pronounce:
+        (Path(args.out) / pipeline.PRONOUNCE).write_text(Path(pronounce).read_text(encoding='utf-8'), encoding='utf-8')
     report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
                              _progress)
     sections = sum(c['kind'] == 'section' for c in board['chapters'])
@@ -96,10 +106,16 @@ def cmd_voice(args):
 def cmd_render(args):
     from . import pipeline
     project = Path(args.project)
+    from .library import missing_pictures
+    messages = missing_pictures(pipeline.storyboard(project), project)
+    if messages:
+        sys.exit('\n' + '\n'.join(messages))
     if args.stills:
         from .engine import render as renderer
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
-        prod = renderer.make_production(pipeline.storyboard(project), tl, pipeline.settings(project)['lang'], project)
+        cfg, board = pipeline.settings(project), pipeline.storyboard(project)
+        aspect = pipeline.validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
+        prod = renderer.make_production(board, tl, cfg['lang'], project, aspect=aspect)
         out = project / 'build' / 'stills'
         out.mkdir(parents=True, exist_ok=True)
         for s in args.stills.split(','):
@@ -107,7 +123,10 @@ def cmd_render(args):
         print(f'  stills -> {out}')
         return
     t = _stage('render')
-    out = pipeline.render(project, args.start, args.duration, args.workers)
+    try:
+        out = pipeline.render(project, args.start, args.duration, args.workers)
+    except ValueError as error:
+        sys.exit(f'\n{error}')
     print(f'  done ({time.time() - t:.0f}s)')
     for w in json.loads((out.parent / 'render-warnings.json').read_text(encoding='utf-8')):
         if w.startswith('skipped'):
@@ -196,7 +215,7 @@ def cmd_doodles(args):
 
 def _settings(args):
     out = {}
-    for key in ('voice', 'speed', 'workers'):
+    for key in ('voice', 'speed', 'workers', 'aspect'):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
     if getattr(args, 'no_credit', False):
@@ -216,6 +235,7 @@ MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
 
 def main(argv=None):
     from . import paths
+    from .pipeline import ASPECTS
     from .engine.storyboard import DIALS, LOOKS
     paths.migrate()                                   # once: Doodle Studio's folders become KinoDraw's
     if paths.left_behind:
@@ -227,10 +247,14 @@ def main(argv=None):
         p.add_argument('script', help='a .md/.txt/.docx file, or the text itself in quotes')
         p.add_argument('-o', '--out', required=True, help='project folder to create')
         p.add_argument('--title')
-        p.add_argument('--lang', choices=['en', 'zh'], help='default: detected from the script')
+        p.add_argument('--lang', choices=['en', 'zh', 'es'], help='default: detected from the script')
         p.add_argument('--voice')
         p.add_argument('--speed', type=float)
+        p.add_argument('--pronounce', metavar='FILE', help='how the voice says words, one "word = how to say it" a '
+                       'line (captions keep your spelling); kept as the project\'s pronounce.txt')
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
+        p.add_argument('--aspect', choices=ASPECTS, default='16:9',
+                       help='16:9 for YouTube (default) or 9:16 for Shorts, TikTok and Reels')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
         p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
@@ -278,11 +302,11 @@ def main(argv=None):
     p.add_argument('project')
     p.set_defaults(func=cmd_finish)
     p = sub.add_parser('setup')
-    p.add_argument('--lang', nargs='+', default=['en', 'zh'], choices=['en', 'zh'])
+    p.add_argument('--lang', nargs='+', default=['en', 'zh'], choices=['en', 'zh', 'es'])
     p.set_defaults(func=cmd_setup)
     p = sub.add_parser('doodles')
     p.add_argument('query')
-    p.add_argument('--lang', default='en', choices=['en', 'zh'])
+    p.add_argument('--lang', default='en', choices=['en', 'zh', 'es'])
     p.set_defaults(func=cmd_doodles)
     args = ap.parse_args(argv)
     args.func(args)

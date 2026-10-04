@@ -32,6 +32,9 @@ EDGE = 6                            # px of a text piece's paper edge and tilt t
 
 
 class CollageProduction:
+    vertical = False               # set by vertical.Vertical: the frame is the stage alone, laid out in 9:16 there
+    size = (W, H)
+
     def __init__(self, episode, tline, lang, project_dir, relaxed=False):
         self.ep, self.tl, self.lang, self.dir, self.relaxed = episode, tline, lang, Path(project_dir), relaxed
         self.dial = episode.get('motion', 'lively')
@@ -132,7 +135,7 @@ class CollageProduction:
         if k and st.transition != 'none' and t < st.start + TRANS:
             img = self._transition(self._stage_frame(k - 1, t), img, st.transition, (t - st.start) / TRANS,
                                    f'{self.seed}.{k}')
-        if self.show_captions:
+        if self.show_captions and not self.vertical:
             self._caption(img, t)
         return img.convert('RGB')
 

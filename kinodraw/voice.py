@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import wave
@@ -42,13 +43,23 @@ FILES = {       # name: (url, sha256, bytes)
 }
 LANGS = {
     'en': {'model': 'kokoro-v1.0.fp16.onnx', 'voices': 'voices-v1.0.bin', 'config': None, 'voice': 'af_heart'},
+    'es': {'model': 'kokoro-v1.0.fp16.onnx', 'voices': 'voices-v1.0.bin', 'config': None, 'voice': 'ef_dora'},
     'zh': {'model': 'kokoro-v1.1-zh.fp16.onnx', 'voices': 'voices-v1.1-zh.bin', 'config': 'config-v1.1-zh.json',
            'voice': 'zf_001'},
 }
+VOICES = {
+    'en': [('af_heart', 'Heart, US woman (default)'), ('af_bella', 'Bella, US woman'),
+           ('af_nicole', 'Nicole, US woman, soft'), ('am_michael', 'Michael, US man'),
+           ('am_fenrir', 'Fenrir, US man, deep'), ('bf_emma', 'Emma, UK woman'), ('bm_george', 'George, UK man')],
+    'zh': [('zf_001', 'Mei, Mandarin woman (default)'), ('zf_002', 'Lan, Mandarin woman'),
+           ('zm_010', 'Wei, Mandarin man'), ('zm_020', 'Jun, Mandarin man')],
+    'es': [('ef_dora', 'Dora, Latin American woman (default)'), ('em_alex', 'Alex, Latin American man')],
+}
+SPEEDS = (0.85, 1.15)
 SR = 24000
 GAP = .4                 # silence after each beat
 VERSION = 1              # bump when synthesis or alignment changes (invalidates cached clips)
-CLAUSE = {'en': ',.;:?!—', 'zh': '，。；：？！、—'}
+CLAUSE = {'en': ',.;:?!—', 'zh': '，。；：？！、—', 'es': ',.;:?!—'}
 PHONE_MARKS = ',.;:?!—…'
 NOT_SOUNDS = set(' ˈˌːʲ')
 
@@ -86,15 +97,20 @@ def _espeak_config():
     return EspeakConfig(data_path=str(data))
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def _engine(lang: str):
+    ensure_models(lang)
+    spec = LANGS[lang]
+    return _model_engine(spec['model'], spec['voices'], spec['config'])
+
+
+@lru_cache(maxsize=2)
+def _model_engine(model, voices, config):
     import onnxruntime
     onnxruntime.set_default_logger_severity(3)       # fp16 graphs log many harmless constant-folding warnings
     from kokoro_onnx import Kokoro
-    ensure_models(lang)
-    spec = LANGS[lang]
-    config = str(MODEL_DIR / spec['config']) if spec['config'] else None
-    return Kokoro(str(MODEL_DIR / spec['model']), str(MODEL_DIR / spec['voices']), espeak_config=_espeak_config(),
+    config = str(MODEL_DIR / config) if config else None
+    return Kokoro(str(MODEL_DIR / model), str(MODEL_DIR / voices), espeak_config=_espeak_config(),
                   vocab_config=config)
 
 
@@ -112,7 +128,7 @@ def voices(lang: str) -> list[str]:
 def phonemes(text: str, lang: str) -> str:
     if lang == 'zh':
         return _zh_g2p()(text)[0]
-    return _engine('en').tokenizer.phonemize(text, 'en-us')
+    return _engine(lang).tokenizer.phonemize(text, 'es-419' if lang == 'es' else 'en-us')
 
 
 # --------------------------------------------------------------- alignment
@@ -120,7 +136,7 @@ def _is_clause_mark(text: str, i: int, lang: str) -> bool:
     ch = text[i]
     if ch not in CLAUSE[lang]:
         return False
-    return lang == 'zh' or ch == '—' or i + 1 == len(text) or text[i + 1] in ' "”’)'
+    return lang == 'zh' or ch == '—' or i + 1 == len(text) or text[i + 1] in ' "”’)' or (lang == 'es' and text[i + 1] == '»')
 
 
 def align(spoken: str, timings, lang: str) -> list[float]:
@@ -157,15 +173,76 @@ def align(spoken: str, timings, lang: str) -> list[float]:
 
 
 # -------------------------------------------------------------- synthesis
-def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None, speed: float = 1.0) -> Clip:
+def voice_name(voice_id: str) -> str:
+    """The friendly name of a voice, or its id if it isn't listed."""
+    return next((name for choices in VOICES.values() for vid, name in choices if vid == voice_id), voice_id)
+
+
+def parse_lexicon(text: str) -> dict:
+    """Pronunciations from one word = respelling per line."""
+    lexicon = {}
+    marks = ''.join(CLAUSE.values()) + PHONE_MARKS
+    for n, line in enumerate(text.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        word, sep, said = line.partition('=')
+        said = said.strip().translate(str.maketrans('', '', marks)).strip()
+        if not sep or not word.strip() or not said:
+            raise ValueError(f'Line {n} of pronounce.txt should look like "word = how to say it", '
+                             'for example "GIF = jif".')
+        lexicon[word.strip()] = said
+    return lexicon
+
+
+def read_lexicon(path: Path) -> dict:
+    """The project's pronunciations, or none when the file is missing."""
+    path = Path(path)
+    return parse_lexicon(path.read_text(encoding='utf-8')) if path.exists() else {}
+
+
+def respell(text: str, lexicon: dict, lang: str) -> str:
+    """Change spoken words while keeping the script's spelling elsewhere."""
+    if not lexicon:
+        return text
+    if lang == 'en':        # "WHO" or "iPhone" matches only as typed, "Honey" or "C#" in any case; exact entries first
+        exact = {key for key in lexicon if any(c.isupper() for c in key[1:])}
+        loose = {key.lower(): said for key, said in lexicon.items() if key not in exact}
+        keys = sorted(lexicon, key=lambda key: (-len(key), key not in exact))
+        pattern = '|'.join(re.escape(key) if key in exact else f'(?i:{re.escape(key)})' for key in keys)
+        return re.sub(r'(?<!\w)(?:' + pattern + r')(?!\w)',
+                      lambda m: lexicon[m[0]] if m[0] in exact else loose[m[0].lower()], text)
+    pattern = '|'.join(re.escape(key) for key in sorted(lexicon, key=len, reverse=True))
+    return re.sub(pattern, lambda m: lexicon[m[0]], text)
+
+
+def preview(voice_id: str, lang: str, speed: float = 1.0) -> Path:
+    """A cached sample of a voice, using only models already on this computer."""
+    if voice_id not in dict(VOICES.get(lang, [])):
+        raise ValueError('Choose a voice for this language.')
+    if not SPEEDS[0] <= speed <= SPEEDS[1]:
+        raise ValueError('Speed should be between 0.85 and 1.15.')
+    if missing_files(lang):
+        size = 220 if lang == 'zh' else 190
+        raise ValueError(f'The voices download with your first video (about {size} MB). '
+                         'Make a video once, then you can hear every voice here.')
+    text = {'en': 'Hi! I can read your script aloud, just like this.', 'zh': '你好！我可以像这样为你朗读脚本。',
+            'es': '¡Hola! Puedo leer tu guion en voz alta, así.'}
+    return synthesize(text[lang], lang, paths.cache_dir() / 'voice-samples', voice_id, speed).wav
+
+
+def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None, speed: float = 1.0,
+               lexicon: dict | None = None) -> Clip:
     voice = voice or LANGS[lang]['voice']
-    key = hashlib.sha256(json.dumps([VERSION, LANGS[lang]['model'], voice, speed, spoken]).encode()).hexdigest()[:16]
+    said = respell(spoken, lexicon, lang) if lexicon else spoken
+    content = [VERSION, LANGS[lang]['model'], voice, speed, spoken] + ([said] if said != spoken else [])
+    key = hashlib.sha256(json.dumps(content).encode()).hexdigest()[:16]     # times follow the caption spelling
     cache_dir = Path(cache_dir)
     wav, meta = cache_dir / f'{key}.wav', cache_dir / f'{key}.json'
     if wav.exists() and meta.exists():
         info = json.loads(meta.read_text(encoding='utf-8'))
         return Clip(wav, info['duration'], info['char_times'])
-    audio, sr, timings = _engine(lang).create_timed(phonemes(spoken, lang), voice, speed=speed, is_phonemes=True)
+    audio, sr, timings = _engine(lang).create_timed(phonemes(said, lang), voice, speed=speed, is_phonemes=True)
     char_times = align(spoken, timings, lang)
     cache_dir.mkdir(parents=True, exist_ok=True)
     with wave.open(str(wav), 'wb') as w:
@@ -175,7 +252,8 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
         w.writeframes((np.clip(audio, -1, 1) * 32767).astype('<i2').tobytes())
     duration = round(len(audio) / sr, 3)
     meta.write_text(json.dumps({'duration': duration, 'char_times': char_times, 'voice': voice, 'speed': speed,
-                                'text': spoken}, ensure_ascii=False), encoding='utf-8')
+                                'text': spoken, **({'said': said} if said != spoken else {})},
+                               ensure_ascii=False), encoding='utf-8')
     return Clip(wav, duration, char_times)
 
 
@@ -394,7 +472,7 @@ def _said(text: str) -> str:
 
 
 def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | None = None,
-                   speed: float = 1.0) -> dict:
+                   speed: float = 1.0, lexicon: dict | None = None) -> dict:
     """Clips like synthesize()'s, cut from one continuous reading of the script; ``beats`` is [(beat id, spoken
     text)] in order. Kokoro reads the beats as a guide, aligned to the take frame by frame (dynamic time warping):
     every cut lands in a pause, every character time follows the take, and each clip gets its guide's speech level.
@@ -403,8 +481,10 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     recording, cache_dir = Path(recording), Path(cache_dir)
     voice = voice or LANGS[lang]['voice']
     digest = hashlib.sha256(recording.read_bytes()).hexdigest()
-    key = hashlib.sha256(json.dumps([VERSION, RECORDING_VERSION, LANGS[lang]['model'], voice, speed, digest,
-                                     [list(b) for b in beats]]).encode()).hexdigest()[:16]
+    content = [VERSION, RECORDING_VERSION, LANGS[lang]['model'], voice, speed, digest, [list(b) for b in beats]]
+    if lexicon:
+        content.append(sorted(lexicon.items()))
+    key = hashlib.sha256(json.dumps(content).encode()).hexdigest()[:16]
     out, report = cache_dir / 'recording', cache_dir / 'recording-align.json'
     meta = out / f'{key}.json'
     if meta.exists():
@@ -412,7 +492,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         report.write_text(json.dumps(info['report'], ensure_ascii=False, indent=1), encoding='utf-8')
         return {c['id']: Clip(out / c['wav'], c['duration'], c['char_times']) for c in info['clips']}
 
-    guides = [synthesize(text, lang, cache_dir, voice, speed) for _, text in beats]
+    guides = [synthesize(text, lang, cache_dir, voice, speed, lexicon) for _, text in beats]
     pieces = [_read_wav(g.wav) for g in guides]
     offsets = np.cumsum([0] + [len(p) for p in pieces])
     take = _decode(recording)

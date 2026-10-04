@@ -4,6 +4,7 @@ Project folder:
   project.json        settings (language, voice, speed, director, workers, credit, recording)
   script.<ext>        the source script
   recording.<ext>     optional: your own reading of the script, used as the narration
+  pronounce.txt       optional: word = respelling, for spoken words only
   read-aloud.txt      the script as it is narrated, one numbered sentence a line: what to read for your recording
   storyboard.json     chapters + beats + visuals (editable; re-running keeps your edits)
   doodles/ photos/    optional: your own SVG doodles and photos
@@ -18,11 +19,22 @@ import re
 import shutil
 from pathlib import Path
 
-from . import PRODUCT, ingest, script, styles, voice
+from . import PRODUCT, ingest, library, script, styles, voice
 from .audio import mix as audio
 from .engine import render as renderer
 from .engine.storyboard import drawable
 from .package import clock, contact_sheet, encoded_qa, mux, publish, sha
+
+ASPECTS = ('16:9', '9:16')
+
+
+def validate_aspect(aspect: str, look: str | None = None) -> str:
+    if aspect not in ASPECTS:
+        raise ValueError('aspect must be 16:9 or 9:16')
+    entry = styles.get(look or 'whiteboard')
+    if entry and aspect not in entry['aspect']:
+        raise ValueError(f'{look or "whiteboard"} does not support {aspect}')
+    return aspect
 
 
 def _load(path: Path):
@@ -39,6 +51,7 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
     ``direction`` sets the storyboard's dials: look, story, motion and brand (see docs/storyboard.md)."""
     if (direction or {}).get('look'):
         drawable(direction['look'])
+    settings['aspect'] = validate_aspect(settings.get('aspect', '16:9'), (direction or {}).get('look'))
     project_dir = Path(project_dir)
     project_dir.mkdir(parents=True, exist_ok=True)
     src = Path(source) if isinstance(source, Path) or (len(str(source)) < 1024 and '\n' not in str(source)) else None
@@ -71,6 +84,7 @@ def storyboard(project_dir: Path) -> dict:
 
 
 READ_ALOUD = 'read-aloud.txt'
+PRONOUNCE = 'pronounce.txt'
 
 
 def read_aloud(project_dir: Path) -> list[dict]:
@@ -106,6 +120,7 @@ def narrate(project_dir: Path, progress=None) -> dict:
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang = cfg['lang']
+    lexicon = voice.read_lexicon(project_dir / PRONOUNCE)
     before = json.dumps(board, ensure_ascii=False, sort_keys=True)
     script.sync_takes(board)
     if json.dumps(board, ensure_ascii=False, sort_keys=True) != before:
@@ -116,7 +131,8 @@ def narrate(project_dir: Path, progress=None) -> dict:
     voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
     for i, beat in enumerate(board['beats']):
-        clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'], cfg['speed'])
+        clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
+                                           cfg['speed'], lexicon)
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
@@ -125,7 +141,7 @@ def narrate(project_dir: Path, progress=None) -> dict:
         beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
         try:
             clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
-                                         cfg['voice'], cfg['speed'])
+                                         cfg['voice'], cfg['speed'], lexicon)
         except voice.RecordingError as error:
             raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: kinodraw voice '
                                        f'"{project_dir}" --recording none. The script to read, as it is narrated (one '
@@ -148,7 +164,11 @@ def build_audio(project_dir: Path, clips: dict) -> dict:
 
 def render(project_dir: Path, start: float = 0, duration: float | None = None, workers: int | None = None) -> Path:
     project_dir = Path(project_dir)
+    messages = library.missing_pictures(storyboard(project_dir), project_dir)
+    if messages:
+        raise ValueError('\n'.join(messages))
     cfg = settings(project_dir)
+    aspect = validate_aspect(cfg.get('aspect', '16:9'), storyboard(project_dir).get('look'))
     build = project_dir / 'build'
     tl = _load(build / 'timeline.json')
     out = build / 'silent.mp4'
@@ -156,15 +176,15 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
     workers = workers or cfg.get('workers', 1)
     if workers > 1:
         warnings = renderer.render_segments(project_dir, project_dir / 'storyboard.json', cfg['lang'],
-                                            build / 'timeline.json', start, n, out, workers)
+                                            build / 'timeline.json', start, n, out, workers, aspect=aspect)
     else:
-        prod = renderer.make_production(storyboard(project_dir), tl, cfg['lang'], project_dir)
+        prod = renderer.make_production(storyboard(project_dir), tl, cfg['lang'], project_dir, aspect=aspect)
         renderer.encode(prod, start, n, out, 20)
         warnings = prod.warnings
     board = storyboard(project_dir)
     if styles.renderer(board.get('look')) != 'whiteboard':   # sound effects follow the scheduled animation
         if workers > 1:
-            prod = renderer.make_production(board, tl, cfg['lang'], project_dir)
+            prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect)
         _save(build / 'cues.json', {'cues': prod.cues()})
     _save(build / 'render-warnings.json', warnings)
     return out
@@ -175,18 +195,21 @@ def finish(project_dir: Path) -> dict:
     project_dir = Path(project_dir)
     cfg, board = settings(project_dir), storyboard(project_dir)
     lang, build = cfg['lang'], project_dir / 'build'
+    aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
+    size = (1080, 1920) if aspect == '9:16' else (1920, 1080)
     tl = _load(build / 'timeline.json')
     mixed = audio.mix(board, tl, build)
-    stem = re.sub(r'[\\/:*?"<>|]+', '', board['title'][lang]).strip()[:80] or 'video'
+    stem = re.sub(r'[\\/:*?"<>|¿¡]+', '', board['title'][lang]).strip()[:80] or 'video'
     video = project_dir / f'{stem}.mp4'
     mux(tl, build / 'silent.mp4', mixed, video, lang, board['title'][lang], build)
-    qa = encoded_qa(tl, video, mixed)
+    qa = encoded_qa(tl, video, mixed, size=size)
     if board.get('look') == 'collage':                # words written over other words never pass
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
-    publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')))
-    contact_sheet(tl, video, build / 'contact-sheet.jpg')
+    publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
+            size=(720, 1280) if aspect == '9:16' else (1280, 720))
+    contact_sheet(tl, video, build / 'contact-sheet.jpg', size=size)
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
     _save(build / 'qa.json', qa)
     return qa

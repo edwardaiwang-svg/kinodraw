@@ -78,6 +78,7 @@ def me() -> dict:
 
 class CloudProvider:
     name, model = 'cloud', 'kinodraw-cloud'
+    languages = ('en', 'zh')                          # what the cloud plans; anything else stays offline, unbilled
 
     def __init__(self):
         self.token = _token()

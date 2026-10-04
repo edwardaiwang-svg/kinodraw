@@ -6,6 +6,7 @@ injects into the page, so other web pages on this computer cannot drive it.
 from __future__ import annotations
 
 import difflib
+import io
 import json
 import mimetypes
 import re
@@ -22,10 +23,11 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import PRODUCT, director, paths, pipeline, styles, voice
 from ..director.validate import validate
-from ..library import resolve
+from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
 from ..package import sha
 
 STATIC = Path(__file__).resolve().parent / 'static'
+SVG_POLICY = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox"
 FONTS = Path(__file__).resolve().parents[1] / 'assets' / 'fonts'
 CONFIG = paths.config_dir() / 'studio.json'
 
@@ -128,6 +130,39 @@ def _summary(path: Path) -> dict:
 
 
 # ------------------------------------------------------------------ actions
+def _voice_settings(lang: str, voice_id, speed) -> dict:
+    if voice_id not in dict(voice.VOICES.get(lang, [])):
+        raise ValueError('Choose a voice for this language.')
+    try:
+        speed = round(float(speed), 2)
+    except (TypeError, ValueError):
+        raise ValueError('Speed should be between 0.85 and 1.15.') from None
+    if not voice.SPEEDS[0] <= speed <= voice.SPEEDS[1]:
+        raise ValueError('Speed should be between 0.85 and 1.15.')
+    return {'voice': voice_id, 'speed': speed}
+
+
+def voice_settings(name: str, body: dict | None = None) -> dict:
+    """Read or save the project's voice, speed and pronunciations."""
+    path = _project(name)
+    cfg = pipeline.settings(path)
+    pronounce = path / pipeline.PRONOUNCE
+    if body is not None:
+        settings = _voice_settings(cfg['lang'], body.get('voice'), body.get('speed'))
+        text = body.get('pronounce', '')
+        if not isinstance(text, str):
+            raise ValueError('Pronunciations should be text: word = how to say it.')
+        voice.parse_lexicon(text)
+        pipeline._save(path / 'project.json', {**cfg, **settings})
+        if text.strip():
+            pronounce.write_text(text, encoding='utf-8')
+        else:
+            pronounce.unlink(missing_ok=True)
+        cfg.update(settings)
+    return {'lang': cfg['lang'], 'voice': cfg['voice'], 'speed': cfg['speed'],
+            'pronounce': pronounce.read_text(encoding='utf-8') if pronounce.exists() else ''}
+
+
 def create_project(body: dict) -> dict:
     text = (body.get('text') or '').strip()
     if not text:
@@ -138,7 +173,10 @@ def create_project(body: dict) -> dict:
     name = _slug(doc.title)
     path = projects_root() / name
     mode = body.get('director') or 'rules'
-    settings = {k: body[k] for k in ('voice', 'workers') if body.get(k)}
+    lang = body.get('lang') or doc.lang
+    settings = {k: body[k] for k in ('workers',) if body.get(k)}
+    settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
+    settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
 
     def job(progress):
         progress('storyboard', 0, 1)
@@ -151,6 +189,14 @@ def create_project(body: dict) -> dict:
         return {'project': name, 'notes': report.get('notes', [])[:20],
                 'cost': None if not usage else usage.cost_usd, 'calls': 0 if not usage else usage.calls}
     return {'job': JOBS.start('create', name, job), 'project': name}
+
+
+def set_format(name: str, body: dict) -> dict:
+    path = _project(name)
+    cfg = pipeline.settings(path)
+    cfg['aspect'] = pipeline.validate_aspect(body.get('aspect'), pipeline.storyboard(path).get('look'))
+    pipeline._save(path / 'project.json', cfg)
+    return cfg
 
 
 def docx_script(name: str, data: bytes) -> str:
@@ -246,6 +292,79 @@ def _changed(path: Path, digest: str | None, lines: list[dict]) -> list[int]:
         if tag != 'equal':
             changed.update(range(j1, j2) if j2 > j1 else [min(j1, len(now) - 1)])
     return sorted(n + 1 for n in changed)
+
+
+def list_pictures(name: str) -> list[dict]:
+    """The project's pictures available for manual picking, in filename order."""
+    folder = _project(name) / PICTURES
+    pictures = []
+    for path in sorted(folder.glob('*')):
+        if path.name.startswith('.') or path.suffix.lower() not in PICTURE_TYPES:
+            continue
+        if resolve(OWN + path.name, folder.parent):
+            pictures.append({'id': OWN + path.name, 'name': path.name})
+    return pictures
+
+
+_picture_lock = threading.Lock()
+
+
+def save_picture(name: str, filename: str, stream, length: int) -> dict:
+    """Validate and keep the raw picture locally, without overwriting another picture."""
+    import resvg_py
+    from PIL import Image
+    project = _project(name)
+    if length <= 0:
+        raise ValueError(f'“{filename}” is empty. Choose your picture again.')
+    if length > PICTURE_MAX:
+        raise ValueError(f'“{filename}” is too big (over 10 MB). Make it smaller and try again.')
+    suffix = Path(filename).suffix.lower()
+    if suffix not in PICTURE_TYPES:
+        raise ValueError('Choose a PNG, JPG or SVG picture.')
+    data = stream.read(length)
+    if len(data) != length:
+        raise ValueError(f'The upload of “{filename}” stopped part-way. Try again.')
+    try:
+        if suffix == '.svg':
+            text = data.decode('utf-8')
+            if '<svg' not in text:
+                raise ValueError('no SVG')
+            resvg_py.svg_to_bytes(svg_string=text, width=64, height=64)
+        else:
+            signature = b'\x89PNG\r\n\x1a\n' if suffix == '.png' else b'\xff\xd8\xff'
+            if not data.startswith(signature):
+                raise ValueError('wrong picture type')
+            with Image.open(io.BytesIO(data)) as image:
+                image.verify()
+            with Image.open(io.BytesIO(data)) as image:
+                image.load()                    # verify() skips JPEG data, so a cut-off photo would pass
+    except Exception:
+        raise ValueError(f'“{filename}” isn’t a picture KinoDraw can open. Save it again as a PNG, JPG or SVG '
+                         'and upload it again.') from None
+    stem = re.sub(r'[^\w\-]', '', Path(filename).stem.replace(' ', '-'))[:60] or 'picture'
+    folder = project / PICTURES
+    folder.mkdir(exist_ok=True)
+    with _picture_lock:
+        number = 1
+        while True:
+            filename = f'{stem}{"" if number == 1 else f"-{number}"}{suffix}'
+            target = folder / filename
+            if not target.exists() and not target.is_symlink():
+                own_path(OWN + filename, project)
+                break
+            if resolve(OWN + filename, project) and target.read_bytes() == data:
+                return {'id': OWN + filename, 'name': filename, 'pictures': list_pictures(name)}
+            number += 1
+        part = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=folder, prefix='.upload-', delete=False) as f:
+                part = Path(f.name)
+                f.write(data)
+            part.rename(target)
+        finally:
+            if part:
+                part.unlink(missing_ok=True)
+    return {'id': OWN + filename, 'name': filename, 'pictures': list_pictures(name)}
 
 
 def save_take(name: str, filename: str, stream, length: int) -> dict:
@@ -379,6 +498,9 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     path = _project(name)
     tl_path = path / 'build' / 'timeline.json'
     board = pipeline.storyboard(path)
+    messages = missing_pictures(board, path)
+    if messages:
+        raise ValueError('\n'.join(messages))
     lang = board['lang']
     if tl_path.exists() and json.loads(tl_path.read_text(encoding='utf-8')).get('storyboard_sha256') == sha(path / 'storyboard.json'):
         tl = json.loads(tl_path.read_text(encoding='utf-8'))
@@ -388,9 +510,11 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     if beat in tl['beats']:
         info = tl['beats'][beat]
         t = min(info['start'] + offset, info['end'] - .1)
-    prod = renderer.make_production(board, tl, lang, path)
-    buf = io.BytesIO()
-    prod.frame(min(t, tl['duration'] - .05)).convert('RGB').resize((960, 540)).save(buf, 'JPEG', quality=85)
+    aspect = pipeline.settings(path).get('aspect', '16:9')
+    prod = renderer.make_production(board, tl, lang, path, aspect=aspect)
+    buf = io.BytesIO()                                # the project's own format, at half its video size
+    prod.frame(min(t, tl['duration'] - .05)).convert('RGB').resize((540, 960) if aspect == '9:16' else (960, 540)) \
+        .save(buf, 'JPEG', quality=85)
     return buf.getvalue()
 
 
@@ -405,11 +529,13 @@ def state() -> dict:
             'advanced': bool(_config().get('advanced')),
             'credit': _config().get('credit', True), 'product': PRODUCT['name'],
             'models': SUGGESTED,
+            'formats': [{'value': '16:9', 'label': 'Landscape 16:9 (YouTube)'},
+                        {'value': '9:16', 'label': 'Vertical 9:16 (Shorts, TikTok, Reels)'}],
             'styles': [{'value': f"{e['id']}/{e['stories'][0]}", 'label': e['name']['en']}   # the registry's looks
                        for e in styles.looks(ready=True)],                               # that render now
-            'voices': {'en': ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'bf_emma', 'bm_george'],
-                       'zh': ['zf_001', 'zf_002', 'zm_010', 'zm_020']},
-            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh')},
+            'voices': {lang: [{'id': vid, 'name': name} for vid, name in choices]
+                       for lang, choices in voice.VOICES.items()},
+            'models_ready': {lang: not voice.missing_files(lang) for lang in ('en', 'zh', 'es')},
             'notice': paths.NOT_MOVED if paths.left_behind else None}   # Doodle Studio's folders could not move yet
 
 
@@ -462,6 +588,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({'error': 'not found'}, 404)
         ctype = ctype or mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
         size = path.stat().st_size
+        extra = {'Accept-Ranges': 'bytes'}
+        if ctype == 'image/svg+xml':    # a picture opened as a page (its URL carries the token) runs no scripts here
+            extra['Content-Security-Policy'] = SVG_POLICY
         rng = re.match(r'bytes=(\d+)-(\d*)', self.headers.get('Range') or '')
         if rng:                                        # <video> seeks with range requests
             a = int(rng.group(1))
@@ -469,8 +598,8 @@ class Handler(BaseHTTPRequestHandler):
             with path.open('rb') as f:
                 f.seek(a)
                 data = f.read(b - a + 1)
-            return self._send(206, data, ctype, {'Content-Range': f'bytes {a}-{b}/{size}', 'Accept-Ranges': 'bytes'})
-        self._send(200, path.read_bytes(), ctype, {'Accept-Ranges': 'bytes'})
+            return self._send(206, data, ctype, {**extra, 'Content-Range': f'bytes {a}-{b}/{size}'})
+        self._send(200, path.read_bytes(), ctype, extra)
 
     # -- routes
     def do_GET(self):
@@ -503,7 +632,11 @@ class Handler(BaseHTTPRequestHandler):
             if parts[0] == 'doodle' and method == 'GET' and len(parts) >= 2:
                 did = Path(parts[-1]).stem
                 proj = projects_root() / q['project'] if q.get('project') else None
+                if did.startswith(OWN) and q.get('project'):
+                    proj = _project(q['project'])
                 path = resolve(did, proj)
+                if did.startswith(OWN):
+                    return self._file(path) if path else self._json({'error': 'no doodle'}, 404)
                 return self._file(path, 'image/svg+xml') if path else self._json({'error': 'no doodle'}, 404)
             if parts[0] == 'files' and method == 'GET' and len(parts) >= 3:
                 root = _project(parts[1])
@@ -523,6 +656,9 @@ class Handler(BaseHTTPRequestHandler):
     def _api(self, method, p, q):
         if p == ['state'] and method == 'GET':
             return self._json(state())
+        if len(p) == 4 and p[0] == 'voices' and p[3] == 'sample' and method == 'GET':
+            settings = _voice_settings(p[1], p[2], q.get('speed', 1.0))
+            return self._file(voice.preview(settings['voice'], p[1], settings['speed']), 'audio/wav')
         if p == ['projects'] and method == 'GET':
             items = [_summary(d) for d in projects_root().iterdir() if (d / 'project.json').exists()]
             return self._json(sorted(items, key=lambda x: -x['modified']))
@@ -537,8 +673,12 @@ class Handler(BaseHTTPRequestHandler):
                                    'qa': json.loads((path / 'build/qa.json').read_text(encoding='utf-8')) if (path / 'build/qa.json').exists() else None})
             if p[2:] == ['storyboard'] and method == 'PUT':
                 return self._json(save_storyboard(name, self._body()))
+            if p[2:] == ['voice'] and method in ('GET', 'PUT'):
+                return self._json(voice_settings(name, self._body() if method == 'PUT' else None))
             if p[2:] == ['direct'] and method == 'POST':
                 return self._json(redirect(name, self._body()))
+            if p[2:] == ['format'] and method == 'POST':
+                return self._json(set_format(name, self._body()))
             if p[2:] == ['make'] and method == 'POST':
                 return self._json(make_video(name))
             if p[2:] == ['narrator']:
@@ -546,6 +686,12 @@ class Handler(BaseHTTPRequestHandler):
             if p[2:] == ['recording'] and method == 'POST':      # the file itself is the body (it can be large)
                 return self._json(save_take(name, q.get('filename') or 'recording', self.rfile,
                                             int(self.headers.get('Content-Length') or 0)))
+            if p[2:] == ['pictures']:
+                if method == 'GET':
+                    return self._json(list_pictures(name))
+                if method == 'POST':
+                    return self._json(save_picture(name, q.get('filename') or 'picture', self.rfile,
+                                                   int(self.headers.get('Content-Length') or 0)))
             if p[2:] == ['align'] and method == 'POST':
                 return self._json(use_take(name))
             if p[2:] == ['still'] and method == 'GET':
