@@ -26,7 +26,6 @@ from PIL import Image
 
 from .. import script, styles
 from . import auto_scenes as auto
-from . import captions as cap
 from . import ink
 from . import scenes
 from . import skin as skins
@@ -65,7 +64,7 @@ class Production:
         scenes.load_page_plugins()
         self.layout = Layout()
         self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir, self.skin)
-        self.camera = Camera()
+        self.camera = Camera(locked=self.skin.locked_camera)
         self.cuts, self.stock, self.modes = [], [], []
         self.cut_marks = []            # index of the first element drawn on each cut's stretch
         self.cards, self.notes, self.pages = {}, {}, {}
@@ -345,8 +344,11 @@ class Production:
             note['image'] = img
             note['mini'] = img.resize(note['mini_size'], Image.LANCZOS)
             px, py = note['pin_xy']
-            mini = self.ctx.add(ink.StaticDrawing(note['mini'], pop=.05), px, py, note['t_pin'] - .02, fixed=True,
-                                hand=False)
+            pinned = ink.StaticDrawing(note['mini'], pop=.05)
+            # the note's drawings are already in the look's cells or tiles: shrinking them and dressing them again
+            # would melt the words into a smear of cells
+            pinned.dressed = True
+            mini = self.ctx.add(pinned, px, py, note['t_pin'] - .02, fixed=True, hand=False)
             mini.start = mini.trigger
 
     def _index(self):
@@ -371,7 +373,11 @@ class Production:
         return 'board', {}, None, None
 
     def view(self, t, L, hand=True):
-        frame = self.skin.background().copy()
+        if self.skin.textured:
+            L = int(round(L))
+            frame = self.skin.background(x=L).copy()
+        else:
+            frame = self.skin.background().copy()
         lo, hi = L - 20, L + SIZE[0] + 20
         for layer in (0, 1):
             for e in self.els:
@@ -382,6 +388,8 @@ class Production:
                 img, _, _ = e.state(t)
                 if img is not None:
                     ink.paste(frame, img, e.x - L, e.y)
+        if self.skin.textured:
+            frame = self.skin.post(frame, L)
         if hand:
             self._hand(frame, t, L)
         return frame
@@ -428,6 +436,11 @@ class Production:
         return e._last_pen
 
     def board_frame(self, t):
+        if self.camera.locked:
+            wipe = self.camera.wipe_at(t)
+            if wipe is not None:
+                from_L, to_L, u = wipe
+                return skins.wipe(self.view(t, from_L, hand=False), self.view(t, to_L, hand=False), u, self.skin)
         return self.view(t, self.camera.at(t))
 
     def stock_frame(self, t, a, clip):
@@ -452,12 +465,17 @@ class Production:
         elif kind in ('pullback', 'fly', 'agenda'):
             frame = self._transition(t, kind, p, a, b)
         elif kind == 'zoom':
-            frame = self._zoom(t, p, a, b)
+            if self.camera.locked:
+                frame = skins.wipe(self.view(a - .01, self.agenda_x, hand=False), self.board_frame(t),
+                                   (t - a) / (b - a), self.skin)
+            else:
+                frame = self._zoom(t, p, a, b)
         elif kind == 'fade_in':
             u = ease((t - a) / (b - a))
             src = self.view(t, self.agenda_x, hand=False)
             dst = self.board_frame(t)
-            frame = Image.blend(src, dst, u)
+            frame = (skins.wipe(src, dst, (t - a) / (b - a), self.skin) if self.camera.locked
+                     else Image.blend(src, dst, u))
         else:
             frame = self.board_frame(t)
         if self.vertical:
@@ -485,8 +503,9 @@ class Production:
         if kind == 'pullback':
             u = ease((t - a) / (b - a))
             board = self.view(tr['hold_end'] - .01, note['x'], hand=False)
-            frame = Image.blend(board, agenda, u)
-            ink.paste(frame, note['image'], sx, sy)
+            frame = (skins.wipe(board, agenda, (t - a) / (b - a), self.skin) if self.camera.locked
+                     else Image.blend(board, agenda, u))
+            ink.paste(frame, self._note_image(note, board, sx, sy), sx, sy)
             return frame
         if kind == 'fly':
             u = ease((t - a) / (b - a))
@@ -495,12 +514,27 @@ class Production:
             mini_w = note['mini'].width
             w = nw + (mini_w - nw) * u
             s = w / nw
-            img = note['image'].resize((max(1, int(note['image'].width * s)), max(1, int(note['image'].height * s))), Image.BILINEAR)
+            image = self._note_image(note, None, sx, sy, tr)
+            img = image.resize((max(1, int(image.width * s)), max(1, int(image.height * s))), Image.BILINEAR)
             x = sx + (tx - sx) * u
             y = sy + (ty - sy) * u - 60 * math.sin(math.pi * u)
             ink.paste(agenda, img, x, y)
             return agenda
         return agenda
+
+    def _note_image(self, note, board, sx, sy, tr=None):
+        """The takeaway note as the board showed it. A look with a glow (Pixel Quest) glows the whole board, so the
+        note is cut from that glowing board rather than pasted raw, which would dull the card in one frame."""
+        if not self.skin.bloom:
+            return note['image']
+        if 'shown' not in note:
+            if board is None:
+                board = self.view(tr['hold_end'] - .01, note['x'], hand=False)
+            x, y = int(round(sx)), int(round(sy))
+            shown = board.crop((x, y, x + note['image'].width, y + note['image'].height)).convert('RGBA')
+            shown.putalpha(note['image'].getchannel('A'))
+            note['shown'] = shown
+        return note['shown']
 
     def _zoom(self, t, p, a, b):
         u = (t - a) / (b - a)
@@ -524,7 +558,9 @@ class Production:
             return
         ch, a, b = span
         alpha = min(1., (t - a) / .4, (b - t) / .3)       # labels fade in and out; nothing pops
-        chip = faded(chip_image(ch, self.lang, self.skin.fonts), alpha)
+        tag = (chip_image(ch, self.lang, self.skin.fonts) if self.skin.chapter_tag == 'chip'
+               else skins.tag_image(ch, self.lang, self.skin))
+        chip = faded(tag, alpha)
         ink.paste(frame, chip, 36, 22)
         src = source_line(ch, self.lang)
         if src:
@@ -547,7 +583,7 @@ class Production:
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
             return
-        img = cap.caption_image(c['text'], self.lang, self.skin.fonts, self.skin.caption, self.skin.caption_edge)
+        img = self.skin.caption_image(c['text'], self.lang)
         ink.paste(frame, img, (SIZE[0] - img.width) / 2, 1046 - img.height)
 
 
@@ -657,20 +693,35 @@ def faded(img, alpha):
 def ui_text(text, size, color, fonts=ink.FONTS):
     key = (text, size, tuple(color), fonts)
     if key not in _txt_cache:
-        f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size, fonts)
-        w = int(f.getlength(text)) + 6
-        img = Image.new('RGBA', (w, size + 12), (0, 0, 0, 0))
         from PIL import ImageDraw
-        ImageDraw.Draw(img).text((2, 2), text, font=f, fill=tuple(color) + (255,))
+        kind = 'ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption'
+        f = ink.font(kind, size, fonts)
+        cmap = ink._cmap(*getattr(fonts, kind))
+        if all(c.isspace() or ord(c) in cmap for c in text):
+            w = int(f.getlength(text)) + 6
+            img = Image.new('RGBA', (w, size + 12), (0, 0, 0, 0))
+            ImageDraw.Draw(img).text((2, 2), text, font=f, fill=tuple(color) + (255,))
+        else:       # symbols the look font lacks (₂, →) come from fallback fonts on the primary font's baseline
+            runs = ink.ui_runs(text, kind, size, fonts)
+            img = Image.new('RGBA', (int(sum(rf.getlength(c) for c, rf in runs)) + 6, size + 12), (0, 0, 0, 0))
+            d, x, base = ImageDraw.Draw(img), 2, 2 + f.getmetrics()[0]
+            for c, rf in runs:
+                d.text((x, base), c, font=rf, fill=tuple(color) + (255,), anchor='ls')
+                x += rf.getlength(c)
         _txt_cache[key] = img
     return _txt_cache[key]
 
 
-def chip_image(ch, lang, fonts=ink.FONTS):
+def chip_text(ch, lang):
     label = (ch.get('label') or {}).get(lang, '')
     title = (ch.get('title') or {}).get(lang, '')
     short = title.split(':')[0].split('：')[0] if ch['kind'] == 'section' else title
     text = f'{label} · {short}' if label and short and short.strip().lower() != label.strip().lower() else (label or short)
+    return text
+
+
+def chip_image(ch, lang, fonts=ink.FONTS):
+    text = chip_text(ch, lang)
     key = (text, ch.get('color'), lang, fonts)     # by what it shows: one process may render several videos
     if key not in _chip_cache:
         from PIL import ImageDraw

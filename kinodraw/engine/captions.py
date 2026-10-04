@@ -2,7 +2,8 @@
 
 ``spoken`` and ``display`` share the same clause punctuation sequence (validated),
 so clause k of the display text is timed by clause k of the spoken text. Cues
-group whole clauses and must fit in <= 2 balanced lines at 70 px (never shrunk).
+group whole clauses and by default fit in <= 2 balanced lines at 70 px (never shrunk).
+A look may supply its own two-line fit check.
 """
 from __future__ import annotations
 
@@ -80,8 +81,8 @@ def fits(text, lang):
     return balanced_lines(text, lang) is not None
 
 
-def split_long(text, lang):
-    """Split one over-long clause into pieces that each fit two lines."""
+def split_long(text, lang, fits=fits):
+    """Split one over-long clause into pieces accepted by the supplied fit check."""
     us = units(text, lang)
     pieces, cur = [], ''
     for u in us:
@@ -95,8 +96,8 @@ def split_long(text, lang):
     return pieces
 
 
-def cues_for_beat(spoken, display, lang, char_time, speech_end):
-    """char_time(pos) -> seconds from beat start. Returns [(start, end, text)]."""
+def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits):
+    """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)]."""
     sd, ss = clause_spans(display, lang), clause_spans(spoken, lang)
     if len(sd) != len(ss):
         # Fallback: proportional mapping (validator should prevent this).
@@ -105,7 +106,7 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end):
     atoms = []
     for (da, db), (sa, sb) in zip(sd, ss):
         dtext = display[da:db]
-        pieces = [dtext] if fits(dtext, lang) else split_long(dtext, lang)
+        pieces = [dtext] if fits(dtext, lang) else split_long(dtext, lang, fits=fits)
         off = 0
         for p in pieces:
             frac = off / max(1, len(dtext))

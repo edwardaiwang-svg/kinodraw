@@ -81,6 +81,14 @@ def font_runs(text: str, lang: str, size: int, fonts: Fonts = FONTS):
     return [(t, font(k, size, fonts)) for t, k in runs]
 
 
+def ui_runs(text: str, kind: str, size: int, fonts: Fonts = FONTS):
+    """Per-character (char, font): a glyph the look's font lacks comes from the whiteboard UI font, then Noto Sans SC."""
+    chain = [(fonts, kind), (FONTS, 'ui'), (fonts, 'zh_caption')]
+    return [(ch, font(k, size, fs)) for ch in text
+            for fs, k in [next(((fs, k) for fs, k in chain if ch.isspace() or ord(ch) in _cmap(*getattr(fs, k))),
+                               chain[-1])]]
+
+
 def text_width(text: str, lang: str, size: int, fonts: Fonts = FONTS) -> float:
     return sum(f.getlength(t) for t, f in font_runs(text, lang, size, fonts))
 
@@ -640,21 +648,25 @@ def circle_points(cx, cy, rx, ry, start=-math.pi / 2, turns=1.0, n=90, wobble=0.
 class Hand:
     """A photographed drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no
     forearm) into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
-    'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil."""
+    'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil, or 'cursor' a pixel arrow."""
 
     def __init__(self, tool='marker'):
         import json
         base = ASSETS / 'hand'
-        self.img = Image.open(base / 'hand.png').convert('RGBA')
-        if tool != 'marker':
-            from .skin import hand_image
-            self.img = hand_image(self.img, tool)
-        anchor = json.loads((base / 'hand.json').read_text(encoding='utf-8'))
-        self.tip = (anchor['tip_x'], anchor['tip_y'])
+        if tool == 'cursor':
+            from .skin import cursor_image
+            self.img, self.tip = cursor_image()
+        else:
+            self.img = Image.open(base / 'hand.png').convert('RGBA')
+            if tool != 'marker':
+                from .skin import hand_image
+                self.img = hand_image(self.img, tool)
+            anchor = json.loads((base / 'hand.json').read_text(encoding='utf-8'))
+            self.tip = (anchor['tip_x'], anchor['tip_y'])
         shadow = Image.new('RGBA', self.img.size, (0, 0, 0, 0))
         shadow.putalpha(self.img.getchannel('A').point(lambda v: int(v * .18)).filter(ImageFilter.GaussianBlur(9)))
         self.shadow = shadow
-        self.paths = [base / 'hand.png', base / 'hand.json']
+        self.paths = [] if tool == 'cursor' else [base / 'hand.png', base / 'hand.json']
 
     def paste(self, frame, point, lifted=False):
         x = int(round(point[0] - self.tip[0]))

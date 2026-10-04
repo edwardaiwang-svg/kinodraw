@@ -27,6 +27,7 @@ CELL_X0, CELL_W = 50, 540          # cell inside a column: x 50..590
 ROW_Y = [(84, 440), (466, 822)]    # two rows; captions start below ~865
 PAGE_BOX = (60, 84, 1800, 738)     # page scene box within a 3-column screen
 PAN_SECONDS = .9
+WIPE_SECONDS = PAN_SECONDS
 STALE = 3.0                        # max seconds between a visual's words and its first stroke
 CUT_GRACE = 1.5                    # max seconds a page change waits for unfinished drawing
 SETTLE = .35                       # the camera leaves a page this long after its last stroke
@@ -159,10 +160,12 @@ class Camera:
 
     A pan always starts from wherever the camera actually is at that moment (even
     mid-pan), so the camera never jumps, whatever order the moves were added in.
+    A locked camera replaces pans with wipes between two stationary boards.
     """
 
-    def __init__(self):
-        self.keys = [(0.0, 0.0, 'cut')]   # (t_start, to_L, 'cut' | 'pan')
+    def __init__(self, locked=False):
+        self.locked = locked
+        self.keys = [(0.0, 0.0, 'cut')]   # (t_start, to_L, 'cut' | 'pan' | 'wipe')
         self._segs = None
 
     def _segments(self):
@@ -177,7 +180,9 @@ class Camera:
 
     @staticmethod
     def _eval(seg, t):
-        t0, a, b, _ = seg
+        t0, a, b, kind = seg
+        if kind == 'wipe':
+            return b
         if a == b:
             return b
         f = min(1., max(0., (t - t0) / PAN_SECONDS))
@@ -187,6 +192,15 @@ class Camera:
         segs = self._segments()
         i = bisect.bisect_right(self._starts, t) - 1
         return self._eval(segs[max(i, 0)], t)
+
+    def wipe_at(self, t):
+        """The two stationary boards and progress of the current wipe, if any."""
+        segs = self._segments()
+        i = bisect.bisect_right(self._starts, t) - 1
+        t0, a, b, kind = segs[max(i, 0)]
+        if kind == 'wipe' and t0 <= t < t0 + WIPE_SECONDS:
+            return a, b, (t - t0) / WIPE_SECONDS
+        return None
 
     def target_at(self, t):
         cur = self.keys[0][1]
@@ -202,7 +216,7 @@ class Camera:
 
     def pan(self, t, L):
         if self.target_at(t) != L:
-            self.keys.append((t, L, 'pan'))
+            self.keys.append((t, L, 'wipe' if self.locked else 'pan'))
             self._segs = None
 
 
@@ -320,6 +334,8 @@ class Scheduler:
                 if c0 < L_cols or c1 > L_cols + COLS_ON_SCREEN - 1:
                     # a page shows whole; a slot scrolls into view (never left of the page's start)
                     new_col = base if c1 <= base + COLS_ON_SCREEN - 1 else max(c0, c1 - COLS_ON_SCREEN + 1)
+                    if cam.locked and c1 > base + COLS_ON_SCREEN - 1:
+                        new_col = c0
                     # Dwell: let what is on screen be read before panning away
                     # (charts ~2.5 s, glossary notes ~5 s after they finish).
                     lo_col, hi_col = L_cols, L_cols + COLS_ON_SCREEN - 1

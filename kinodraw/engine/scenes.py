@@ -89,6 +89,8 @@ class Ctx:
         return ink.stroke_drawing(size, polylines, color=color or ink.INK, width=width, closed_fill=fills, **kw)
 
     def add(self, drawing, x, y, trigger, **kw) -> Element:
+        if self.skin.textured:
+            x, y = int(round(x)), int(round(y))
         el = Element(self.skin.dress(drawing, x, y), x, y, trigger, **kw)
         self.elements.append(el)
         return el

@@ -18,6 +18,7 @@ from PIL import Image, ImageDraw
 
 from . import captions as cap
 from . import ink
+from . import skin as skins
 
 W, H = 1080, 1920
 BOARD = (0, 656, 1080, 608)            # x, y, w, h: the 16:9 frame, scaled 0.5625, in the middle
@@ -117,11 +118,22 @@ class Vertical:
             parts.append((_ui_line(_fit_ui(label, 38, fonts), 38, self._label_color(color), fonts), 0))
         room = TITLE_H - 6 * bool(parts) - sum(img.height for img, _ in parts) - (18 if color else 0) \
             - (56 if source else 0)                     # what the title lines may use, beside label, bar and source
-        lines, size = ink.fit_text(title, lang, TEXT_W, lines_max, size, min_size=48, fonts=fonts)
-        tall = lambda: int(size * 1.2) * len(lines) + 16 > room
-        if any(ink.text_width(l, lang, size, fonts) > TEXT_W for l in lines) or tall():
+        kind = 'en_hand' if lang != 'zh' else 'zh_hand'
+        fallback = _needs_fallback(title, kind, fonts)
+        measure = (lambda text: _text_width(text, kind, size, fonts)) if fallback else \
+            (lambda text: ink.text_width(text, lang, size, fonts))
+        if fallback:
             while True:
-                lines = _wrap(title, lang, TEXT_W, lambda t: ink.text_width(t, lang, size, fonts))
+                lines = _wrap(title, lang, TEXT_W, measure)
+                if len(lines) <= lines_max or size <= 48:
+                    break
+                size -= 2
+        else:
+            lines, size = ink.fit_text(title, lang, TEXT_W, lines_max, size, min_size=48, fonts=fonts)
+        tall = lambda: int(size * 1.2) * len(lines) + 16 > room
+        if any(measure(l) > TEXT_W for l in lines) or tall():
+            while True:
+                lines = _wrap(title, lang, TEXT_W, measure)
                 if size <= 8 or (len(lines) <= lines_max or size <= 40) and not tall():
                     break                                # below 40 px only when the title would not fit otherwise
                 size = max(8, size - 2)
@@ -129,10 +141,13 @@ class Vertical:
         block = Image.new('RGBA', (W, lh * len(lines) + 16), (0, 0, 0, 0))
         d = ImageDraw.Draw(block)
         for k, line in enumerate(lines):
-            x = (W - ink.text_width(line, lang, size, fonts)) / 2
-            for part, f in ink.font_runs(line, lang, size, fonts):
-                d.text((x, 4 + k * lh), part, font=f, fill=self._ink() + (255,))
-                x += f.getlength(part)
+            x = (W - measure(line)) / 2
+            if fallback:
+                _draw_text(d, (x, 4 + k * lh), line, kind, size, fonts, fill=self._ink() + (255,))
+            else:
+                for part, f in ink.font_runs(line, lang, size, fonts):
+                    d.text((x, 4 + k * lh), part, font=f, fill=self._ink() + (255,))
+                    x += f.getlength(part)
         parts.append((block, 6 if parts else 0))
         if color:                                        # the section's colour, as a short underline
             bar = Image.new('RGBA', (W, 12), (0, 0, 0, 0))
@@ -165,6 +180,10 @@ class Vertical:
     def caption_image(self, text):
         color = (18, 18, 18) if self.collage else tuple(self.skin.caption)
         edge = (255, 255, 255) if self.collage else tuple(self.skin.caption_edge)
+        if not self.collage and skins.contrast(color, self.skin.base[:3]) < 4.5:
+            # light letters that need their outline to show on the paper band (Mosaic) blur together at phone
+            # size: the band is plain, so write them in the look's ink instead
+            color, edge = tuple(self.skin.ink[:3]), tuple(self.skin.base[:3])
         return caption_image(text, self.lang, self.fonts, color, edge)
 
     def caption_box(self, text):
@@ -208,19 +227,49 @@ def _faded(img, alpha):
     return out
 
 
+@lru_cache(maxsize=4096)
+def _needs_fallback(text, kind, fonts):
+    # Existing looks keep their original shaping, kerning and Spanish text paths.
+    return fonts != ink.FONTS and any(not ch.isspace() and ord(ch) not in ink._cmap(*getattr(fonts, kind))
+                                     for ch in text)
+
+
+def _text_width(text, kind, size, fonts):
+    if not _needs_fallback(text, kind, fonts):
+        return ink.font(kind, size, fonts).getlength(text)
+    return skins._run_width(text, kind, size, fonts)
+
+
+def _draw_text(draw, pos, text, kind, size, fonts, **kwargs):
+    f = ink.font(kind, size, fonts)
+    if not _needs_fallback(text, kind, fonts):
+        draw.text(pos, text, font=f, **kwargs)
+        return
+    y = pos[1] + f.getmetrics()[0]            # the original top becomes one shared baseline
+    runs = skins.glyph_runs(text, kind, size, fonts)
+    passes = [kwargs]
+    if kwargs.get('stroke_width'):            # every outline first, so no letter's outline covers its neighbour
+        passes = [{**kwargs, 'fill': kwargs['stroke_fill']}, {'fill': kwargs['fill']}]
+    for kw in passes:
+        x = pos[0]
+        for ch, font in runs:
+            draw.text((x, y), ch, font=font, anchor='ls', **kw)
+            x += font.getlength(ch)
+
+
 def _ui_line(text, size, color, fonts):
-    f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size, fonts)
-    img = Image.new('RGBA', (int(f.getlength(text)) + 6, size + 14), (0, 0, 0, 0))
-    ImageDraw.Draw(img).text((3, 3), text, font=f, fill=tuple(color) + (255,))
+    kind = 'ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption'
+    img = Image.new('RGBA', (int(_text_width(text, kind, size, fonts)) + 6, size + 14), (0, 0, 0, 0))
+    _draw_text(ImageDraw.Draw(img), (3, 3), text, kind, size, fonts, fill=tuple(color) + (255,))
     return img
 
 
 def _fit_ui(text, size, fonts):
     """Shorten a one-line label to TEXT_W with an ellipsis."""
-    f = ink.font('ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption', size, fonts)
-    if f.getlength(text) <= TEXT_W:
+    kind = 'ui' if all(ord(c) < 0x2e80 for c in text) else 'zh_caption'
+    if _text_width(text, kind, size, fonts) <= TEXT_W:
         return text
-    while text and f.getlength(text + '…') > TEXT_W:
+    while text and _text_width(text + '…', kind, size, fonts) > TEXT_W:
         text = text[:-1]
     return text.rstrip() + '…'
 
@@ -228,8 +277,8 @@ def _fit_ui(text, size, fonts):
 def wrap(text, lang, size, fonts=ink.FONTS, width=TEXT_W):
     """Balanced lines of ``text`` no wider than ``width`` in the caption font at ``size``: the fewest lines, then the
     narrowest widest line, so a two-line caption is two even lines rather than a full one and a stub."""
-    f = ink.font('en_caption' if lang != 'zh' else 'zh_caption', size, fonts)
-    return _wrap(text, lang, width, f.getlength)
+    kind = 'en_caption' if lang != 'zh' else 'zh_caption'
+    return _wrap(text, lang, width, lambda t: _text_width(t, kind, size, fonts))
 
 
 def _break_unit(unit, width, measure):
@@ -342,17 +391,17 @@ def _caption_height(line_count, size):
 def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255)):
     """The caption below the board: ``color`` letters in an ``edge`` outline, like the 16:9 captions, larger."""
     lines, size = caption_lines(text, lang, fonts)
-    f = ink.font('en_caption' if lang != 'zh' else 'zh_caption', size, fonts)
+    kind = 'en_caption' if lang != 'zh' else 'zh_caption'
     stroke = max(5, round(size / 10))
     lh = int(size * 1.18)
-    widths = [f.getlength(l) for l in lines]
+    widths = [_text_width(l, kind, size, fonts) for l in lines]
     w = int(max(widths)) + 2 * stroke + 8
     h = _caption_height(len(lines), size)
     img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
-        d.text(((w - widths[i]) / 2, stroke + i * lh), line, font=f, fill=tuple(color) + (255,), stroke_width=stroke,
-               stroke_fill=tuple(edge) + (255,))
+        _draw_text(d, ((w - widths[i]) / 2, stroke + i * lh), line, kind, size, fonts,
+                   fill=tuple(color) + (255,), stroke_width=stroke, stroke_fill=tuple(edge) + (255,))
     return img
 
 
