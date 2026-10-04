@@ -15,6 +15,17 @@ function directorOptions(selected) {
     return `<option value="${k}"${soon ? ' disabled' : ''}${k === selected ? ' selected' : ''}>${soon ? 'KinoDraw Cloud AI (coming soon)' : v}</option>`;
   }).join('');
 }
+// "Choose for me": the video's director picks the style (studio/server.py create_project, director/style.py).
+const PICKER = { rules: 'offline word rules', cloud: 'KinoDraw Cloud AI', openai: 'your OpenAI key', anthropic: 'your Anthropic key',
+  compat: 'your OpenAI-compatible server', command: 'your command' };
+const autoLabel = (director) => `Choose for me (${PICKER[director] || PICKER.rules})`;
+function autoNote(director) {
+  const who = director === 'rules'
+    ? 'The offline word rules pick on this computer from words in your script; nothing is sent.'
+    : `${director === 'cloud' ? 'KinoDraw Cloud AI (GPT-6 Luna)' : PICKER[director][0].toUpperCase() + PICKER[director].slice(1)} picks from the title, the headings and the first 600 characters of your script.`;
+  return `${who} Only styles that work in the chosen format are picked. Name a product below only for a promo (then the paper-collage promo can be picked).`;
+}
+const pickLine = (pick) => `Style: ${pick.label}, chosen by ${pick.by === 'rules' ? 'the offline word rules' : PICKER[pick.by] || pick.by}: ${pick.reason}${pick.note ? ` (${pick.note})` : ''}`;
 function needsCloudSignIn(director) {     // KinoDraw Cloud picked but nobody signed in: open the sign-in instead of failing
   if (director !== 'cloud' || STATE.cloud_signed_in) return false;
   toast('Sign in to KinoDraw Cloud first (free: 5 AI videos a month), or choose Offline.', 6000);
@@ -118,12 +129,12 @@ const voiceMeta = (id, server) => (STATE.voice_server?.on      // with Settings 
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
 async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
-  const STAGES = { storyboard: 'Reading the script', director: 'Planning the visuals', voice: 'Recording the narration',
+  const STAGES = { storyboard: 'Reading the script', style: 'Choosing a style', director: 'Planning the visuals', voice: 'Recording the narration',
     timeline: 'Timing captions and music', render: 'Drawing the video (the longest step)', finish: 'Adding music, captions and chapters',
     'download-search': 'Downloading the doodle search (first video only)', 'download-voice': 'Downloading the voice (first video only)',
     ...(own ? { voice: 'Getting ready to listen to your recording', align: 'Matching your recording to each sentence',
       timeline: 'Timing every drawing to your voice' } : {}) };
-  const SLOT = { 'download-search': 'storyboard', 'download-voice': 'voice', align: 'voice' };   // these fill their step's share
+  const SLOT = { 'download-search': 'storyboard', style: 'storyboard', 'download-voice': 'voice', align: 'voice' };   // these fill their step's share
   const MB = (n) => Math.round(n / 1e6);
   for (;;) {
     await new Promise((r) => setTimeout(r, 800));
@@ -221,7 +232,7 @@ function showNew() {
     }[d];
   };
   dirSel.onchange = async () => {
-    note();
+    note(); syncStyle();
     if (dirSel.value === 'cloud' && STATE.cloud_signed_in && !STATE.cloud) {
       try { STATE.cloud = await api('/api/cloud/me'); } catch (e) { STATE.cloud = null; }
       note();
@@ -242,27 +253,35 @@ function showNew() {
       $('#file-name').textContent = f.name; fillVoices();
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
-  $('#style').innerHTML = STATE.styles.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('');
+  $('#style').innerHTML = `<option id="style-auto" value="auto">${esc(autoLabel(dirSel.value))}</option>`
+    + STATE.styles.map((s, i) => `<option value="${esc(s.value)}"${i ? '' : ' selected'}>${esc(s.label)}</option>`).join('');
   $('#format').innerHTML = formatOptions('16:9');
-  $('#style').onchange = () => {            // a promo names its product; the whiteboard ignores Motion
-    const collage = $('#style').value === 'collage/promo';
-    $('#brand').classList.toggle('hidden', !collage);
+  function syncStyle() {                    // a promo names its product; the whiteboard ignores Motion
+    const auto = $('#style').value === 'auto', collage = $('#style').value === 'collage/promo';
+    $('#style-auto').textContent = autoLabel(dirSel.value);
+    $('#brand').classList.toggle('hidden', !collage && !auto);
     $('#motion-wrap').classList.toggle('hidden', !collage);
-  };
+    $('#style-note').classList.toggle('hidden', !auto);
+    $('#style-note').textContent = auto ? autoNote(dirSel.value) : '';
+  }
+  $('#style').onchange = syncStyle;
+  syncStyle();
   $('#create').onclick = async () => {
     if (needsCloudSignIn(dirSel.value)) return;
     try {
-      const [look, story] = $('#style').value.split('/');
+      const auto = $('#style').value === 'auto';
+      const [look, story] = auto ? ['auto', null] : $('#style').value.split('/');
       const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
         speed: Number($('#speed').value),
         director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story, aspect: $('#format').value,
-        motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' ? brand : null,
+        motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' || auto ? brand : null,
         ...(STATE.voice_server?.on ? { server_voice: $('#server-voice').value.trim() } : {}) };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
       const res = await watch(job, 'Creating the storyboard');
       const whole = wholeVideoOffline(res);
       if (whole) toast(whole, 8000);
+      else if (res?.style) toast(pickLine(res.style), 9000);
       else if (res?.notes?.length) toast(`${res.notes.length} AI suggestions were replaced by the offline plan`);
       await openProject(project, ownVoice() ? 'narrator' : null);
     } catch (e) { $('#progress').classList.add('hidden'); toast(e.message, 6000); }
@@ -281,6 +300,8 @@ async function openProject(name, tab = null) {
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
   $('#p-meta').textContent = `${board.beats.length} beats · ${LANG_NAMES[p.lang]}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : voiceMeta(p.settings.voice, p.settings.server_voice)}`;
+  $('#p-style').textContent = p.settings.style_pick ? pickLine(p.settings.style_pick) : '';
+  $('#p-style').classList.toggle('hidden', !p.settings.style_pick);
   $('#p-format').innerHTML = formatOptions(p.settings.aspect || '16:9');
   $('#p-format').onchange = async () => {
     try {

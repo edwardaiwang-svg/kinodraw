@@ -73,3 +73,7 @@ The rules director always runs first; its plan is both the draft and the fallbac
 The answer is constrained to a JSON schema and checked by code. A beat whose answer fails any check keeps its draft. Code also decides how much is drawn: sentence by sentence, the model's visuals replace the draft's only when they put at least as much on the board (every doodle, number, quote or note counts), so the model can re-pick a sentence's pictures but never leave a listed thing or an illustrated sentence without its picture.
 
 KinoDraw Cloud (a separate, private service) runs the same contract on the server. That way the model keys never ship in the app, and quotas and costs are enforced in one place.
+
+### Style: Choose for me
+
+`kinodraw/director/style.py` picks a new video's look once, before its storyboard is built, through the video's director: KinoDraw Cloud (`POST /v1/style`, GPT-6 Luna) or an own-key director (`pick_style`, the same JSON-schema call as a section) sees the title, the section headings, the script's first 600 characters, its language and format, and the styles that can render them; the answer's schema only allows those. The offline director picks on the computer from words in the script. The promo is offered only when a product is named. An answer outside the offer, or a failed call, falls back to the offline pick with a note. The pick and its reason are saved in `project.json` (`style_pick`), so re-planning the visuals never picks again.

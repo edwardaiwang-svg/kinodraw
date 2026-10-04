@@ -100,3 +100,15 @@ class CloudProvider:
         usage.add(u.get('model', 'kinodraw-cloud'), u.get('input_tokens', 0), u.get('output_tokens', 0),
                   u.get('cached_tokens', 0), 0.0)       # the plan pays; nothing is billed to you per call
         return out['section']
+
+    def pick_style(self, payload: dict, usage: Usage) -> dict:
+        """"Choose for me": GPT-6 Luna picks one of ``payload['options']`` (metered against the plan's AI allowance,
+        not counted as a video)."""
+        out = _call('/v1/style', payload, self.token)
+        u = out.get('usage') or {}
+        usage.add(u.get('model', 'kinodraw-cloud'), u.get('input_tokens', 0), u.get('output_tokens', 0),
+                  u.get('cached_tokens', 0), 0.0)
+        pick = out.get('pick') or {}
+        if not isinstance(pick.get('style'), str):
+            raise ProviderError('KinoDraw Cloud did not name a style')
+        return {'style': pick['style'], 'reason': str(pick.get('reason') or '')}

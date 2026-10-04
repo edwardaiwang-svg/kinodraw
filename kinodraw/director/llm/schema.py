@@ -83,10 +83,28 @@ LIMITS = {'es': {'label': 22, 'title': 40, 'hook': 30, 'quote': 110, 'gloss': 80
           'zh': {'label': 10, 'title': 20, 'hook': 15, 'quote': 44, 'gloss': 32, 'takeaway_chars': 24}}
 
 
+# "Choose for me": one call per new video picks its look from the options the app offers for its format, language and
+# brand (director/style.py). The options are the only answers the schema allows.
+STYLE_SYSTEM = """You choose the visual style of a short narrated explainer video before it is drawn.
+You see the video's title, its section headings, the start of the script, its format and the styles that can render
+it (each with what it fits). Pick the ONE style that suits the topic, audience and tone best. When nothing is a clear
+fit, pick the plain whiteboard. A product promo style is only offered when the user named a product.
+Return style (one of the option ids, exactly) and reason: one short sentence (at most 120 characters, in the script's
+language) that tells the user why this style suits the script.
+"""
+STYLE_REASON_MAX = 120
+
+
+def style_schema(ids: list[str]) -> dict:
+    """The answer to a style pick: one of ``ids`` and a one-line reason."""
+    return _obj(style={'type': 'string', 'enum': list(ids)}, reason=S)
+
+
 def schema_json() -> str:
     return json.dumps(SECTION_SCHEMA, indent=1)
 
 
 if __name__ == '__main__':                            # the server's copy: python -m kinodraw.director.llm.schema
-    print(json.dumps({'version': 1, 'system': SYSTEM, 'schema': SECTION_SCHEMA, 'limits': LIMITS,
-                      'max_visuals_per_beat': MAX_VISUALS_PER_BEAT}, ensure_ascii=False, indent=1))
+    print(json.dumps({'version': 2, 'system': SYSTEM, 'schema': SECTION_SCHEMA, 'limits': LIMITS,
+                      'max_visuals_per_beat': MAX_VISUALS_PER_BEAT, 'style_system': STYLE_SYSTEM,
+                      'style_reason_max': STYLE_REASON_MAX}, ensure_ascii=False, indent=1))

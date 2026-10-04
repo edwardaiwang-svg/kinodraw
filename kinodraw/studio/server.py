@@ -24,6 +24,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import PRODUCT, director, paths, pipeline, styles, voice, voice_server
+from ..director import style
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
 from ..package import sha
@@ -262,21 +263,31 @@ def create_project(body: dict) -> dict:
     lang = body.get('lang') or doc.lang
     settings = {k: body[k] for k in ('workers',) if body.get(k)}
     settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
-    settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), body.get('look'))
+    auto = body.get('look') == style.AUTO                                    # "Choose for me": the director picks
+    settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), None if auto else body.get('look'))
     settings.update(credit=True, credit_chosen=True)                         # the end card starts on, whatever 0.2.0 said
     if _config().get('voice_server', {}).get('on') and body.get('server_voice'):
         if chosen := _server_voice_name(body['server_voice']):               # blank = the Settings voice
             settings['server_voice'] = chosen
+    direction = {**{k: body.get(k) for k in ('look', 'story', 'motion')},
+                 'brand': {k: v for k, v in (body.get('brand') or {}).items() if v} or None}
 
     def job(progress):
         progress('storyboard', 0, 1)
-        pipeline.new_project(text, path, title=title, lang=body.get('lang') or None,
-                             direction={**{k: body.get(k) for k in ('look', 'story', 'motion')},
-                                        'brand': {k: v for k, v in (body.get('brand') or {}).items() if v} or None},
+        pick = None
+        if auto:                                      # once, before the storyboard; saved, so a re-plan never re-picks
+            progress('style', 0, 1)
+            pick = style.choose(doc, mode, lang, settings['aspect'], direction['brand'], body.get('model') or None,
+                                body.get('base_url') or None)
+            look, story = pick['style'].split('/')
+            direction.update(look=look, story=story, motion=None,
+                             brand=direction['brand'] if story == 'promo' else None)
+            settings['style_pick'] = pick
+        pipeline.new_project(text, path, title=title, lang=body.get('lang') or None, direction=direction,
                              director=mode, **settings)
         report = director.direct(path, mode, body.get('model') or None, body.get('base_url') or None, progress)
         usage = report.get('usage')
-        return {'project': name, 'notes': report.get('notes', [])[:20],
+        return {'project': name, 'notes': report.get('notes', [])[:20], 'style': pick,
                 'cost': None if not usage else usage.cost_usd, 'calls': 0 if not usage else usage.calls}
     return {'job': JOBS.start('create', name, job), 'project': name}
 
