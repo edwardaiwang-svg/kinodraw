@@ -52,24 +52,17 @@ class SignInNeeded(ProviderError, ValueError):
         self.sentence = sentence
 
 
-def anonymous_token() -> str:
-    """This installation's anonymous token: the kept one, or a new one from /v1/anonymous (asked for once, never in a
-    loop). Raises SignInNeeded when the cloud's open access is off (403), or the server predates it (404)."""
-    return _kept_anonymous() or _issue_anonymous()['token']
-
-
 def anonymous() -> dict:
     """The plan of the anonymous token (asking for one if there is none), for the Studio; never the token itself."""
     token = _kept_anonymous()
-    if not token:
-        return {k: v for k, v in _issue_anonymous().items() if k != 'token'} | {'anonymous': True}
-    try:
-        return _call('/v1/me', token=token) | {'anonymous': True}
-    except ProviderError as error:
-        if getattr(error, 'status', None) != 401:
-            raise
-        forget_anonymous()
-        raise SignInNeeded(error.detail) from error
+    if token:
+        try:
+            return _call('/v1/me', token=token) | {'anonymous': True}
+        except ProviderError as error:
+            if getattr(error, 'status', None) != 401:
+                raise
+            forget_anonymous()      # another cloud's token, a revoked one, or open access ended: ask once for a new one
+    return {k: v for k, v in _issue_anonymous().items() if k != 'token'} | {'anonymous': True}
 
 
 def forget_anonymous():
@@ -164,10 +157,12 @@ class CloudProvider:
 
     def __init__(self):
         self.token, self.anonymous, self.refused = _token(), False, None     # an email sign-in always wins
+        self.renewable = False                     # a kept anonymous token the cloud refuses gets one new one
         if not self.token:
-            self.anonymous = True
+            kept = _kept_anonymous()
+            self.anonymous, self.renewable = True, bool(kept)
             try:
-                self.token = anonymous_token()     # SignInNeeded goes up, as 0.2.0's sign-in message did
+                self.token = kept or _issue_anonymous()['token']    # SignInNeeded goes up, as 0.2.0's sign-in did
             except SignInNeeded:
                 raise
             except ProviderError as error:         # throttled or unreachable: this video is planned offline
@@ -188,8 +183,16 @@ class CloudProvider:
         except ProviderError as error:
             if not (self.anonymous and getattr(error, 'status', None) == 401):
                 raise
-            forget_anonymous()                     # open access ended: the rest of this video stays offline
-            self.token, self.refused = None, SignInNeeded(error.detail)
+            forget_anonymous()
+            if self.renewable:                     # a kept token this cloud doesn't know (another cloud's, or revoked):
+                self.renewable = False             # ask once for a new one, then send again
+                try:
+                    self.token = _issue_anonymous()['token']
+                except ProviderError as refused:   # open access is off (SignInNeeded), throttled or unreachable
+                    self.token, self.refused = None, refused
+                    raise
+                return self._send(path, body)
+            self.token, self.refused = None, SignInNeeded(error.detail)     # open access ended: the rest stays offline
             raise self.refused from error
 
     def direct_section(self, payload: dict, usage: Usage) -> dict:

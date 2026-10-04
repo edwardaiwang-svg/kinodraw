@@ -1,6 +1,7 @@
 """KinoDraw Cloud with no account: while the cloud's open access is on, the app asks once for an anonymous token for this
-installation and uses it like a sign-in; when the cloud says no (403, a 404 from a server before open access, or a 401
-for the anonymous token), the app forgets it and asks for an email sign-in as 0.2.0 did, in the cloud's words."""
+installation and uses it like a sign-in. A 401 for a kept token (another cloud's, a revoked one, or open access ended)
+makes the app forget it and ask once for a new one; when the cloud says no (403, or a 404 from a server before open
+access), the app asks for an email sign-in as 0.2.0 did, in the cloud's words."""
 import json
 import re
 import shutil
@@ -28,7 +29,8 @@ ISSUED = {'token': 'anon-token-1', 'plan': 'free', 'remaining': None, 'opus_rema
 
 @pytest.fixture
 def fake_cloud(monkeypatch, tmp_path):
-    """A KinoDraw Cloud on 127.0.0.1 that records every request; ``replies[path]`` is (status, body)."""
+    """A KinoDraw Cloud on 127.0.0.1 that records every request; ``replies[path]`` is (status, body), or a function of
+    the Authorization header that returns one."""
     seen, replies = [], {
         '/v1/anonymous': (200, ISSUED),
         '/v1/me': (200, {'plan': 'free', 'remaining': None}),
@@ -40,7 +42,8 @@ def fake_cloud(monkeypatch, tmp_path):
         def _reply(self):
             body = self.rfile.read(int(self.headers.get('Content-Length') or 0))
             seen.append((self.path, self.headers.get('Authorization'), json.loads(body) if body else None))
-            status, data = replies.get(self.path, (404, {'error': 'not found'}))
+            reply = replies.get(self.path, (404, {'error': 'not found'}))
+            status, data = reply(self.headers.get('Authorization')) if callable(reply) else reply
             out = json.dumps(data).encode()
             self.send_response(status)
             self.send_header('Content-Type', 'application/json')
@@ -135,8 +138,8 @@ def test_a_server_from_before_open_access_gets_0_2_0s_sign_in_message(fake_cloud
 
 
 def test_a_refused_anonymous_token_is_forgotten_and_the_video_finishes_offline(fake_cloud, keychain, monkeypatch):
-    """Open access ended after the token was issued: this video is planned offline (as 0.2.0 does when the cloud
-    refuses a video), the token is forgotten, and the next video asks once and gets the sign-in sentence."""
+    """Open access ended after the token was issued: the app asks once for a new token, gets the sign-in sentence,
+    plans this video offline (as 0.2.0 does when the cloud refuses a video), and the next video asks once again."""
     seen, replies = fake_cloud
     keychain[('KinoDraw', 'cloud-anon-token')] = 'anon-token-1'
     replies['/v1/videos'] = (401, {'error': SENTENCE})
@@ -144,11 +147,40 @@ def test_a_refused_anonymous_token_is_forgotten_and_the_video_finishes_offline(f
     board = script.build(ingest.read(FIX / 'printing_press.md'))
     report = LLMDirector(providers.make_provider('cloud'), 'en').direct(board)
     assert report['notes'] == [f'The offline director planned this video ({SENTENCE})']
-    assert keychain == {} and _paths(seen) == ['/v1/videos']
+    assert keychain == {} and _paths(seen) == ['/v1/videos', '/v1/anonymous']
     _new_process(monkeypatch)
     with pytest.raises(cloud.SignInNeeded, match='needs you to sign in again'):
         providers.make_provider('cloud')
-    assert _paths(seen) == ['/v1/videos', '/v1/anonymous']                           # no loop of new tokens
+    assert _paths(seen) == ['/v1/videos', '/v1/anonymous', '/v1/anonymous']          # no loop of new tokens
+
+
+def _stale(replies, *paths):
+    """The cloud doesn't know the token 'stale' (another cloud's, or revoked): 401 "sign in again", as authed() says."""
+    for path in paths:
+        ok = replies[path]
+        replies[path] = lambda auth, ok=ok: (401, {'error': 'sign in again'}) if auth == 'Bearer stale' else ok
+
+
+def test_a_kept_token_this_cloud_does_not_know_is_replaced_once_while_open_access_is_on(fake_cloud, keychain, tmp_path,
+                                                                                         capsys, monkeypatch):
+    from kinodraw import cli
+    seen, replies = fake_cloud
+    keychain[('KinoDraw', 'cloud-anon-token')] = 'stale'
+    _stale(replies, '/v1/videos', '/v1/direct')
+    cli.main(['new', str(FIX / 'tiny.md'), '-o', str(tmp_path / 'p'), '--director', 'cloud'])
+    assert _paths(seen)[:3] == ['/v1/videos', '/v1/anonymous', '/v1/videos'] and '/v1/direct' in _paths(seen)
+    assert seen[0][1] == 'Bearer stale' and all(auth == 'Bearer anon-token-1' for path, auth, _ in seen[2:])
+    assert keychain == {('KinoDraw', 'cloud-anon-token'): 'anon-token-1'}
+    assert 'sign in' not in capsys.readouterr().out.lower()
+
+
+def test_a_new_token_the_cloud_also_refuses_is_not_replaced_again(fake_cloud, keychain):
+    seen, replies = fake_cloud
+    keychain[('KinoDraw', 'cloud-anon-token')] = 'stale'
+    replies['/v1/videos'] = (401, {'error': SENTENCE})
+    with pytest.raises(cloud.SignInNeeded, match='needs you to sign in again'):
+        providers.make_provider('cloud').open_video(2, 100)
+    assert _paths(seen) == ['/v1/videos', '/v1/anonymous', '/v1/videos'] and keychain == {}
 
 
 def test_a_401_mid_video_keeps_the_other_sections_offline_without_asking_again(fake_cloud, keychain):
@@ -222,8 +254,18 @@ def test_the_studio_shows_the_sign_in_when_the_cloud_asks_for_it(studio, fake_cl
     assert studio('/api/cloud/anonymous', 'POST') == (403, {'error': server.SIGN_IN, 'code': 'sign_in'})
     keychain[('KinoDraw', 'cloud-anon-token')] = 'anon-token-1'
     replies['/v1/me'] = (401, {'error': SENTENCE})
+    replies['/v1/anonymous'] = (403, {'error': SENTENCE})                  # open access ended: asked once, then no
     assert studio('/api/cloud/anonymous', 'POST') == (403, {'error': SENTENCE, 'code': 'sign_in'})
     assert keychain == {}
+
+
+def test_the_studio_replaces_a_kept_token_this_cloud_does_not_know(studio, fake_cloud, keychain):
+    seen, replies = fake_cloud
+    keychain[('KinoDraw', 'cloud-anon-token')] = 'stale'
+    _stale(replies, '/v1/me')
+    status, reply = studio('/api/cloud/anonymous', 'POST')
+    assert status == 200 and reply == {k: v for k, v in ISSUED.items() if k != 'token'}
+    assert _paths(seen) == ['/v1/me', '/v1/anonymous'] and keychain == {('KinoDraw', 'cloud-anon-token'): 'anon-token-1'}
 
 
 def _js():
