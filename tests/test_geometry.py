@@ -202,8 +202,8 @@ def test_portrait_production_smoke(productions):
     assert portrait.scene_at(portrait.tl['duration'] - .5) == 'end'
     assert not portrait.warnings
     checked = 0
-    for i in range(8):
-        t = i * (portrait.tl['duration'] - .01) / 7
+    for i in range(16):        # 8 samples could all land between drawings (an empty note before its label is written)
+        t = i * (portrait.tl['duration'] - .01) / 15
         assert portrait.frame(t).size == (1080, 1920)
         L = portrait.camera.at(t)
         for e in _visible_at_rest(portrait, t):
