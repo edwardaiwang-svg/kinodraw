@@ -68,6 +68,7 @@ async function playSample(lang, id, speed, button) {      // the first sample of
     if (!r.ok) throw new Error((await r.json()).error || 'Could not play this sample.');
     sampleAudio?.pause();
     sampleAudio = new Audio(url);
+    sampleAudio.disableRemotePlayback = true;
     sampleAudio.onerror = () => toast('Could not play this sample.', 6000);
     await sampleAudio.play();
   } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
@@ -79,6 +80,7 @@ async function playServerSample(name, button) {     // Settings > Voice server r
     await api('/api/voice-server/test', { method: 'POST', body: JSON.stringify({ url: server.url, model: server.model, voice: name || server.voice }) });
     sampleAudio?.pause();
     sampleAudio = new Audio(`/api/voice-server/test.wav?token=${encodeURIComponent(T)}&t=${Date.now()}`);
+    sampleAudio.disableRemotePlayback = true;
     sampleAudio.onerror = () => toast('Could not play this sample.', 6000);
     await sampleAudio.play();
   } catch (e) { toast(e.message, 6000); } finally { button.disabled = false; button.textContent = label; }
@@ -514,7 +516,7 @@ function renderVideo(p) {
   const files = [[`${stem}.srt`, 'Captions (.srt)'], [`${stem}-chapters.txt`, 'Chapters'], [`${stem}-description.txt`, 'Description'],
     [`${stem}-transcript.md`, 'Transcript'], [`${stem}-thumbnail.png`, 'Thumbnail']];
   const qa = p.qa ? `<div class="qa ${p.qa.ok ? 'ok' : 'bad'}">${p.qa.ok ? '✓ Checked: every frame decodes, audio matches, chapters embedded.' : `Check: ${esc(p.qa.problems.join('; '))}`}</div>` : '';
-  box.innerHTML = `<video controls preload="metadata" poster="${fileSrc(`${stem}-thumbnail.png`)}" src="${fileSrc(video)}"></video>${qa}
+  box.innerHTML = `<video controls disableremoteplayback preload="metadata" poster="${fileSrc(`${stem}-thumbnail.png`)}" src="${fileSrc(video)}"></video>${qa}
     <div class="files">${files.map(([f, l]) => `<a href="${fileSrc(f)}" target="_blank">${l}</a>`).join('')}</div>
     <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). ${p.settings.voice_server && !p.settings.recording ? `Narration: ${esc(p.settings.voice_server.voice || p.settings.voice_server.model)} from your voice server.` : p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
 }
@@ -606,7 +608,7 @@ function renderNarrator(name, info, choice = info.narrator) {
         <label class="file upload">Upload a recording <input id="n-file" type="file"></label>
         <span id="n-take" class="muted">${info.take ? `Your recording: ${esc(info.take)}` : 'No recording yet'}</span>
       </div>
-      ${info.take ? `<audio controls preload="none" src="${fileSrc(info.take)}"></audio>` : ''}
+      ${info.take ? `<audio controls disableremoteplayback preload="none" src="${fileSrc(info.take)}"></audio>` : ''}
       <button id="n-use" class="${check?.ok ? 'ghost' : 'primary'}"${info.take ? '' : ' disabled'}>Use it for this video</button>
       <div id="n-result">${narratorResult(info)}</div>
       <p class="tip"><b>Read it naturally</b>, at your usual pace, and pause for a moment between sentences. Record it in
@@ -742,7 +744,7 @@ function showSettings() {
     const result = $('#vs-result', body); serverBusy(true); result.textContent = 'Testing…';
     try {
       const test = await api('/api/voice-server/test', { method: 'POST', body: JSON.stringify(serverFields()) });
-      result.innerHTML = `<p>${esc(test.message)}</p><audio controls preload="none" src="/api/voice-server/test.wav?token=${encodeURIComponent(T)}&t=${Date.now()}"></audio>`;
+      result.innerHTML = `<p>${esc(test.message)}</p><audio controls disableremoteplayback preload="none" src="/api/voice-server/test.wav?token=${encodeURIComponent(T)}&t=${Date.now()}"></audio>`;
     } catch (e) { result.textContent = e.message; }
     finally { serverBusy(false); }
   };

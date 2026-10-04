@@ -63,4 +63,18 @@ def test_opening_the_studio_looks_up_no_host_names(monkeypatch):
         monkeypatch.setattr(socket, name, lambda *args, name=name: asked.append(name) or '')
     httpd, url = server.serve(0)
     httpd.shutdown()
+    httpd.server_close()
     assert url.startswith('http://127.0.0.1:') and asked == []
+
+
+def test_playing_media_does_not_look_for_airplay_devices():
+    """Without disableremoteplayback, playing a <video> or <audio> makes macOS browse the local network for
+    AirPlay receivers (mDNSResponder logs AirPlayXPCHelper browsing about 1 s after play()), which can ask
+    "Allow KinoDraw to find devices on local networks?" after the window opens."""
+    import re
+    page = (server.STATIC / 'index.html').read_text(encoding='utf-8')
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    tags = re.findall(r'<(?:video|audio)\b[^>]*>', page + js)
+    assert tags and all('disableremoteplayback' in t for t in tags)
+    made = re.findall(r'(\w+) = new Audio\(', js)
+    assert made and all(js.count(f'{a}.disableRemotePlayback = true') >= js.count(f'{a} = new Audio(') for a in set(made))
