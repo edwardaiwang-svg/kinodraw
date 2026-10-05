@@ -53,7 +53,9 @@ FONTS = Fonts(EN_HAND, ZH_HAND, EN_CAPTION, ZH_CAPTION, UI_FONT)      # the whit
 @lru_cache(maxsize=128)
 def font(kind: str, size: int, fonts: Fonts = FONTS) -> ImageFont.FreeTypeFont:
     path, index = getattr(fonts, kind)
-    return ImageFont.truetype(path, size, index=index)
+    # Basic layout everywhere: Pillow would switch to Raqm shaping (other kerning, so other letter positions)
+    # wherever libfribidi happens to be installed, as on most Linux systems but not on macOS or Windows.
+    return ImageFont.truetype(path, size, index=index, layout_engine=ImageFont.Layout.BASIC)
 
 
 def hand_font(lang: str, size: int, fonts: Fonts = FONTS):

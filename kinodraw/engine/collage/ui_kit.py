@@ -45,7 +45,7 @@ def _family(lang, hand=False):
 
 @lru_cache(maxsize=16)
 def _font(family, size):
-    return ImageFont.truetype(str(FONTS / FILES[family]), size)
+    return ImageFont.truetype(str(FONTS / FILES[family]), size, layout_engine=ImageFont.Layout.BASIC)  # as ink.font
 
 
 def text_width(text, family, size):
