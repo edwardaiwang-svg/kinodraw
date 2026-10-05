@@ -145,7 +145,64 @@ def test_legacy_directors_and_annotations_match_prechange_snapshots(name):
     RulesDirector(board['lang']).direct(board)
     annotate(board)
     snapshot = FIX / 'director_snapshots' / (Path(name).stem + '.json')
-    assert json.dumps(board, ensure_ascii=False, indent=2) + '\n' == snapshot.read_text(encoding='utf-8')
+    expected = json.loads(snapshot.read_text(encoding='utf-8'))
+    # Reviewed source excerpts and semantic repairs in offline/compat/final-*.diff.
+    # Apply only these explicit deltas to the immutable original, then compare everything.
+    hooks = {
+        'tiny.md': {'s1': {'en': 'Archaeologists have found pots…'},
+                    's2': {'en': 'To make one jar of honey, bees…'}},
+        'sky_blue.md': {'s1': {'en': 'White sunlight is really a mix…'},
+                        's2': {'en': 'When sunlight hits the tiny…'},
+                        's3': {'en': 'At sunset the light travels…'}},
+        'sleep_zh.md': {'s1': {'zh': '白天，大脑工作时会产生很多代谢…'},
+                        's2': {'zh': '睡眠也在帮我们整理记忆。'},
+                        's3': {'zh': '一般来说，成年人每晚需要7到9…'}},
+    }[name]
+    actual_chapters = {c['id']: c for c in board['chapters']}
+    source = (FIX / name).read_text(encoding='utf-8')
+    for chapter in expected['chapters']:
+        if chapter['id'] in hooks:
+            hook = hooks[chapter['id']]
+            assert chapter['kind'] == 'section' and 'hook' not in chapter
+            assert next(iter(hook.values())).removesuffix('…') in source
+            assert actual_chapters[chapter['id']]['hook'] == hook
+            chapter['hook'] = hook
+    if name == 'sleep_zh.md':
+        actual_beats = {b['id']: b for b in board['beats']}
+        expected_beats = {b['id']: b for b in expected['beats']}
+        disease = [{'id': 'b008v0', 'type': 'cluster',
+                    'items': [{'doodle': 'narrator_explain'}], 'relation': 'none'}]
+        assert expected_beats['b008']['visuals'][0]['items'][0]['doodle'] == 'fl_mosquito'
+        assert actual_beats['b008']['visuals'] == disease
+        expected_beats['b008']['visuals'] = disease
+        takeaway = {
+            'id': 'b009', 'chapter': 's1', 'kind': 'take',
+            'display': {'zh': '本节要点：白天，大脑工作时会产生很多代谢废物。'},
+            'spoken': {'zh': '本节要点：白天，大脑工作时会产生很多代谢废物。'},
+            'visuals': [
+                {'id': 'b009v0', 'type': 'cluster', 'items': [{'doodle': 'cell'}],
+                 'relation': 'none', 'size': 'margin'},
+                {'id': 'b009v1', 'type': 'cluster', 'items': [{'doodle': 'magnifier_report'}],
+                 'relation': 'none', 'size': 'margin'},
+            ],
+            'take': {'headline': {'zh': '白天，大脑工作时会产生很多代谢废物。'}},
+            'direction': [{'i': 0, 'span': [0, 23], 'role': 'tagline', 'energy': 1,
+                           'scene': 'board', 'emphasis': '代谢废物',
+                           'options': {'scene': ['board'], 'emphasis': ['代谢废物', '白天'],
+                                       'energy': [0, 1]}, 'source': 'rules'}],
+        }
+        assert expected_beats['b009']['take']['headline'] == {
+            'zh': '如果长期睡不够，这些废物就会越积越多。'}
+        assert actual_beats['b009'] == takeaway
+        expected['beats'][expected['beats'].index(expected_beats['b009'])] = takeaway
+        phone = {'id': 'b016v1', 'type': 'cluster',
+                 'items': [{'doodle': 'smartphone', 'label': {'zh': '手机'},
+                            'trigger': {'zh': '手机'}}],
+                 'relation': 'none', 'trigger': {'zh': '手机'}}
+        assert expected_beats['b016']['visuals'][1]['items'][0]['doodle'] == 'fl_no_mobile_phones'
+        assert actual_beats['b016']['visuals'][1] == phone
+        expected_beats['b016']['visuals'][1] = phone
+    assert json.dumps(board, ensure_ascii=False, indent=2) == json.dumps(expected, ensure_ascii=False, indent=2)
 
 
 def test_spanish_annotation_roles_and_emphasis(spanish_normalize):

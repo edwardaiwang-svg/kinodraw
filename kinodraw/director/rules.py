@@ -77,7 +77,7 @@ EMOJI_ALSO = {'fl_snowflake': {'snow'}}                # emoji a shorter word ma
 # Phenomena are not objects: "blue light" is never an emoji of a lamp or a traffic light.
 PHENOMENA = {'en': set('light sound heat energy power force gravity electricity radiation magnetism friction '
                        'pressure temperature'.split()),
-             'zh': set('光 光线 声音 热量 能量 力 引力 电 辐射 磁力 压力 温度'.split())}
+             'zh': set('光 光线 蓝光 红光 阳光 太阳光 声音 热量 能量 力 引力 电 辐射 磁力 压力 温度'.split())}
 IDIOMS = {'en': re.compile(r"\b(?:(?:in )?a matter of|no matter|as a matter of fact|in terms of|in light of|"
                            r"on the other hand|at hand|in fact|of course|at (?:least|most|first|last|all)|in time|on time|"
                            r"in charge|(?:take|takes|took|taken) place|(?:make|makes|made) sense|in turn|by and large|"
@@ -183,7 +183,7 @@ class RulesDirector:
         self.characters: dict = {}
         self.references: dict = {}
         self.topic: dict = {}                                   # chapter -> rank of every picture for its subject
-        self.pictures: dict = {}                                # word -> the picture it got first
+        self.pictures: dict = {}                                # word -> the picture it got first in this section
         self.banned_words = {singular(w) if lang in ('en', 'es') else w
                              for w in banned()['words'].get('en' if lang == 'es' else lang, ())}
 
@@ -204,6 +204,7 @@ class RulesDirector:
             if beat['chapter'] != current:            # a new chapter starts on a clean board
                 current = beat['chapter']
                 recent.clear()
+                self.pictures.clear()
             if kind in ('title', 'agenda', 'opener') or chapter['kind'] == 'intro':
                 continue
             if kind == 'closing':
@@ -233,14 +234,26 @@ class RulesDirector:
                 planned.append((held[beat['id']][0], timelines[beat['id']]))
                 budget -= 1                           # a chart page still leaves room for the first sentence
             for detect in (self._quote, self._definition, self._number):
-                if budget <= 0:
-                    break
-                found = detect(beat, text, norm, recent)
-                if found:
+                remaining = text
+                while budget > 0:
+                    found = detect(beat, remaining, norm, recent)
+                    if not found:
+                        break
                     v, pos = found
+                    if detect == self._definition:
+                        count = sum(other['type'] == 'glossary' for _, other in planned)
+                        if count:
+                            v['id'] += str(count)
                     planned.append((pos, v))
                     taken.add(sentence_of(pos))
                     budget -= 1
+                    if detect != self._definition:
+                        break
+                    term = v['term'][lang]
+                    end = remaining.lower().find(term.lower(), pos) + len(term)
+                    if end < len(term):
+                        break
+                    remaining = ' ' * end + remaining[end:]
             question = next((k for k, s_ in enumerate(sentences) if s_.endswith(('?', '？'))), None)
             if question is not None and question not in taken and budget > 0 and since_narrator >= 3 \
                     and not self._characters_in(text):
@@ -399,11 +412,19 @@ class RulesDirector:
                 if self.matcher.entries[hit.id]['set'] == 'bespoke' and self._names(hit.id, hit.phrase):
                     lo, hi = lo - NAMED_EASE, hi - NAMED_EASE     # "doctors": a doctor's stethoscope
                 score = hit.score * max(0.0, min(1.0, (agree - lo) / (hi - lo)))
+                rank = self.topic[chapter][self.pos[hit.id]]
+                if rank > TOPIC_RANK and self.matcher.entries[hit.id]['set'] == 'fluent':
+                    score *= .75                  # rank is context, not proof against a literal object
                 if score > (0. if listing else .15):
                     senses.setdefault(key, []).append((hit, score))
             blocked = []                              # spans whose picture was used moments ago
             for key, cands in sorted(senses.items(), key=lambda kv: -max(s for _, s in kv[1])):
-                chosen = self._sense(key, cands, sentence)
+                if listing:
+                    curated = [c for c in cands if self.matcher.entries[c[0].id]['set'] == 'bespoke'
+                               and self._names(c[0].id, c[0].phrase)]
+                    chosen = max(curated, key=lambda c: c[1]) if curated else self._sense(key, cands, sentence)
+                else:
+                    chosen = self._sense(key, cands, sentence)
                 if chosen is None:
                     continue
                 hit, score = chosen
@@ -566,9 +587,27 @@ class RulesDirector:
         return False
 
     def _meaning_allows(self, did, phrase, sentence):
+        entry = self.matcher.entries[did]
+        # Narrow subject drawings must not illustrate their broad search tags in another sense.
+        contexts = {
+            'leaf_sun': (r'\b(?:leaf|leaves|plant\w*|photosynth\w*)\b', r'叶|植物|光合作用'),
+            'solar_panel': (r'\b(?:panel\w*|photovoltaic|solar (?:power|energy|farm))\b', r'太阳能|光伏'),
+            'debt_fraction': (r'\b(?:debt|GDP|leverage|economic|bills?)\b', r'债|负债|经济'),
+            'buyback_arrow': (r'\b(?:buyback|repurchase|stock|shares|company|corporate)\b', r'回购|股票|股份|公司'),
+            'crossroads_sign': (r'\b(?:roads?|streets?|signposts?|junction|intersection|traffic|choice|decision|choose|options?|strategy)\b',
+                                r'路口|道路|街道|路标|交通|选择|抉择|决策|策略'),
+        }
+        context = es_gloss(sentence) if self.lang == 'es' else sentence
+        if did in contexts and not re.search(contexts[did][self.lang == 'zh'], context, re.I):
+            return False
+        if self.lang == 'zh':
+            if entry['set'] == 'fluent' and phrase:
+                return self._is_head(did, phrase)
+            if did == 'fl_optical_disk' and re.search(r'蓝光|波长|散射', sentence) and not re.search(r'光盘|影片|专辑', sentence):
+                return False
+            return True
         if self.lang != 'en':
             return True
-        entry = self.matcher.entries[did]
         desc = entry.get('desc', '')
         words = {singular(w) for w in re.findall(r'[a-z]+', desc.lower())}
         names = self._characters_in(sentence)
@@ -613,6 +652,15 @@ class RulesDirector:
 
     def _candidate_allowed(self, hit, sentence, chapter):
         key = self._key(hit.phrase) if hit.phrase else ''
+        if self.lang == 'en' and hit.phrase:
+            before = sentence[:hit.start].lower() if hit.start >= 0 else ''
+            after = sentence[hit.start + len(hit.phrase):].lower() if hit.start >= 0 else ''
+            if key in {'cut', 'share', 'spring'} and (re.search(r'\b(?:you|we|they|he|she|to|can|will|would|could)\s*$', before)
+                    or re.match(r'\s+(?:it|them|a|the|into|up)\b', after)):
+                return False
+            if key == 'spring' and re.search(r'\b(?:autumn|summer|winter|season)\b', sentence, re.I) \
+                    and hit.id == 'fl_hot_springs':
+                return False
         return (key not in GENERIC[self.lang] and not self._banned(key)
                 and self._belongs(hit.id, hit.phrase, chapter)
                 and self._meaning_allows(hit.id, hit.phrase, sentence))
@@ -660,7 +708,7 @@ class RulesDirector:
         entry = self.matcher.entries[did]
         on_topic = self.topic[chapter][self.pos[did]] <= TOPIC_RANK
         if entry['set'] == 'fluent':
-            return on_topic and (self.lang == 'zh' or not phrase or self._is_head(did, phrase))
+            return bool(phrase) and self._is_head(did, phrase)
         return on_topic or (bool(phrase) and self._names(did, phrase))
 
     def _names(self, did, phrase):
@@ -677,7 +725,13 @@ class RulesDirector:
     def _is_head(self, did, phrase):
         """An emoji named 'light blue heart' is a heart: 'light' may not call it up; 'heart' may. One named
         'ferris wheel' is a Ferris wheel: 'wheels' alone may not call it up; 'Ferris wheel' may."""
-        name = re.split(r'\b(?:at|with|of|in|on|for|from|to|and|or)\b', self.matcher.entries[did].get('desc', '').lower())[0]
+        if self.lang == 'zh':
+            # First tag names the actual object; later tags include loose associations/senses.
+            tags = self.matcher.entries[did].get('zh') or []
+            return bool(tags) and phrase == tags[0]
+        if did == 'fl_hot_springs':
+            return self._key(phrase) in {'hot spring', 'hotspring'}
+        name = re.split(r'\b(?:at|with|in|on|for|from|to|and|or)\b', self.matcher.entries[did].get('desc', '').lower())[0]
         words = re.findall(r'[a-z]+', name)
         phrase = es_gloss(phrase) if self.lang == 'es' else phrase
         said = [singular(w) for w in re.findall(r'[a-z]+', phrase.lower())]
@@ -687,9 +741,9 @@ class RulesDirector:
             return True
         if said and said[-1] in EMOJI_ALSO.get(did, ()):
             return True
-        if not words or singular(words[-1]) != said[-1]:
+        if not words or not said or singular(words[-1]) != said[-1]:
             return False
-        return all(w in EMOJI_ADJ or singular(w) in said for w in words[:-1])
+        return all(w in EMOJI_ADJ or w == 'of' and 'of' in said or singular(w) in said for w in words[:-1])
 
     def _sense(self, key, cands, sentence):
         """Which picture a word gets: the one it had before (a word keeps its picture); else its best-tagged
@@ -780,16 +834,28 @@ class RulesDirector:
 
     def _definition(self, beat, text, norm, recent):
         if self.lang == 'en':
-            m = re.search(r"\b((?:an? |the )?[a-z][\w-]*(?: [a-z][\w-]*){0,3}) (?:called|known as|named) "
-                          r"(?:an? |the )?([A-Za-z][\w-]*(?: [A-Za-z][\w-]*){0,2})\b", text)
-            if not m or re.match(r'(this|that|these|those|it|is|are|was|were)\b', m.group(1).split(' ')[0]):
+            copulas = re.finditer(r'\b(?:The|A|An) ([^.!?]+?) is (?:called|known as|named) (?:the |a |an )?([A-Za-z][\w-]*)[.!?]\s*([^.!?]+[.!?])', text)
+            named = re.finditer(r"\b((?:an? |the )?[a-z][\w-]*(?: [a-z][\w-]*){0,3}) (?:called|known as|named) "
+                               r"(?:an? |the )?([A-Za-z][\w-]*(?: [A-Za-z][\w-]*){0,2})\b", text)
+            candidates = [(m, True) for m in copulas] + [(m, False) for m in named]
+            for m, copula in sorted(candidates, key=lambda pair: pair[0].start()):
+                if copula:
+                    term, gloss = m.group(2), m.group(3).strip()
+                    v = {'id': f"{beat['id']}g", 'type': 'glossary',
+                         'term': {'en': term.capitalize()}, 'text': {'en': gloss},
+                         'trigger': {'en': self._spoken(norm, term)}}
+                    return v, m.start()
+                if re.match(r'(this|that|these|those|it|is|are|was|were)\b', m.group(1).split(' ')[0]):
+                    continue
+                term, words = m.group(2), m.group(1).split()
+                while words and words[0] in PREPOSITIONS:
+                    words = words[1:]
+                if not words or words[-1] in ('is', 'are', 'was', 'were', 'be', 'been'):
+                    continue                               # naming clause: the definition is elsewhere
+                gloss = ' '.join(words)
+                break
+            else:
                 return None
-            term, words = m.group(2), m.group(1).split()
-            while words and words[0] in PREPOSITIONS:
-                words = words[1:]
-            if not words or words[-1] in ('is', 'are', 'was', 'were', 'be', 'been'):
-                return None                                # 'this process is called X': the definition is elsewhere
-            gloss = ' '.join(words)
         elif self.lang == 'es':
             # 'roca fundida llamada magma' only: 'X se llama Y' is 'X is called Y', the definition is elsewhere
             m = re.search(r'\b((?:(?:un|una|el|la) )?[^\W\d_][\w-]*(?: [^\W\d_][\w-]*){0,3}) '
@@ -817,6 +883,12 @@ class RulesDirector:
             if not m:
                 return None
             term, gloss = m.group(2), m.group(1)
+            if re.match(r'^[这那它就]', gloss):
+                # An anaphoric naming clause points back to the complete phenomenon, not '这就'.
+                start = max(text.rfind('。', 0, m.start()), text.rfind('！', 0, m.start()), text.rfind('？', 0, m.start())) + 1
+                gloss = text[start:m.start()].strip('，、；： ')
+                if len(gloss) < 4 or re.match(r'^[这那它就]', gloss):
+                    return None
         v = {'id': f"{beat['id']}g", 'type': 'glossary', 'term': {self.lang: term[:1].upper() + term[1:]},
              'text': {self.lang: gloss[:1].upper() + gloss[1:]}}
         trig = self._spoken(norm, term)
