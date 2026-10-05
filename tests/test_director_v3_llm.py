@@ -86,6 +86,50 @@ def test_bad_json_falls_back(fake_codex):
     assert 'JSON' in report['fallback_reason'] and report['notes']
 
 
+def test_eval_command_explicit_env_and_model_subprocess(tmp_path):
+    tool = tmp_path / 'command.py'
+    log = tmp_path / 'requests.jsonl'
+    plans = tmp_path / 'plans.json'
+    fixtures = sorted((ROOT / 'tests' / 'fixtures' / 'genre').glob('*.md')) + [
+        ROOT / 'tests' / 'fixtures' / 'lion_story.md']
+    plans.write_text(json.dumps([llm.plan_v3(path)[0] for path in fixtures]), encoding='utf-8')
+    tool.write_text('''import json, sys
+from pathlib import Path
+request = json.load(sys.stdin)
+log, plans = map(Path, sys.argv[1:])
+index = len(log.read_text(encoding='utf-8').splitlines()) if log.exists() else 0
+with log.open('a', encoding='utf-8') as stream:
+    stream.write(json.dumps(request) + '\\n')
+print(json.dumps(json.loads(plans.read_text(encoding='utf-8'))[index]))
+''', encoding='utf-8')
+    runner = tmp_path / 'eval_runner.py'
+    runner.write_text('''import os, runpy, sys
+sys.path.insert(0, sys.argv.pop(1))
+from kinodraw.director.llm import providers
+def forbidden(*args):
+    raise AssertionError('explicit command route read api_key')
+providers.api_key = forbidden
+os.environ['KINODRAW_DIRECTOR_COMMAND'] = sys.argv.pop(1)
+sys.argv[0] = sys.argv.pop(1)
+runpy.run_path(sys.argv[0], run_name='__main__')
+''', encoding='utf-8')
+    out = tmp_path / 'eval'
+    done = subprocess.run([sys.executable, str(runner), str(ROOT),
+                           shlex.join([sys.executable, str(tool), str(log), str(plans)]),
+                           str(ROOT / 'scripts' / 'eval_director_v3.py'),
+                           '--provider', 'command', '--model', 'eval-test', '--out', str(out)],
+                          capture_output=True, encoding='utf-8', timeout=30)
+    assert done.returncode == 0, done.stderr
+    reports = [json.loads(line) for line in done.stdout.splitlines()]
+    requests = [json.loads(line) for line in log.read_text(encoding='utf-8').splitlines()]
+    assert len(reports) == len(requests) == len(fixtures)
+    assert all(r['model'] == 'eval-test' and r['schema'] == PLAN_SCHEMA for r in requests)
+    assert all(not r['fallback'] and r['usage']['calls'] == 1 and
+               r['usage']['cost_usd'] is None for r in reports)
+    for path, report in zip(fixtures, reports):
+        assert json.loads((out / f'{path.stem}.json').read_text(encoding='utf-8')) == report
+
+
 def test_command_array_root_is_rejected(monkeypatch):
     from types import SimpleNamespace
     provider = providers.CommandProvider(command='unused-test-command')
@@ -119,22 +163,25 @@ def test_injected_provider_does_not_need_a_name():
     assert report['provider'] == 'Director' and not report['fallback']
 
 
-def test_unsupported_provider_fails_offline_before_loading_credentials(monkeypatch):
-    monkeypatch.setattr(providers, 'make_provider', lambda *a, **k: pytest.fail('loaded a legacy provider'))
+def test_named_byok_provider_routes_through_factory(monkeypatch):
+    expected, _ = llm.plan_v3('# Lesson\n\nCount three dots.')
+    class Provider:
+        def direct_plan(self, payload, usage):
+            return expected
+    seen = []
+    def factory(kind, **kwargs):
+        seen.append((kind, kwargs))
+        return Provider()
+    monkeypatch.setattr(llm, 'make_provider', factory)
     _, report = llm.plan_v3('# Lesson\n\nCount three dots.', 'openai')
-    assert report['fallback'] and 'contract v3 requires the command provider' in report['fallback_reason']
+    assert not report['fallback'] and seen == [('openai', {'lang': 'en'})]
 
 
-def test_missing_command_and_cloud_fail_offline_without_keys(monkeypatch):
+def test_missing_command_fails_offline_without_keys(monkeypatch):
     monkeypatch.delenv('KINODRAW_DIRECTOR_COMMAND', raising=False)
     monkeypatch.setattr(providers, 'api_key', lambda *a: pytest.fail('read a key'))
-    for name, reason in [('command', 'KINODRAW_DIRECTOR_COMMAND'), ('cloud', 'contract v3 not deployed yet')]:
-        _, report = llm.plan_v3('# Lesson\n\nCount three dots.', name)
-        assert report['fallback'] and reason in report['fallback_reason']
-    from kinodraw.director.llm import cloud
-    monkeypatch.setattr(cloud.CloudProvider, '__init__', lambda *a: None)
-    with pytest.raises(providers.ProviderError, match='contract v3 not deployed yet'):
-        providers.make_provider('cloud').direct_plan({}, providers.Usage())
+    _, report = llm.plan_v3('# Lesson\n\nCount three dots.', 'command')
+    assert report['fallback'] and 'KINODRAW_DIRECTOR_COMMAND' in report['fallback_reason']
 
 
 def test_bridge_timeout_is_clear(monkeypatch, capsys):

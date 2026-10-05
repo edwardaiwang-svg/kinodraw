@@ -14,7 +14,7 @@ import uuid
 
 from ... import paths
 from ...net import urlopen
-from .providers import ProviderError, Usage
+from .providers import ProviderError, Usage, validate_structure
 
 URL = paths.getenv('KINODRAW_CLOUD_URL') or 'https://api.doodlecloud.org'   # the env var points a test build elsewhere
 # Cloudflare refuses Python's default "Python-urllib" signature (error 1010), so the app names itself.
@@ -122,10 +122,15 @@ def _call(path: str, body: dict | None = None, token: str | None = None, timeout
                                           **({'Authorization': f'Bearer {token}'} if token else {})})
     try:
         with urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read())
+            result = json.loads(response.read())
+            if not isinstance(result, dict):
+                raise ProviderError('KinoDraw Cloud returned a non-object response')
+            return result
     except urllib.error.HTTPError as error:
         try:
             reply = json.loads(error.read())
+            if not isinstance(reply, dict):
+                reply = {}
             detail = reply.get('error', '')
         except Exception:  # noqa: BLE001
             reply, detail = {}, ''
@@ -134,6 +139,8 @@ def _call(path: str, body: dict | None = None, token: str | None = None, timeout
         failure = ProviderError(f'KinoDraw Cloud {error.code}: {detail or error.reason}')
         failure.status, failure.detail = error.code, detail
         raise failure from error
+    except (ValueError, TypeError) as error:
+        raise ProviderError('KinoDraw Cloud returned invalid JSON') from error
     except urllib.error.URLError as error:
         raise ProviderError(f'KinoDraw Cloud unreachable: {error.reason}') from error
 
@@ -166,8 +173,8 @@ class CloudProvider:
     name, model = 'cloud', 'kinodraw-cloud'
     languages = ('en', 'zh')                          # what the cloud plans; anything else stays offline, unbilled
 
-    def __init__(self, lang: str | None = None):
-        self.token, self.anonymous, self.refused = _token(), False, None     # an email sign-in always wins
+    def __init__(self, lang: str | None = None, *, token: str | None = None):
+        self.token, self.anonymous, self.refused = token if token is not None else _token(), False, None     # an email sign-in always wins
         self.renewable = False                     # a kept anonymous token the cloud refuses gets one new one
         if not self.token and lang not in (None, *self.languages):    # a language it never plans: no token asked
             self.refused = ProviderError('KinoDraw Cloud plans English and Chinese videos only')   # for, no ID made
@@ -190,7 +197,7 @@ class CloudProvider:
 
     def _send(self, path: str, body: dict) -> dict:
         if not self.token:
-            raise self.refused
+            raise self.refused or ProviderError('Sign in to KinoDraw Cloud first')
         try:
             return _call(path, body, self.token)
         except ProviderError as error:
@@ -207,6 +214,30 @@ class CloudProvider:
                 return self._send(path, body)
             self.token, self.refused = None, SignInNeeded(error.detail)     # open access ended: the rest stays offline
             raise self.refused from error
+
+    def direct_plan(self, payload: dict, usage: Usage) -> dict:
+        """Open and claim one whole video using the versioned Cloud lifecycle."""
+        from ..v3.schema import PLAN_SCHEMA
+        try:
+            if not self.video_id:
+                sections = len(set(b['section_id'] for b in payload['beats']))
+                characters = sum(max(len(b['text']), len(b['spoken'])) for b in payload['beats'])
+                opened = self._send('/v3/videos', {'sections': sections, 'characters': characters})
+                self.video_id = opened['video_id']
+            out = self._send('/v3/plan', {'video_id': self.video_id, 'storyboard': payload})
+        except ProviderError as error:
+            # An unknown/unowned video is also 404; never disguise it as an absent route.
+            if getattr(error, 'status', None) in (404, 405, 501) and (
+                    getattr(error, 'status', None) != 404 or
+                    getattr(error, 'detail', '').strip().lower() in ('', 'not found', 'not found.')):
+                raise ProviderError('KinoDraw Cloud v3 is not deployed here; using the offline plan') from error
+            raise
+        u = out.get('usage') or {}
+        usage.add(u.get('model', 'gpt-6-luna'), u.get('input_tokens', 0), u.get('output_tokens', 0),
+                  u.get('cached_tokens', 0), 0.0)
+        if out.get('contract_version') != 3:
+            raise ProviderError('KinoDraw Cloud returned the wrong plan contract version')
+        return validate_structure(out.get('plan'), PLAN_SCHEMA)
 
     def direct_section(self, payload: dict, usage: Usage) -> dict:
         if not self.video_id:

@@ -7,7 +7,7 @@ import time
 
 from ... import ingest, script, styles
 from ..llm.director import LLMDirector
-from ..llm.providers import CommandProvider, ProviderError, Usage
+from ..llm.providers import CommandProvider, ProviderError, Usage, make_provider
 from ..rules import RulesDirector as PictureDirector
 from .rules import from_rules
 from .semantics import beats
@@ -37,10 +37,9 @@ def plan_v3(doc_or_script, provider=None):
                     if not command:
                         raise ProviderError('command: set KINODRAW_DIRECTOR_COMMAND for the dev director')
                     provider = CommandProvider(command=command)
-                elif provider == 'cloud':
-                    raise ProviderError('KinoDraw Cloud contract v3 not deployed yet')
                 else:
-                    raise ProviderError(f'{provider}: contract v3 requires the command provider')
+                    # v3 supports Spanish too; retain the legacy cloud language gate for v1.
+                    provider = make_provider(provider, lang=None if provider == 'cloud' else lang)
             builder = LLMDirector(provider, lang)
             builder.rules = pictures
             payload = builder._payload(board, {'kind': 'board'}, board['beats'], len(board['chapters']))
