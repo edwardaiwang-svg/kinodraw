@@ -268,12 +268,36 @@ def test_upload_rejects_large_body_before_read_and_stays_offline(project, studio
 
 def test_studio_storyboard_rejects_escape_and_still_missing_is_plain(studio, project):
     path, board, beat = project
+    code, saved, _ = studio('/api/projects/Honey')
+    assert code == 200
+    pair = {name: (path / name).read_bytes() for name in ('storyboard.json', 'project.json')}
     beat['visuals'][0]['items'][0]['doodle'] = 'own:../../x.png'
-    code, result, _ = studio('/api/projects/Honey/storyboard', json.dumps(board).encode(), 'PUT')
-    assert code == 200 and result['ok'] is False and 'pictures folder' in ' '.join(result['errors'])
+    body = {'storyboard': board, 'revision': saved['revision']}
+    code, result, _ = studio('/api/projects/Honey/storyboard', json.dumps(body).encode(), 'PUT')
+    assert code == 400 and result['ok'] is False and 'pictures folder' in ' '.join(result['errors'])
+    assert {name: (path / name).read_bytes() for name in pair} == pair
+    code, current, _ = studio('/api/projects/Honey')
+    assert code == 200
+    assert (current['revision'], current['storyboard'], current['settings']) == (
+        saved['revision'], saved['storyboard'], saved['settings'])
     (path / 'pictures/logo.png').unlink()
     code, result, _ = studio('/api/projects/Honey/still')
     assert code == 400 and 'logo.png' in result['error'] and 'Error:' not in result['error']
+
+
+def test_studio_storyboard_requires_a_revision_and_preserves_the_pair(studio, project):
+    path, board, _ = project
+    code, saved, _ = studio('/api/projects/Honey')
+    assert code == 200
+    pair = {name: (path / name).read_bytes() for name in ('storyboard.json', 'project.json')}
+    for body in (board, {'storyboard': board}):
+        code, result, _ = studio('/api/projects/Honey/storyboard', json.dumps(body).encode(), 'PUT')
+        assert code == 428 and result == {'error': 'Load the project revision before saving.'}
+        assert {name: (path / name).read_bytes() for name in pair} == pair
+    code, current, _ = studio('/api/projects/Honey')
+    assert code == 200
+    assert (current['revision'], current['storyboard'], current['settings']) == (
+        saved['revision'], saved['storyboard'], saved['settings'])
 
 
 def test_catalog_never_offers_own_pictures():
