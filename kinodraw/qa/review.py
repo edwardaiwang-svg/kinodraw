@@ -104,7 +104,8 @@ def contact_sheet(video: Path | str, timeline: Path | dict, output: Path,
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(output)
-    output.with_suffix('.tiles.json').write_text(json.dumps([asdict(t) for t in tiles], indent=2, ensure_ascii=False) + '\n')
+    output.with_suffix('.tiles.json').write_text(json.dumps([asdict(t) for t in tiles], indent=2, ensure_ascii=False) + '\n',
+                                                encoding='utf-8')
     return tiles
 
 
