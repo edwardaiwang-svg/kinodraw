@@ -45,3 +45,39 @@ PORTRAIT = Geometry(
     bottom_ui=(0, 1500, 1080, 1920), top_ui=(0, 0, 1080, 288),
     text_safe=((88, 288, 992, 600), (88, 600, 888, 1250)),
 )
+
+
+# Native square board: 5% edges, dedicated caption band, no landscape crop.
+SQUARE = Geometry(
+    'landscape', (1080, 1080), 1080, 1, 64, 952,
+    ((140, 470), (490, 820)), (64, 140, 952, 680), .9, 3.5, 1,
+    title_band=(64, 54, 1016, 130), board_band=(64, 140, 1016, 820),
+    caption_band=(64, 850, 1016, 1016),
+    text_safe=((54, 54, 1026, 850), (54, 850, 1026, 1026)),
+)
+
+
+def geometry_for_size(size, aspect='16:9'):
+    """Scale layout coordinates before generating drawings, never resize frames.
+
+    Unchanged baseline sizes return their original immutable geometry.
+    """
+    from dataclasses import replace
+    base = {'16:9': LANDSCAPE, '9:16': PORTRAIT, '1:1': SQUARE}[aspect]
+    size = tuple(size)
+    if len(size) != 2 or any(not isinstance(v, int) or v <= 0 for v in size):
+        raise ValueError('size requires positive integer dimensions')
+    if size[0] * base.size[1] != size[1] * base.size[0]:
+        raise ValueError('size must match aspect')
+    if size == base.size:
+        return base
+    scale = size[0] / base.size[0]
+    def coords(value):
+        if value is None:
+            return None
+        return tuple(coords(v) if isinstance(v, tuple) else round(v * scale) for v in value)
+    fields = ('col', 'cell_x0', 'cell_w', 'rows', 'page_box', 'title_band', 'board_band',
+              'caption_band', 'rail', 'bottom_ui', 'top_ui', 'text_safe')
+    return replace(base, size=size, **{key: coords(getattr(base, key)) if isinstance(getattr(base, key), tuple)
+                                    or getattr(base, key) is None else round(getattr(base, key) * scale)
+                                    for key in fields})
