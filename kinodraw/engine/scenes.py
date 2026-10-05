@@ -37,6 +37,8 @@ class Ctx:
         self.color = ink.NEUTRAL
         self.chapter = None
         self.beat = None
+        self.text_w = layout.g.cell_w
+        self.text_h = layout.g.rows[0][1] - layout.g.rows[0][0]
 
     # ---- language + time helpers
     def T(self, pair, default=''):
@@ -63,10 +65,18 @@ class Ctx:
 
     # ---- drawable factories
     def text(self, s, size, color=None, max_w=None, max_lines=3, align='left', pace=1.0, min_size=28):
-        if max_w:
-            lines, size = ink.fit_text(s, self.lang, max_w, max_lines, size, min_size=min_size, fonts=self.fonts)
-        else:
-            lines = [s]
+        if max_w is None:
+            inset = math.ceil(self.layout.g.size[0] * .04) + (0 if self.skin.locked_camera else 12)
+            max_w = self.text_w - 2 * max(0, inset - self.layout.g.cell_x0)
+        width = max(1, max_w - 12)
+        lines, size = ink.fit_text(s, self.lang, width, max_lines, size,
+                                  min_size=min_size, fonts=self.fonts)
+        while size > 2:
+            asc, desc = ink.hand_font(self.lang, size, self.fonts).getmetrics()
+            if int(size * 1.18) * (len(lines) - 1) + asc + desc + 12 <= self.text_h:
+                break
+            size -= 2
+            lines = ink.wrap_words(s, self.lang, size, width, fonts=self.fonts)
         return ink.TextDrawing(lines, self.lang, size, color=color or ink.INK, align=align, pace=pace,
                                fonts=self.fonts)
 
@@ -89,6 +99,12 @@ class Ctx:
         return ink.stroke_drawing(size, polylines, color=color or ink.INK, width=width, closed_fill=fills, **kw)
 
     def add(self, drawing, x, y, trigger, **kw) -> Element:
+        if isinstance(drawing, ink.TextDrawing):
+            g = self.layout.g
+            margin_x, margin_y = math.ceil(g.size[0] * .04), math.ceil(g.size[1] * .04)
+            left = math.floor(x / g.col) * g.col
+            x = max(x, left + margin_x + (0 if self.skin.locked_camera else 12))
+            y = min(max(y, margin_y), g.size[1] - margin_y - drawing.size[1])
         if self.skin.textured:
             x, y = int(round(x)), int(round(y))
         el = Element(self.skin.dress(drawing, x, y), x, y, trigger, **kw)
@@ -171,13 +187,16 @@ def build_cluster(v, beat, box, ctx, max_dur=None):
 def build_quote(v, beat, box, ctx):
     x0, y0, w, h = box
     t = ctx.time_of(beat, v.get('trigger'))
+    group = v.get('id') or f'quote:{len(ctx.elements)}'
     mark = ctx.text('“', 150, color=ctx.color)
-    ctx.add(mark, x0 - 6, y0 - 34, t)
-    body = ctx.text(ctx.T(v.get('text')), 46 if ctx.lang in ('en', 'es') else 48, max_w=w - 110, max_lines=4, pace=1.25)
-    bel = ctx.add(body, x0 + 90, y0 + 20, t)
-    who = ctx.text('— ' + ctx.T(v.get('who')), 38, color=ctx.color, max_w=w - 110, max_lines=1)
-    wel = ctx.add(who, x0 + 90, y0 + 30 + body.size[1], t)
-    ctx.register(v.get('id'), 'all', [bel, wel])
+    mel = ctx.add(mark, x0 - 6, y0 - 34, t, group=group, atomic=True, essential=True)
+    body = ctx.text(ctx.T(v.get('text')), 46 if ctx.lang in ('en', 'es') else 48, max_w=w - 140, max_lines=4, pace=1.25)
+    bel = ctx.add(body, x0 + 90, y0 + 20, t, group=group, atomic=True, essential=True)
+    els = [mel, bel]
+    if speaker := ctx.T(v.get('who')).strip():
+        who = ctx.text('— ' + speaker, 38, color=ctx.color, max_w=w - 110, max_lines=1)
+        els.append(ctx.add(who, x0 + 90, y0 + 30 + body.size[1], t, group=group, atomic=True, essential=True))
+    ctx.register(v.get('id'), 'all', els)
     ctx.register(v.get('id'), 0, [bel])
 
 

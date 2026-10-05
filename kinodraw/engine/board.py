@@ -57,6 +57,7 @@ class Element:
     deadline: float | None = None   # must be finished by then (a transition follows)
     skipped: bool = False           # not drawn at all (too late to be useful)
     beat: str = ''                  # the beat whose visual this is (pacing), '' for automatic scenes
+    atomic: bool = False            # quote card: one camera stop and a shared drawing budget
 
     @property
     def duration(self):
@@ -262,7 +263,7 @@ class Scheduler:
         units = []
         for i in order:
             e = elements[i]
-            key = (e.stretch, round(e.trigger, 2))
+            key = (e.stretch, round(e.trigger, 2), e.group if e.atomic else '')
             if units and units[-1][0] == key:
                 units[-1][1].append(e)
             else:
@@ -274,7 +275,7 @@ class Scheduler:
         for k in range(len(units) - 1, -1, -1):
             next_trig[k] = upcoming
             if not all(e.after is not None for e in units[k][1]):
-                upcoming = units[k][0][1]
+                upcoming = min(e.trigger for e in units[k][1])
         hand_free, last_pen = -1e9, None
         placed, started, dropped = [], set(), set()
         state = {'stretch': -1, 'arrive': 0., 'base': 0}
@@ -293,7 +294,8 @@ class Scheduler:
                     state['arrive'] = t
                 state['base'] = int(round(L / g.col))
 
-        for k, ((s, trig), els) in enumerate(units):
+        for k, ((s, trig, _), els) in enumerate(units):
+            trig = min(e.trigger for e in els)
             enter(s)
             arrive, base = state['arrive'], state['base']
             page_change = planned[s + 1] if s + 1 < len(planned) else math.inf
@@ -302,6 +304,39 @@ class Scheduler:
                     e.deadline = min(page_change - SETTLE, e.deadline if e.deadline is not None else math.inf)
             nxt = max(trig, min(next_trig[k], trig + 60))
             deadline = min([e.deadline for e in els if e.deadline is not None] or [math.inf])
+            quote_ready = None
+            if k + 1 < len(units) and units[k + 1][0][0] == s and all(e.atomic for e in units[k + 1][1]):
+                upcoming = units[k + 1][1]
+                L_cols = int(round(cam.target_at(nxt) / g.col))
+                c0 = min(column_span(e, g.col)[0] for e in upcoming)
+                c1 = max(column_span(e, g.col)[1] for e in upcoming)
+                if c0 < L_cols or c1 >= L_cols + g.cols_on_screen:
+                    quote_ready = nxt - g.pan_seconds - SETTLE
+                    deadline = min(deadline, quote_ready)
+                    for e in els:
+                        e.deadline = min(deadline, e.deadline if e.deadline is not None else math.inf)
+            if all(e.atomic for e in els):
+                c0 = min(column_span(e, g.col)[0] for e in els)
+                c1 = max(column_span(e, g.col)[1] for e in els)
+                L_cols = int(round(cam.target_at(trig) / g.col))
+                if c0 < L_cols or c1 >= L_cols + g.cols_on_screen:
+                    new_col = max(base, c0, c1 - g.cols_on_screen + 1)
+                    pan_at = max(trig - g.pan_seconds, hand_free + SETTLE, arrive)
+                    cam.pan(pan_at, new_col * g.col)
+                    arrive = pan_at + g.pan_seconds
+                start = max(trig, hand_free + .05, arrive)
+                # Quotes are never stale: compress the whole card to the next narration/page boundary.
+                window = max(.05, min(nxt, page_change - SETTLE, deadline) - start - .05)
+                natural = sum(e.drawing.duration for e in els)
+                rate = max(1., natural / window)
+                for e in els:
+                    e.start, e.rate = start, rate
+                    start = e.end
+                    placed.append(e)
+                    started.add(e.group or id(e))
+                hand_free = els[-1].end
+                last_pen = (els[-1].x + els[-1].w, els[-1].y + els[-1].h / 2)
+                continue
             start = max(trig, hand_free + .15, arrive)
             natural, pos = 0., last_pen                     # natural length of the unit
             for e in els:
@@ -311,6 +346,8 @@ class Scheduler:
                     pos = (e.x + e.w, e.y + e.h / 2)
             window = max(.1, min(nxt, page_change, deadline) - start - .1)
             rate = 1.0 if natural <= window else min(max_rate, natural / window)
+            if quote_ready is not None and any(e.essential for e in els):
+                rate = max(rate, natural / window)
             # Keep up with the words: when the hand would reach a drawing more than KEEP_UP after it is said
             # (the second picture of "sunlight hits the tiny molecules", queued behind the first), the whole
             # unit speeds up just enough, never past max_rate.
@@ -378,7 +415,7 @@ class Scheduler:
                     e.skipped = True
                     continue
                 if misses:                                  # essential (or already half drawn): hurry
-                    e_rate = max(e_rate, min(4.0, e.drawing.duration / max(.05, e.deadline - earliest)))
+                    e_rate = max(e_rate, e.drawing.duration / max(.01, e.deadline - earliest))
                 if pan_at is not None:
                     cam.pan(pan_at, new_col * g.col)
                 e.rate, e.start = e_rate, earliest

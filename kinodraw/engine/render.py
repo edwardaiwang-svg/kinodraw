@@ -38,8 +38,8 @@ HERE = Path(__file__).resolve().parent
 FPS = 30
 SIZE = LANDSCAPE.size
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
-NOTE_READ = 1.0          # a finished takeaway note stays readable this long before it is pinned
-PAUSE_MAX = 4.0          # the longest pause after a beat while the drawing hand catches up (pacing)
+NOTE_READ = .05          # the note is read during narration; pin it without a silent reading hold
+PAUSE_MAX = .1           # catch up by compressing strokes, with only a breath between beats
 PACE_MARGIN = .3         # a beat's drawings finish this long before the next beat's words start
 
 
@@ -124,6 +124,8 @@ class Production:
                         box, _ = self.layout.slot(rows_needed=2)
                     else:
                         box, _ = self.layout.slot()
+                    ctx.text_w = box[2]
+                    ctx.text_h = box[3]
                     scenes.SLOT_BUILDERS[vt](v, beat, box, ctx)
                 elif vt in scenes.PAGE_BUILDERS:
                     box, (c0, _) = self.layout.page()
@@ -132,6 +134,8 @@ class Production:
                     anchor = Image.new('RGBA', (self.g.cols_on_screen * self.g.col - 4, 1), (0, 0, 0, 0))
                     ctx.add(ink.StaticDrawing(anchor, pop=.01), c0 * self.g.col + 2, self.g.page_box[1] + 16,
                             ctx.time_of(beat, v.get('trigger')), hand=False)
+                    ctx.text_w = box[2]
+                    ctx.text_h = box[3]
                     scenes.PAGE_BUILDERS[vt](v, beat, box, ctx)
                 elif vt == 'emphasis':
                     deferred.append(v)
@@ -140,7 +144,12 @@ class Production:
                 else:
                     self.warnings.append(f"{beat['id']}: unsupported visual type {vt}")
             except Exception as error:  # noqa: BLE001 - keep rendering; report
+                del ctx.elements[n0:]                 # a failed builder must not leave half a visual
+                ctx.registry.pop(v.get('id'), None)
                 self.warnings.append(f"{beat['id']}/{v.get('id')}: {type(error).__name__}: {error}")
+            finally:
+                ctx.text_w = self.g.cell_w
+                ctx.text_h = self.g.rows[0][1] - self.g.rows[0][0]
             hold = 3.5 if vt == 'glossary' else (1.8 if vt in scenes.PAGE_BUILDERS or vt == 'quote' else .8)
             for el in ctx.elements[n0:]:
                 el.hold = hold
@@ -154,7 +163,8 @@ class Production:
                 self.warnings.append(f"{beat['id']}/{v.get('id')}: emphasis {error}")
             self._tag(n0, v.get('id') or f"{beat['id']}#emphasis", beat=beat['id'])
         for el in ctx.elements[first_new:]:          # e.g. wait for a section opener to be drawn
-            el.trigger = max(el.trigger, not_before)
+            if not el.atomic:
+                el.trigger = max(el.trigger, not_before)
 
     def _build(self):
         ctx, lay = self.ctx, self.layout
@@ -257,10 +267,10 @@ class Production:
         xt = tcol * self.g.col
         self.scene_marks.append((xt, 'take'))
         prep = bt.get('prep', bt['start'])
-        self.cut(prep + .1, xt, 'pan')
+        self.cut(prep - self.g.pan_seconds, xt, 'pan')
         tr = next((x for x in self.tl['transitions'] if x['section'] == cid), None)
         deadline = tr['hold_end'] - NOTE_READ if tr else None
-        t_note = prep + .1 + self.g.pan_seconds
+        t_note = prep
         spoken = beat['spoken'][self.lang]
         prefix = script.take_text('', self.lang)            # "Key takeaway: " (said before the headline)
         t_label = ctx.time_of(beat, None, 0.)
@@ -283,6 +293,12 @@ class Production:
             for el in ctx.elements[n0:]:
                 el.trigger = max(el.trigger, t_note + .02)
                 el.after = el.after or written
+        if deadline is not None and not self.relaxed:
+            extras = [el for el in ctx.elements if el.beat == beat['id'] and not el.essential]
+            reserve = sum(el.drawing.duration / 4 + .2 for el in extras)
+            for el in els:
+                if el.essential:
+                    el.deadline = deadline - reserve
 
     def _transitions(self):
         ctx = self.ctx
@@ -294,9 +310,10 @@ class Production:
                 self.warnings.append(f'transition {sec}: missing card or note')
                 continue
             t_p = tr['hold_end']
-            t_f = t_p + .35
-            t_c = t_f + .9
-            t_r = t_c + .7
+            span = tr['end'] - t_p
+            t_f = t_p + span * .2
+            t_c = t_p + span * .5
+            t_r = t_p + span * .8
             self.modes.append((t_p, t_f, 'pullback', {'section': sec}))
             self.modes.append((t_f, t_c, 'fly', {'section': sec}))
             self.modes.append((t_c, tr['end'], 'agenda', {'section': sec}))
@@ -322,10 +339,12 @@ class Production:
                 size, pos = 60, (cx + cw - strip + (strip - 60) / 2, cy + chh - 72)
             else:
                 size, pos = auto.check_spot(card['box'], taken, (150, 120, 96) if chh >= 600 else (90, 72, 60))
-            ctx.add(auto.check_mark(ctx, size=size), pos[0], pos[1], t_c + .05, fixed=True)
+            check = ctx.add(auto.check_mark(ctx, size=size), pos[0], pos[1], t_c + .05, fixed=True)
+            check.rate = max(1., check.drawing.duration / max(.01, t_r - check.trigger))
             if nxt in self.cards:
                 circ, pos = auto.circle_around(ctx, self.cards[nxt]['box'], self.cards[nxt]['color'])
-                ctx.add(circ, pos[0], pos[1], t_r, fixed=True)
+                circle = ctx.add(circ, pos[0], pos[1], t_r, fixed=True)
+                circle.rate = max(1., circle.drawing.duration / max(.01, tr['end'] - t_r))
         for a, b, clip in self.stock:
             self.modes.append((a, b, 'stock', {'clip': clip}))
         self.modes.sort(key=lambda m: m[0])
@@ -340,7 +359,15 @@ class Production:
             Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=1.0, stale=math.inf, cut_grace=math.inf,
                                                keep_optional=True)
         else:
-            Scheduler(self.camera, self.g).run(els, self.cuts)
+            Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=4.0)
+        for e in els:
+            if not e.atomic:
+                continue
+            clears = [t for t, _, _ in self.cuts[e.stretch + 1:]]
+            clears += [tr['hold_end'] for tr in self.tl['transitions'] if tr['hold_end'] > e.trigger]
+            clears += [t for t, _, _ in self.camera.keys if e.start is not None and t > e.end]
+            if clears:
+                e.hidden_after = min(clears)
         skipped = sorted({e.group for e in els if e.skipped})
         if skipped:
             self.warnings.append(f"skipped {len(skipped)} visual(s) that could not keep pace with the narration: "
@@ -413,13 +440,17 @@ class Production:
             L = int(round(L))
             frame = self.skin.background(*self.size, x=L).copy()
         else:
-            frame = self.skin.background(*self.size).copy()
+            x = 12 + int(round(self._drift(t)))
+            paper = self.skin.background(self.size[0] + 24, self.size[1])
+            frame = paper.crop((x, 0, x + self.size[0], self.size[1]))
         lo, hi = L - 20, L + self.size[0] + 20
         for layer in (0, 1):
             for e in self.els:
                 if e.start > t:
                     break
                 if e.layer != layer or e.x > hi or e.x + e.w < lo:
+                    continue
+                if isinstance(e.drawing, ink.TextDrawing) and not self.text_visible(e, t, L):
                     continue
                 img, _, _ = e.state(t)
                 if img is not None:
@@ -430,10 +461,19 @@ class Production:
             self._hand(frame, t, L)
         return frame
 
+    def text_visible(self, e, t, L):
+        """Cull whole text (whole cards for quotes) before a camera move can clip a glyph."""
+        mx, my = self.size[0] * .04, self.size[1] * .04
+        parts = self.ctx.registry.get(e.group, {}).get('all', [e]) if e.atomic else [e]
+        return all(mx <= p.x - L and p.x + p.w - L <= self.size[0] - mx
+                   and my <= p.y and p.y + p.h <= self.size[1] - my for p in parts)
+
     def _hand(self, frame, t, L):
         i = bisect.bisect_right(self.hand_starts, t) - 1
         cur = self.hand_els[i] if i >= 0 else None
         if cur is not None and cur.start <= t < cur.end:
+            if isinstance(cur.drawing, ink.TextDrawing) and not self.text_visible(cur, t, L):
+                return
             _, pen, down = cur.state(t)
             if pen is not None:
                 self.hand.paste(frame, (cur.x - L + pen[0], cur.y + pen[1]), lifted=not down)
@@ -446,7 +486,7 @@ class Production:
         if prev is None or nxt is None:
             return
         gap = nxt.start - prev.end
-        if gap > 1.4 or gap <= 0:
+        if gap <= 0:
             return
         p0 = self._last_pen(prev)
         p1 = self._first_pen(nxt)
@@ -477,7 +517,10 @@ class Production:
             if wipe is not None:
                 from_L, to_L, u = wipe
                 return skins.wipe(self.view(t, from_L, hand=False), self.view(t, to_L, hand=False), u, self.skin)
-        return self.view(t, self.camera.at(t))
+        return self.view(t, self.camera.at(t) + self._drift(t))
+
+    def _drift(self, t):
+        return 0. if self.camera.locked else 12 * math.sin(t * .8)
 
     def stock_frame(self, t, a, clip):
         path = self.project_dir / 'stock/MANIFEST.json'
@@ -533,12 +576,13 @@ class Production:
         sec = p['section']
         note = self.notes[sec]
         tr = next(x for x in self.tl['transitions'] if x['section'] == sec)
-        agenda = self.view(t, self.agenda_x, hand=(kind == 'agenda'))
+        agenda = self.view(t, self.agenda_x + self._drift(t), hand=(kind == 'agenda'))
         nx, ny, nw, nh = note['bbox']
         sx, sy = nx - note['x'], ny
         if kind == 'pullback':
             u = ease((t - a) / (b - a))
-            board = self.view(tr['hold_end'] - .01, note['x'], hand=False)
+            board = self.view(tr['hold_end'] - .01 if self.camera.locked else t,
+                              note['x'] + self._drift(t), hand=False)
             frame = (skins.wipe(board, agenda, (t - a) / (b - a), self.skin) if self.camera.locked
                      else Image.blend(board, agenda, u))
             ink.paste(frame, self._note_image(note, board, sx, sy), sx, sy)
@@ -573,38 +617,37 @@ class Production:
         return note['shown']
 
     def _zoom(self, t, p, a, b):
-        u = (t - a) / (b - a)
-        card = self.cards[p['section']]
-        cx = card['box'][0] - self.agenda_x + card['box'][2] / 2
-        cy = card['box'][1] + card['box'][3] / 2
-        agenda = self.view(a - .01, self.agenda_x, hand=False)
-        s = 1 + 2.4 * ease(u)
-        w, h = self.size[0] / s, self.size[1] / s
-        x0 = min(max(0, cx - w / 2), self.size[0] - w)
-        y0 = min(max(0, cy - h / 2), self.size[1] - h)
-        zoomed = agenda.crop((int(x0), int(y0), int(x0 + w), int(y0 + h))).resize(self.size, Image.BILINEAR)
-        k = ease((u - .5) / .5)
-        if k <= 0:
-            return zoomed
-        return Image.blend(zoomed, self.board_frame(t), k)
+        # Keep agenda lettering inside its safe area throughout the move into the section.
+        agenda = self.view(t, self.agenda_x + self._drift(t), hand=False)
+        return Image.blend(agenda, self.board_frame(t), ease((t - a) / (b - a)))
 
     def _chrome(self, frame, t):
         span = self._chapter_span(t)
         if span is None or span[0]['kind'] in ('intro', 'outro'):
             return
         ch, a, b = span
+        if sum(c['kind'] in ('section', 'board') for c in self.ep['chapters']) == 1 \
+                and self.ctx.T(ch.get('label')) == script.TEXT[self.lang]['label'].format(n=1):
+            ch = {**ch, 'label': {}}
         alpha = min(1., (t - a) / .4, (b - t) / .3)       # labels fade in and out; nothing pops
         tag = (chip_image(ch, self.lang, self.skin.fonts) if self.skin.chapter_tag == 'chip'
                else skins.tag_image(ch, self.lang, self.skin))
-        chip = faded(tag, alpha)
-        ink.paste(frame, chip, 36, 22)
+        chip = faded(self._fit_ui(tag), alpha)
+        ink.paste(frame, chip, 77, 44)
         src = source_line(ch, self.lang)
         if src:
-            img = faded(ui_text(src, 34, self.skin.soft, self.skin.fonts), alpha)
-            ink.paste(frame, img, 1920 - 40 - img.width, 26)
+            img = faded(self._fit_ui(ui_text(src, 34, self.skin.soft, self.skin.fonts)), alpha)
+            ink.paste(frame, img, 1920 - 77 - img.width, 44)
         footer = self.ctx.T(self.ep.get('footer'))
         if footer:
-            ink.paste(frame, ui_text(footer, 24, self.skin.faint, self.skin.fonts), 40, 1080 - 34)
+            img = self._fit_ui(ui_text(footer, 24, self.skin.faint, self.skin.fonts))
+            ink.paste(frame, img, 77, 1036 - img.height)
+
+    def _fit_ui(self, img):
+        w = int(self.size[0] * .92)
+        if img.width > w:
+            return img.resize((w, max(1, round(img.height * w / img.width))), Image.LANCZOS)
+        return img
 
     def _chapter_span(self, t):
         for c in self.tl['chapters']:
@@ -619,8 +662,8 @@ class Production:
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
             return
-        img = self.skin.caption_image(c['text'], self.lang)
-        ink.paste(frame, img, (self.size[0] - img.width) / 2, 1046 - img.height)
+        img = self._fit_ui(self.skin.caption_image(c['text'], self.lang))
+        ink.paste(frame, img, (self.size[0] - img.width) / 2, 1036 - img.height)
 
 
 def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None):
@@ -682,7 +725,7 @@ def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, roun
         for k, bid in enumerate(order[:-1]):
             nxt = timing['beats'][order[k + 1]]                 # a takeaway's pre-roll is for its note
             if bid in pinned:
-                need = ends.get(bid, -math.inf) + NOTE_READ - pinned[bid]
+                continue                                      # pin immediately; the note's strokes compress to fit
             else:
                 need = ends.get(bid, -math.inf) + PACE_MARGIN - nxt.get('prep', nxt['start'])
             room = PAUSE_MAX - pauses.get(bid, 0.)
