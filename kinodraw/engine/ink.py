@@ -582,17 +582,25 @@ class TextDrawing:
 
 
 def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
-    """Greedy wrap for board text (whole words; CJK per character)."""
+    """Greedy wrap for board text; split words that cannot fit on an empty line."""
     f = hand_font(lang, size, fonts) if kind == 'hand' else \
         font('en_caption' if lang in ('en', 'es') else 'zh_caption', size, fonts)
+    width = (lambda s: text_width(s, lang, size, fonts)) if kind == 'hand' else f.getlength
     units = re.findall(r'\S+\s*', text) if lang in ('en', 'es') else re.findall(r"[A-Za-z0-9$.,%×\-–/+']+\s*|.", text)
     lines, cur = [], ''
     for u in units:
+        if width(u.rstrip()) > max_width:
+            if cur.strip():
+                lines.append(cur.rstrip())
+            cur = ''
+            for ch in u:
+                if cur and width(cur + ch) > max_width:
+                    lines.append(cur.rstrip())
+                    cur = ''
+                cur += ch
+            continue
         trial = cur + u
-        if cur and f.getlength(trial.rstrip()) > max_width:
-            if lang == 'zh' and re.match(r'[，。！？；：、）」』”’%]', u):
-                cur = trial
-                continue
+        if cur and width(trial.rstrip()) > max_width:
             lines.append(cur.rstrip())
             cur = u.lstrip() if lang in ('en', 'es') else u
         else:

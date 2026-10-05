@@ -18,21 +18,17 @@ from . import skin
 from .storyboard import normalize
 
 FPS = 30
-CHAPTER_GAP = .6
-TRANSITION = 2.8          # pull back 0.35 + fly/pin 0.9 + check 0.7 + circle 0.8 (+ slack)
+CHAPTER_GAP = .15
+TRANSITION = .35         # quick pullback, pin and agenda settle
 END_CARD = 5.0            # pan to the closing page, write it, and let it be read
 CREDIT = 2.0              # then "Made with ..." under it (the project's credit setting can turn it off)
 ZH_DWELL = .5             # extra reading pause per Mandarin paragraph (9/19 precedent)
-ZOOM_IN = .9              # first part of each section: zoom into its agenda card
-AGENDA_CARD = 2.6         # hand time per agenda card: the agenda holds until every card is drawn
-TAKE_PREROLL = 2.0        # pan to the takeaway page and lay the note down before it is read out
+ZOOM_IN = .35             # first part of each section: zoom into its agenda card
+TAKE_PREROLL = .15        # start the note's camera move just before its words
 
 
 def take_hold(beat, lang):
-    head = (beat.get('take') or {}).get('headline', {}).get(lang, '')
-    if lang in ('en', 'es'):
-        return max(3.0, len(head.split()) / 3.0)
-    return max(3.0, len(re.findall(r'[一-鿿A-Za-z0-9]', head)) / 6.0)
+    return .05            # the note is read during its narration, then pinned immediately
 
 
 def layout(episode, lang, clips, pauses=None, credit=True):
@@ -53,15 +49,18 @@ def layout(episode, lang, clips, pauses=None, credit=True):
     chapters = {c['id']: c for c in episode['chapters']}
     cursor = 0.
     out_beats, order, transitions, capts = {}, [], [], []
+    used_pauses = {}
     n_cards = sum(c['kind'] == 'section' for c in episode['chapters'])
-    agenda_start = None
     for i, beat in enumerate(beats):
         clip = clips[beat['id']]
         take = beat.get('kind') == 'take' and chapters[beat['chapter']]['kind'] == 'section'
         prep = cursor
         start = cursor + (TAKE_PREROLL if take else 0.)
         speech_end = start + clip['speech']
-        end = speech_end + (ZH_DWELL if lang == 'zh' else 0.) + float(pauses.get(beat['id'], 0.))
+        pause = 0. if take else min(.1, max(0., float(pauses.get(beat['id'], 0.))))
+        if pause:
+            used_pauses[beat['id']] = round(pause, 3)
+        end = speech_end + min(.1, ZH_DWELL if lang == 'zh' else 0.) + pause
         nxt = beats[i + 1] if i + 1 < len(beats) else None
         chapter_change = nxt is not None and nxt['chapter'] != beat['chapter']
         info = {'start': round(start, 4), 'speech_end': round(speech_end, 4), 'char_times': clip['char_times']}
@@ -76,10 +75,6 @@ def layout(episode, lang, clips, pauses=None, credit=True):
             end = t_end
         elif chapter_change:
             end += CHAPTER_GAP
-        if chapters[beat['chapter']]['kind'] == 'agenda':
-            agenda_start = start if agenda_start is None else agenda_start
-            if chapter_change:                           # short agenda narration: wait for the cards
-                end = max(end, agenda_start + 1.4 + AGENDA_CARD * n_cards + CHAPTER_GAP)
         info['end'] = round(end, 4)
         out_beats[beat['id']] = info
         order.append(beat['id'])
@@ -100,7 +95,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         label = (c.get('label') or {}).get(lang, '').strip()
         title = (c.get('title') or {}).get(lang, '').strip()
         chaps.append({'id': c['id'], 'start': out_beats[ids[0]]['start'], 'end': out_beats[ids[-1]]['end'],
-                      'title': f'{label} · {title}' if c['kind'] not in ('intro', 'outro', 'agenda') and label
+                      'title': f'{label} · {title}' if n_cards > 1 and c['kind'] not in ('intro', 'outro', 'agenda') and label
                       and title and title.lower() != label.lower() else (label or title)})
     # Music: flagged beats, section transitions (pull-back onward) and the end card.
     music = []
@@ -119,7 +114,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         else:
             merged.append([a, b])
     return {'language': lang, 'fps': FPS, 'duration': duration, 'beats': out_beats, 'beat_order': order,
-            'pauses': {k: round(float(v), 3) for k, v in pauses.items() if v},
+            'pauses': used_pauses,
             'captions': capts, 'chapters': chaps, 'transitions': transitions,
             'music': [{'start': round(a, 4), 'end': round(b, 4)} for a, b in merged],
             'end_card': {'start': round(duration - tail, 4), 'end': duration},
