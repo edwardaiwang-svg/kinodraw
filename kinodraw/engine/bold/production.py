@@ -29,6 +29,7 @@ class BoldProduction:
                                    end=start + (e.end if e.end is not None else scene.duration),
                                    skipped=False, fixed=True, words=e.text)
                                    for start, scene in zip(self.starts, self.scenes) for e in scene.elements])
+        self.els = self.ctx.elements
         self.cuts = [start for start, scene in zip(self.starts[1:], self.scenes[1:]) if scene.transition_in == 'cut']
 
     def frame_array(self, t):

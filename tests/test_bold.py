@@ -1,5 +1,6 @@
 """Pixel-level acceptance for the smooth renderer and its hybrid joins."""
 import hashlib
+import multiprocessing
 from dataclasses import asdict
 
 import numpy as np
@@ -241,3 +242,90 @@ def test_declared_cut_is_exact():
     production = BoldProduction(scenes, size=SIZE)
     assert production.cuts == [2.5]
     assert np.array_equal(production.frame_array(2.5), render_frame(scenes[1], 0, *SIZE))
+
+
+def test_static_appearance_is_cached_across_motion_and_invalidated_on_edits(monkeypatch):
+    from kinodraw.engine.bold import render as renderer
+    renderer._LAYERS.clear()
+    calls = []
+    raster = renderer._raster
+    monkeypatch.setattr(renderer, '_raster', lambda *a, **k: calls.append(a[0]) or raster(*a, **k))
+    scene = MotionScene(elements=[E(kind='picture', svg_id='fl_rocket'), E(text='CACHED', preset='slam')], glow=0)
+    a = render_frame(scene, 2, *SIZE)
+    count = len(calls)
+    b = render_frame(scene, 2.2, *SIZE)
+    assert count == 2 and len(calls) == count
+    assert not np.array_equal(a, b)
+    scene.elements[1].text = 'EDITED'
+    edited = render_frame(scene, 2.2, *SIZE)
+    assert len(calls) == count + 1 and not np.array_equal(b, edited)
+    scene.elements[0].accent = True
+    render_frame(scene, 2.2, *SIZE)
+    assert len(calls) == count + 2
+
+
+def test_blur_reuses_rasters_and_leaves_stationary_art_sharp(monkeypatch):
+    from kinodraw.engine.bold import render as renderer
+    renderer._LAYERS.clear()
+    scene = MotionScene(elements=[E(kind='dot', kick=50, x=.3, size=40),
+                                 E(kind='ring', start=-1, x=.8, size=150)], motion_floor=0, glow=0, blur_samples=1)
+    sharp = render_frame(scene, .04, *SIZE)
+    monkeypatch.setattr(renderer, '_raster', lambda *a, **k: pytest.fail('unchanged geometry was rasterised again'))
+    scene.blur_samples = 3
+    blurred = render_frame(scene, .04, *SIZE)
+    assert np.array_equal(sharp[:, 220:], blurred[:, 220:])
+    assert not np.array_equal(sharp[:, :200], blurred[:, :200])
+
+
+def test_glow_uses_quarter_resolution_and_the_cached_art(monkeypatch):
+    from kinodraw.engine.bold import render as renderer
+    renderer._LAYERS.clear()
+    shapes = []
+    original = renderer.glow_layer
+    monkeypatch.setattr(renderer, 'glow_layer', lambda a, d: shapes.append(a.shape) or original(a, d))
+    scene = MotionScene(elements=[E(kind='ring', emissive=True)], motion_floor=0)
+    render_frame(scene, 2, *SIZE)
+    monkeypatch.setattr(renderer, '_raster', lambda *a, **k: pytest.fail('glow rasterised a second copy of the artwork'))
+    render_frame(scene, 2.1, *SIZE)
+    assert shapes == [(45, 80, 3)] * 2
+
+
+@pytest.mark.parametrize('size', [(1920, 1080), (1280, 720), (1080, 1920)])
+def test_corner_captions_have_readable_cap_height(size):
+    scene = MotionScene(elements=[E(text='H', preset='corner_caption', size=19)], motion_floor=0, glow=0)
+    frame = render_frame(scene, 2, *size)
+    rows = np.flatnonzero((frame.max(axis=2) > 100).any(axis=1))
+    assert len(rows) >= 18 * size[1] / 1080
+    long = E(text='CORNER CAPTIONS MUST STAY READABLE', preset='corner_caption', size=19, width=180)
+    doc = scene_svg(MotionScene(elements=[long]), 2, 'text')
+    assert doc.count('<text') > 1 and 'font-size="28.000000"' in doc
+
+
+def test_counter_subtitle_has_a_gap_outside_the_ring():
+    from kinodraw.engine.bold.render import element_pose
+    scene = demo_scenes()[1]
+    ring, subtitle = scene.elements[0], scene.elements[2]
+    for t in np.linspace(.6, scene.duration, 30):
+        _, ry, rs, _ = element_pose(scene, ring, 0, t)
+        _, ty, ts, _ = element_pose(scene, subtitle, 2, t)
+        assert ty - subtitle.size * ts / 2 - (ry + (ring.size / 2 + 2) * rs) >= 24
+
+
+def _bold_segment(bounds):
+    from kinodraw.engine.bold import render as renderer
+    renderer._LAYERS.clear()
+    scenes = demo_scenes()
+    for scene in scenes:
+        scene.grain = .4
+    production = BoldProduction(scenes, size=(160, 90))
+    assert production.els is production.ctx.elements    # engine.render.build's worker interface
+    start, n = bounds
+    return np.stack([production.frame_array(start + i / 30) for i in range(n)])
+
+
+def test_two_worker_splits_equal_single_process_with_cold_caches():
+    expected = _bold_segment((0, 360))
+    with multiprocessing.get_context('spawn').Pool(2) as pool:
+        for split in (75, 91, 251):    # scene boundary, inside a morph, and inside kinetic type
+            pieces = pool.map(_bold_segment, [(0, split), (split / 30, 360 - split)])
+            assert np.array_equal(expected, np.concatenate(pieces))

@@ -15,7 +15,7 @@ def demo_scenes():
     counter = MotionScene(duration=2.5, transition_in='morph', elements=[
         E(kind='ring', motif='idea', x=.5, y=.49, size=390, emissive=True),
         E(text='', preset='counter', value_to=4160, duration=1.8, x=.5, y=.46, size=132, width=700),
-        E(text='WEEKS TO MAKE IT COUNT', preset='corner_caption', x=.5, y=.65, size=22, start=.6),
+        E(text='WEEKS TO MAKE IT COUNT', preset='corner_caption', x=.5, y=.73, size=28, width=700, start=.6),
         *captions('02 / KEEP COUNTING')])
     reveal = MotionScene(duration=3., transition_in='morph', energy=4, elements=[
         E(kind='line', motif='idea', x=.5, y=.7, width=1230, size=10, emissive=True),
