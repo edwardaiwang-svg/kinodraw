@@ -759,7 +759,7 @@ function showFeedback() {
       <label for="f-url">Link to your video, if you posted it<input id="f-url" type="url" maxlength="300" placeholder="https://…" value="${esc(d.video_url)}"></label>
       <label class="row"><input id="f-quote" type="checkbox"${d.quote_ok ? ' checked' : ''}><span>KinoDraw may quote what I wrote, without my name, on its site and in reports about KinoDraw</span></label>
       <label class="row"><input id="f-age" type="checkbox"${d.age_13_plus ? ' checked' : ''}><span>I am 13 or older</span></label>
-      <label id="f-email-wrap" for="f-email"${d.age_13_plus ? '' : ' class="hidden"'}>Email, if you'd like a reply (optional)<input id="f-email" type="email" maxlength="200" placeholder="you@example.com" value="${esc(d.email)}"></label>
+      <label id="f-email-wrap" for="f-email"${d.age_13_plus ? '' : ' class="hidden"'}>Email, if you'd like a reply (optional)<input id="f-email" type="email" maxlength="200" placeholder="you@example.com" value="${esc(d.email)}"${d.age_13_plus ? '' : ' disabled'}></label>
       <p id="f-result" class="note" role="status" aria-live="polite"></p>
       <div class="send-row"><p class="muted">Send gives KinoDraw Cloud what you typed and ticked, plus the app version, your computer type, language and install ID.
         <a href="${PRIVACY}#feedback" target="_blank">Privacy</a></p><button id="f-send" type="submit" class="primary">Send</button></div>
@@ -771,7 +771,10 @@ function showFeedback() {
     video_url: $('#f-url', form).value, quote_ok: $('#f-quote', form).checked, age_13_plus: $('#f-age', form).checked,
     email: $('#f-email', form).value });
   form.oninput = () => { feedbackDraft = read(); };
-  $('#f-age', form).onchange = (e) => $('#f-email-wrap', form).classList.toggle('hidden', !e.target.checked);   // 13+ only
+  $('#f-age', form).onchange = (e) => {             // 13+ only; disabled when hidden, so a half-typed email can't stop Send
+    $('#f-email-wrap', form).classList.toggle('hidden', !e.target.checked);
+    $('#f-email', form).disabled = !e.target.checked;
+  };
   form.onsubmit = async (e) => {
     e.preventDefault();
     const f = read();

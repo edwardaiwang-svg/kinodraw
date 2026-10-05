@@ -33,9 +33,12 @@ def fake_cloud(monkeypatch, tmp_path):
             body = self.rfile.read(int(self.headers.get('Content-Length') or 0))
             seen.append((self.path, self.headers.get('Authorization'), json.loads(body)))
             status, data = reply[0]
-            out = json.dumps(data).encode()
+            if status is None:                                  # hangs up without an answer
+                self.close_connection = True
+                return
+            out = data if isinstance(data, bytes) else json.dumps(data).encode()
             self.send_response(status)
-            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Type', 'application/json' if isinstance(data, dict) else 'text/html')
             self.send_header('Content-Length', str(len(out)))
             self.end_headers()
             self.wfile.write(out)
@@ -118,6 +121,11 @@ def test_the_email_is_dropped_unless_13_or_older_is_ticked(studio, fake_cloud):
     ({'video_url': 'ftp://example.com/v'}, 'http:// or https://'),
     ({'video_url': 'https://example.com/' + 'v' * 300}, 'up to 300 characters'),
     ({'email': 'not an email'}, 'email address doesn’t look right'),
+    ({'email': 'a@b.c'}, 'email address doesn’t look right'),                  # as the cloud checks it
+    ({'email': 'x:y@example.com'}, 'email address doesn’t look right'),
+    ({'email': 'x' * 65 + '@example.com'}, 'email address doesn’t look right'),
+    ({'video_url': 'https://example.com/a\tb'}, 'http:// or https://'),
+    ({'video_url': 'https://'}, 'http:// or https://'),
     ({'quote_ok': None}, 'Tick or untick the boxes'),
     ({'age_13_plus': 'yes'}, 'Tick or untick the boxes'),
 ])
@@ -155,6 +163,27 @@ def test_no_internet_is_a_plain_sentence_and_send_again_works(studio, fake_cloud
                                               'internet connection and press Send again.')
     monkeypatch.setattr(cloud, 'URL', working)
     assert studio('/api/feedback', FORM) == (200, {'ok': True}) and len(seen) == 1
+
+
+UNREACHABLE = 'Your feedback wasn’t sent. KinoDraw Cloud can’t be reached. Check your internet connection and press Send again.'
+
+
+@pytest.mark.parametrize('answer', [(200, b'<html>Sign in to the school Wi-Fi</html>'), (None, None)])
+def test_a_wifi_sign_in_page_or_a_hang_up_is_the_no_internet_sentence(studio, fake_cloud, answer):
+    seen, reply = fake_cloud
+    reply[0] = answer
+    assert studio('/api/feedback', FORM) == (502, {'error': UNREACHABLE}) and len(seen) == 1
+    assert studio('/api/state')[1]['feedback_sent'] is False
+
+
+def test_a_cloud_that_never_answers_is_given_up_on_soon_with_the_same_sentence(studio, monkeypatch):
+    waited = []
+
+    def no_answer(request, timeout):
+        waited.append(timeout)
+        raise TimeoutError('timed out')
+    monkeypatch.setattr(cloud, 'urlopen', no_answer)
+    assert studio('/api/feedback', FORM) == (502, {'error': UNREACHABLE}) and waited[0] <= 30
 
 
 def test_feedback_is_sent_with_an_offline_project_and_no_keychain(studio, fake_cloud, monkeypatch, tmp_path):

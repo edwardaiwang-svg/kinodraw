@@ -693,7 +693,7 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
 
 # ------------------------------------------------------------------ feedback
 FEEDBACK_USES = ('school', 'work', 'personal', 'other')
-EMAIL = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+EMAIL = re.compile(r'[^\s@:]{1,64}@[^\s@]{1,253}\.[^\s@]{2,24}')          # KinoDraw Cloud's own check
 NOT_SENT = 'Your feedback wasn’t sent.'
 
 
@@ -727,7 +727,7 @@ def feedback_body(body: dict) -> dict:
     url = url.strip() if isinstance(url, str) else ''
     if url:
         parsed = urlparse(url)
-        if parsed.scheme not in ('http', 'https') or not parsed.netloc or len(url) > 300 or ' ' in url:
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc or len(url) > 300 or re.search(r'\s', url):
             raise ValueError('The video link should start with http:// or https:// (up to 300 characters).')
         out['video_url'] = url
     for box in ('quote_ok', 'age_13_plus'):
@@ -754,11 +754,15 @@ class FeedbackNotSent(Exception):
 def send_feedback(body: dict) -> dict:
     """Send the feedback form to KinoDraw Cloud: the user pressed Send, so it goes whichever director is chosen, with
     no sign-in and no cloud token. Remembers that feedback was sent once, so the card after a video stays quiet."""
+    from http.client import HTTPException
     from ..director.llm import cloud
     from ..director.llm.providers import ProviderError
     sent = feedback_body(body)
     try:
         cloud.feedback(sent)
+    except (OSError, ValueError, HTTPException) as error:    # no answer, a hang-up or a Wi-Fi sign-in page, not JSON
+        raise FeedbackNotSent(f'{NOT_SENT} KinoDraw Cloud can’t be reached. Check your internet connection and '
+                              'press Send again.') from error
     except ProviderError as error:
         status, detail = getattr(error, 'status', None), getattr(error, 'detail', '')
         if status == 404:                               # a KinoDraw Cloud from before feedback

@@ -113,7 +113,7 @@ class EmailUnavailable(ValueError):
     plain sentence to show, with the way to go on offline."""
 
 
-def _call(path: str, body: dict | None = None, token: str | None = None) -> dict:
+def _call(path: str, body: dict | None = None, token: str | None = None, timeout: int = 180) -> dict:
     if not URL:
         raise ProviderError('KinoDraw Cloud is not available in this build yet; use offline mode or your own key')
     req = urllib.request.Request(URL.rstrip('/') + path, method='POST' if body is not None else 'GET',
@@ -121,7 +121,7 @@ def _call(path: str, body: dict | None = None, token: str | None = None) -> dict
                                  headers={'Content-Type': 'application/json', 'User-Agent': USER_AGENT,
                                           **({'Authorization': f'Bearer {token}'} if token else {})})
     try:
-        with urlopen(req, timeout=180) as response:
+        with urlopen(req, timeout=timeout) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as error:
         try:
@@ -159,7 +159,7 @@ def me() -> dict:
 
 def feedback(body: dict) -> dict:
     """Send what the user wrote in the Studio's feedback form. No token: feedback needs no account, even Offline."""
-    return _call('/v1/feedback', body)
+    return _call('/v1/feedback', body, timeout=30)          # a short wait: someone is watching the Send button
 
 
 class CloudProvider:

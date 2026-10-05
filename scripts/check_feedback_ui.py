@@ -6,7 +6,8 @@ The Python running this needs Playwright (pip install playwright; playwright ins
 one that runs the Studio (default: this one); CHROMIUM, if set, is the browser to use (a Playwright headless shell from
 another version, say). The Studio gets a scratch home folder, no keychain and no cloud token.
 It opens the form from the sidebar and from the card a finished video shows, ticks "I am 13 or older" (the email field
-appears), sends once into a cloud failure (the form keeps everything and says why), sends again and sees the thank-you.
+appears), half types an email and unticks it, sends once into a cloud failure (Send still goes, with no email; the form
+keeps everything and says why), ticks 13+ again, sends again and sees the thank-you.
 With --make it first makes a real video from tests/fixtures/tiny.md and checks the card appears after it (needs the
 voice and doodle-search models, e.g. KINODRAW_MODELS). Exit 0 when every check holds.
 """
@@ -125,11 +126,17 @@ def main():
             page.locator('#modal .modal-box').screenshot(path=str(args.shot))
             print(f'screenshot {args.shot}')
 
-            page.click('#f-send')                                              # the cloud is busy the first time
+            page.fill('#f-email', 'me@')                                       # half typed, then 13+ unticked:
+            page.uncheck('#f-age')
+            expect(page.locator('#f-email-wrap')).to_be_hidden()
+            page.click('#f-send')                                              # Send still goes (the cloud is busy)
             expect(page.locator('#f-result')).to_contain_text('Your feedback wasn’t sent. KinoDraw Cloud had a problem.')
+            assert len(seen) == 1 and 'email' not in seen[0][2] and seen[0][2]['age_13_plus'] is False, seen
             assert page.input_value('#f-text').startswith('The doodles were lovely.')   # nothing typed is lost
-            assert page.input_value('#f-email') == 'teacher@example.com' and page.is_checked('#f-age')
             page.screenshot(path=str(args.shot.with_name('retry.png')))
+            page.check('#f-age')
+            assert page.input_value('#f-email') == 'me@'                       # kept for when 13+ is ticked again
+            page.fill('#f-email', 'teacher@example.com')
             page.click('#f-send')
             expect(page.locator('#modal-body h2')).to_have_text('Thank you!')
             page.screenshot(path=str(args.shot.with_name('thanks.png')))
