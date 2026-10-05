@@ -12,7 +12,7 @@
 <aside id="side">
   <div class="brand">Kino<span>Draw</span></div>
   <button id="btn-new" class="primary wide">+ New video</button>
-  <button id="btn-sample" class="ghost wide">Watch an example</button>
+  <button id="btn-trash">Trash</button><button id="btn-sample" class="ghost wide">Watch an example</button>
   <div class="side-label">Your videos</div>
   <nav id="projects"></nav>
   <button id="btn-settings" class="ghost wide">Settings</button>
@@ -62,6 +62,7 @@
         <div id="speed-wrap"></div>
       </div>
       <label>Director <select id="director"></select></label>
+      <label><input id="director-v3" type="checkbox" checked> Whole-story director v3 — chooses cast, treatments and style. Uncheck for legacy/manual whiteboard.</label>
       <label>Style <select id="style"></select></label>
       <label>Format <select id="format"></select></label>
       <label id="motion-wrap" class="hidden">Motion <select id="motion"><option value="calm">Calm</option><option value="lively" selected>Lively</option>
@@ -92,12 +93,14 @@
         <button id="p-redirect" class="ghost">Re-plan visuals</button>
         <button id="p-reveal" class="ghost">Open folder</button>
         <label class="check"><input id="p-credit" type="checkbox" checked><span></span></label>
-        <button id="p-make" class="primary">Make video</button>
+        <button id="p-export" class="ghost hidden">Export</button><button id="p-projectzip" class="ghost hidden">Project ZIP</button><button id="p-make" class="primary">Make video</button>
       </div>
     </header>
     <div class="tabs"><button data-tab="board" class="on">Storyboard</button><button data-tab="narrator">Narrator</button><button data-tab="video">Video</button></div>
+    <div id="p-plan-source" class="muted"></div>
+    <details id="p-plan" class="hidden"><summary>Saved cast and scene treatments (JSON)</summary><label>Cast<textarea id="plan-cast"></textarea></label><label>Scene treatments<textarea id="plan-scenes"></textarea></label><label>Style configuration<textarea id="plan-style"></textarea></label></details>
     <div id="tab-board">
-      <div class="board-bar"><span id="dirty" class="muted"></span><button id="p-save" class="primary small" disabled>Save changes</button></div>
+      <div class="board-bar"><button id="p-undo" disabled>Undo</button><button id="p-redo" disabled>Redo</button><button id="p-versions">Versions</button><button id="p-rename">Rename</button><button id="p-duplicate">Duplicate</button><button id="p-trash">Trash</button><span id="dirty" class="muted" role="status" aria-live="polite"></span><button id="p-save" class="primary small" disabled>Save changes</button></div>
       <div id="board"></div>
     </div>
     <div id="tab-narrator" class="hidden"></div>
@@ -107,7 +110,7 @@
 
 <div id="modal" class="modal hidden"><div class="modal-box"><button class="close">×</button><div id="modal-body"></div></div></div>
 <div id="progress" class="modal hidden"><div class="modal-box progress-box">
-  <div id="prog-title">Working…</div><div class="bar"><div id="prog-fill"></div></div><div id="prog-stage" class="muted"></div>
+  <button id="prog-cancel" class="small">Cancel</button><div id="prog-title">Working…</div><div class="bar"><div id="prog-fill"></div></div><div id="prog-stage" class="muted"></div>
 </div></div>
 <div id="toast" class="hidden"></div>
 </body>

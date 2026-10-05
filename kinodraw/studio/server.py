@@ -24,6 +24,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import PRODUCT, VERSION, director, paths, pipeline, styles, voice, voice_server
+from ..project_store import ProjectStore, RevisionConflict, atomic_save_json
 from ..director import style
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
@@ -52,10 +53,57 @@ def _config() -> dict:
 
 def _save_config(cfg: dict):
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, indent=1), encoding='utf-8')
+    atomic_save_json(CONFIG, cfg)
 
 
 # ------------------------------------------------------------------ jobs
+class JobCancelled(ValueError):
+    pass
+
+
+class JobContext:
+    """Callable progress seam; subprocess exporters may use run_process/check_cancelled."""
+    def __init__(self, job):
+        self.job = job
+        self.cancelled = threading.Event()
+
+    def check_cancelled(self):
+        if self.cancelled.is_set():
+            raise JobCancelled('Cancelled. You can retry.')
+
+    def __call__(self, stage, done, total):
+        self.check_cancelled()
+        self.job.update(stage=stage, done=done, total=total)
+
+    def run_process(self, args, **kwargs):
+        import subprocess
+        self.check_cancelled()
+        # The caller owns output files and engine logic. Avoid pipe deadlocks here.
+        if kwargs.get('stdout') == subprocess.PIPE or kwargs.get('stderr') == subprocess.PIPE:
+            raise ValueError('Use output files rather than PIPE with job subprocesses')
+        process = subprocess.Popen(args, **kwargs)
+        try:
+            while process.poll() is None:
+                if self.cancelled.wait(.05):
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        process.kill(); process.wait()
+                    self.check_cancelled()
+            self.check_cancelled()
+            if process.returncode:
+                raise subprocess.CalledProcessError(process.returncode, args)
+            return process.returncode
+        finally:
+            if process.poll() is None:
+                process.kill(); process.wait()
+
+
+# Main integration registers only exported, implemented seams. Nothing fakes success.
+STUDIO_HOOKS = {}  # provider(body), writer(body), starters(), export(path, body, context), projectzip(path, body, context)
+
+
 class Jobs:
     """One heavy job at a time (voice/render are CPU-bound); others wait in order."""
 
@@ -63,6 +111,7 @@ class Jobs:
         self.jobs: dict[str, dict] = {}
         self.lock = threading.Lock()
         self.run_lock = threading.Lock()
+        self.contexts = {}
 
     def start(self, kind: str, project: str, fn) -> str:
         jid = uuid.uuid4().hex[:10]
@@ -71,20 +120,34 @@ class Jobs:
         with self.lock:
             self.jobs[jid] = job
 
-        def progress(stage, done, total):
-            job.update(stage=stage, done=done, total=total)
+        progress = JobContext(job)
+        self.contexts[jid] = progress
 
         def run():
             with self.run_lock:
-                job['state'] = 'running'
                 try:
+                    progress.check_cancelled()
+                    job['state'] = 'running'
                     job['result'] = fn(progress)
+                    progress.check_cancelled()
                     job['state'] = 'done'
+                except JobCancelled as error:
+                    job.update(state='cancelled', error=str(error))
                 except Exception as error:  # noqa: BLE001 - shown to the user
                     job.update(state='failed', error=_plain(error))
                     traceback.print_exc()
         threading.Thread(target=run, daemon=True).start()
         return jid
+
+    def cancel(self, jid):
+        with self.lock:
+            job = self.jobs.get(jid)
+            if job is None:
+                raise FileNotFoundError(jid)
+            if job['state'] not in ('done', 'failed', 'cancelled'):
+                job['state'] = 'cancelling'
+                self.contexts[jid].cancelled.set()
+            return dict(job)
 
     def get(self, jid: str) -> dict | None:
         return self.jobs.get(jid)
@@ -107,6 +170,10 @@ def _project(name: str) -> Path:
     if not re.fullmatch(r'[\w\- .]{1,80}', name) or name.startswith('.'):
         raise ValueError('bad project name')
     path = projects_root() / name
+    if path.is_symlink() or path.resolve().parent != projects_root().resolve():
+        raise ValueError('Project must be inside the owned projects folder')
+    if (path / '.studio/pending.json').exists():
+        _store(path).load()
     if not (path / 'project.json').exists():
         raise FileNotFoundError(name)
     return path
@@ -122,13 +189,13 @@ def _slug(title: str) -> str:
 
 def _summary(path: Path) -> dict:
     try:
-        board = pipeline.storyboard(path)
-        cfg = pipeline.settings(path)
+        saved = _store(path).load()
+        board, cfg = saved['storyboard'], saved['settings']
         videos = sorted(p.name for p in path.glob('*.mp4') if not p.name.endswith('.partial.mp4'))
         return {'name': path.name, 'title': board['title'][board['lang']], 'lang': board['lang'],
                 'beats': len(board['beats']), 'director': cfg.get('director', 'rules'), 'videos': videos,
                 'thumbnail': next((p.name for p in path.glob('*-thumbnail.png')), None),
-                'modified': path.stat().st_mtime}
+                'trashed': bool(cfg.get('studio_trashed')), 'modified': path.stat().st_mtime}
     except Exception:  # noqa: BLE001 - a half-created folder
         return {'name': path.name, 'title': path.name, 'broken': True, 'modified': path.stat().st_mtime}
 
@@ -155,7 +222,8 @@ def _server_voice_name(name) -> str:
 def voice_settings(name: str, body: dict | None = None) -> dict:
     """Read or save the project's voice, speed and pronunciations."""
     path = _project(name)
-    cfg = pipeline.settings(path)
+    saved = _store(path).load()
+    cfg = saved['settings']
     pronounce = path / pipeline.PRONOUNCE
     if body is not None:
         settings = _voice_settings(cfg['lang'], body.get('voice'), body.get('speed'))
@@ -165,7 +233,7 @@ def voice_settings(name: str, body: dict | None = None) -> dict:
         if not isinstance(text, str):
             raise ValueError('Pronunciations should be text: word = how to say it.')
         voice.parse_lexicon(text)
-        pipeline._save(path / 'project.json', {**cfg, **settings})
+        _store(path).save(saved['storyboard'], {**cfg, **settings}, body.get('revision', saved['revision']))
         if text.strip():
             pronounce.write_text(text, encoding='utf-8')
         else:
@@ -239,7 +307,8 @@ def apply_video_settings(path: Path) -> voice_server.Server | None:
     """Apply this computer's Studio choices to the project's next video: the credit, and the voice server (the
     Settings address and model, with the project's own server voice name if it has one). Returns that server, or None
     for the built-in voice; a project's own settings never choose the address."""
-    cfg, studio = pipeline.settings(path), _config()
+    saved = _store(path).load()
+    cfg, studio = saved['settings'], _config()
     cfg['credit'] = project_credit(path, cfg)   # the project's own end-card box (project_credit)
     spec, server = studio.get('voice_server', {}), None
     if spec.get('on'):
@@ -247,11 +316,11 @@ def apply_video_settings(path: Path) -> voice_server.Server | None:
         cfg['voice_server'] = voice_server.record(server)
     else:
         cfg.pop('voice_server', None)
-    pipeline._save(path / 'project.json', cfg)
+    _store(path).save(saved['storyboard'], cfg, saved['revision'])
     return server
 
 
-def create_project(body: dict) -> dict:
+def create_project(body: dict, provider=None) -> dict:
     text = (body.get('text') or '').strip()
     if not text:
         raise ValueError('paste a script or choose a file')
@@ -260,12 +329,15 @@ def create_project(body: dict) -> dict:
     doc = ingest.read(text, title=title)
     name = _slug(doc.title)
     path = projects_root() / name
-    mode = body.get('director') or 'rules'
+    mode = body.get('director') or ('cloud' if (body.get('lang') or doc.lang) in ('en', 'zh') else 'rules')
     lang = body.get('lang') or doc.lang
+    if mode == 'cloud' and lang not in ('en', 'zh'):
+        mode = 'rules'
     settings = {k: body[k] for k in ('workers',) if body.get(k)}
     settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
     auto = body.get('look') == style.AUTO                                    # "Choose for me": the director picks
     settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), None if auto else body.get('look'))
+    settings['director_v3'] = body.get('director_v3', True) is not False
     settings.update(credit=True, credit_chosen=True)                         # the end card starts on, whatever 0.2.0 said
     if _config().get('voice_server', {}).get('on') and body.get('server_voice'):
         if chosen := _server_voice_name(body['server_voice']):               # blank = the Settings voice
@@ -276,7 +348,9 @@ def create_project(body: dict) -> dict:
     def job(progress):
         progress('storyboard', 0, 1)
         pick = None
-        if auto:                                      # once, before the storyboard; saved, so a re-plan never re-picks
+        if auto and settings['director_v3']:
+            direction.update(look='whiteboard', story='story', motion=None)
+        if auto and not settings['director_v3']:       # once, before the storyboard; saved, so a re-plan never re-picks
             progress('style', 0, 1)
             pick = style.choose(doc, mode, lang, settings['aspect'], direction['brand'], body.get('model') or None,
                                 body.get('base_url') or None)
@@ -284,12 +358,26 @@ def create_project(body: dict) -> dict:
             direction.update(look=look, story=story, motion=None,
                              brand=direction['brand'] if story == 'promo' else None)
             settings['style_pick'] = pick
-        pipeline.new_project(text, path, title=title, lang=body.get('lang') or None, direction=direction,
-                             director=mode, **settings)
-        report = director.direct(path, mode, body.get('model') or None, body.get('base_url') or None, progress)
+        # Pipeline may write intermediate JSON; keep that work out of the live project.
+        store = _store(path)
+        store.meta.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='create-', dir=store.meta) as folder:
+            scratch = Path(folder)
+            pipeline.new_project(text, scratch, title=title, lang=body.get('lang') or None, direction=direction,
+                                 director=mode, **settings)
+            if settings['director_v3']:
+                chosen = provider if provider is not None else STUDIO_HOOKS.get('provider', lambda b: mode)(body)
+                report = pipeline.direct_v3(scratch, provider=chosen)
+            else:
+                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress)
+            progress.check_cancelled()
+            import shutil
+            for source in scratch.glob('script.*'):
+                shutil.copy2(source, path / source.name)
+            store.initialize(pipeline.storyboard(scratch), pipeline.settings(scratch))
         usage = report.get('usage')
         return {'project': name, 'notes': report.get('notes', [])[:20], 'style': pick,
-                'cost': None if not usage else usage.cost_usd, 'calls': 0 if not usage else usage.calls}
+                'cost': None if not usage else (usage.get('cost_usd', 0) if isinstance(usage, dict) else usage.cost_usd), 'calls': 0 if not usage else (usage.get('calls', 0) if isinstance(usage, dict) else usage.calls)}
     return {'job': JOBS.start('create', name, job), 'project': name}
 
 
@@ -307,17 +395,19 @@ def set_credit(name: str, body: dict) -> dict:
     if not isinstance(body.get('credit'), bool):
         raise ValueError('credit must be true or false')
     path = _project(name)
-    cfg = pipeline.settings(path)
+    saved = _store(path).load()
+    cfg = saved['settings']
     cfg.update(credit=body['credit'], credit_chosen=True)
-    pipeline._save(path / 'project.json', cfg)
+    _store(path).save(saved['storyboard'], cfg, body.get('revision', saved['revision']))
     return cfg
 
 
 def set_format(name: str, body: dict) -> dict:
     path = _project(name)
-    cfg = pipeline.settings(path)
+    saved = _store(path).load()
+    cfg = saved['settings']
     cfg['aspect'] = pipeline.validate_aspect(body.get('aspect'), pipeline.storyboard(path).get('look'))
-    pipeline._save(path / 'project.json', cfg)
+    _store(path).save(saved['storyboard'], cfg, body.get('revision', saved['revision']))
     return cfg
 
 
@@ -343,6 +433,8 @@ def make_video(name: str) -> dict:
     path = _project(name)
 
     def job(progress):
+        if 'make' in STUDIO_HOOKS:
+            return STUDIO_HOOKS['make'](path, {}, progress)
         server = apply_video_settings(path)
         if server:
             server.key = voice_server.api_key(server.url, env_without_base=False)
@@ -571,15 +663,33 @@ def use_take(name: str) -> dict:
 
 def redirect(name: str, body: dict) -> dict:
     path = _project(name)
+    expected = body.get('revision')
     mode = body.get('director') or 'rules'
-
     def job(progress):
-        report = director.direct(path, mode, body.get('model') or None, body.get('base_url') or None, progress)
-        cfg = pipeline.settings(path)
+        store = _store(path)
+        state = store.load()
+        store.snapshot('Before replan', expected)
+        cfg = state['settings']
         cfg['director'] = mode
-        (path / 'project.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
-        usage = report.get('usage')
-        return {'notes': report.get('notes', [])[:20], 'cost': None if not usage else usage.cost_usd}
+        # Plan in an owned scratch folder; only a complete validated result is committed.
+        with tempfile.TemporaryDirectory(prefix='replan-', dir=store.meta) as folder:
+            scratch = Path(folder)
+            atomic_save_json(scratch / 'storyboard.json', state['storyboard'])
+            if cfg.get('director_v3'):
+                for key in ('plan_v3', 'plan_v3_report', 'scene_treatments'):
+                    cfg.pop(key, None)
+                atomic_save_json(scratch / 'project.json', cfg)
+                report = pipeline.direct_v3(scratch, provider=STUDIO_HOOKS.get('provider', lambda b: mode)(body))
+            else:
+                atomic_save_json(scratch / 'project.json', cfg)
+                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress)
+            progress.check_cancelled()
+            store.save(pipeline.storyboard(scratch), pipeline.settings(scratch), state['revision'], 'Before replan commit')
+        return {'notes': report.get('notes', [])[:20], 'report': report}
+    # Reject stale callers synchronously (409), also check again when queued work begins.
+    state = _store(path).load()
+    if expected is not None and expected != state['revision']:
+        raise RevisionConflict(state['revision'])
     return {'job': JOBS.start('direct', name, job)}
 
 
@@ -633,13 +743,43 @@ def move_picture(board: dict, beat_id: str, visual: int, to: int, item: int | No
     return moved
 
 
-def save_storyboard(name: str, board: dict) -> dict:
+def _store(path):
+    return ProjectStore(path, lambda board: validate(board, path))
+
+
+def save_storyboard(name: str, board: dict, revision=None, plan=None) -> dict:
     path = _project(name)
     report = validate(board, path)
     if not report['ok']:
         return {'ok': False, 'errors': report['errors'][:20]}
-    (path / 'storyboard.json').write_text(json.dumps(board, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
-    return {'ok': True, 'warnings': report['warnings']}
+    store = _store(path)
+    cfg = None
+    if plan is not None:
+        from ..director.v3.validate import validate as validate_plan
+        from ..director.v3.adapter import adapt
+        with store.locked():
+            state = store._state()
+            store._check(state, revision)
+            cfg = state['settings']
+            checked = plan
+            if plan != cfg.get('plan_v3'):
+                from ..director.validate import _doodles
+                candidates = {beat['id']: list(_doodles(beat.get('visuals', []))) for beat in board['beats']}
+                for scene in (cfg.get('plan_v3') or {}).get('scenes', []):
+                    refs = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture']
+                    for bid in scene['beat_ids']:
+                        candidates.setdefault(bid, []).extend(refs)
+                checked, repairs = validate_plan(plan, board, candidates)
+                if repairs:
+                    raise ValueError('Invalid plan: ' + '; '.join(repairs[:10]))
+            # Re-adapt only changed plans; ordinary board edits must retain manual visuals.
+            if checked != cfg.get('plan_v3'):
+                board, treatments = adapt(checked, board)
+                cfg.update(plan_v3=checked, scene_treatments=treatments, director_v3=True)
+            # save outside this lock, with the same revision check protecting the gap.
+    saved = store.save(board, cfg, revision)
+    return {'ok': True, 'warnings': report['warnings'], 'revision': saved['revision'],
+            'storyboard': saved['storyboard'], 'settings': saved['settings']}
 
 
 def search_doodles(query: str, lang: str) -> list:
@@ -794,7 +934,8 @@ def state() -> dict:
         server['key_saved'] = False
     signed_in = bool(cloud.URL) and ('cloud-token' in names or bool(paths.getenv('KINODRAW_CLOUD_TOKEN')))
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
-            'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
+            'default_director': 'cloud' if cloud.URL else 'rules',   # signed out, a first video needs no account
+            'hooks': {k: k in STUDIO_HOOKS for k in ('writer', 'starters', 'export', 'projectzip')},
             'cloud': None, 'install_id': cloud.kept_install_id(),     # shown in Settings, to ask for its data to be deleted
             'cloud_languages': list(cloud.CloudProvider.languages),   # others are planned offline, never asked
             'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
@@ -919,6 +1060,8 @@ class Handler(BaseHTTPRequestHandler):
             if parts[0] != 'api':
                 return self._json({'error': 'not found'}, 404)
             return self._api(method, parts[1:], q)
+        except RevisionConflict as error:
+            self._json({'error': str(error), 'code': 'revision_conflict', 'revision': error.revision}, 409)
         except FileNotFoundError as error:
             self._json({'error': f'not found: {error}'}, 404)
         except ValueError as error:
@@ -928,6 +1071,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json({'error': f'{type(error).__name__}: {error}'}, 500)
 
     def _api(self, method, p, q):
+        if p == ['writer'] and method == 'POST':
+            if 'writer' not in STUDIO_HOOKS:
+                return self._json({'error': 'Topic writer is unavailable until the writer module is integrated.'}, 503)
+            return self._json(STUDIO_HOOKS['writer'](self._body()))
+        if p == ['starters'] and method == 'GET':
+            if 'starters' not in STUDIO_HOOKS:
+                return self._json({'error': 'Starter projects are not integrated.'}, 503)
+            return self._json(STUDIO_HOOKS['starters']())
         if p == ['state'] and method == 'GET':
             return self._json(state())
         if p == ['voice-server'] and method == 'POST':
@@ -942,34 +1093,89 @@ class Handler(BaseHTTPRequestHandler):
             settings = _voice_settings(p[1], p[2], q.get('speed', 1.0))
             return self._file(voice.preview(settings['voice'], p[1], settings['speed']), 'audio/wav')
         if p == ['projects'] and method == 'GET':
-            items = [_summary(d) for d in projects_root().iterdir() if (d / 'project.json').exists()]
-            return self._json(sorted(items, key=lambda x: -x['modified']))
+            items = [_summary(d) for d in projects_root().iterdir() if d.is_dir() and not d.is_symlink() and not d.name.startswith('.') and ((d / 'project.json').exists() or (d / '.studio/pending.json').exists())]
+            return self._json(sorted([x for x in items if bool(x.get('trashed')) == (q.get('trash') == '1')], key=lambda x: -x['modified']))
         if p == ['projects'] and method == 'POST':
             return self._json(create_project(self._body()))
         if len(p) >= 2 and p[0] == 'projects':
             name = p[1]
             if len(p) == 2 and method == 'GET':
                 path = _project(name)
-                return self._json({**_summary(path), 'storyboard': pipeline.storyboard(path),
-                                   'settings': pipeline.settings(path), 'credit': project_credit(path),
+                saved = _store(path).load()
+                return self._json({**_summary(path), **saved, 'credit': project_credit(path),
                                    'qa': json.loads((path / 'build/qa.json').read_text(encoding='utf-8')) if (path / 'build/qa.json').exists() else None})
             if p[2:] == ['storyboard'] and method == 'PUT':
-                return self._json(save_storyboard(name, self._body()))
+                body = self._body()
+                if not body.get('revision') or 'storyboard' not in body:
+                    return self._json({'error': 'Load the project revision before saving.'}, 428)
+                result = save_storyboard(name, body['storyboard'], body['revision'], body.get('plan_v3'))
+                return self._json(result, 200 if result['ok'] else 400)
             if p[2:] == ['reorder'] and method == 'POST':
                 try:
                     body = self._body()
                     board = body['storyboard'] if 'storyboard' in body else pipeline.storyboard(_project(name))
                     board = move_picture(board, body.get('beat'), body.get('visual'), body.get('to'), body.get('item'))
-                    result = save_storyboard(name, board)
+                    if not body.get('revision'):
+                        return self._json({'error': 'Load the project revision before saving.'}, 428)
+                    result = save_storyboard(name, board, body['revision'])
+                except RevisionConflict:
+                    raise
                 except ValueError as error:
                     return self._json({'ok': False, 'errors': [str(error)]}, 400)
                 if result['ok']:
                     result['storyboard'] = board
                 return self._json(result, 200 if result['ok'] else 400)
+            if p[2:] in (['rename'], ['duplicate'], ['trash'], ['untrash']) and method == 'POST':
+                body, path = self._body(), _project(name)
+                store = _store(path)
+                project_state = store.load()
+                if not body.get('revision'):
+                    return self._json({'error': 'Revision required'}, 428)
+                if body['revision'] != project_state['revision']:
+                    raise RevisionConflict(project_state['revision'])
+                if p[2] == 'duplicate':
+                    import shutil
+                    target = projects_root() / _slug(body.get('title') or name + ' copy')
+                    with store.locked():
+                        store._check(store._state(), body['revision'])
+                        if any(x.is_symlink() for x in path.rglob('*')):
+                            raise ValueError('Projects with linked files cannot be duplicated')
+                        shutil.copytree(path, target, ignore=shutil.ignore_patterns('.studio', 'build'))
+                    return self._json({'project': target.name})
+                if p[2] == 'rename':
+                    title = str(body.get('title') or '').strip()[:200]
+                    if not title:
+                        raise ValueError('Title required')
+                    project_state['storyboard']['title'][project_state['storyboard']['lang']] = title
+                    project_state['settings']['title'] = title
+                else:
+                    project_state['settings']['studio_trashed'] = p[2] == 'trash'
+                return self._json(store.save(project_state['storyboard'], project_state['settings'], body['revision']))
+            if p[2:] == ['versions']:
+                store = _store(_project(name))
+                if method == 'GET':
+                    return self._json(store.versions())
+                body = self._body()
+                if not body.get('revision'):
+                    return self._json({'error': 'Revision required'}, 428)
+                return self._json(store.snapshot(body.get('label') or 'Saved version', body['revision']))
+            if p[2:] == ['restore'] and method == 'POST':
+                body = self._body()
+                if not body.get('revision'):
+                    return self._json({'error': 'Revision required'}, 428)
+                return self._json(_store(_project(name)).restore(body.get('version'), body['revision']))
+            if p[2:] in (['export'], ['projectzip']) and method == 'POST':
+                kind, body, path = p[2], self._body(), _project(name)
+                if kind not in STUDIO_HOOKS:
+                    return self._json({'error': kind + ' is unavailable until its module is integrated.'}, 503)
+                return self._json({'job': JOBS.start(kind, name, lambda context: STUDIO_HOOKS[kind](path, body, context))})
             if p[2:] == ['voice'] and method in ('GET', 'PUT'):
                 return self._json(voice_settings(name, self._body() if method == 'PUT' else None))
             if p[2:] == ['direct'] and method == 'POST':
-                return self._json(redirect(name, self._body()))
+                body = self._body()
+                if not body.get('revision'):
+                    return self._json({'error': 'Revision required'}, 428)
+                return self._json(redirect(name, body))
             if p[2:] == ['format'] and method == 'POST':
                 return self._json(set_format(name, self._body()))
             if p[2:] == ['credit'] and method == 'POST':
@@ -993,6 +1199,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, still(name, q.get('beat'), float(q.get('offset', 0)), float(q.get('t', 0))), 'image/jpeg')
             if p[2:] == ['reveal'] and method == 'POST':
                 return self._json(_reveal(_project(name)))
+        if p[:1] == ['jobs'] and len(p) == 3 and p[2] == 'cancel' and method == 'POST':
+            return self._json(JOBS.cancel(p[1]))
         if p[:1] == ['jobs'] and len(p) == 2 and method == 'GET':
             job = JOBS.get(p[1])
             return self._json(job) if job else self._json({'error': 'no such job'}, 404)

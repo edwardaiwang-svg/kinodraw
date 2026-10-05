@@ -21,8 +21,8 @@ const PICKER = { rules: 'offline word rules', cloud: 'KinoDraw Cloud AI', openai
 const autoLabel = (director) => `Choose for me (${PICKER[director] || PICKER.rules})`;
 function autoNote(director) {
   const who = director === 'rules'
-    ? 'The offline word rules pick on this computer from words in your script; nothing is sent.'
-    : `${director === 'cloud' ? 'KinoDraw Cloud AI (GPT-6 Luna)' : PICKER[director][0].toUpperCase() + PICKER[director].slice(1)} picks from the title, the headings and the first 600 characters of your script.`;
+    ? 'The offline word rules pick on this computer from words in your script; planning text is not uploaded.'
+    : `${director === 'cloud' ? 'KinoDraw Cloud AI' : PICKER[director][0].toUpperCase() + PICKER[director].slice(1)} receives the full story and planning prompt to choose the video plan. Use Offline to keep planning on this computer.`;
   return `${who} Only styles that work in the chosen format are picked. Name a product below only for a promo (then the paper-collage promo can be picked).`;
 }
 const pickLine = (pick) => `Style: ${pick.label}, chosen by ${pick.by === 'rules' ? 'the offline word rules' : PICKER[pick.by] || pick.by}: ${pick.reason}${pick.note ? ` (${pick.note})` : ''}`;
@@ -43,13 +43,23 @@ function wholeVideoOffline(res) {          // KinoDraw Cloud refused the video (
   return res?.notes?.find((n) => n.startsWith('The offline director planned this video')) || null;
 }
 let STATE = null, current = null, board = null, dirty = false, cloudEmail = '';   // the sign-in address, kept between openings
+let revision = null, plan = null, history = [], future = [], lastEdit = null, saveTimer = null, saving = null, planError = '', rawPlan = {};
+const editState = () => JSON.stringify({ board, plan });
+const saveState = () => JSON.stringify({ board, plan, rawPlan, planError });
+const draftKey = (name) => `kinodraw-draft:${STATE.projects_root}:${name}`;
+function saveStatus(message) { if ($('#dirty')) $('#dirty').textContent = message; }
+function keepDraft() {
+  try { localStorage.setItem(draftKey(current), JSON.stringify({ revision, rawPlan, ...JSON.parse(editState()) })); }
+  catch (e) { saveStatus('Draft could not be kept in this browser: ' + e.message); }
+}
+
 let cloudAsks = '';                         // KinoDraw Cloud's sentence when it asks for an email sign-in
 
 async function api(path, opts = {}) {
   const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
   const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, ...type, ...(opts.headers || {}) } });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code });
+  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code, status: r.status });
   return data;
 }
 const doodleSrc = (id) => `/doodle/${encodeURIComponent(id)}.svg?token=${T}${current ? `&project=${encodeURIComponent(current)}` : ''}`;
@@ -136,6 +146,11 @@ const voiceMeta = (id, server) => (STATE.voice_server?.on      // with Settings 
 
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
 async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
+  $('#prog-cancel').disabled = false;
+  $('#prog-cancel').onclick = async () => {
+    try { await api(`/api/jobs/${job}/cancel`, { method: 'POST' }); $('#prog-cancel').disabled = true; $('#prog-stage').textContent = 'Cancellation requested; waiting for the current step to stop…'; }
+    catch (e) { toast(e.message); }
+  };
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
   const STAGES = { storyboard: 'Reading the script', style: 'Choosing a style', director: 'Planning the visuals', voice: 'Recording the narration',
     timeline: 'Timing captions and music', render: 'Drawing the video (the longest step)', finish: 'Adding music, captions and chapters',
@@ -152,10 +167,10 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
     $('#prog-fill').style.width = `${Math.min(99, ((k + frac) / order.length) * 100)}%`;
     const count = j.stage.startsWith('download') ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
       : j.total > 1 ? ` · ${j.done}/${j.total}` : '';
-    $('#prog-stage').textContent = `${STAGES[j.stage] || 'Starting'}${count}`;
-    if (j.state === 'done' || j.state === 'failed') {
+    $('#prog-stage').textContent = j.state === 'cancelling' ? 'Cancellation requested; waiting for the current step to stop…' : `${STAGES[j.stage] || 'Starting'}${count}`;
+    if (['done', 'failed', 'cancelled'].includes(j.state)) {
       $('#progress').classList.add('hidden');
-      if (j.state === 'failed') throw new Error(j.error);
+      if (j.state !== 'done') throw new Error(j.error);
       return j.result;
     }
   }
@@ -172,7 +187,8 @@ async function loadProjects() {
 
 // ---------------------------------------------------------------- example
 function showSample() {          // a finished video that ships with the app: plays at once, nothing to download
-  current = null; loadProjects();
+  if (dirty && current) keepDraft();
+  clearTimeout(saveTimer); dirty = false; planError = ''; rawPlan = {}; current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-sample').content.cloneNode(true));
   $('#s-make').onclick = showNew;
 }
@@ -206,12 +222,18 @@ function syncNewVoice() {      // New video: with Settings > Voice server on, th
 }
 
 function showNew() {
-  current = null; loadProjects();
+  if (dirty && current) keepDraft();
+  clearTimeout(saveTimer); dirty = false; planError = ''; rawPlan = {}; current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-new').content.cloneNode(true));
   const langSel = $('#lang'), voiceSel = $('#voice'), dirSel = $('#director');
   const voiceLang = () => langSel.value || scriptLang($('#script').value);
   const fillVoices = () => {
     voiceSel.innerHTML = voiceOptions(voiceLang());
+    const cloudOption = dirSel.querySelector('option[value="cloud"]');
+    if (cloudOption) {
+      cloudOption.disabled = !STATE.cloud_available || !STATE.cloud_languages.includes(voiceLang());
+      if (cloudOption.disabled && dirSel.value === 'cloud') { dirSel.value = 'rules'; dirSel.onchange?.(); }
+    }
   };
   langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
   fillVoices();
@@ -232,12 +254,14 @@ function showNew() {
     $('#model').placeholder = (STATE.models[d] || [])[0] || 'model name';
     $('#director-note').textContent = {
       rules: 'Offline: free and private. Visuals are chosen by matching words to 1,700+ doodles on your computer.',
-      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : cloudAsks || 'KinoDraw Cloud AI (GPT-6 Luna) plans each section: free, with no account or API key. Offline keeps everything on this computer.',
+      cloud: STATE.cloud ? `KinoDraw Cloud, ${esc(STATE.cloud.plan || 'free')} plan: ${STATE.cloud.remaining === null ? 'unlimited videos (fair use)' : `${STATE.cloud.remaining ?? '?'} videos left this month`}.` : STATE.cloud_signed_in ? 'KinoDraw Cloud: signed in.' : cloudAsks || 'KinoDraw Cloud AI receives your full story and planning prompt. Anonymous access depends on availability and quota. Choose Offline for local planning; a configured voice server still receives narration text.',
       openai: STATE.keys.openai ? 'Uses your OpenAI key (about $0.02 per 15-minute video with GPT-6 Luna).' : 'Add your OpenAI key under Settings first.',
       anthropic: STATE.keys.anthropic ? 'Uses your Anthropic key (about $1 per 15-minute video with Opus).' : 'Add your Anthropic key under Settings first.',
       compat: 'Any OpenAI-compatible server (OpenRouter, Groq, a local Ollama…): set the base URL and model.',
       command: STATE.keys.command ? 'Runs your saved command once per section; the model name is passed along to it.' : 'Save your command under Settings first.',
     }[d];
+    if (d !== 'rules') $('#director-note').textContent += ' Planning uploads your full story and prompt to the selected provider. Choose Offline for local planning.';
+    else $('#director-note').textContent += ' Initial asset downloads may use the network; a configured voice server receives narration text.';
   };
   dirSel.onchange = async () => {
     note(); syncStyle();
@@ -284,7 +308,7 @@ function showNew() {
       const brand = { name: $('#brand-name').value.trim(), url: $('#brand-url').value.trim(), cta: $('#brand-cta').value.trim() };
       const body = { text: $('#script').value, title: $('#title').value, lang: langSel.value, voice: voiceSel.value,
         speed: Number($('#speed').value),
-        director: dirSel.value, model: $('#model').value, base_url: $('#base-url').value, look, story, aspect: $('#format').value,
+        director: dirSel.value, director_v3: $('#director-v3').checked, model: $('#model').value, base_url: $('#base-url').value, look, story, aspect: $('#format').value,
         motion: look === 'collage' ? $('#motion').value : null, brand: story === 'promo' || auto ? brand : null,
         ...(STATE.voice_server?.on ? { server_voice: $('#server-voice').value.trim() } : {}) };
       const { job, project } = await api('/api/projects', { method: 'POST', body: JSON.stringify(body) });
@@ -304,18 +328,49 @@ function formatOptions(selected) {
 }
 
 async function openProject(name, tab = null) {
+  if (dirty && current && current !== name && !(await saveBoard())) return;
+  if (saving) await saving;
+  clearTimeout(saveTimer);
   current = name; dirty = false; loadProjects();
   const p = await api(`/api/projects/${encodeURIComponent(name)}`);
-  board = p.storyboard;
+  board = p.storyboard; revision = p.revision; plan = p.settings.plan_v3 || null; planError = ''; rawPlan = {};
+  history = []; future = []; lastEdit = editState();
+  let draft;
+  try { draft = JSON.parse(localStorage.getItem(draftKey(name)) || 'null'); } catch (e) { /* malformed browser draft ignored */ }
+  if (draft && (JSON.stringify({ board: draft.board, plan: draft.plan }) !== lastEdit || Object.keys(draft.rawPlan || {}).length)) {
+    if (confirm('Recover the edits kept in this browser? A conflicting draft will require version review before it can be saved.')) {
+      board = draft.board; plan = draft.plan; revision = draft.revision; rawPlan = draft.rawPlan || {}; if (Object.keys(rawPlan).length) planError = 'Recovered invalid plan JSON — correct it before saving'; dirty = true; lastEdit = editState();
+    }
+  }
   $('#main').replaceChildren($('#tpl-project').content.cloneNode(true));
   $('#p-title').textContent = p.title;
+  saveStatus(dirty ? 'Recovered draft — save or review versions' : 'Saved');
+  $('#p-save').disabled = !dirty;
+  $('#p-undo').onclick = () => travelHistory(false);
+  $('#p-redo').onclick = () => travelHistory(true);
+  $('#p-versions').onclick = showVersions;
+  for (const action of ['rename', 'duplicate', 'trash']) $('#p-' + action).onclick = async () => {
+    if (dirty && !(await saveBoard())) return;
+    const title = action === 'rename' ? prompt('Project title', p.title) : undefined;
+    if (action === 'rename' && !title) return;
+    if (action === 'trash' && !confirm('Move this project to Trash? You can restore it from the sidebar.')) return;
+    try {
+      const res = await api(`/api/projects/${encodeURIComponent(name)}/${action}`, { method: 'POST', body: JSON.stringify({ revision, title }) });
+      if (action === 'trash') { current = null; dirty = false; loadProjects(); showSample(); }
+      else await openProject(res.project || name);
+    } catch (e) { toast(e.message); }
+  };
+  const report = p.settings.plan_v3_report;
+  $('#p-plan-source').textContent = report ? `Planner: ${report.provider || 'unknown'}${report.fallback ? ' · Offline fallback: ' + report.fallback_reason : ''}${report.model ? ' · ' + report.model : ''}` : 'Legacy/manual storyboard';
+  renderPlan();
   $('#p-meta').textContent = `${board.beats.length} beats · ${LANG_NAMES[p.lang]}${p.settings.aspect === '9:16' ? ' · vertical 9:16' : ''} · ${p.settings.recording ? 'narrated in your own voice' : voiceMeta(p.settings.voice, p.settings.server_voice)}`;
-  $('#p-style').textContent = p.settings.style_pick ? pickLine(p.settings.style_pick) : '';
-  $('#p-style').classList.toggle('hidden', !p.settings.style_pick);
+  $('#p-style').textContent = plan ? `Saved v3 style: ${plan.style.mode} · ${plan.style.whiteboard_skin} · ${plan.style.reason}` : p.settings.style_pick ? pickLine(p.settings.style_pick) : '';
+  $('#p-style').classList.toggle('hidden', !plan && !p.settings.style_pick);
   $('#p-format').innerHTML = formatOptions(p.settings.aspect || '16:9');
   $('#p-format').onchange = async () => {
     try {
-      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/format`, { method: 'POST', body: JSON.stringify({ aspect: $('#p-format').value }) });
+      if (dirty && !(await saveBoard())) return;
+      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/format`, { method: 'POST', body: JSON.stringify({ aspect: $('#p-format').value, revision }) });
       p.settings.aspect = cfg.aspect;
       const meta = $('#p-meta');
       meta.textContent = meta.textContent.replace(' · vertical 9:16', '');
@@ -323,7 +378,7 @@ async function openProject(name, tab = null) {
         const last = meta.textContent.lastIndexOf(' · ');
         meta.textContent = `${meta.textContent.slice(0, last)} · vertical 9:16${meta.textContent.slice(last)}`;
       }
-      toast('Format saved. Make video to render it.');
+      await openProject(name); toast('Format saved. Make video to render it.');
     } catch (e) { $('#p-format').value = p.settings.aspect || '16:9'; toast(e.message, 6000); }
   };
   const credit = $('#p-credit');
@@ -332,17 +387,18 @@ async function openProject(name, tab = null) {
   credit.parentElement.title = `Ends the video with a 2-second "Made with ${STATE.product}" card. Untick to leave it off this video.`;
   credit.onchange = async () => {
     try {
-      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/credit`, { method: 'POST', body: JSON.stringify({ credit: credit.checked }) });
+      if (dirty && !(await saveBoard())) return;
+      const cfg = await api(`/api/projects/${encodeURIComponent(name)}/credit`, { method: 'POST', body: JSON.stringify({ credit: credit.checked, revision }) });
       p.credit = cfg.credit;
-      toast(`End card ${p.credit ? 'on' : 'off'}. Make video to apply it.`);
+      await openProject(name); toast(`End card ${p.credit ? 'on' : 'off'}. Make video to apply it.`);
     } catch (e) { credit.checked = p.credit; toast(e.message, 6000); }
   };
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (await needsCloudSignIn($('#p-director').value, p.lang)) return;
-    if (dirty && !confirm('Re-planning replaces your unsaved edits. Continue?')) return;
+    if (dirty && !(await saveBoard())) return;
     try {
-      const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/direct`, { method: 'POST', body: JSON.stringify({ director: $('#p-director').value }) })).job, 'Planning the visuals');
+      const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/direct`, { method: 'POST', body: JSON.stringify({ director: $('#p-director').value, revision }) })).job, 'Planning the visuals');
       const whole = wholeVideoOffline(res);
       if (whole) toast(whole, 8000);
       else toast(res?.cost ? `Done · AI cost $${res.cost.toFixed(4)}` : 'Visuals re-planned');
@@ -350,10 +406,23 @@ async function openProject(name, tab = null) {
     } catch (e) { toast(e.message, 6000); }
   };
   $('#p-reveal').onclick = () => api(`/api/projects/${encodeURIComponent(name)}/reveal`, { method: 'POST' });
+  for (const kind of ['export', 'projectzip']) {
+    const button = $('#p-' + kind);
+    button.classList.toggle('hidden', !STATE.hooks?.[kind]);
+    button.onclick = async () => {
+      if (dirty && !(await saveBoard())) return;
+      try {
+        const response = await api(`/api/projects/${encodeURIComponent(name)}/${kind}`, { method: 'POST', body: JSON.stringify({ revision }) });
+        const result = await watch(response.job, kind === 'export' ? 'Exporting' : 'Packing the project');
+        if (!result?.file) throw new Error('The export hook returned no downloadable file.');
+        modal(`<h2>Export ready</h2><a href="${fileSrc(result.file)}" target="_blank">Download ${esc(result.file)}</a>`);
+      } catch (e) { $('#progress').classList.add('hidden'); toast(e.message, 7000); }
+    };
+  }
   $('#p-make').onclick = () => makeVideo(name);
   $('#p-save').onclick = saveBoard;
   document.querySelectorAll('.tabs button').forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
-  renderBoard();
+  renderBoard(); updateHistory();
   renderVideo(p);
   loadNarrator(name, tab === 'narrator' ? 'own' : undefined);     // opened from New video with My own voice chosen
   if (tab || p.videos?.length) showTab(tab || 'video');
@@ -364,7 +433,57 @@ function showTab(tab) {
   for (const t of ['board', 'narrator', 'video']) $(`#tab-${t}`).classList.toggle('hidden', t !== tab);
 }
 
-function markDirty() { dirty = true; $('#p-save').disabled = false; $('#dirty').textContent = 'Unsaved changes'; }
+function updateHistory() {
+  if ($('#p-undo')) $('#p-undo').disabled = !history.length;
+  if ($('#p-redo')) $('#p-redo').disabled = !future.length;
+}
+function markDirty(record = true) {
+  const next = editState();
+  if (record && lastEdit !== next) { history.push(lastEdit); history = history.slice(-100); future = []; }
+  lastEdit = next; dirty = true; $('#p-save').disabled = false;
+  keepDraft(); saveStatus('Unsaved changes'); updateHistory();
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveBoard, 900);
+}
+function travelHistory(redo) {
+  const source = redo ? future : history, target = redo ? history : future;
+  if (!source.length) return;
+  target.push(editState()); const state = JSON.parse(source.pop());
+  board = state.board; plan = state.plan; planError = ''; rawPlan = {};
+  markDirty(false); renderBoard(); renderPlan();
+}
+function renderPlan() {
+  const box = $('#p-plan'); if (!box) return;
+  box.classList.toggle('hidden', !plan);
+  if (!plan) return;
+  for (const key of ['cast', 'scenes', 'style']) {
+    const input = $('#plan-' + key);
+    input.value = rawPlan[key] ?? JSON.stringify(plan[key], null, 2);
+    input.oninput = () => {
+      try { plan[key] = JSON.parse(input.value); delete rawPlan[key]; planError = Object.keys(rawPlan).length ? 'Correct invalid plan JSON before saving' : ''; markDirty(); }
+      catch (e) { clearTimeout(saveTimer); rawPlan[key] = input.value; planError = 'Invalid ' + key + ' JSON: ' + e.message; dirty = true; keepDraft(); saveStatus(planError); }
+    };
+  }
+}
+async function showVersions() {
+  try {
+    const items = await api(`/api/projects/${encodeURIComponent(current)}/versions`);
+    const box = modal(`<h2>Versions</h2><button id="version-save">Save named version</button><div>${items.map(x => `<p>${esc(x.label)} · ${esc(x.created)} <button data-version="${x.id}">Restore</button></p>`).join('') || 'No versions yet'}</div>`);
+    $('#version-save', box).onclick = async () => {
+      const label = prompt('Version name'); if (!label) return;
+      if (dirty && !(await saveBoard())) return;
+      try { await api(`/api/projects/${encodeURIComponent(current)}/versions`, { method: 'POST', body: JSON.stringify({ revision, label }) }); showVersions(); }
+      catch (e) { toast(e.message); }
+    };
+    box.querySelectorAll('[data-version]').forEach(button => button.onclick = async () => {
+      if (!confirm('Restore this version? The current saved state will also become a version.')) return;
+      if (dirty) keepDraft();
+      try {
+        const res = await api(`/api/projects/${encodeURIComponent(current)}/restore`, { method: 'POST', body: JSON.stringify({ revision, version: button.dataset.version }) });
+        localStorage.removeItem(draftKey(current)); dirty = false; closeModal(); await openProject(current);
+      } catch (e) { saveStatus(e.message); toast(e.message); }
+    });
+  } catch (e) { toast(e.message); }
+}
 
 function renderBoard() {
   const lang = board.lang, root = $('#board');
@@ -422,15 +541,16 @@ function showBeatPreview(el, beat, fresh = false) {
 const SLOT_TYPES = ['cluster', 'quote', 'glossary', 'stat'];   // pictures that can be drawn earlier or later
 
 async function reorderPicture(beat, visual, to, item = null) {
+  if (dirty && !(await saveBoard())) return;
   const project = current, sent = board, main = $('#main');
   main.inert = true;                                  // no edits while the move saves: the reply replaces the board
   try {
     const res = await api(`/api/projects/${encodeURIComponent(project)}/reorder`, {
-      method: 'POST', body: JSON.stringify({ storyboard: sent, beat, visual, to, item })
+      method: 'POST', body: JSON.stringify({ storyboard: sent, revision, beat, visual, to, item })
     });
     if (current !== project || board !== sent) return; // another project (or a fresh copy) was opened meanwhile
     if (!res.ok) { toast('Not moved: ' + res.errors[0]); return; }
-    board = res.storyboard;
+    history.push(editState()); history = history.slice(-100); future = []; board = res.storyboard; revision = res.revision; lastEdit = editState(); updateHistory();
     dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved';
     renderBoard();
     const card = [...$('#board').querySelectorAll('.beat')].find((el) => el.dataset.beat === beat);
@@ -515,14 +635,53 @@ async function pickDoodle(query, onPick) {
 }
 
 async function saveBoard() {
-  try {
-    const res = await api(`/api/projects/${encodeURIComponent(current)}/storyboard`, { method: 'PUT', body: JSON.stringify(board) });
-    if (!res.ok) { toast(`Not saved: ${res.errors[0]}`, 7000); return false; }
-    dirty = false; $('#p-save').disabled = true; $('#dirty').textContent = 'Saved';
-    loadNarrator(current, document.querySelector('input[name="n-pick"]:checked')?.value);   // an edited takeaway is read aloud
-    return true;
-  } catch (e) { toast(e.message, 6000); return false; }
+  clearTimeout(saveTimer);
+  if (planError) { saveStatus(planError); return false; }
+  if (saving) { await saving; return dirty ? saveBoard() : true; }
+  if (!dirty) return true;
+  const name = current, sent = saveState(), expected = revision;
+  saveStatus('Saving…');
+  saving = (async () => {
+    try {
+      const snapshot = JSON.parse(sent);
+      const res = await api(`/api/projects/${encodeURIComponent(name)}/storyboard`, { method: 'PUT', body: JSON.stringify({ storyboard: snapshot.board, plan_v3: snapshot.plan, revision: expected }) });
+      if (!res.ok) throw new Error(res.errors[0]);
+      if (current !== name) return true;
+      revision = res.revision;
+      if (saveState() === sent) {
+        const adapted = JSON.stringify(board) !== JSON.stringify(res.storyboard);
+        const savedPlan = res.settings.plan_v3 || null;
+        const adaptedPlan = JSON.stringify(plan) !== JSON.stringify(savedPlan);
+        if (adapted) board = res.storyboard;
+        if (adaptedPlan) plan = savedPlan;
+        lastEdit = editState();
+        if (adapted) renderBoard();
+        if (adaptedPlan) renderPlan();
+        dirty = false; $('#p-save').disabled = true; saveStatus('Saved');
+        localStorage.removeItem(draftKey(name));
+        if (plan && $('#p-style')) $('#p-style').textContent = `Saved v3 style: ${plan.style.mode} · ${plan.style.whiteboard_skin} · ${plan.style.reason}`;
+        loadNarrator(name, document.querySelector('input[name="n-pick"]:checked')?.value);
+      } else { keepDraft(); saveStatus(planError || 'Unsaved changes'); }
+      return true;
+    } catch (e) {
+      if (current === name) { keepDraft(); saveStatus(planError || (saveState() === sent ? 'Not saved: ' + e.message : 'Unsaved changes')); }
+      return false;
+    }
+  })();
+  const ok = await saving; saving = null;
+  if (ok && dirty && current === name) return saveBoard();
+  return ok;
 }
+window.addEventListener('beforeunload', event => {
+  if (dirty || planError) { keepDraft(); event.preventDefault(); event.returnValue = ''; }
+});
+document.addEventListener('keydown', event => {
+  if (!(event.ctrlKey || event.metaKey) || !current) return;
+  if (event.key.toLowerCase() === 's') { event.preventDefault(); saveBoard(); }
+  if (event.key.toLowerCase() === 'z' && !['INPUT', 'TEXTAREA'].includes(event.target.tagName)) {
+    event.preventDefault(); travelHistory(event.shiftKey);
+  }
+});
 
 async function makeVideo(name, anyway = false) {   // anyway: the user saw which sentences don't fit and goes ahead
   if (dirty && !(await saveBoard())) return;
@@ -680,9 +839,10 @@ function renderNarrator(name, info, choice = info.narrator) {
   box.querySelectorAll('input[name="n-pick"]').forEach((r) => (r.onchange = async () => {
     try {
       if (r.value === 'builtin' && info.narrator === 'own' || r.value === 'own' && info.take) {
+        if (dirty && !(await saveBoard())) return;
         const next = await api(`/api/projects/${encodeURIComponent(name)}/narrator`, { method: 'POST', body: JSON.stringify({ narrator: r.value }) });
         toast(r.value === 'own' ? 'Your video will be narrated in your own voice' : 'Your video will use the built-in voice');
-        renderNarrator(name, next);
+        await openProject(name, 'narrator');
         $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${r.value === 'own' ? 'narrated in your own voice' : voiceMeta(next.voice, next.server_voice)}`);
       } else renderNarrator(name, info, r.value);
     } catch (e) { toast(e.message, 6000); }
@@ -703,12 +863,13 @@ function renderNarrator(name, info, choice = info.narrator) {
     form.onsubmit = async (e) => {
       e.preventDefault(); save.disabled = true;
       try {
+        if (dirty && !(await saveBoard())) return;
         const settings = await api(`/api/projects/${encodeURIComponent(name)}/voice`, { method: 'PUT',
-          body: JSON.stringify({ voice: select.value, speed: Number(slider.value), pronounce: pronounce.value,
+          body: JSON.stringify({ revision, voice: select.value, speed: Number(slider.value), pronounce: pronounce.value,
             ...(serverVoice ? { server_voice: serverVoice.value } : {}) }) });
         info.voice = settings.voice;
         info.server_voice = settings.server_voice;
-        renderNarrator(name, info);
+        await openProject(name, 'narrator');
         $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ` ${voiceMeta(settings.voice, settings.server_voice)}`);
         toast('Saved');
       } catch (err) { toast(err.message, 6000); }
@@ -721,7 +882,9 @@ function renderNarrator(name, info, choice = info.narrator) {
     const f = e.target.files[0]; if (!f) return;
     $('#n-take', box).textContent = `Adding ${f.name}…`;
     try {
+      if (dirty && !(await saveBoard())) return;
       renderNarrator(name, await api(`/api/projects/${encodeURIComponent(name)}/recording?filename=${encodeURIComponent(f.name)}`, { method: 'POST', body: f }));
+      await openProject(name, 'narrator');
       $('#p-meta').textContent = $('#p-meta').textContent.replace(/[^·]*$/, ' narrated in your own voice');
     } catch (err) {
       $('#n-take', box).textContent = info.take ? `Your recording: ${info.take}` : 'No recording yet';
@@ -730,8 +893,10 @@ function renderNarrator(name, info, choice = info.narrator) {
   };
   $('#n-use', box).onclick = async () => {
     try {
+      if (dirty && !(await saveBoard())) return;
       const job = (await api(`/api/projects/${encodeURIComponent(name)}/align`, { method: 'POST' })).job;
       renderNarrator(name, await watch(job, 'Listening to your recording', ['voice', 'align', 'timeline'], true));
+      await openProject(name, 'narrator');
     } catch (e) { $('#progress').classList.add('hidden'); showProblem(e.message); }
   };
   $('#n-make', box)?.addEventListener('click', () => makeVideo(name, true));
@@ -946,3 +1111,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const items = await api('/api/projects');
   if (items.length && !items[0].broken) openProject(items[0].name); else showSample();
 });
+
+$('#btn-trash').onclick = async () => {
+  try {
+    const items = await api('/api/projects?trash=1');
+    const box = modal('<h2>Trash</h2>' + (items.map(x => `<p>${esc(x.title)} <button data-trash="${esc(x.name)}">Restore project</button></p>`).join('') || '<p>Trash is empty.</p>'));
+    box.querySelectorAll('[data-trash]').forEach(button => button.onclick = async () => {
+      try { const name = button.dataset.trash; const state = await api(`/api/projects/${encodeURIComponent(name)}`);
+        await api(`/api/projects/${encodeURIComponent(name)}/untrash`, { method: 'POST', body: JSON.stringify({ revision: state.revision }) }); closeModal(); await openProject(name);
+      } catch (e) { toast(e.message); }
+    });
+  } catch (e) { toast(e.message); }
+};

@@ -169,3 +169,11 @@ ol.read-aloud li::marker { color: var(--soft); font-size: 16px; }
 ol.read-aloud li.miss { background: #fdecea; }
 ol.read-aloud li.poor, ol.read-aloud li.changed { background: #fff8d6; }
 ol.read-aloud .tag { font-size: 13px; border: 1.5px solid var(--ink); border-radius: 99px; padding: 1px 8px; background: #fff; vertical-align: middle; white-space: nowrap; }
+
+/* Persistent editing controls and the actual saved v3 plan. */
+.board-bar { flex-wrap: wrap; gap: .5rem; }
+#dirty { flex: 1 1 16rem; white-space: normal; }
+#p-plan { margin: 1rem 0; }
+#p-plan label { display: block; margin: .5rem 0; }
+#p-plan textarea { width: 100%; min-height: 12rem; font-family: monospace; }
+:focus-visible { outline: 2px solid #1e6fd9; outline-offset: 3px; }

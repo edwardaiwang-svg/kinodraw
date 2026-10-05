@@ -29,9 +29,9 @@ def studio(tmp_path, monkeypatch):
     httpd.shutdown()
 
 
-def test_signed_out_users_start_with_the_offline_director(studio, monkeypatch):
-    """v0.1.6 preselected Doodle Cloud on every install, so a first Create sent a new user to the sign-in."""
-    assert json.loads(studio('/api/state')[2])['default_director'] == 'rules'
+def test_signed_out_users_start_with_the_cloud_director(studio, monkeypatch):
+    """EN/ZH newcomers choose Cloud by default; Offline remains an explicit switch."""
+    assert json.loads(studio('/api/state')[2])['default_director'] == 'cloud'
     monkeypatch.setattr(providers, 'saved', lambda: {'cloud-token'})
     assert json.loads(studio('/api/state')[2])['default_director'] == 'cloud'
     js = (server.STATIC / 'app.js').read_text(encoding='utf-8')

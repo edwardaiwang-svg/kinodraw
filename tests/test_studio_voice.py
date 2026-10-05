@@ -32,6 +32,9 @@ def studio(tmp_path, monkeypatch):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def call(path, body=None, method=None, raw=None):
+        if body is not None and path.endswith('/storyboard') and method == 'PUT':
+            name = path.split('/')[-2]
+            body = {'storyboard': body, 'revision': server._store(root / name).load()['revision']}
         data = raw if raw is not None else None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(url + path.lstrip('/'), data=data, method=method or ('GET' if data is None else 'POST'),
                                      headers={'X-Studio-Token': server.Handler.token})
