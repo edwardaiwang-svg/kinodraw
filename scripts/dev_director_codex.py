@@ -12,7 +12,7 @@ from pathlib import Path
 def main():
     try:
         request = json.load(sys.stdin)
-        with tempfile.TemporaryDirectory(prefix='codex-', dir='/tmp/kd1005/a2-dev') as scratch:
+        with tempfile.TemporaryDirectory(prefix='kinodraw-codex-') as scratch:
             schema, out = Path(scratch) / 'schema.json', Path(scratch) / 'out.txt'
             schema.write_text(json.dumps(request['schema']), encoding='utf-8')
             prompt = request['system'] + '\n\n' + request['user']
@@ -38,5 +38,4 @@ def main():
 
 
 if __name__ == '__main__':
-    Path('/tmp/kd1005/a2-dev').mkdir(parents=True, exist_ok=True)
     main()
