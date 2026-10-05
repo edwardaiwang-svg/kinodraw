@@ -157,6 +157,11 @@ def me() -> dict:
     return _call('/v1/me', token=_token())
 
 
+def feedback(body: dict) -> dict:
+    """Send what the user wrote in the Studio's feedback form. No token: feedback needs no account, even Offline."""
+    return _call('/v1/feedback', body)
+
+
 class CloudProvider:
     name, model = 'cloud', 'kinodraw-cloud'
     languages = ('en', 'zh')                          # what the cloud plans; anything else stays offline, unbilled

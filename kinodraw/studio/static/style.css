@@ -28,7 +28,8 @@ h1 { font-size: 30px; margin: 0 0 6px; }
 #projects a { display: block; padding: 8px 10px; border-radius: 10px; color: var(--ink); text-decoration: none; cursor: pointer; }
 #projects a:hover, #projects a.on { background: #fff; box-shadow: var(--shadow); }
 #projects small { display: block; color: var(--soft); }
-#feedback { font-size: 13px; color: var(--soft); text-align: center; }
+#feedback { font-size: 13px; color: var(--soft); border: none; background: none; padding: 2px; text-decoration: underline; }
+#feedback:hover { color: var(--ink); }
 
 /* main */
 #main { flex: 1; overflow: auto; }
@@ -123,6 +124,21 @@ video { width: 100%; border-radius: 14px; border: 2px solid var(--ink); backgrou
 #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; z-index: 20; max-width: 80vw; }
 .settings section { margin-bottom: 18px; }
 .settings h3 { margin: 0 0 6px; }
+
+/* feedback: the form, and the small card after a finished video */
+.feedback form { display: flex; flex-direction: column; gap: 12px; }
+.feedback .grid { margin: 0; }
+.feedback label.row { align-items: flex-start; gap: 8px; color: var(--ink); font-size: 14px; }
+.feedback label.row input { width: auto; margin-top: 3px; accent-color: var(--orange); }
+.feedback .send-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.feedback .send-row p { margin: 0; flex: 1; min-width: 240px; }
+.feedback-card { display: flex; gap: 12px; align-items: center; background: #fff8d6; border: 2px solid var(--ink); border-radius: 12px;
+  padding: 8px 8px 8px 14px; margin: 0 0 12px; }
+.feedback-card span { flex: 1; }
+.feedback-card a { color: var(--ink); cursor: pointer; text-decoration: underline; }
+.feedback-card button.x { border: none; background: none; padding: 0 6px; font-size: 18px; color: var(--soft); }
+.feedback-more { margin: 0 0 12px; font-size: 13px; }
+.feedback-more a, .feedback .github a { color: var(--soft); cursor: pointer; }
 
 /* narrator: built-in voice or your own */
 .narrator-pick { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin: 12px 0; }

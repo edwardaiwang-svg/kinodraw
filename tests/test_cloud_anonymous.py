@@ -380,10 +380,11 @@ def test_choosing_cloud_in_the_menu_when_it_asks_for_a_sign_in_never_says_no_acc
 const T = 't', els = {};
 const $ = (sel) => (els[sel] = els[sel] || { textContent: '', placeholder: '', classList: { toggle() {} } });
 const esc = (s) => String(s ?? '');
-const dirSel = { value: 'cloud' }, cloudEmail = '';
-let STATE = { cloud_available: true, cloud_signed_in: false, cloud: null, models: {}, keys: {} }, cloudAsks = '';
-let reply;
-const fetch = async () => reply;
+const dirSel = { value: 'cloud' }, cloudEmail = '', asked = [];
+let STATE = { cloud_available: true, cloud_signed_in: false, cloud: null, cloud_languages: ['en', 'zh'], models: {}, keys: {} }, cloudAsks = '';
+let reply, lang = 'en';
+const voiceLang = () => lang;
+const fetch = async (url) => (asked.push(url), reply);
 const syncStyle = () => {};     // 0.3.0's Style menu follows the director; not under test here
 const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="muted">([^<]*)/)[1].trim(); };
 '''
@@ -397,14 +398,18 @@ const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="
     await dirSel.onchange();
     out.push([els['#director-note'].textContent, settingsText()]);
   }
+  lang = 'es'; STATE.cloud = null; asked.length = 0;      // a Spanish video: the cloud never plans it, so is never asked
+  await dirSel.onchange();
+  out.push([asked, STATE.cloud]);
   console.log(JSON.stringify(out));
 })();'''
     out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
-    unknown, asks, allowed = out
+    unknown, asks, allowed, spanish = out
     assert 'while KinoDraw Cloud allows it' in unknown                 # Settings before the cloud was asked: no promise
     assert asks == ['Sign in with your email in Settings, or choose Offline.'] * 2
     assert allowed == ['KinoDraw Cloud, free plan: unlimited videos (fair use).',
                        'Free, with no account or API key. Signing in with your email is optional.']
+    assert spanish == [[], None]
 
 
 def test_settings_shows_the_installation_id_once_kinodraw_cloud_was_used():

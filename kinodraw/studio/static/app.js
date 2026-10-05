@@ -241,7 +241,8 @@ function showNew() {
   };
   dirSel.onchange = async () => {
     note(); syncStyle();
-    if (dirSel.value === 'cloud' && STATE.cloud_available && !STATE.cloud) {    // nothing goes to the cloud before this
+    if (dirSel.value === 'cloud' && STATE.cloud_available && !STATE.cloud    // nothing goes to the cloud before this
+        && (STATE.cloud_signed_in || STATE.cloud_languages.includes(voiceLang()))) {   // nor for a language it never plans
       try { STATE.cloud = await (STATE.cloud_signed_in ? api('/api/cloud/me') : api('/api/cloud/anonymous', { method: 'POST' })); cloudAsks = ''; }
       catch (e) { STATE.cloud = null; if (e.code === 'sign_in') cloudAsks = e.message; }   // the note and Settings say it asks
       note();
@@ -558,6 +559,7 @@ async function makeVideo(name, anyway = false) {   // anyway: the user saw which
     toast(res.ok ? `Video ready (${res.length})` : `Video made, with warnings: ${res.problems[0]}`, 6000);
     await openProject(name);
     document.querySelector('.tabs button[data-tab="video"]').click();
+    feedbackCard($('#tab-video'));
   } catch (e) {
     $('#progress').classList.add('hidden'); toast(e.message, 10000);
     if (own) { showTab('narrator'); loadNarrator(name, undefined, e.message); }
@@ -735,6 +737,81 @@ function renderNarrator(name, info, choice = info.narrator) {
   $('#n-make', box)?.addEventListener('click', () => makeVideo(name, true));
 }
 
+// ---------------------------------------------------------------- feedback
+// Sent to KinoDraw Cloud only when the user presses Send (studio/server.py send_feedback): no account, any director.
+const ISSUES = 'https://github.com/edwardaiwang-svg/kinodraw/issues/new/choose';
+const PRIVACY = 'https://edwardaiwang-svg.github.io/kinodraw/privacy.html';
+const RATINGS = [['5', '5, very well'], ['4', '4'], ['3', '3'], ['2', '2'], ['1', '1, not at all']];
+const USES = [['school', 'School'], ['work', 'Work'], ['personal', 'Personal'], ['other', 'Something else']];
+let feedbackDraft = {};          // what the form held when it closed or could not send: nothing typed is lost
+function showFeedback() {
+  const d = feedbackDraft, lang = current && board ? board.lang : null;     // the open project's language, if any
+  const options = (list, chosen) => `<option value="">Choose…</option>`
+    + list.map(([v, l]) => `<option value="${v}"${String(chosen ?? '') === v ? ' selected' : ''}>${l}</option>`).join('');
+  const body = modal(`<div class="feedback"><h2>Feedback or a problem? Tell us</h2>
+    <form id="f-form">
+      <label for="f-text">What would you like to tell us?<textarea id="f-text" rows="5" maxlength="2000"
+        placeholder="What worked, what didn’t, what you wish it did…">${esc(d.text)}</textarea></label>
+      <div class="grid">
+        <label for="f-rating">How well did KinoDraw work for this video?<select id="f-rating">${options(RATINGS, d.rating)}</select></label>
+        <label for="f-use">What was the video for?<select id="f-use">${options(USES, d.use)}</select></label>
+      </div>
+      <label for="f-url">Link to your video, if you posted it<input id="f-url" type="url" maxlength="300" placeholder="https://…" value="${esc(d.video_url)}"></label>
+      <label class="row"><input id="f-quote" type="checkbox"${d.quote_ok ? ' checked' : ''}><span>KinoDraw may quote what I wrote, without my name, on its site and in reports about KinoDraw</span></label>
+      <label class="row"><input id="f-age" type="checkbox"${d.age_13_plus ? ' checked' : ''}><span>I am 13 or older</span></label>
+      <label id="f-email-wrap" for="f-email"${d.age_13_plus ? '' : ' class="hidden"'}>Email, if you'd like a reply (optional)<input id="f-email" type="email" maxlength="200" placeholder="you@example.com" value="${esc(d.email)}"></label>
+      <p id="f-result" class="note" role="status" aria-live="polite"></p>
+      <div class="send-row"><p class="muted">Send gives KinoDraw Cloud what you typed and ticked, plus the app version, your computer type, language and install ID.
+        <a href="${PRIVACY}#feedback" target="_blank">Privacy</a></p><button id="f-send" type="submit" class="primary">Send</button></div>
+    </form>
+    <p class="muted github">Prefer GitHub? <a href="${ISSUES}" target="_blank">Open an issue</a></p></div>`);
+  const form = $('#f-form', body), send = $('#f-send', body);
+  const open = () => $('#f-form') === form && !$('#modal').classList.contains('hidden');    // not closed or replaced
+  const read = () => ({ text: $('#f-text', form).value, rating: $('#f-rating', form).value, use: $('#f-use', form).value,
+    video_url: $('#f-url', form).value, quote_ok: $('#f-quote', form).checked, age_13_plus: $('#f-age', form).checked,
+    email: $('#f-email', form).value });
+  form.oninput = () => { feedbackDraft = read(); };
+  $('#f-age', form).onchange = (e) => $('#f-email-wrap', form).classList.toggle('hidden', !e.target.checked);   // 13+ only
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = read();
+    send.disabled = true; send.textContent = 'Sending…'; $('#f-result', form).textContent = '';
+    try {
+      await api('/api/feedback', { method: 'POST', body: JSON.stringify({ ...f, rating: f.rating ? Number(f.rating) : null,
+        use: f.use || null, email: f.age_13_plus ? f.email : undefined, ...(lang ? { lang } : {}) }) });
+      feedbackDraft = {}; STATE.feedback_sent = true;
+      const card = $('#tab-video .feedback-card');
+      if (card) feedbackCard(card.parentElement);               // from now on, only a quiet link there
+      if (open()) {
+        body.innerHTML = '<div class="feedback"><h2>Thank you!</h2><p>We got it, and we read every message.</p><button id="f-done" class="primary">Close</button></div>';
+        $('#f-done', body).onclick = closeModal;
+      } else toast('Thank you! Your feedback was sent.');
+    } catch (err) {                                             // the form keeps everything, to press Send again
+      $('#f-result', form).textContent = err.message;
+      if (!open()) toast(err.message, 8000);
+    } finally { send.disabled = false; send.textContent = 'Send'; }
+  };
+  $('#f-text', form).focus();
+}
+
+function feedbackCard(box) {     // after a video the user made: a small card, never in the way of watching or saving it
+  if (!box) return;
+  box.querySelector('.feedback-card, .feedback-more')?.remove();
+  const card = document.createElement('div');
+  if (STATE.feedback_sent) {
+    card.className = 'feedback-more';
+    card.innerHTML = '<a role="button" tabindex="0">Send more feedback</a>';
+  } else {
+    card.className = 'feedback-card';
+    card.innerHTML = '<span><a role="button" tabindex="0">How did this video go? Tell us in 30 seconds</a></span><button class="x" title="Dismiss" aria-label="Dismiss">×</button>';
+    card.querySelector('.x').onclick = () => card.remove();
+  }
+  const open = card.querySelector('a');
+  open.onclick = showFeedback;
+  open.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showFeedback(); } };
+  box.prepend(card);
+}
+
 // ---------------------------------------------------------------- settings
 function showSettings() {
   const voiceServer = STATE.voice_server || { on: false, url: '', model: '', voice: '', key_saved: false };
@@ -858,6 +935,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-new').onclick = showNew;
   $('#btn-sample').onclick = showSample;
   $('#btn-settings').onclick = showSettings;
+  $('#feedback').onclick = showFeedback;
   $('#modal .close').onclick = closeModal;
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
   await refreshState();

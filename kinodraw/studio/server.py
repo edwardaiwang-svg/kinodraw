@@ -23,7 +23,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .. import PRODUCT, director, paths, pipeline, styles, voice, voice_server
+from .. import PRODUCT, VERSION, director, paths, pipeline, styles, voice, voice_server
 from ..director import style
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
@@ -691,6 +691,93 @@ def still(name: str, beat: str | None, offset: float = 0.0, t: float = 0.0) -> b
     return buf.getvalue()
 
 
+# ------------------------------------------------------------------ feedback
+FEEDBACK_USES = ('school', 'work', 'personal', 'other')
+EMAIL = re.compile(r'[^@\s]+@[^@\s]+\.[^@\s]+')
+NOT_SENT = 'Your feedback wasn’t sent.'
+
+
+def _computer() -> str:
+    import sys
+    return {'darwin': 'mac', 'win32': 'windows'}.get(sys.platform, 'linux' if sys.platform.startswith('linux')
+                                                     else sys.platform[:20])
+
+
+def feedback_body(body: dict) -> dict:
+    """The feedback form as KinoDraw Cloud takes it (POST /v1/feedback), checked here so a mistake is said at once.
+    The email goes only when "I am 13 or older" is ticked; the app adds its version, the computer type, the language
+    and the install ID."""
+    text = body.get('text')
+    text = text.strip() if isinstance(text, str) else ''
+    if not text:
+        raise ValueError('Write what you’d like to tell us first.')
+    if len(text) > 2000:
+        raise ValueError('Please keep it under 2,000 characters.')
+    out = {'text': text}
+    rating = body.get('rating')
+    if rating is not None:
+        if type(rating) is not int or not 1 <= rating <= 5:
+            raise ValueError('Choose how well it worked from 1 to 5.')
+        out['rating'] = rating
+    if body.get('use'):
+        if body['use'] not in FEEDBACK_USES:
+            raise ValueError('Choose what the video was for from the list.')
+        out['use'] = body['use']
+    url = body.get('video_url')
+    url = url.strip() if isinstance(url, str) else ''
+    if url:
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc or len(url) > 300 or ' ' in url:
+            raise ValueError('The video link should start with http:// or https:// (up to 300 characters).')
+        out['video_url'] = url
+    for box in ('quote_ok', 'age_13_plus'):
+        if not isinstance(body.get(box), bool):
+            raise ValueError('Tick or untick the boxes, then press Send again.')
+        out[box] = body[box]
+    email = body.get('email')
+    email = email.strip() if isinstance(email, str) else ''
+    if email and out['age_13_plus']:                    # under 13 (or not ticked): never sent, even if typed
+        if len(email) > 200 or not EMAIL.fullmatch(email):
+            raise ValueError('That email address doesn’t look right. Check it, or leave it empty.')
+        out['email'] = email
+    from ..director.llm import cloud
+    lang = body.get('lang')                             # the project's language, when sent from a project
+    out.update(install_id=cloud.install_id(), app_version=VERSION, os=_computer(),
+               lang=lang if lang in voice.LANGS else 'en')     # else the Studio's own language
+    return out
+
+
+class FeedbackNotSent(Exception):
+    """KinoDraw Cloud did not take the feedback (offline, busy or refused); the message is the sentence to show."""
+
+
+def send_feedback(body: dict) -> dict:
+    """Send the feedback form to KinoDraw Cloud: the user pressed Send, so it goes whichever director is chosen, with
+    no sign-in and no cloud token. Remembers that feedback was sent once, so the card after a video stays quiet."""
+    from ..director.llm import cloud
+    from ..director.llm.providers import ProviderError
+    sent = feedback_body(body)
+    try:
+        cloud.feedback(sent)
+    except ProviderError as error:
+        status, detail = getattr(error, 'status', None), getattr(error, 'detail', '')
+        if status == 404:                               # a KinoDraw Cloud from before feedback
+            raise FeedbackNotSent(f'{NOT_SENT} KinoDraw Cloud can’t take feedback yet. Please use "Prefer GitHub? '
+                                  'Open an issue" below.') from error
+        if status and status < 500 and detail:          # the cloud's own sentence (a bad field, too many at once)
+            raise FeedbackNotSent(f'{NOT_SENT} {detail}') from error
+        if status:
+            raise FeedbackNotSent(f'{NOT_SENT} KinoDraw Cloud had a problem. Please press Send again in a few '
+                                  'minutes.') from error
+        raise FeedbackNotSent(f'{NOT_SENT} KinoDraw Cloud can’t be reached. Check your internet connection and '
+                              'press Send again.') from error
+    cfg = _config()
+    if not cfg.get('feedback_sent'):
+        cfg['feedback_sent'] = True
+        _save_config(cfg)
+    return {'ok': True}
+
+
 def state() -> dict:
     from ..director.llm import cloud
     from ..director.llm.providers import SUGGESTED, saved
@@ -708,6 +795,7 @@ def state() -> dict:
             'cloud_languages': list(cloud.CloudProvider.languages),   # others are planned offline, never asked
             'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
+            'feedback_sent': bool(_config().get('feedback_sent')),   # after that, a finished video offers it quietly
             'voice_server': server,
             'product': PRODUCT['name'],
             'models': SUGGESTED,
@@ -929,6 +1017,11 @@ class Handler(BaseHTTPRequestHandler):
             from ..director.llm import cloud
             b = self._body()
             return self._json(cloud.verify(b['email'], b['code']))
+        if p == ['feedback'] and method == 'POST':        # sent only when the user presses Send, whatever the director
+            try:
+                return self._json(send_feedback(self._body()))
+            except FeedbackNotSent as error:            # the page keeps what they typed, to send again
+                return self._json({'error': str(error)}, 502)
         if p == ['keys'] and method == 'POST':
             from ..director.llm.providers import save_key
             b = self._body()
