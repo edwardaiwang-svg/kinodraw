@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
 
 from .schema import ATMOSPHERES
 
@@ -20,10 +19,10 @@ SPECIES = {
 }
 SPECIES_RE = re.compile(r'\b(' + '|'.join(SPECIES) + r')\b', re.I)
 NAME_RE = re.compile(r'\b[A-Z][a-z]+(?:[ -][A-Z][a-z]+)*\b')
-STOP_NAMES = set('''A An The Once Upon At In On By From To And But As Then When While First Next Finally
+STOP_NAMES = set('''A An The Once Upon At In On By From To And But As Then When Whenever While First Next Finally
 Today Tomorrow Yesterday This That These Those Here There It Its He His Him She Her They Their We Our You
 Your I Why What How Step Key Lesson News Report Data According Introducing Meet Try Start Every All One
-Two Three No Now Dawn Night Morning After Before Because For If So With Without Still Meanwhile'''.split())
+Two Three No Now Dawn Night Morning After Before Because For If So With Without Still Meanwhile Baba'''.split())
 TITLES = {'King', 'Queen', 'Doctor', 'Professor', 'Captain'}
 COLOURS = ('#DCA45C', '#DB7F42', '#A88058', '#7B9CAB', '#AA899F', '#85A47B')
 ACTION_CUES = {
@@ -33,8 +32,6 @@ ACTION_CUES = {
     'breathe_heavy': r'breath(?:es?|ing)\s+heavily', 'hide': r'hid(?:e|es|ing)?|hid',
     'pounce': r'pounc\w*', 'hug': r'hug\w*', 'point': r'point\w*', 'talk': r'said|says?|talk\w*',
 }
-ACTION_RE = re.compile(r'\b(?:' + '|'.join(ACTION_CUES.values()) +
-                       r'|watch\w*|met|saw|stood|felt|wait\w*)\b', re.I)
 BEFORE_NAME = re.compile(r'\b(?:' + '|'.join(SPECIES) +
                          r')(?:\s+(?:cub|puppy|kitten))?(?:\s+(?:named|called))?\s*$', re.I)
 
@@ -71,8 +68,12 @@ def candidate_ids(candidates, beat_id) -> set[str]:
     return {c if isinstance(c, str) else c['id'] for c in (offered or [])}
 
 
+def name_key(name) -> str:
+    return re.sub(r'^(?:' + '|'.join(TITLES) + r')\s+', '', name, flags=re.I).casefold()
+
+
 def mentions(name, text) -> bool:
-    name = re.sub(r'^(?:' + '|'.join(TITLES) + r')\s+', '', name)
+    name = name_key(name)
     return bool(name and re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I))
 
 
@@ -81,16 +82,18 @@ def detect_cast(script_beats) -> list[dict]:
     found = []
     for m in NAME_RE.finditer(text):
         words = m.group().split()
-        while words and (words[0] in STOP_NAMES or words[0] in TITLES):
+        start = m.start()
+        while words and words[0] in STOP_NAMES:
+            start += len(words.pop(0)) + 1
+        while words and words[0] in TITLES:
             words.pop(0)
         if words and not any(w in STOP_NAMES for w in words):
-            found.append((' '.join(words), m.start(), m.end()))
-    counts = Counter(n for n, _, _ in found)
+            found.append((' '.join(words), start, m.end()))
     names = list(dict.fromkeys(n for n, _, _ in found))
     cast = []
     for name in names:
         contexts = []
-        acting = False
+        named = False
         for i, (n, start, end) in enumerate(found):
             if n != name:
                 continue
@@ -98,20 +101,42 @@ def detect_cast(script_beats) -> list[dict]:
             right = min(end + 100, found[i + 1][1] if i + 1 < len(found) else len(text))
             before = re.split(r'[.!?\n]', text[left:start])[-1]
             after = re.split(r'[.!?\n]', text[end:right])[0]
-            verb = ACTION_RE.search(after)
-            acting |= bool(verb)
             # A preceding noun belongs to this name only when adjacent; following action clauses may
             # describe another animal. "lion cub Pendo watched the tigress Mara" has two genomes.
             noun = BEFORE_NAME.search(before)
-            before = before[noun.start():] if noun else ''
-            after = after[:verb.start()] if verb else after
-            contexts.append(before + text[start:end] + after)
-        description = next((s for s in contexts if SPECIES_RE.search(s)), '')
-        if not description and counts[name] < 2 and not acting:
+            introduced = re.match(r',\s+(?:a|an)\s+[^,]+', after, re.I)
+            location = re.search(r'\b(?:in|at|across|from|near|of)\s+(?:the\s+)?(?:[a-z]+\s+){0,2}$', before, re.I)
+            subject = re.match(r"\s+(?:(?:was|is|did|would|had)\s+)?(?:" + '|'.join(ACTION_CUES.values()) +
+                               r"|watch\w*|lived|loved|returned|guarded)\b", after, re.I)
+            # Capitalization alone (places, headings, plural common nouns) is not a name cue.
+            named |= bool(noun or (introduced and not location and SPECIES_RE.search(introduced.group())) or
+                          any(w in TITLES for w in text[start:end].split()) or
+                          (subject and not name.endswith('s') and not SPECIES_RE.fullmatch(name)) or
+                          re.search(r'\b(?:mother|father|sister|brother),\s*$', before, re.I) or
+                          re.search(r'\b(?:hug\w*|met|saw|named|called)\s*$', before, re.I))
+            # Only explicit noun phrases and subject-owned attributes supply traits. Mere
+            # proximity (especially an object followed by someone else's description) cannot.
+            local = before[noun.start():] if noun else ''
+            if introduced and not location and SPECIES_RE.search(introduced.group()):
+                local += introduced.group()
+            group = re.match(r'\s+and the other (lionesses|tigresses|lions|tigers)\b', after, re.I)
+            if group:
+                local += ' ' + {'lionesses': 'lioness', 'tigresses': 'tigress',
+                                'lions': 'lion', 'tigers': 'tiger'}[group[1].lower()]
+            attribute = re.match(r'\s+(?:is|was|has|had)\s+(.+)', after, re.I)
+            if attribute:
+                owned = re.split(r"\b(?:of|behind|beside|against|with|when|while)\b|"
+                                 r"\b(?:his|her|their)\s+(?:mother|father|sister|brother)\b",
+                                 attribute[1], maxsplit=1, flags=re.I)[0]
+                local += ' ' + owned
+            title = next((w for w in text[start:end].split() if w in TITLES), '')
+            contexts.append(title + ' ' + local)
+        if not named:
             continue
+        description = next((s for s in contexts if SPECIES_RE.search(s)), '')
         cue = ' '.join(contexts).lower()
         species_hit = SPECIES_RE.search(description)
-        species = species_hit.group().lower() if species_hit else 'human'
+        species = species_hit.group().lower() if species_hit else 'lion' if re.search(r'\bmane\b', cue) else 'human'
         kind, family = SPECIES[species]
         age = ('baby' if re.search(r'\b(cub|baby|puppy|kitten|hatchling)\b', cue) else
                'young' if species in ('boy', 'girl') or re.search(r'\b(young|child|teen)\b', cue) else
@@ -121,7 +146,7 @@ def detect_cast(script_beats) -> list[dict]:
             ('mane_black', r'black\s+mane'), ('mane_gold', r'gold(?:en)?\s+mane'),
             ('mane_none', r'no\s+mane|\bcub\b'), ('stripes', r'tigress|tiger|stripe'),
             ('spots', r'spot'), ('scar_nose', r'scar(?:red)?\s+nose|scar\s+(?:on|across)\s+(?:his|her|the)\s+nose'),
-            ('scar_eye', r'scar.{0,20}eye'), ('crown', r'\bking\b|\bqueen\b|crown'),
+            ('scar_eye', r'scar.{0,25}eye'), ('crown', r'\bking\b|\bqueen\b|crown'),
             ('glasses', r'glasses'), ('freckles', r'freckles'), ('fluffy', r'fluffy'),
         ):
             if re.search(pattern, cue):
@@ -145,22 +170,30 @@ def detect_cast(script_beats) -> list[dict]:
 def actions(beat, cast) -> list[dict]:
     out = []
     text = beat['spoken']
+    # Resolve full names first so Ann cannot borrow a verb from Mary Ann.
+    pattern = '|'.join(re.escape(name_key(c['name'])) for c in sorted(cast, key=lambda c: -len(name_key(c['name']))))
+    starts = list(re.finditer(r'(?<!\w)(?:' + pattern + r')(?!\w)', text, re.I)) if pattern else []
     for c in cast:
-        if not mentions(c['name'], text):
-            continue
-        start = re.search(re.escape(c['name']), text, re.I)
-        if start is None:
-            continue
-        tail = text[start.end():]
-        for other in cast:
-            if other['id'] != c['id']:
-                hit = re.search(r'\b' + re.escape(other['name']) + r'\b', tail, re.I)
-                if hit:
-                    tail = tail[:hit.start()]
-        for verb, pattern in ACTION_CUES.items():
-            if re.search(r'\b(?:' + pattern + r')\b', tail, re.I):
-                out.append({'actor': c['id'], 'verb': verb, 'at_beat': beat['id'],
-                            'intensity': 3 if verb in ('roar', 'swipe', 'pounce') else 1})
+        seen = set()
+        for i, start in enumerate(starts):
+            if start.group().casefold() != name_key(c['name']):
+                continue
+            end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
+            tail = re.split(r'[.!?;\n]|\b(?:while|whereas|when)\b', text[start.end():end], maxsplit=1, flags=re.I)[0]
+            tail = re.sub(r'^,\s+(?:a|an)\s+[^,]+,', '', tail, flags=re.I)
+            # A coordinated verb keeps the subject; a fresh noun/pronoun starts another clause.
+            tail = re.split(r'\b(?:but|and)\s+(?:the|a|an|he|she|it|they)\b', tail, maxsplit=1, flags=re.I)[0]
+            for verb, pattern in ACTION_CUES.items():
+                if verb in seen:
+                    continue
+                for hit in re.finditer(r'\b(?:' + pattern + r')\b', tail, re.I):
+                    clause = re.split(r'\bbut\b', tail[:hit.start()], flags=re.I)[-1]
+                    if re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", clause, re.I):
+                        continue
+                    out.append({'actor': c['id'], 'verb': verb, 'at_beat': beat['id'],
+                                'intensity': 3 if verb in ('roar', 'swipe', 'pounce') else 1})
+                    seen.add(verb)
+                    break
     return out
 
 

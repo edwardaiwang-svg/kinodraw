@@ -6,7 +6,7 @@ import re
 
 from ..rules import RulesDirector as PictureDirector
 from ..validate import _doodles
-from .schema import SCENE
+from .schema import SCENE, SKINS
 from .semantics import actions, atmosphere, beats, candidate_ids, detect_cast, mentions
 from .validate import _default, validate
 
@@ -58,7 +58,8 @@ def from_rules(board: dict, candidates=None) -> dict:
                       'recurring_motif': cast[0]['name'] if cast else title or 'the central idea',
                       'sections': [{'section_id': sid,
                                     'intent': next(b['text'] for b in script if b['section'] == sid)} for sid in sections]},
-        'style': {'mode': mode, 'whiteboard_skin': 'chalkboard' if genre == 'lesson' else 'whiteboard',
+        'style': {'mode': mode, 'whiteboard_skin': board['look'] if genre == 'explainer' and board.get('look') in SKINS else
+                  'chalkboard' if genre == 'lesson' else 'whiteboard',
                   'palette': palette, 'type': 'hand' if genre in ('lesson', 'explainer') else
                   'serif' if genre == 'poem' else 'display' if energetic else 'rounded',
                   'energy': 5 if energetic else 2 if genre in ('lesson', 'poem') else 3,

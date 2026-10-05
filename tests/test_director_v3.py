@@ -17,7 +17,7 @@ from kinodraw.director.validate import _doodles, validate as validate_legacy
 from kinodraw.engine import render, timeline
 
 FIX = Path(__file__).parent / 'fixtures' / 'genre'
-SCRATCH = Path('/tmp/kd1005/a2-schema')
+SCRATCH = Path('/tmp/kd1005/a2-schema-fix1')
 
 
 def _assert_shape(value, schema):
@@ -356,3 +356,156 @@ def test_prompt_covers_reference_grammar_and_cast_constraints():
                    '27', 'mane_black', '1.4', 'baby', '4.5:1', 'bar lines', 'recurring', 'fog_with_shooting_star'):
         assert phrase in SYSTEM
     assert detect_genre('Introducing our new app') == 'launch/promo'
+
+
+def test_explainer_adapter_preserves_notebook_skin_and_frames():
+    board = script.build(ingest.read('# How ideas connect\n\nA book holds an idea.'), story='story')
+    PictureDirector('en').direct(board)
+    board['look'] = 'notebook'
+    plan = from_rules(board)
+    assert plan['storyboard']['genre'] == 'explainer'
+    assert plan['style']['whiteboard_skin'] == 'notebook'
+    legacy, _ = adapt(plan, board)
+    assert legacy == board
+    project = SCRATCH / 'notebook'
+    project.mkdir(parents=True, exist_ok=True)
+    clips = timeline.synthetic_clips(board, 'en')
+    timing = timeline.layout(board, 'en', clips, render.pacing(board, 'en', clips, project))
+    original = render.make_production(board, timing, 'en', project)
+    adapted = render.make_production(legacy, timing, 'en', project)
+    end = max(e.end for e in original.ctx.elements)
+    for t in (0, end / 2, end + .1):
+        assert np.array_equal(np.asarray(original.frame(t)), np.asarray(adapted.frame(t)))
+
+
+@pytest.mark.parametrize('treatment', ['whiteboard', 'motion', 'kinetic_type', 'chart', 'character', 'atmosphere'])
+def test_adapter_honors_empty_picture_selection(treatment, drafts, plans):
+    board = copy.deepcopy(drafts['explainer'])
+    cluster = {'id': 'old', 'type': 'cluster', 'items': [{'doodle': 'book_stack'}], 'relation': 'none'}
+    quote = {'id': 'quote', 'type': 'quote', 'text': {'en': 'An idea'}, 'speaker': {'en': ''}}
+    board['beats'][0]['visuals'] = [cluster, quote]
+    plan = copy.deepcopy(plans['explainer'])
+    plan['scenes'][0].update(treatment=treatment, elements=[])
+    fixed, repairs = validate(plan, board, _candidates(board))
+    assert repairs == []
+    legacy, _ = adapt(fixed, board)
+    assert legacy['beats'][0]['visuals'] == ([cluster, quote] if treatment in ('character', 'atmosphere') else [quote])
+    assert board['beats'][0]['visuals'] == [cluster, quote]
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('Pendo, a lion cub, did not roar.', set()),
+    ("Pendo, a lion cub, didn't roar.", set()),
+    ('Pendo, a lion cub, never roared.', set()),
+    ('Pendo, a lion cub, waited. The engine roared.', set()),
+    ('Pendo, a lion cub, waited! The engine roared.', set()),
+    ('Pendo, a lion cub, did not roar, but laughed.', {'laugh'}),
+    ('Pendo, a lion cub, waited. Pendo roared.', {'roar'}),
+    ('Pendo, a lion cub, roared.', {'roar'}),
+])
+def test_actions_follow_the_named_subject_and_negation(text, expected):
+    from kinodraw.director.v3.semantics import actions, beats, detect_cast
+    board = {'beats': [{'id': 'b1', 'text': text}]}
+    normalized = beats(board)
+    cast = detect_cast(normalized)
+    assert {a['verb'] for a in actions(normalized[0], cast) if a['actor'] == 'pendo'} == expected
+    plan = from_rules(board, [])
+    assert {a['verb'] for s in plan['scenes'] for a in s['actions'] if a['actor'] == 'pendo'} == expected
+    assert validate(plan, board, []) == (plan, [])
+
+
+def test_once_mentioned_object_is_detected_and_repaired():
+    from kinodraw.director.v3.semantics import beats, detect_cast
+    board = {'beats': [{'id': 'b1', 'text': 'Alice hugged Bob.'}]}
+    assert {c['name'] for c in detect_cast(beats(board))} == {'Alice', 'Bob'}
+    plan = from_rules(board, [])
+    assert {c['name'] for c in plan['cast']} == {'Alice', 'Bob'}
+    plan['cast'] = [c for c in plan['cast'] if c['name'] == 'Alice']
+    fixed, repairs = validate(plan, board, [])
+    assert {c['name'] for c in fixed['cast']} == {'Alice', 'Bob'}
+    assert any('added named character Bob' in r for r in repairs)
+    assert validate(fixed, board, []) == (fixed, [])
+
+
+def test_cast_repair_keeps_overlapping_full_names_distinct():
+    from kinodraw.director.v3.semantics import beats, detect_cast
+    board = {'beats': [{'id': 'b1', 'text': 'Mary Ann, a woman, hugged Ann, a girl.'}]}
+    detected = detect_cast(beats(board))
+    assert {c['name'] for c in detected} == {'Mary Ann', 'Ann'}
+    plan = from_rules(board, [])
+    plan['cast'] = []
+    fixed, repairs = validate(plan, board, [])
+    assert {c['name'] for c in fixed['cast']} == {'Mary Ann', 'Ann'}
+    assert sum('added named character' in r for r in repairs) == 2
+    assert validate(fixed, board, []) == (fixed, [])
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('Pendo, a lion cub, did not, in fact, roar.', set()),
+    ('Pendo, a lion cub, waited while the engine roared.', set()),
+    ('Mary Ann, a woman, roared. Ann, a girl, slept.', {('mary_ann', 'roar'), ('ann', 'sleep')}),
+])
+def test_remaining_action_boundaries(text, expected):
+    board = {'beats': [{'id': 'b1', 'text': text}]}
+    plan = from_rules(board, [])
+    assert {(a['actor'], a['verb']) for s in plan['scenes'] for a in s['actions']} == expected
+    assert validate(plan, board, []) == (plan, [])
+
+
+@pytest.mark.parametrize('text', ['Books hold ideas.', 'Leaders help families. Leaders support children.',
+                                 'In Serengeti, the lions rested. Terrified by the noise, the hyenas fled.'])
+def test_common_nouns_and_locations_are_not_cast(text):
+    plan = from_rules({'beats': [{'id': 'b1', 'text': text}]}, [])
+    assert plan['cast'] == []
+
+
+def test_lion_story_introductions_and_species():
+    text = ("In the golden Serengeti, a tiny lion cub named Pendo lived with his pride. "
+            "Pendo loved his mother, Mara, more than anyone else. "
+            "Pendo was terrified of his father, the great King Kojo. "
+            "Kojo had a massive black mane, a scar over his left eye, and a roar. "
+            "Mara and the other lionesses had gone out to hunt. "
+            "Terrified by the sheer force of the king, the remaining hyenas scattered. "
+            "Kojo stood breathing heavily.")
+    board = {'beats': [{'id': 'b1', 'text': text}]}
+    plan = from_rules(board, [])
+    cast = {c['name']: c for c in plan['cast']}
+    assert set(cast) == {'Pendo', 'Mara', 'Kojo'}
+    assert (cast['Pendo']['species'], cast['Pendo']['age']) == ('lion', 'baby')
+    assert (cast['Mara']['species'], cast['Mara']['sex'], cast['Mara']['age']) == ('lioness', 'female', 'adult')
+    assert (cast['Kojo']['species'], cast['Kojo']['age'], cast['Kojo']['size']) == ('lion', 'adult', 1.4)
+    assert {'mane_black', 'scar_eye', 'crown'} <= set(cast['Kojo']['marks'])
+    assert validate(plan, board, []) == (plan, [])
+
+
+@pytest.mark.parametrize('rename', [False, True])
+def test_full_lion_narration_has_only_actor_owned_traits(rename):
+    source = Path(__file__).resolve().parents[1] / 'docs/overnight-2026-10-05/evidence/director-final/lion-story.md'
+    text = source.read_text()
+    names = ('Pendo', 'Mara', 'Kojo')
+    if rename:
+        replacements = ('Tavi', 'Nala', 'Roko')
+        for old, new in zip(names, replacements):
+            text = text.replace(old, new)
+        names = replacements
+    board = script.build(ingest.read(text), story='story')
+    plan = RulesDirector('en').direct(board, [])
+    cast = {c['name']: c for c in plan['cast']}
+    assert set(cast) == set(names)
+    baby, mother, father = (cast[name] for name in names)
+    assert (baby['species'], baby['age'], baby['size']) == ('lion', 'baby', .55)
+    assert baby['sex'] != 'female'
+    assert baby['marks'] == ['mane_none']
+    assert (mother['species'], mother['sex'], mother['age']) == ('lioness', 'female', 'adult')
+    assert (father['species'], father['age'], father['size']) == ('lion', 'adult', 1.4)
+    assert {'mane_black', 'scar_eye'} <= set(father['marks'])
+    assert validate(plan, board, []) == (plan, [])
+    acting = {(a['actor'], a['verb']) for s in plan['scenes'] for a in s['actions']}
+    assert (father['id'], 'walk') in acting
+    assert (baby['id'], 'hide') in acting
+    assert (baby['id'], 'roar') not in acting
+
+
+@pytest.mark.parametrize('genre', ['story', 'explainer', 'launch', 'lesson', 'news', 'poem'])
+def test_genre_fixtures_have_no_unexpected_cast(genre, plans):
+    assert {c['name'] for c in plans[genre]['cast']} == ({'Pendo', 'Mara', 'Kojo'} if genre == 'story' else set())

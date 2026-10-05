@@ -6,7 +6,7 @@ import math
 import re
 
 from .schema import PLAN_SCHEMA, SCENE
-from .semantics import beats, candidate_ids, detect_cast, mentions
+from .semantics import beats, candidate_ids, detect_cast, mentions, name_key
 
 
 def _default(schema):
@@ -159,7 +159,7 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
                  f'cast.{c["id"]}.palette', repairs)
         cast.append(c)
     for c in detect_cast(script):
-        if any(mentions(existing['name'], c['name']) or mentions(c['name'], existing['name']) for existing in cast):
+        if any(name_key(existing['name']) == name_key(c['name']) for existing in cast):
             continue
         while c['id'] in ids:
             c['id'] += '_2'

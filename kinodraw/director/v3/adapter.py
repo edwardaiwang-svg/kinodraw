@@ -62,6 +62,6 @@ def adapt(plan: dict, board: dict) -> tuple[dict, list[dict]]:
                 chosen.append({'id': vid, 'type': 'cluster',
                                'items': [{'doodle': ref}], 'relation': 'none'})
                 existing.add(ref)
-            if refs:
+            if refs or scene['treatment'] not in ('character', 'atmosphere'):
                 beat['visuals'] = chosen
     return out, copy.deepcopy(plan['scenes'])
