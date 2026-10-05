@@ -1,0 +1,53 @@
+{
+  "fresh_focus": {
+    "moods": [
+      "bright",
+      "upbeat",
+      "calm"
+    ],
+    "bpm": 103.501811,
+    "downbeat": 0.142,
+    "duration": 124.05552083333333,
+    "sha256": "87d70572729712abfb6d444b7de4cc7b0104eafca1f0fcfec1798fd824325c3c",
+    "measurement": "scripts/measure_bpm.py spectral flux / autocorrelation / bass and chroma phase",
+    "contrast": 7.730411000270414,
+    "halves_bpm": [
+      103.50181128169584,
+      103.49288486416398
+    ]
+  },
+  "natural_vibes": {
+    "moods": [
+      "neutral",
+      "calm",
+      "warm"
+    ],
+    "bpm": 100.0,
+    "downbeat": 2.132,
+    "duration": 129.07102083333334,
+    "sha256": "12ac1554aa7d48a40a4c906ca1b89e81138093556f8c0f457f53040479226ad8",
+    "measurement": "scripts/measure_bpm.py spectral flux / autocorrelation / bass and chroma phase",
+    "contrast": 6.762928625622881,
+    "halves_bpm": [
+      99.99999999999844,
+      99.99999999999844
+    ]
+  },
+  "inventing_flight": {
+    "moods": [
+      "discovery",
+      "playful",
+      "adventure"
+    ],
+    "bpm": 144.997583,
+    "downbeat": 0.047,
+    "duration": 141.888,
+    "sha256": "916e736efa3caed4ea8534e727670dbac41af0fb44f00fa667aebaab9b2b6407",
+    "measurement": "scripts/measure_bpm.py spectral flux / autocorrelation / bass and chroma phase",
+    "contrast": 4.427226557423557,
+    "halves_bpm": [
+      144.99758337360802,
+      144.99758337360802
+    ]
+  }
+}
