@@ -59,10 +59,10 @@ def mux(tl: dict, silent: Path, mix: Path, output: Path, lang: str, title: str, 
 
 
 def video_size(video: Path):
-    """(width, height) of a video from its header alone (no decode), or None when ffmpeg finds no H.264 stream."""
+    """(width, height) of a video from its header alone (no decode), or None when ffmpeg finds no video stream."""
     err = subprocess.run([FFMPEG, '-hide_banner', '-i', str(video)], capture_output=True, encoding='utf-8',
                          errors='replace').stderr
-    found = re.search(r'Video: h264.*?(\d{3,4})x(\d{3,4})', err)
+    found = re.search(r'Video: [^\n]*?\b([1-9]\d*)x([1-9]\d*)\b', err)
     return (int(found[1]), int(found[2])) if found else None
 
 
@@ -73,7 +73,7 @@ def _probe(video: Path) -> dict:
     frames = [int(x) for x in re.findall(r'frame=\s*(\d+)', err)]
     head = err.split('Output #0')[0]                  # the input's report (chapters are listed again for the output)
     return {'frames': frames[-1] if frames else 0, 'errors': [l for l in err.splitlines() if 'rror' in l],
-            'size': re.search(r'Video: h264.*?(\d{3,4})x(\d{3,4})', head), 'audio': 'Audio: aac' in head,
+            'size': re.search(r'Video: [^\n]*?\b([1-9]\d*)x([1-9]\d*)\b', head), 'audio': 'Audio: aac' in head,
             'chapters': re.findall(r'Chapter #\d+:\d+: start [\d.]+, end [\d.]+\s+Metadata:\s+title\s+:\s*(.*)', head)}
 
 
@@ -118,7 +118,8 @@ def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0, size=(
     times = sorted({*np.arange(0, tl['duration'] - .1, every).round(2), *(round(c['start'] + 1, 2) for c in tl['chapters'])})
     times = [t for t in times if t < tl['duration'] - .05][:60]
     cols = 6
-    w, h = (180, 320) if size[1] > size[0] else (320, 180)
+    w = 180 if size[1] > size[0] else 320
+    h = round(w * size[1] / size[0])
     sheet = Image.new('RGB', (cols * w, ((len(times) + cols - 1) // cols) * (h + 26)), 'white')
     d = ImageDraw.Draw(sheet)
     label = ink.font('ui', 18)

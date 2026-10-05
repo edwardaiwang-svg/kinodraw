@@ -877,48 +877,140 @@ def build(episode, tline, args):
     return prod
 
 
-def encode(prod, start, n, output, crf):
+def encode(prod, start, n, output, crf, context=None):
+    """Stage privately, report encoded frames, replace only after success."""
+    import os
+    import tempfile
+    import threading
+    from ..progress import RenderContext, encoded_frames, validate_frames, wait_process
+    ctx = context or RenderContext()
+    ctx.begin()
+    ctx.token.check()
+    if n <= 0:
+        raise ValueError('frames must be positive')
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     w, h = prod.size
-    proc = subprocess.Popen([FFMPEG, '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}',
-                             '-r', str(FPS), '-i', '-', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', str(crf),
-                             '-pix_fmt', 'yuv420p', '-threads', '2', '-movflags', '+faststart', str(output)],
-                            stdin=subprocess.PIPE)
-    t1 = time.time()
-    for i in range(n):
-        t = start + i / FPS
-        proc.stdin.write(prod.frame(t).convert('RGB').tobytes())
-        if i % 900 == 0:
-            print(f'frame {i}/{n} t={t:.1f}s {i / max(time.time() - t1, 1e-6):.1f} fps', flush=True)
-    proc.stdin.close()
-    if proc.wait() != 0:
-        sys.exit('ffmpeg failed')
+    with tempfile.TemporaryDirectory(prefix='.encode-', dir=output.parent) as work:
+        temp = Path(work) / output.name
+        progress = Path(os.environ.get('KINODRAW_WORKER_PROGRESS', str(Path(work) / 'progress')))
+        group = not bool(os.environ.get('KINODRAW_WORKER_PROGRESS'))
+        proc = ctx.token.register(subprocess.Popen(
+            [FFMPEG, '-y', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{w}x{h}',
+             '-r', str(FPS), '-i', '-', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', str(crf),
+             '-pix_fmt', 'yuv420p', '-threads', '2', '-movflags', '+faststart',
+             '-progress', str(progress), '-stats_period', '0.05', str(temp)],
+            stdin=subprocess.PIPE, start_new_session=group), group=group)
+        previous_handler = None
+        if not group and threading.current_thread() is threading.main_thread():
+            import signal
+            previous_handler = signal.signal(signal.SIGTERM, lambda *_: ctx.token.cancel())
+        done = threading.Event()
+        errors = []
+        def monitor():
+            try:
+                while not done.wait(.03):
+                    ctx.report(min(encoded_frames(progress), n - 1), n)
+            except BaseException as exc:
+                errors.append(exc)
+                ctx.token.cancel()
+        thread = threading.Thread(target=monitor, daemon=True)
+        thread.start()
+        try:
+            for i in range(n):
+                ctx.token.check()
+                frame = prod.frame(start + i / FPS).convert('RGB')
+                if frame.size != (w, h):
+                    raise ValueError('generated frame size differs from production size')
+                proc.stdin.write(frame.tobytes())
+            proc.stdin.close()
+            wait_process(proc, ctx)
+            ctx.report(min(encoded_frames(progress), n - 1), n)
+            if errors:
+                raise errors[0]
+            validate_frames(FFMPEG, temp, n, ctx, group=group)
+            ctx.token.commit(temp, output)
+            ctx.report(n, n)
+        except (BrokenPipeError, OSError):
+            ctx.token.check()
+            raise
+        finally:
+            done.set()
+            thread.join()
+            reader = getattr(prod, '_stock_reader', None)
+            if reader is not None and reader.proc is not None:
+                reader.close()
+                reader.proc.wait()
+            ctx.token.stop(proc)
+            if not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except BrokenPipeError:
+                    pass
+            ctx.token.unregister(proc)
+            if previous_handler is not None:
+                signal.signal(signal.SIGTERM, previous_handler)
 
 
-def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20, aspect='16:9', portrait=None):
-    """Render ``n`` frames as ``workers`` frame-aligned segments in child processes, then join them losslessly."""
+def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20,
+                    aspect='16:9', portrait=None, context=None):
+    """One/two owned process groups, private segments, atomic lossless join."""
+    import os
+    import tempfile
+    from ..progress import RenderContext, encoded_frames, validate_frames, wait_process
+    if workers not in (1, 2) or n < workers:
+        raise ValueError('use one or two workers and at least one frame per worker')
+    ctx = context or RenderContext()
+    ctx.begin()
+    ctx.token.check()
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     bounds = [round(n * i / workers) for i in range(workers + 1)]
-    seg_dir = output.parent / f'.{output.stem}.segments'
-    seg_dir.mkdir(parents=True, exist_ok=True)
     worker = [sys.executable, '--render-worker'] if getattr(sys, 'frozen', False) else \
-        [sys.executable, '-m', 'kinodraw.engine.render']       # a packaged app has no `python -m`
+        [sys.executable, '-m', 'kinodraw.engine.render']
     base = worker + ['--project', str(project), '--episode', str(episode), '--lang', lang, '--crf', str(crf),
-                     '--aspect', aspect] + \
-        (['--timeline', str(timeline)] if timeline else ['--synthetic'])
+                     '--aspect', aspect] + (['--timeline', str(timeline)] if timeline else ['--synthetic'])
     if portrait is not None:
         base += ['--portrait', portrait]
-    segs = [seg_dir / f'{i:02d}.mp4' for i in range(workers)]
-    procs = [subprocess.Popen(base + ['--start', repr(start + bounds[i] / FPS), '--frames',
-                                      str(bounds[i + 1] - bounds[i]), '--output', str(seg)])
-             for i, seg in enumerate(segs)]
-    if any([p.wait() != 0 for p in procs]):
-        raise RuntimeError('segment render failed')
-    listing = seg_dir / 'list.txt'
-    listing.write_text(''.join(f"file '{seg.name}'\n" for seg in segs), encoding='utf-8')
-    subprocess.run([FFMPEG, '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing), '-c', 'copy',
-                    '-movflags', '+faststart', str(output)], check=True)
-    warnings = json.loads(Path(f'{segs[0]}.json').read_text(encoding='utf-8'))['warnings']
-    shutil.rmtree(seg_dir)
-    return warnings
+    procs = []
+    with tempfile.TemporaryDirectory(prefix='.segments-', dir=output.parent) as work:
+        seg_dir = Path(work)
+        segs = [seg_dir / f'{i:02d}.mp4' for i in range(workers)]
+        progress = [seg_dir / f'{i:02d}.progress' for i in range(workers)]
+        try:
+            for i, seg in enumerate(segs):
+                ctx.token.check()
+                env = dict(os.environ, KINODRAW_WORKER_PROGRESS=str(progress[i]))
+                procs.append(ctx.token.register(subprocess.Popen(base + [
+                    '--start', repr(start + bounds[i] / FPS), '--frames', str(bounds[i + 1] - bounds[i]),
+                    '--output', str(seg)], env=env, start_new_session=True), group=True))
+            while any(p.poll() is None for p in procs):
+                ctx.token.check()
+                if any(p.poll() not in (None, 0) for p in procs):
+                    raise RuntimeError('segment render failed')
+                ctx.report(min(sum(encoded_frames(p) for p in progress), n - 1), n)
+                time.sleep(.03)
+            ctx.token.check()
+            if any(p.returncode != 0 for p in procs):
+                raise RuntimeError('segment render failed')
+            ctx.report(min(sum(encoded_frames(p) for p in progress), n - 1), n)
+            listing = seg_dir / 'list.txt'
+            listing.write_text(''.join(f"file '{seg.name}'\n" for seg in segs), encoding='utf-8')
+            temp = seg_dir / ('joined' + output.suffix)
+            join = ctx.token.register(subprocess.Popen([
+                FFMPEG, '-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', str(listing),
+                '-c', 'copy', '-movflags', '+faststart', str(temp)], start_new_session=True), group=True)
+            procs.append(join)
+            wait_process(join, ctx)
+            validate_frames(FFMPEG, temp, n, ctx)
+            warnings = json.loads(Path(f'{segs[0]}.json').read_text(encoding='utf-8'))['warnings']
+            ctx.token.commit(temp, output)
+            ctx.report(n, n)
+            return warnings
+        finally:
+            for proc in procs:
+                ctx.token.stop(proc)
+                ctx.token.unregister(proc)
 
 
 def main(argv=None):
