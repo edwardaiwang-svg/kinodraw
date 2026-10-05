@@ -128,10 +128,12 @@ def _structure(blocks, title, fallback) -> Document:
         levels = sorted({lvl for lvl, _ in blocks if lvl})
     section_level = next((lvl for lvl in levels if sum(1 for b, _ in blocks if b == lvl) >= 2), None)
     text = ' '.join(t for _, t in blocks)
-    doc = Document(title=title or body_title or (_first_words(blocks) if blocks else fallback or 'Untitled'),
-                   lang=detect_lang(text))
+    lang = detect_lang(text)
+    doc = Document(title=_sentence_spacing(title or body_title or (_first_words(blocks) if blocks else fallback or 'Untitled'), lang),
+                   lang=lang)
     current = None
     for lvl, t in blocks:
+        t = _sentence_spacing(t, lang)
         if section_level and lvl == section_level:
             current = Section(t)
             doc.sections.append(current)
@@ -148,6 +150,7 @@ def _structure(blocks, title, fallback) -> Document:
 QUOTES = {'"': '"', '“': '”', '‘': '’', '「': '」', '『': '』', '«': '»'}
 CLOSERS = '"”’」』»)]）'
 FUNCTION_WORDS = set('the of in a an and to for with at on by from his her its'.split())
+URL = re.compile(r'\b(?:https?://|www\.)[^\s<>"“”]+')
 
 
 def _outside_quotes(text: str) -> list[bool]:
@@ -159,7 +162,8 @@ def _outside_quotes(text: str) -> list[bool]:
                       and (not stack or stack[-1] != '’'
                            or re.match(r'(?:s|t|d|m|re|ve|ll)\b', text[i + 1:], re.I)
                            or (text[i - 1].isupper() and (i < 2 or not text[i - 2].isalnum()))))
-        if not apostrophe:
+        inch = ch == '"' and i > 0 and text[i - 1].isdigit() and (not stack or stack[-1] != '"')
+        if not apostrophe and not inch:
             if stack and ch == stack[-1]:
                 stack.pop()
             elif ch in QUOTES:
@@ -170,7 +174,7 @@ def _outside_quotes(text: str) -> list[bool]:
 
 def _protect_periods(text: str, lang: str) -> str:
     names = (r'Sr|Sra|Srta|Dr|Dra|Prof|Ud|Uds|EE\.UU|etc' if lang == 'es' else
-             r'Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K|No')
+             r'Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K|Ph\.D|No')
     text = re.sub(r'\b[A-Za-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|edu|gov|io|co|nl|es|uk)\b',
                   lambda m: m.group(0).replace('.', '\0'), text)
     text = re.sub(r'\b(?:[A-Za-z]\.){2,}', lambda m: m.group(0).replace('.', '\0'), text)
@@ -181,7 +185,12 @@ def _protect_periods(text: str, lang: str) -> str:
 def _sentence_spacing(text: str, lang: str) -> str:
     if lang == 'zh':
         return text
-    protected = _protect_periods(text, lang)
+    urls = []
+    def keep_url(m):
+        value = m.group().rstrip('.,;:!?')
+        urls.append(value)
+        return f'{len(urls) - 1}' + m.group()[len(value):]
+    protected = _protect_periods(URL.sub(keep_url, text), lang)
     outside = _outside_quotes(protected)
     def space_end(m):
         if m.end() > m.start() + len(m.group(1)):
@@ -198,7 +207,8 @@ def _sentence_spacing(text: str, lang: str) -> str:
         return m.group(1) + ' ' if not outside[m.start()] and outside[end] else m.group(0)
     protected = re.sub(r'([' + re.escape(''.join(QUOTES.values())) + r']+)\s*(?=[A-Za-zÁÉÍÓÚÑÜáéíóúñü0-9])',
                        space_quote, protected)
-    return protected.replace('\0', '.')
+    protected = protected.replace('\0', '.')
+    return re.sub(r'(\d+)', lambda m: urls[int(m.group(1))], protected)
 
 
 def _sentences(text: str, lang: str) -> list[str]:
@@ -226,8 +236,10 @@ def _title(text: str, lang: str) -> str:
     if len(words) <= 10:
         return first.rstrip('.')
     outside = _outside_quotes(first)
+    urls = [m.span() for m in URL.finditer(first)]
     marks = [m.start() for m in re.finditer(r'[,;:—–]', first)
-             if outside[m.end()] and len(first[:m.start()].split()) >= 3]
+             if outside[m.end()] and not any(a <= m.start() < b for a, b in urls)
+             and len(first[:m.start()].split()) >= 3]
     if marks:
         return first[:marks[-1]].strip()
     words = words[:8]

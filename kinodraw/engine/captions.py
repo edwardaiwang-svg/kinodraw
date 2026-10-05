@@ -12,7 +12,7 @@ from functools import lru_cache
 
 from PIL import Image, ImageDraw
 
-from ..ingest import CLOSERS, _sentence_spacing
+from ..ingest import CLOSERS, _outside_quotes, _sentence_spacing
 from . import ink
 
 SIZE = 70
@@ -112,10 +112,13 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits):
     # Captions include closing marks; spoken spans still index the original character times.
     for text, spans in ((display, sd), (spoken, ss)):
         joined, start = [], 0
+        outside = _outside_quotes(text)
         for _, end in spans:
             if end <= start:
                 continue
             while end < len(text) and text[end] in CLOSERS + '.,;:?!…，。；：？！、':
+                if text[end] == '"' and outside[end] and not outside[end + 1]:
+                    break
                 end += 1
             joined.append((start, end))
             start = end
