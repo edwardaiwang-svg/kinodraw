@@ -152,3 +152,113 @@ def test_real_catalog_and_recorded_cloud_preserve_meaning():
         assert not doodles(beat) & banned
         assert not {c['id'] for c in payload['candidates']} & banned
     assert board['beats'][-2]['atmosphere']['scene'] == board['beats'][-1]['atmosphere']['scene']
+
+
+def cloud_for(rules):
+    cloud = LLMDirector.__new__(LLMDirector)
+    cloud.lang, cloud.k, cloud.rules, cloud.notes = 'en', 12, rules, []
+    return cloud
+
+
+def test_named_characters_reject_faces_without_face_in_description(rules, monkeypatch):
+    monkeypatch.setattr(rules.matcher, 'semantic', lambda text, k=5: [Hit('fl_exploding_head', 1.)])
+    board = rules.direct(board_for('Pendo was shocked.', 'Mara was shocked.',
+                                   'Pendo watched Mara.'))
+    cloud = cloud_for(rules)
+    payload = cloud._payload(board, board['chapters'][0], board['beats'], 1)
+    answer = {'beats': [{'beat_id': b['id'], 'visuals': [{'type': 'cluster', 'items': [
+        {'doodle': 'fl_exploding_head', 'trigger': 'shocked'}]}]} for b in board['beats'][:2]]}
+    cloud._apply(board, board['chapters'][0], board['beats'], answer, payload)
+    assert len(cloud.notes) == 2
+    assert all('fl_exploding_head' not in doodles(b) for b in board['beats'])
+    assert all('fl_exploding_head' not in {c['id'] for c in b['candidates']} for b in payload['beats'])
+    assert rules._meaning_allows('fl_blue_heart', None, 'Pendo watched Mara.')
+
+
+@pytest.mark.parametrize('adjective', ['tired', 'sleeping', 'tired sleeping'])
+def test_participial_adjectives_preserve_animal_subject(rules, adjective):
+    sentence = f'The {adjective} cub rubbed his scarred nose.'
+    board = rules.direct(board_for(sentence))
+    assert rules._animal_subject(sentence)
+    assert 'fl_nose' not in doodles(board['beats'][0])
+    assert 'fl_nose' not in {h.id for h in rules.candidates(sentence, 's1', 12)}
+    assert not rules._animal_subject('The doctor examined the tired cub.')
+    assert not rules._animal_subject('The doctor touched the sleeping cub.')
+
+
+def test_such_as_examples_keep_literal_pictures(rules):
+    sentence = 'Tools such as microscopes let us see tiny cells.'
+    board = rules.direct(board_for(sentence))
+    assert {'microscope', 'cell'} <= doodles(board['beats'][0])
+    assert {'microscope', 'cell'} <= {h.id for h in rules.candidates(sentence, 's1', 12)}
+
+
+def test_repeated_initial_common_nouns_keep_pictures_and_narrator(rules, monkeypatch):
+    sentences = ('Teachers help students learn.', 'Teachers read stories to children.')
+    board = rules.direct(board_for(*sentences))
+    assert not rules.characters
+    assert all('character' not in b for b in board['beats'])
+    assert 'family_group' in doodles(board['beats'][1])
+    cloud = cloud_for(rules)
+    payload = cloud._payload(board, board['chapters'][0], board['beats'], 1)
+    cloud._apply(board, board['chapters'][0], board['beats'], {'beats': [
+        {'beat_id': 'b1', 'visuals': [{'type': 'cluster', 'items': [
+            {'doodle': 'narrator_explain', 'trigger': 'Teachers read'}]}]}]}, payload)
+    assert not cloud.notes
+    monkeypatch.setattr(rules, '_concepts', lambda *args, **kwargs: [])
+    board = rules.direct(board_for(*sentences))
+    assert 'narrator_explain' in doodles(board['beats'][0])
+
+
+def test_cloud_picture_permission_is_scoped_to_trigger_sentence(rules):
+    sentence = 'The doctor touched his nose. The lion rubbed his scarred nose.'
+    board = rules.direct(board_for(sentence))
+    cloud = cloud_for(rules)
+    payload = cloud._payload(board, board['chapters'][0], board['beats'], 1)
+    assert 'fl_nose' in {c['id'] for c in payload['beats'][0]['candidates']}
+    for trigger in ('scarred nose', '', 'invented words', 'nose'):
+        trial = copy.deepcopy(board)
+        cloud.notes.clear()
+        cloud._apply(trial, trial['chapters'][0], trial['beats'], {'beats': [
+            {'beat_id': 'b0', 'visuals': [{'type': 'cluster', 'items': [
+                {'doodle': 'fl_nose', 'trigger': trigger}]}]}]}, payload)
+        if trigger == 'nose':
+            assert not cloud.notes
+        else:
+            assert len(cloud.notes) == 1
+            assert trial['beats'][0]['visuals'] == board['beats'][0]['visuals']
+
+
+@pytest.mark.parametrize('species', ['dog', 'puppy', 'fox', 'cat', 'kitten', 'rabbit', 'horse', 'bird'])
+def test_recurring_animals_keep_supported_species_traits(rules, species):
+    board = rules.direct(board_for(f'Rex, a {species}, guarded the house.', 'Rex was breathing heavily.'))
+    assert species in rules.characters['Rex']['traits']
+    assert species in board['beats'][1]['character'][0]['traits']
+    assert not {'lungs', 'fl_lungs'} & doodles(board['beats'][1])
+    assert not {'lungs', 'fl_lungs'} & {h.id for h in rules.candidates('Rex was breathing heavily.', 's1', 12)}
+
+
+@pytest.mark.parametrize('sentence,banned', [
+    ('The lion was brave like thick armor.', {'knight_helmet', 'fl_military_helmet'}),
+    ('The lion spoke in a voice like rolling thunder.', {'lightning_bolt', 'fl_cloud_with_lightning_and_rain'}),
+    ('The lion stood like stone and spoke in a voice like rolling thunder.',
+     {'lightning_bolt', 'fl_cloud_with_lightning_and_rain'}),
+])
+def test_modified_similes_reject_literal_noun_pictures(rules, sentence, banned):
+    board = rules.direct(board_for(sentence))
+    assert all(not rules._meaning_allows(did, None, sentence) for did in banned)
+    assert not banned & doodles(board['beats'][0])
+    assert not banned & {h.id for h in rules.candidates(sentence, 's1', 12)}
+
+
+
+def test_common_noun_exclusion_does_not_need_picture_index(rules):
+    assert 'leader' not in rules.matcher.index
+    board = rules.direct(board_for('Leaders help families.', 'Leaders support children.'))
+    assert not rules.characters
+    assert all('character' not in b for b in board['beats'])
+    assert any('family_group' in doodles(b) for b in board['beats'])
+    assert rules._meaning_allows('family_group', None, 'Leaders help families.')
+    cloud = cloud_for(rules)
+    payload = cloud._payload(board, board['chapters'][0], board['beats'], 1)
+    assert any('family_group' in {c['id'] for c in b['candidates']} for b in payload['beats'])

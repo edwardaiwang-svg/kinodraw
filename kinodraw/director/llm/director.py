@@ -177,7 +177,7 @@ class LLMDirector:
                 raise ValueError(f'{what} too long')
             return {lang: s}
 
-        def doodle(d, required=False):
+        def doodle(d, phrase=None, required=False):
             d = _clean(d)
             if not d:
                 if required:
@@ -185,6 +185,12 @@ class LLMDirector:
                 return None
             if d not in allowed:
                 raise ValueError(f'doodle {d!r} was not offered')
+            if d in self.rules.matcher.entries:
+                sentences = script.sentences(beat['display'][lang], lang) or [beat['display'][lang]]
+                phrase = _clean(phrase)
+                local = next((s for s in sentences if phrase and phrase in s), None)
+                if not all(self.rules._meaning_allows(d, phrase, s) for s in ([local] if local else sentences)):
+                    raise ValueError(f'doodle {d!r} does not fit its sentence')
             return d
 
         def with_trigger(spec, phrase):
@@ -195,7 +201,7 @@ class LLMDirector:
         if kind == 'cluster':
             items = []
             for it in (raw.get('items') or [])[:3]:
-                entry = {'doodle': doodle(it.get('doodle'), required=True)}
+                entry = {'doodle': doodle(it.get('doodle'), it.get('trigger'), required=True)}
                 if _clean(it.get('label')):
                     entry['label'] = text(it['label'], lim['label'], 'label')
                 items.append(with_trigger(entry, it.get('trigger')))
@@ -209,7 +215,7 @@ class LLMDirector:
             if not value or value not in section_text:
                 raise ValueError(f'value {value!r} is not in the text')
             v = {'id': vid, 'type': 'stat', 'value': {lang: value}, 'label': text(raw.get('label') or ' ', lim['label'], 'label')}
-            d = doodle(raw.get('doodle'))
+            d = doodle(raw.get('doodle'), raw.get('trigger') or value)
             if d:
                 v['doodle'] = d
             return with_trigger(v, raw.get('trigger') or value)

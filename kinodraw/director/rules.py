@@ -150,14 +150,15 @@ for (pose, cues), words in zip(NARRATOR_CUES, (
 ANIMALS = set('lion lioness cub tiger tigress hyena dog puppy wolf fox cat kitten bear elephant giraffe '
               'zebra monkey ape deer rabbit horse bird eagle owl mouse rat snake bee'.split())
 ANATOMY = re.compile(r'\b(?:lungs?|nose|tooth|teeth|molar|anatomical heart|brain|hands?|feet|foot|arms?|legs?|body part)\b', re.I)
-FACES = re.compile(r'\b(?:face|smile|grin|laughing|Santa Claus)\b', re.I)
-TRAITS = re.compile(r'\b(?:(?:lion|tiger|wolf|bear) cub|black mane|scarred nose|lioness|tigress|lion|tiger|cub|hyena)\b', re.I)
+FACES = re.compile(r'\b(?:face|head|smile|grin|laughing|star-struck|Santa Claus)\b', re.I)
+TRAITS = re.compile(r'\b(?:(?:lion|tiger|wolf|bear) cub|black mane|scarred nose|' +
+                    '|'.join(sorted(ANIMALS)) + r')\b', re.I)
 ATMOSPHERE = re.compile(r'\b(?:shooting star|fog|mist|night|stars?|rain|dust|dawn)\b', re.I)
 ATMOSPHERE_PICTURE = re.compile(r'\b(?:foggy|fog|mist|night|stars?|rain|dust|dawn|sunrise|cloud|comet|moon)\b', re.I)
 FIGURATIVE = re.compile(r'\b(?:like|as)\s+(?:(?:a|an|the|his|her|its)\s+)?([a-z]+)|'
                         r'\b(heart) of (?:the |a |an )?(?:savanna|pride|forest|jungle)|'
                         r'\b(blazing) eyes\b', re.I)
-FIGURE_WORDS = {'armor': {'armor', 'helmet', 'shield'}, 'armour': {'armour', 'helmet', 'shield'},
+FIGURE_WORDS = {'armor': {'armor', 'helmet', 'helm', 'shield'}, 'armour': {'armour', 'helmet', 'helm', 'shield'},
                 'heart': {'heart'}, 'blazing': {'fire', 'flame'}, 'thunder': {'thunder', 'lightning'}}
 SUBJECT_VERBS = AUX | PAST | set('breathes laughs roars hunts swipes rattles visits studies treats examines '
                                'smiles wears feels stands stays trembles shrinks watches'.split())
@@ -507,6 +508,10 @@ class RulesDirector:
                             trait = match.group().lower()
                             if trait not in traits:
                                 traits.append(trait)
+            if not traits and (singular(name.lower()) != name.lower() or singular(name.lower()) in self.matcher.index) and all(
+                    s.startswith(name + ' ') for text in nearby
+                    for s in script.sentences(text, self.lang) if re.search(rf'\b{re.escape(name)}\b', s)):
+                continue                            # capitalized common nouns are not a cast
             self.characters[name] = {'name': name, 'traits': traits}
         scene, previous = None, None
         for beat in board['beats']:
@@ -545,10 +550,16 @@ class RulesDirector:
             return True
         for clause in re.split(r'[.!?;]|\b(?:while|but|whereas)\b', text):
             subject = []
-            for word in re.findall(r"[A-Za-z]+", clause):
+            words = re.findall(r"[A-Za-z]+", clause.lower())
+            for k, word in enumerate(words):
                 low = word.lower()
-                if subject and (low in SUBJECT_VERBS or low.endswith(('ed', 'ing'))):
+                if subject and low in SUBJECT_VERBS | PREPS:
                     break
+                if subject and low.endswith(('ed', 'ing')):
+                    end = next((j for j in range(k + 1, len(words))
+                                if words[j] in SUBJECT_VERBS | PREPS | DETERMINERS), len(words))
+                    if not any(singular(w) in ANIMALS for w in words[k + 1:end]):
+                        break
                 subject.append(word)
             if any(singular(w.lower()) in ANIMALS for w in subject):
                 return True
@@ -562,16 +573,23 @@ class RulesDirector:
         words = {singular(w) for w in re.findall(r'[a-z]+', desc.lower())}
         names = self._characters_in(sentence)
         animal = self._animal_subject(sentence)
+        face = FACES.search(desc) or (entry.get('category') == 'Smileys & Emotion' and 'face' in entry.get('en', []))
         if animal and (self._shows_people(did) or (ANATOMY.search(desc) and (entry['set'] == 'fluent' or not words & ANIMALS))
-                       or (entry['set'] == 'fluent' and FACES.search(desc))):
+                       or (entry['set'] == 'fluent' and face)):
             return False
-        depicts_character = bool(words & ANIMALS) or self._shows_people(did) or FACES.search(desc) or 'crown' in words
+        depicts_character = bool(words & ANIMALS) or self._shows_people(did) or face or 'crown' in words
         if names and depicts_character:             # stock pictures cannot distinguish a cast
             return False
         for match in FIGURATIVE.finditer(sentence):
-            noun = next(g.lower() for g in match.groups() if g)
-            if words & FIGURE_WORDS.get(noun, {singular(noun)}):
-                return False
+            if re.match(r'as\b', match.group(), re.I) and re.search(r'\bsuch\s*$', sentence[:match.start()], re.I):
+                continue
+            figure = re.split(r'[.,;:!?]', sentence[match.start(1):], 1)[0] if match.group(1) \
+                else next(g for g in match.groups() if g)
+            for noun in re.findall(r'[a-z]+', figure.lower()):
+                if noun in SUBJECT_VERBS | PREPS | CONNECTIVES | {'or', 'but'}:
+                    break
+                if words & FIGURE_WORDS.get(noun, {singular(noun)}):
+                    return False
         if entry['set'] == 'fluent' and ATMOSPHERE.search(sentence) \
                 and (ATMOSPHERE_PICTURE.search(desc) or ATMOSPHERE.search(phrase or '')):
             return False
