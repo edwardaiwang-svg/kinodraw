@@ -71,7 +71,7 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
     board.update({k: v for k, v in (direction or {}).items() if v})
     _save(project_dir / 'storyboard.json', board)
     config = {'script': target.name, 'lang': doc.lang, 'voice': voice.LANGS[doc.lang]['voice'], 'speed': 1.0,
-              'director': 'rules', 'director_v3': False, 'workers': 2, **settings}
+              'director': 'rules', 'director_v3': False, 'series_bible': {'cast': []}, 'workers': 2, **settings}
     _save(project_dir / 'project.json', config)
     return board
 
@@ -84,7 +84,7 @@ def storyboard(project_dir: Path) -> dict:
     return _load(Path(project_dir) / 'storyboard.json')
 
 
-def direct_v3(project_dir: Path, provider=None) -> dict:
+def direct_v3(project_dir: Path, provider=None, *, prop_llm=None, prop_candidates=None) -> dict:
     """Save the series bible and compatibility board once; re-renders keep the saved plan."""
     from .director.rules import RulesDirector
     from .director.v3.adapter import adapt
@@ -93,13 +93,27 @@ def direct_v3(project_dir: Path, provider=None) -> dict:
     project_dir = Path(project_dir)
     cfg = settings(project_dir)
     if cfg.get('plan_v3') is not None:
-        return cfg['plan_v3_report']
+        return cfg.get('plan_v3_report', {})
     board = storyboard(project_dir)
     plan, report = plan_v3(board, provider=provider if provider is not None else cfg.get('director', 'rules'))
+    import copy
+    bible = cfg.get('series_bible') or {'cast': copy.deepcopy(plan['cast'])}
+    overrides = {c['id']: c for c in bible.get('cast', [])}
+    plan['cast'] = [{**c, **overrides.get(c['id'], {})} for c in plan['cast']]
+    from .engine.hybrid import prepare_props
+    report['notes'] += prepare_props(plan, board, project_dir, prop_llm, prop_candidates)
     RulesDirector(cfg['lang']).direct(board)
     board, treatments = adapt(plan, board)
+    # adapter accepts catalog refs only; local sanitized props use the existing project doodle path.
+    for scene in plan['scenes']:
+        for element in scene['elements']:
+            if element['kind'] == 'picture' and element['ref'].startswith('gen-'):
+                for bid in scene['beat_ids']:
+                    beat = next(b for b in board['beats'] if b['id'] == bid)
+                    beat['visuals'].append({'id': f'{bid}-{element["ref"]}', 'type': 'cluster',
+                                           'items': [{'doodle': element['ref']}], 'relation': 'none'})
     report = {**report, 'usage': asdict(report['usage'])}
-    cfg.update(director_v3=True, plan_v3=plan, plan_v3_report=report, scene_treatments=treatments)
+    cfg.update(director_v3=True, plan_v3=plan, plan_v3_report=report, scene_treatments=treatments, series_bible={'cast': plan['cast']})
     _save(project_dir / 'storyboard.json', board)
     _save(project_dir / 'project.json', cfg)
     return report
@@ -239,7 +253,7 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
         renderer.encode(prod, start, n, out, 20)
         warnings = prod.warnings
     board = storyboard(project_dir)
-    if styles.renderer(board.get('look')) != 'whiteboard':   # sound effects follow the scheduled animation
+    if _hybrid(cfg) or styles.renderer(board.get('look')) != 'whiteboard':   # sound effects follow the scheduled animation
         if workers > 1:
             prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect)
         _save(build / 'cues.json', {'cues': prod.cues()})
@@ -260,7 +274,7 @@ def finish(project_dir: Path) -> dict:
                          f'{aspect} ({size[0]}x{size[1]}). Run: kinodraw render "{project_dir}" first, so the other '
                          'format\'s finished video is not replaced with the wrong picture.')
     tl = _load(build / 'timeline.json')
-    mixed = audio.mix(board, tl, build)
+    mixed = _hybrid_audio(board, tl, build, cfg) if _hybrid(cfg) else audio.mix(board, tl, build)
     stem = re.sub(r'[\\/:*?"<>|¿¡]+', '', board['title'][lang]).strip()[:80] or 'video'
     if aspect == '9:16':
         stem += ' (vertical)'
@@ -294,3 +308,33 @@ def make(source, project_dir: Path, direct=None, progress=None, server: voice_se
     build_audio(project_dir, clips)
     render(project_dir)
     return finish(project_dir)
+
+
+def _hybrid(cfg):
+    plan = cfg.get('plan_v3')
+    return bool(cfg.get('director_v3') and plan and plan['style']['mode'] != 'whiteboard'
+                and any(s['treatment'] != 'whiteboard' for s in plan['scenes']))
+
+
+def _hybrid_audio(board, tl, build, cfg):
+    from .audio import score, sfx, master
+    import numpy as np
+    speech = audio.read_wav(audio.narration(tl, build))[0]
+    style = cfg['plan_v3']['style']
+    if style['music_mood'] != 'none' and board.get('music', True):
+        result = score.render(tl['duration'], style['music_mood'], style['tempo_bpm'],
+                              narration=speech, ambient=True)
+        out = speech + result.music
+        _save(build / 'score.json', {'bpm': result.bpm, 'track': result.track,
+                                   'beats': result.beats.tolist()})
+    else:
+        out = np.repeat(speech, 2, axis=1) if speech.shape[1] == 1 else speech.copy()
+    cues_path = build / 'cues.json'
+    cues = _load(cues_path)['cues'] if cues_path.is_file() else []
+    if cues and board.get('sfx', True):
+        env = audio.envelope(speech.mean(axis=1))
+        out += sfx.render(cues, tl['duration']) * (1 + (10 ** (audio.SFX_DUCK_DB / 20) - 1) * env)[:, None]
+    out = master.master(out, audio.SR)
+    path = build / 'mix.wav'
+    audio.write_wav(path, out)
+    return path

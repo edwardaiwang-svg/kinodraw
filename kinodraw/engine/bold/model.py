@@ -13,7 +13,7 @@ TYPE_CPS = 30
 PARTICLE_STAGGER = .25
 COMPOSITIONS = {'center', 'left_third', 'right_third', 'split', 'grid', 'full_bleed'}
 CAMERAS = {'static', 'slow_push', 'pull_back', 'pan', 'shake'}
-TRANSITIONS = {'cut', 'wipe', 'iris', 'match', 'zoom_through', 'morph'}
+TRANSITIONS = {'cut', 'wipe', 'iris', 'match', 'zoom_through', 'morph', 'page'}
 PRESETS = {'type_on', 'word_pop', 'slam', 'cascade', 'counter', 'corner_caption'}
 KINDS = {'text', 'picture', 'dot', 'line', 'ring', 'particle_field', 'chart'}
 
@@ -51,6 +51,7 @@ class MotionElement:
     suffix: str = ''
     count: int = 48
     emissive: bool = False
+    font: str = 'rounded'
     kick: float = 0.                  # initial px/frame, with .7 decay at 30 fps
 
     def __post_init__(self):
@@ -85,6 +86,7 @@ class MotionScene:
     motion_floor: float = 1.
     hold: float = .8
     seed: int = 0
+    foreground_drift: float = 5.    # reference pixels; hybrid maps its configured motion floor
     grain: float = 0.                 # optional, applied below the sharp text layer
     glow: float = .7
     blur_samples: int = 3

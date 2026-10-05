@@ -13,7 +13,7 @@ from xml.etree import ElementTree as ET
 import numpy as np
 import resvg_py
 from defusedxml.ElementTree import fromstring
-from PIL import Image, ImageColor
+from PIL import Image, ImageColor, ImageFont
 from scipy.signal import fftconvolve
 
 from ... import library
@@ -24,7 +24,11 @@ from .model import PANEL_ENTER, PARTICLE_STAGGER, TEXT_ENTER, TYPE_CPS
 W, H, FPS = 1920, 1080, 30
 BLUR_SPEED = 600                    # reference-stage pixels/second
 GLOW_HALF = 100                     # radial half-intensity distance at 1080p
-FONT = str(ink.ASSETS / 'fonts' / 'Arimo-Bold.ttf')
+TYPE_FONTS = {'rounded': ('Arimo', 'Arimo-Bold.ttf'),
+              'hand': ('Playpen Sans', 'PlaypenSans-Bold.ttf'),
+              'serif': ('Cinzel', 'Cinzel-Bold.ttf'),
+              'mono': ('Silkscreen', 'Silkscreen-Regular.ttf'),
+              'display': ('Cinzel', 'Cinzel-Bold.ttf')}
 CAPTION_SIZE = 28                   # Arimo's capitals are 19 px high; allow for ambient scaling
 
 
@@ -74,7 +78,7 @@ def element_pose(scene, element, i, t):
     phase = i * 1.71
     floor = scene.motion_floor
     corner = element.kind == 'text' and element.preset == 'corner_caption'
-    drift = .7 if corner else 5.
+    drift = .7 if corner else scene.foreground_drift
     x += floor * drift * math.sin(t * 1.13 + phase)
     y += floor * drift * .7 * math.sin(t * 1.67 + phase * .8)
     scale *= 1 + floor * (.003 if corner else .015) * math.sin(t * 1.91 + phase)
@@ -207,10 +211,17 @@ def _text_tag(text, size, color, x=0, y=0, spacing=0, anchor='middle'):
             f'dominant-baseline="central" letter-spacing="{spacing}">{escape(text)}</text>')
 
 
+def _advance(font, text, family):
+    return len(text) * font.getlength('M') if family == 'mono' else font.getlength(text)
+
+
 @lru_cache(maxsize=256)
-def _text_metrics(text, requested_size, width, corner):
+def _text_metrics(text, requested_size, width, corner, family='rounded'):
     size = max(CAPTION_SIZE, requested_size) if corner else requested_size
     font = ink.font('zh_caption' if re.search(r'[㐀-䶿一-鿿豈-﫿]', text) else 'en_caption', max(1, round(size)))
+    if family != 'rounded' and not re.search(r'[㐀-䶿一-鿿豈-﫿]', text):
+        font = ImageFont.truetype(str(ink.ASSETS / 'fonts' / TYPE_FONTS[family][1]),
+                                  max(1, round(size)), layout_engine=ImageFont.Layout.BASIC)
     spacing = 4 if corner else 0
     if corner:
         lines = []
@@ -218,7 +229,7 @@ def _text_metrics(text, requested_size, width, corner):
             line = ''
             for word in paragraph.split():
                 candidate = f'{line} {word}' if line else word
-                if font.getlength(candidate) + spacing * (len(candidate) - 1) <= width:
+                if _advance(font, candidate, family) + spacing * (len(candidate) - 1) <= width:
                     line = candidate
                     continue
                 if line:
@@ -226,13 +237,13 @@ def _text_metrics(text, requested_size, width, corner):
                 line = ''
                 for ch in word:
                     candidate = line + ch
-                    if line and font.getlength(candidate) + spacing * (len(candidate) - 1) > width:
+                    if line and _advance(font, candidate, family) + spacing * (len(candidate) - 1) > width:
                         lines.append(line)
                         line = ''
                     line += ch
             lines.append(line)
         text = '\n'.join(lines)
-    longest = max((font.getlength(line) + spacing * max(0, len(line) - 1) for line in text.split('\n')), default=1)
+    longest = max((_advance(font, line, family) + spacing * max(0, len(line) - 1) for line in text.split('\n')), default=1)
     if not corner:
         size *= min(1., width / max(1., longest))
     return text, font, size, spacing
@@ -240,7 +251,21 @@ def _text_metrics(text, requested_size, width, corner):
 
 def _text(element, scene, t, color):
     text = counter_text(element, t) if element.preset == 'counter' or element.chart == 'number' and element.kind == 'chart' else element.text
-    text, font, size, spacing = _text_metrics(text, element.size, element.width, element.preset == 'corner_caption')
+    text, font, size, spacing = _text_metrics(text, element.size, element.width, element.preset == 'corner_caption', element.font)
+    if element.font == 'mono':
+        # Silkscreen glyphs are proportional; lay them on an explicit fixed-advance grid.
+        advance = font.getlength('M') * size / font.size + spacing
+        shown = m.typewriter(text, t, element.start, cps=TYPE_CPS) if element.preset == 'type_on' else len(text)
+        out, index = '', 0
+        lines = text.split('\n')
+        for row, line in enumerate(lines):
+            for column, char in enumerate(line):
+                if index < shown:
+                    out += _text_tag(char, size, color, x=(column - (len(line) - 1) / 2) * advance,
+                                     y=(row - (len(lines) - 1) / 2) * size * 1.15)
+                index += 1
+            index += 1
+        return out
     if element.preset == 'type_on' and element.kind == 'text':
         shown = m.typewriter(text, t, element.start, cps=TYPE_CPS)
         out = ''
@@ -306,6 +331,8 @@ def _element_content(scene, e, i, t, geometry=None):
             for ch, x, y, angle in m.ring_layout(e.text, (0, 0), e.size / 2 + 24, t, 8 * scene.motion_floor):
                 text += (f'<g transform="translate({x:.6f} {y:.6f}) rotate({angle:.6f})">'
                          f'{_text_tag(ch, 20, scene.palette.foreground)}</g>')
+    if text:
+        text = f'<g font-family="{TYPE_FONTS[e.font][0]}, Noto Sans SC">{text}</g>'
     return art, text
 
 
@@ -339,7 +366,7 @@ def scene_svg(scene, t, layer='art', overrides=None):
 
 
 def _raster(doc, w, h, text=False):
-    fonts = [FONT] if text else []
+    fonts = [str(ink.ASSETS / 'fonts' / name) for _, name in dict.fromkeys(TYPE_FONTS.values())] if text else []
     if text and any(ord(ch) > 127 for ch in doc):
         fonts.append(str(ink.ASSETS / 'fonts' / 'NotoSansSC-Bold.otf'))
     png = resvg_py.svg_to_bytes(svg_string=doc, width=w, height=h, skip_system_fonts=True, font_files=fonts)
@@ -444,8 +471,8 @@ def _bounds(scene, e, t, geometry):
         x, y = e.width + 12, e.height + 12
     elif e.kind == 'text' or e.kind == 'chart' and e.chart == 'number':
         value = counter_text(e, t) if e.preset == 'counter' or e.kind == 'chart' else e.text
-        text, font, size, spacing = _text_metrics(value, e.size, e.width, e.preset == 'corner_caption')
-        width = max((font.getlength(line) + spacing * max(0, len(line) - 1) for line in text.split('\n')), default=0)
+        text, font, size, spacing = _text_metrics(value, e.size, e.width, e.preset == 'corner_caption', e.font)
+        width = max((_advance(font, line, e.font) + spacing * max(0, len(line) - 1) for line in text.split('\n')), default=0)
         x = width * size / font.size * .7 + size / 2 + 4
         y = len(text.split('\n')) * size * .8 + (44 if e.preset == 'cascade' else 4)
     elif e.kind == 'chart':
@@ -575,12 +602,12 @@ def _background(scene, t, w, h):
     return np.broadcast_to(background, (h, w, 3)).copy()
 
 
-def render_frame(scene, t, w=W, h=H, *, _overrides=None):
+def render_frame(scene, t, w=W, h=H, *, _overrides=None, background=None):
     """RGB uint8 array. Motion blur supersamples artwork alone; grain/glow never touch text."""
     if w <= 0 or h <= 0 or not math.isfinite(t):
         raise ValueError('Frame size must be positive and time finite')
     layers = _layers(scene, w, h)
-    art = _background(scene, t, w, h)
+    art = _background(scene, t, w, h) if background is None else np.asarray(background, np.float32).copy()
     for i, e in enumerate(scene.elements):
         times = [t]
         if scene.blur_samples > 1 and _overrides is None and _element_blurs(scene, e, i, t):

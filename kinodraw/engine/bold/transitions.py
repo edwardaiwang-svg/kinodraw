@@ -70,6 +70,14 @@ def render_transition(old, new, t, w=1920, h=1080, *, kind=None, duration=.65, o
     if kind in {'morph', 'match'} and isinstance(old, MotionScene) and isinstance(new, MotionScene):
         a, b = _motifs(old, new, old_t, new_t, p, kind == 'morph')
     before, after = _frame(old, old_t, w, h, a), _frame(new, new_t, w, h, b)
+    if kind == 'page':
+        # The old leaf folds towards its left binding, exposing the new page.
+        width = max(1, round(w * math.cos(p * math.pi / 2)))
+        out = after.copy()
+        leaf = np.asarray(Image.fromarray(before).resize((width, h), Image.Resampling.BICUBIC))
+        shade = np.linspace(1., 1. - .45 * math.sin(p * math.pi), width)[None, :, None]
+        out[:, :width] = np.clip(leaf * shade, 0, 255).astype(np.uint8)
+        return out
     if kind == 'wipe':
         alpha = np.asarray(m.wipe_mask((w, h), p, 70, max(1, w / 80)), np.float32) / 255
     elif kind == 'iris':
