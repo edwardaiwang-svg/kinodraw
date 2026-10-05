@@ -24,7 +24,7 @@
 <div class="wrap">
   <p class="small"><a href="./">KinoDraw</a></p>
   <h1>Privacy policy</h1>
-  <p class="small">Last updated October 4, 2026. This covers the KinoDraw app (called Doodle Studio before version 0.2.0), its KinoDraw Cloud AI director, the optional voice server and feedback you send from the app.
+  <p class="small">Last updated October 5, 2026. This covers the KinoDraw app (called Doodle Studio before version 0.2.0), its KinoDraw Cloud AI director, the optional voice server and feedback you send from the app.
     The Chrome extension for teachers has <a href="classroom/privacy.html">its own policy</a>.</p>
   <p>KinoDraw turns a script you write into a hand-drawn video on your own computer. The app and KinoDraw Cloud
     have no ads, no analytics and no tracking; the site counts visits without cookies (see below), and nothing about
@@ -47,17 +47,18 @@
   <table>
     <tr><th>Where</th><th>What</th><th>Why</th></tr>
     <tr><td>KinoDraw Cloud (api.doodlecloud.org, run by KinoDraw)</td><td>a random ID for this
-      installation of the app (and your email, only if you sign in), then each section's sentences, the video and
-      section titles, the language, short phrases the offline draft picked from the sentences, and the names of
-      candidate doodles; with Style &gt; "Choose for me", once per new video, the title, the section headings and the
-      first 600 characters of the script, its language and format, and the names of the styles it can use</td><td>to
+      installation of the app (and your email, only if you sign in). New Studio videos use Director v3: planning
+      uploads your full story and prompt, including all displayed and spoken beats, video and section titles,
+      section headings, language, format, picked phrases and candidate doodle names, to plan the overall style,
+      cast and scene treatments. Legacy projects with Director v3 off send each section's sentences, titles,
+      language, picked phrases and candidate doodles; their Style &gt; "Choose for me" request sends the title,
+      the section headings and the first 600 characters of the script, its language and format, and offered styles</td><td>to
       give this installation a token (or sign you in), count videos, and ask GPT-6 Luna for picture suggestions and a
       style</td></tr>
     <tr><td>Resend (email delivery)</td><td>only if you sign in: your email address and a 6-digit sign-in
       code</td><td>to email you the code</td></tr>
-    <tr><td>OpenAI (GPT-6 Luna), through KinoDraw Cloud</td><td>the same sentences, titles, language and doodle names
-      (and, for "Choose for me", the same headings, opening text, format and style names)</td><td>to
-      suggest pictures and a style; OpenAI's API terms apply</td></tr>
+    <tr><td>OpenAI (GPT-6 Luna), through KinoDraw Cloud</td><td>the same full-story Director v3 request, or the
+      section and style requests for legacy projects described above</td><td>to plan the video; OpenAI's API terms apply</td></tr>
     <tr><td>Cloudflare (hosting)</td><td>ordinary request data, such as your IP address; the service's request logs
       keep it for 3 days</td><td>to run the service, fix errors and limit abuse</td></tr>
   </table>
@@ -72,11 +73,15 @@
 
   <h2>Your own AI key or program (Advanced, optional)</h2>
   <p>If you turn on Settings &gt; Advanced directors and choose "My OpenAI key", "My Anthropic key" or
-    "OpenAI-compatible server", the app sends the same section request (sentences, titles, language, picked phrases
-    and candidate doodle names) straight from your computer to that provider with your key: OpenAI, Anthropic, or the
-    server address you entered. With Style &gt; "Choose for me", it also sends that provider one style request per new
-    video (the title, the section headings and the first 600 characters of the script, its language and format, and the
-    names of the styles it can use). KinoDraw Cloud is not involved, and that provider's own terms and privacy policy apply.
+    "OpenAI-compatible server", the app sends the same full-story Director v3 request described above straight
+    from your computer to that provider with your key: OpenAI, Anthropic, or the server address you entered. Legacy
+    projects with Director v3 off send the section request (sentences, titles, language, picked phrases and candidate
+    doodle names); with Style &gt; "Choose for me", they also send one style request per new video (the title, section
+    headings and the first 600 characters of the script, language, format and offered styles). Optional generated SVG
+    props send a drawing brief, palette and repair feedback to the selected supported provider; the topic writer sends
+    your topic, source notes and any voice guidance. Saved plans and generated props are reused locally when rendering
+    again. Choose Offline for local planning. KinoDraw Cloud is not involved in your own-provider requests, and that
+    provider's own terms and privacy policy apply.
     With "My own command", the app hands the request to the program you chose on your computer; where it goes from
     there is up to that program. Your keys and command are kept in your system's keychain, never in project
     files.</p>
