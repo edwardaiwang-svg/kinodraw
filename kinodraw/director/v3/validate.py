@@ -6,7 +6,7 @@ import math
 import re
 
 from .schema import PLAN_SCHEMA, SCENE
-from .semantics import beats, candidate_ids, detect_cast, mentions, name_key
+from .semantics import beats, candidate_ids, cast_evidence, detect_cast, mentions, name_key
 
 
 def _default(schema):
@@ -125,6 +125,46 @@ def _cover(scenes, ids, treatment, repairs):
     return out
 
 
+def _cast_traits(cast, evidence, repairs):
+    for c in cast:
+        key = name_key(c['name'])
+        own = evidence.get(key)
+        if own is None:
+            continue
+        others = {name: cues for name, cues in evidence.items() if name != key}
+        traits = dict(own['traits'])
+        if traits.get('age') == 'baby' and 'sex' not in traits and c['sex'] != 'unknown' and any(
+                cues['traits'].get('sex') == c['sex'] for cues in others.values()):
+            traits['sex'] = 'unknown'
+        if own['baby_size'] is not None and 'size' not in traits and any(
+                cues['traits'].get('size') == c['size'] for cues in others.values()):
+            traits['size'] = own['baby_size']
+        for field, value in traits.items():
+            if c[field] != value:
+                repairs.append(f'cast.{c["id"]}.{field}: replaced {c[field]!r} with {value!r} '
+                               'using actor-owned script evidence')
+                c[field] = value
+        marks = []
+        for mark in c['marks']:
+            owner = next((name for name, cues in others.items() if mark in cues['marks']), None)
+            if mark in own['absent_marks'] or (owner and mark not in own['marks']):
+                reason = 'contradicted by its script description' if mark in own['absent_marks'] else f'owned by {owner}'
+                repairs.append(f'cast.{c["id"]}.marks: removed {mark}, {reason}')
+            else:
+                marks.append(mark)
+        for mark in sorted(own['marks']):
+            if mark not in marks:
+                marks.append(mark)
+                repairs.append(f'cast.{c["id"]}.marks: added actor-owned {mark} from the spoken script')
+        if 'none' in marks and any(mark != 'none' for mark in marks):
+            marks = [mark for mark in marks if mark != 'none']
+            repairs.append(f'cast.{c["id"]}.marks: removed none alongside visible marks')
+        if not marks and c['marks']:
+            marks = ['none']
+            repairs.append(f'cast.{c["id"]}.marks: no remaining marks after script repair')
+        c['marks'] = marks
+
+
 def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
     """Return (repaired plan, repairs). Invalid script ids raise ValueError rather than inventing coverage.
 
@@ -166,6 +206,7 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
         cast.append(c)
         ids.add(c['id'])
         repairs.append(f'cast: added named character {c["name"]} from the spoken script')
+    _cast_traits(cast, cast_evidence(script), repairs)
     out['cast'] = cast
     cast_by_id = {c['id']: c for c in cast}
 
