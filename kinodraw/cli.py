@@ -67,8 +67,11 @@ def cmd_new(args):
                                  title=args.title, lang=args.lang, direction=_direction(args), **_settings(args))
     if pronounce:
         (Path(args.out) / pipeline.PRONOUNCE).write_text(Path(pronounce).read_text(encoding='utf-8'), encoding='utf-8')
-    report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
-                             _progress)
+    if getattr(args, 'director_v3', False):
+        report = pipeline.direct_v3(Path(args.out))
+    else:
+        report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
+                                 _progress)
     sections = sum(c['kind'] == 'section' for c in board['chapters'])
     print(f"  {len(board['beats'])} beats, {sections} sections ({time.time() - t:.0f}s)")
     _report(report)
@@ -120,6 +123,8 @@ def cmd_voice(args):
 def cmd_render(args):
     from . import pipeline
     project = Path(args.project)
+    if getattr(args, 'director_v3', False) or pipeline.settings(project).get('director_v3'):
+        pipeline.direct_v3(project)
     if getattr(args, 'aspect', None) is not None:
         try:
             pipeline.set_aspect(project, args.aspect)
@@ -179,6 +184,9 @@ def cmd_make(args):
 
 def _report(report):
     usage = report.get('usage')
+    if isinstance(usage, dict):
+        from .director.llm.providers import Usage
+        usage = Usage(**usage)
     if usage:
         cost = f'${usage.cost_usd:.4f}' if usage.cost_usd is not None else 'cost unknown for this model'
         print(f'  AI director: {usage.calls} calls, {usage.input_tokens + usage.cached_tokens} in / '
@@ -264,6 +272,8 @@ def cmd_doodles(args):
 
 def _settings(args):
     out = {}
+    if getattr(args, 'director_v3', False):
+        out.update(director_v3=True, director=args.director)
     for key in ('voice', 'speed', 'workers', 'aspect'):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
@@ -343,6 +353,7 @@ def main(argv=None):
                        help='16:9 for YouTube (default) or 9:16 for Shorts, TikTok and Reels')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
+        p.add_argument('--director-v3', action='store_true', help='save and reuse a whole-video v3 director plan')
         p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
         p.add_argument('--story', choices=DIALS['story'], help='story shape (default explain)')
         p.add_argument('--motion', choices=DIALS['motion'],
@@ -382,6 +393,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_voice)
     p = sub.add_parser('render')
     p.add_argument('project')
+    p.add_argument('--director-v3', action='store_true', help='save and reuse a whole-video v3 director plan')
     p.add_argument('--start', type=float, default=0)
     p.add_argument('--duration', type=float)
     p.add_argument('--workers', type=int)

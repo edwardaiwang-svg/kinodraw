@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from dataclasses import asdict
 from pathlib import Path
 
 from . import PRODUCT, ingest, library, script, styles, voice, voice_server
@@ -70,7 +71,7 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
     board.update({k: v for k, v in (direction or {}).items() if v})
     _save(project_dir / 'storyboard.json', board)
     config = {'script': target.name, 'lang': doc.lang, 'voice': voice.LANGS[doc.lang]['voice'], 'speed': 1.0,
-              'director': 'rules', 'workers': 2, **settings}
+              'director': 'rules', 'director_v3': False, 'workers': 2, **settings}
     _save(project_dir / 'project.json', config)
     return board
 
@@ -81,6 +82,27 @@ def settings(project_dir: Path) -> dict:
 
 def storyboard(project_dir: Path) -> dict:
     return _load(Path(project_dir) / 'storyboard.json')
+
+
+def direct_v3(project_dir: Path, provider=None) -> dict:
+    """Save the series bible and compatibility board once; re-renders keep the saved plan."""
+    from .director.rules import RulesDirector
+    from .director.v3.adapter import adapt
+    from .director.v3.llm import plan_v3
+
+    project_dir = Path(project_dir)
+    cfg = settings(project_dir)
+    if cfg.get('plan_v3') is not None:
+        return cfg['plan_v3_report']
+    board = storyboard(project_dir)
+    plan, report = plan_v3(board, provider=provider if provider is not None else cfg.get('director', 'rules'))
+    RulesDirector(cfg['lang']).direct(board)
+    board, treatments = adapt(plan, board)
+    report = {**report, 'usage': asdict(report['usage'])}
+    cfg.update(director_v3=True, plan_v3=plan, plan_v3_report=report, scene_treatments=treatments)
+    _save(project_dir / 'storyboard.json', board)
+    _save(project_dir / 'project.json', cfg)
+    return report
 
 
 def set_aspect(project_dir: Path, aspect: str) -> dict:
@@ -194,6 +216,8 @@ def build_audio(project_dir: Path, clips: dict) -> dict:
 
 def render(project_dir: Path, start: float = 0, duration: float | None = None, workers: int | None = None) -> Path:
     project_dir = Path(project_dir)
+    if settings(project_dir).get('director_v3'):
+        direct_v3(project_dir)
     board = storyboard(project_dir)
     messages = library.missing_pictures(board, project_dir)
     if messages:
@@ -262,7 +286,9 @@ def make(source, project_dir: Path, direct=None, progress=None, server: voice_se
     """Script to finished video. ``direct(project_dir)`` adds visuals to storyboard.json (rules or LLM); ``server``:
     your own voice server (see narrate)."""
     new_project(source, project_dir, **settings_)
-    if direct:
+    if settings(project_dir).get('director_v3'):
+        direct_v3(project_dir)
+    elif direct:
         direct(project_dir)
     clips = narrate(project_dir, progress, server)
     build_audio(project_dir, clips)
