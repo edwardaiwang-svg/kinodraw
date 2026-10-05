@@ -104,7 +104,12 @@ def encoded_qa(tl: dict, video: Path, mix: Path, size=(1920, 1080)) -> dict:
         checks.append({'at': off, 'waveform_correlation': round(corr, 5)})
         if corr < .95:
             problems.append(f'encoded audio differs from the mix at {off}s ({corr:.3f})')
-    return {'ok': not problems, 'problems': problems, 'frames': info['frames'], 'audio_checks': checks,
+    from .qa.probes import probe
+    probes = probe(video, timeline=tl).to_dict()
+    problems += [f"{f['defect']} at {f['start']:.3f}-{f['end']:.3f}s: {f['note']}"
+                 for f in probes['findings'] if f['defect'] in ('dead_air', 'frozen_picture')]
+    return {'ok': not problems, 'problems': problems, 'probes': probes,
+            'frames': info['frames'], 'audio_checks': checks,
             'video_sha256': sha(video), 'duration': tl['duration']}
 
 
