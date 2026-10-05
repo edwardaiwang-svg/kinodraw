@@ -223,7 +223,7 @@ def _parse_style(text: str) -> dict:
     return {'style': data['style'], 'reason': str(data.get('reason') or '')}
 
 
-def make_provider(kind: str, model: str | None = None, base_url: str | None = None):
+def make_provider(kind: str, model: str | None = None, base_url: str | None = None, lang: str | None = None):
     if kind == 'openai':
         return OpenAIProvider(model or 'gpt-6-luna')
     if kind == 'anthropic':
@@ -236,5 +236,5 @@ def make_provider(kind: str, model: str | None = None, base_url: str | None = No
         return CommandProvider(model)
     if kind == 'cloud':
         from .cloud import CloudProvider
-        return CloudProvider()
+        return CloudProvider(lang)               # a language it never plans asks it for nothing
     raise ValueError(f'unknown provider {kind!r}')

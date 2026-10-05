@@ -21,6 +21,8 @@ MATH = ('# Fractions made easy\n\nA fraction is part of a whole, and math teache
         '## Equations\n\nAn equation with fractions is still an equation.\n')
 ROME = ('# The Roman Empire\n\nAncient Rome grew from a village into an empire.\n\n## Emperors\n\n'
         'Every emperor built a temple.\n\n## The fall\n\nThe empire split in two.\n')
+SPANISH = ('# Las abejas\n\nLas abejas visitan muchas flores para hacer miel.\n\n## El banco\n\n'
+           'El banco guarda dinero y monedas para el ahorro.\n')
 PLAIN = '# Why we sleep\n\nSleep helps the body rest.\n\n## Dreams\n\nDreams come at night.\n\n## Habits\n\nGo to bed on time.\n'
 
 
@@ -156,6 +158,21 @@ def test_with_no_sign_in_kinodraw_cloud_picks_with_the_anonymous_token(studio, f
     assert [(c['path'], c['auth']) for c in fake_cloud.seen] == [
         ('/v1/style', 'Bearer anon-1'), ('/v1/anonymous', None), ('/v1/style', 'Bearer anon-2')]
     assert saved == {('KinoDraw', 'cloud-anon-token'): 'anon-2'}
+
+
+@pytest.mark.parametrize('open_access', [True, False])
+def test_with_no_sign_in_a_spanish_video_is_chosen_for_offline_without_asking_the_cloud(studio, fake_cloud, monkeypatch,
+                                                                                        open_access):
+    """KinoDraw Cloud chooses for English and Chinese videos only, so a Spanish one never asks it for a token."""
+    monkeypatch.delenv('KINODRAW_CLOUD_TOKEN')
+    monkeypatch.setattr(cloud, '_token', lambda: None)
+    fake_cloud.anonymous = ['anon-1'] if open_access else []    # off: a 404, as from a cloud before open access
+    _, _, cfg, _ = studio(director='cloud', text=SPANISH, title='Abejas', lang='es')
+    pick = cfg['style_pick']
+    assert pick['by'] == 'rules'
+    assert pick['note'] == 'KinoDraw Cloud AI chooses for English and Chinese videos only; the offline word rules chose'
+    assert fake_cloud.seen == [] and not cloud.INSTALL_ID.exists()
+
 
 def test_only_styles_that_render_the_format_and_language_are_offered(studio, fake_cloud, monkeypatch):
     looks = tuple({**e, 'aspect': ['16:9']} if e['id'] == 'mosaic' else e for e in styles._looks())

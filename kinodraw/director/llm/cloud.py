@@ -161,10 +161,12 @@ class CloudProvider:
     name, model = 'cloud', 'kinodraw-cloud'
     languages = ('en', 'zh')                          # what the cloud plans; anything else stays offline, unbilled
 
-    def __init__(self):
+    def __init__(self, lang: str | None = None):
         self.token, self.anonymous, self.refused = _token(), False, None     # an email sign-in always wins
         self.renewable = False                     # a kept anonymous token the cloud refuses gets one new one
-        if not self.token:
+        if not self.token and lang not in (None, *self.languages):    # a language it never plans: no token asked
+            self.refused = ProviderError('KinoDraw Cloud plans English and Chinese videos only')   # for, no ID made
+        elif not self.token:
             kept = _kept_anonymous()
             self.anonymous, self.renewable = True, bool(kept)
             try:

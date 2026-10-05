@@ -192,6 +192,27 @@ def test_a_401_mid_video_keeps_the_other_sections_offline_without_asking_again(f
     assert _paths(seen) == ['/v1/anonymous', '/v1/videos', '/v1/direct'] and keychain == {}
 
 
+SPANISH = ('# Las abejas\n\nLas abejas visitan muchas flores para hacer miel.\n\n## El banco\n\n'
+           'El banco guarda dinero y monedas para el ahorro. La imprenta produce libros.\n')
+
+
+@pytest.mark.parametrize('open_access', [True, False])
+def test_a_language_the_cloud_does_not_plan_never_asks_it_for_a_token(fake_cloud, keychain, tmp_path, open_access):
+    """A Spanish video with KinoDraw Cloud and no sign-in is planned offline, open access on or off: nothing is sent,
+    no installation ID is made and no sign-in is asked for."""
+    from kinodraw import director
+    seen, replies = fake_cloud
+    if not open_access:
+        replies['/v1/anonymous'] = (403, {'error': SENTENCE})
+    project = tmp_path / 'p'
+    project.mkdir()
+    (project / 'storyboard.json').write_text(json.dumps(script.build(ingest.read(SPANISH))), encoding='utf-8')
+    report = director.direct(project, 'cloud')
+    assert report['notes'] == ['The offline director planned this video (KinoDraw Cloud plans English and Chinese '
+                               'videos only; no cloud video was used)']
+    assert seen == [] and keychain == {} and not cloud.INSTALL_ID.exists()
+
+
 def test_without_a_keychain_the_token_lasts_for_the_process(fake_cloud, monkeypatch):
     seen, _ = fake_cloud
     broken = fail.Keyring()
@@ -301,7 +322,7 @@ def test_create_goes_ahead_without_a_sign_in_and_opens_it_only_when_the_cloud_as
 const T = 't', toasts = [], opened = [];
 const toast = (msg) => toasts.push(msg);
 const showSettings = () => opened.push('settings');
-let STATE = { cloud_signed_in: false, cloud: null }, cloudAsks = '';
+let STATE = { cloud_signed_in: false, cloud: null, cloud_languages: ['en', 'zh'] }, cloudAsks = '';
 let reply;
 const fetch = async () => reply;
 '''
@@ -309,14 +330,41 @@ const fetch = async () => reply;
 (async () => {
   const out = [];
   reply = { ok: true, json: async () => ({ plan: 'free', remaining: null, anonymous: true }) };
-  out.push([await needsCloudSignIn('cloud'), toasts.length, opened.length, STATE.cloud?.anonymous]);
+  out.push([await needsCloudSignIn('cloud', 'en'), toasts.length, opened.length, STATE.cloud?.anonymous]);
   reply = { ok: false, statusText: 'Forbidden', json: async () => ({ error: 'Sign in, please.', code: 'sign_in' }) };
-  out.push([await needsCloudSignIn('cloud'), toasts.slice(), opened.length, STATE.cloud, cloudAsks]);
-  out.push([await needsCloudSignIn('rules')]);
+  out.push([await needsCloudSignIn('cloud', 'en'), toasts.slice(), opened.length, STATE.cloud, cloudAsks]);
+  out.push([await needsCloudSignIn('rules', 'en')]);
   console.log(JSON.stringify(out));
 })();'''
     out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
     assert out == [[False, 0, 0, True], [True, ['Sign in, please.'], 1, None, 'Sign in, please.'], [False]]
+
+
+def test_create_never_asks_for_a_sign_in_for_a_language_the_cloud_does_not_plan():
+    assert server.state()['cloud_languages'] == ['en', 'zh']
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    js = _js()
+    api = re.search(r'^async function api\(.*?^}', js, re.S | re.M)[0]
+    gate = re.search(r'^async function needsCloudSignIn\(.*?^}', js, re.S | re.M)[0]
+    stage = '''
+const T = 't', toasts = [], opened = [], asked = [];
+const toast = (msg) => toasts.push(msg);
+const showSettings = () => opened.push('settings');
+let STATE = { cloud_signed_in: false, cloud: null, cloud_languages: ['en', 'zh'] }, cloudAsks = '';
+const fetch = async (url) => (asked.push(url), { ok: false, statusText: 'Forbidden',
+                                                 json: async () => ({ error: 'Sign in, please.', code: 'sign_in' }) });
+'''
+    run = stage + api + '\n' + gate + '''
+(async () => {
+  const out = [];
+  out.push([await needsCloudSignIn('cloud', 'es'), toasts.length, opened.length, asked.length, cloudAsks]);
+  out.push([await needsCloudSignIn('cloud', 'en'), toasts.length, opened.length, asked.length, cloudAsks]);
+  console.log(JSON.stringify(out));
+})();'''
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    assert out == [[False, 0, 0, 0, ''], [True, 1, 1, 1, 'Sign in, please.']]
 
 
 def test_choosing_cloud_in_the_menu_when_it_asks_for_a_sign_in_never_says_no_account_is_needed():

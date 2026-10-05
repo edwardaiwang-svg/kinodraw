@@ -141,7 +141,7 @@ def choose(doc, mode: str, lang: str, aspect: str, brand: dict | None = None, mo
     from .llm.providers import ProviderError, Usage, make_provider
     usage = Usage()
     try:
-        provider = make_provider(mode, model, base_url)
+        provider = make_provider(mode, model, base_url, lang)
         if lang not in getattr(provider, 'languages', (lang,)):     # as the visuals director: nothing sent, nothing metered
             return _done(local, 'rules', f'{BY.get(mode, mode)} chooses for {" and ".join(_LANG[c] for c in provider.languages)} '
                                          f'videos only; {BY["rules"]} chose')

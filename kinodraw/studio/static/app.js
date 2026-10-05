@@ -26,8 +26,9 @@ function autoNote(director) {
   return `${who} Only styles that work in the chosen format are picked. Name a product below only for a promo (then the paper-collage promo can be picked).`;
 }
 const pickLine = (pick) => `Style: ${pick.label}, chosen by ${pick.by === 'rules' ? 'the offline word rules' : PICKER[pick.by] || pick.by}: ${pick.reason}${pick.note ? ` (${pick.note})` : ''}`;
-async function needsCloudSignIn(director) {     // KinoDraw Cloud picked with no email sign-in: no account needed while
+async function needsCloudSignIn(director, lang) {   // KinoDraw Cloud picked with no email sign-in: no account needed while
   if (director !== 'cloud' || STATE.cloud_signed_in) return false;   // the cloud allows it; when it asks, open the sign-in
+  if (!STATE.cloud_languages.includes(lang)) return false;          // a language it never plans is planned offline: not asked
   try { STATE.cloud = await api('/api/cloud/anonymous', { method: 'POST' }); cloudAsks = ''; return false; }
   catch (e) {
     STATE.cloud = null;
@@ -275,7 +276,7 @@ function showNew() {
   $('#style').onchange = syncStyle;
   syncStyle();
   $('#create').onclick = async () => {
-    if (await needsCloudSignIn(dirSel.value)) return;
+    if (await needsCloudSignIn(dirSel.value, voiceLang())) return;
     try {
       const auto = $('#style').value === 'auto';
       const [look, story] = auto ? ['auto', null] : $('#style').value.split('/');
@@ -337,7 +338,7 @@ async function openProject(name, tab = null) {
   };
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
-    if (await needsCloudSignIn($('#p-director').value)) return;
+    if (await needsCloudSignIn($('#p-director').value, p.lang)) return;
     if (dirty && !confirm('Re-planning replaces your unsaved edits. Continue?')) return;
     try {
       const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/direct`, { method: 'POST', body: JSON.stringify({ director: $('#p-director').value }) })).job, 'Planning the visuals');

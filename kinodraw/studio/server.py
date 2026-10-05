@@ -705,6 +705,7 @@ def state() -> dict:
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if signed_in else 'rules',   # signed out, a first video needs no account
             'cloud': None, 'install_id': cloud.kept_install_id(),     # shown in Settings, to ask for its data to be deleted
+            'cloud_languages': list(cloud.CloudProvider.languages),   # others are planned offline, never asked
             'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
             'advanced': bool(_config().get('advanced')),
             'voice_server': server,
