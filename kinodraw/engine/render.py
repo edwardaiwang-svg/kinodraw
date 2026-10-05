@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 import imageio_ffmpeg
-from PIL import Image
+from PIL import Image, ImageChops
 
 from .. import script, styles
 from . import auto_scenes as auto
@@ -95,6 +95,7 @@ class Production:
         """Move the camera to a new stretch of board; the elements added after this are drawn there."""
         self.cuts.append((t, x, mode))
         self.cut_marks.append(len(self.ctx.elements))
+        self.ctx.page_x = x
 
     def _tag(self, first, group, **flags):
         """Mark the elements added since index ``first`` as one visual (and essential/optional...)."""
@@ -129,6 +130,7 @@ class Production:
                     scenes.SLOT_BUILDERS[vt](v, beat, box, ctx)
                 elif vt in scenes.PAGE_BUILDERS:
                     box, (c0, _) = self.layout.page()
+                    ctx.page_x = c0 * self.g.col
                     # Invisible anchor at the page's left edge, drawn first: the camera pans to the whole
                     # page instead of to whichever column its (centred) title happens to start in.
                     anchor = Image.new('RGBA', (self.g.cols_on_screen * self.g.col - 4, 1), (0, 0, 0, 0))
@@ -359,7 +361,7 @@ class Production:
             Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=1.0, stale=math.inf, cut_grace=math.inf,
                                                keep_optional=True)
         else:
-            Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=4.0)
+            Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=2.0)
         for e in els:
             if not e.atomic:
                 continue
@@ -440,9 +442,10 @@ class Production:
             L = int(round(L))
             frame = self.skin.background(*self.size, x=L).copy()
         else:
-            x = 12 + int(round(self._drift(t)))
-            paper = self.skin.background(self.size[0] + 24, self.size[1])
-            frame = paper.crop((x, 0, x + self.size[0], self.size[1]))
+            frame = self.skin.background(*self.size).copy()
+            drift = int(round(self._drift(t)))
+            if drift:
+                frame = ImageChops.offset(frame, -drift, 0)
         lo, hi = L - 20, L + self.size[0] + 20
         for layer in (0, 1):
             for e in self.els:
@@ -488,11 +491,17 @@ class Production:
         gap = nxt.start - prev.end
         if gap <= 0:
             return
+        # A new board is a separate hand session, not a trip across the old page.
+        if gap > 1.4 and getattr(prev, 'stretch', 0) != getattr(nxt, 'stretch', 0):
+            return
         p0 = self._last_pen(prev)
         p1 = self._first_pen(nxt)
         if p0 is None or p1 is None:
             return
-        u = ease((t - prev.end) / gap)
+        settle = .3 if gap > 1.4 else 0.
+        if t < prev.end + settle:
+            return
+        u = ease((t - prev.end - settle) / (gap - settle))
         x = (prev.x + p0[0]) * (1 - u) + (nxt.x + p1[0]) * u - L
         y = (prev.y + p0[1]) * (1 - u) + (nxt.y + p1[1]) * u
         self.hand.paste(frame, (x, y - 10 * math.sin(math.pi * u)), lifted=True)
@@ -520,7 +529,37 @@ class Production:
         return self.view(t, self.camera.at(t) + self._drift(t))
 
     def _drift(self, t):
-        return 0. if self.camera.locked else 12 * math.sin(t * .8)
+        if self.camera.locked:
+            return 0.
+        # Only idle holds need ambient motion. Fade to zero at both boundaries
+        # so the ordinary drawing coordinates and paper are recovered exactly.
+        L = self.camera.at(t)
+        intervals = [(e.start, e.end) for e in self.els
+                     if e.x + e.w >= L and e.x <= L + self.size[0]]
+        intervals += [(a, a + self.g.pan_seconds) for a, _, kind in self.camera.keys
+                      if kind != 'cut']
+        # Suppress ambient motion for a visible hand trip, including its settle.
+        # Whole intervals keep the envelope continuous when motion changes owner.
+        visible = {id(e) for e in self.els if e.x + e.w >= L and e.x <= L + self.size[0]}
+        for prev, nxt in zip(self.hand_els, self.hand_els[1:]):
+            if id(prev) in visible and id(nxt) in visible and prev.stretch == nxt.stretch and prev.end < nxt.start:
+                if (L <= prev.x and prev.x + prev.w <= L + self.size[0]
+                        and L <= nxt.x and nxt.x + nxt.w <= L + self.size[0]):
+                    intervals.append((prev.end, nxt.start))
+        before, after = 0., math.inf
+        for a, b in intervals:
+            if a <= t < b:
+                return 0.
+            if b <= t:
+                before = max(before, b)
+            elif a > t:
+                after = min(after, a)
+        remaining = after - t
+        if t <= before + .3 or remaining <= 0 or after - before <= .6:
+            return 0.
+        age = t - (before + .3)
+        envelope = ease(min(1., age / .3)) * ease(min(1., remaining / .3))
+        return 12 * math.sin(age * .8) * envelope
 
     def stock_frame(self, t, a, clip):
         path = self.project_dir / 'stock/MANIFEST.json'
@@ -632,16 +671,21 @@ class Production:
         alpha = min(1., (t - a) / .4, (b - t) / .3)       # labels fade in and out; nothing pops
         tag = (chip_image(ch, self.lang, self.skin.fonts) if self.skin.chapter_tag == 'chip'
                else skins.tag_image(ch, self.lang, self.skin))
+        long_tag = tag.width > int(self.size[0] * .92)
         chip = faded(self._fit_ui(tag), alpha)
-        ink.paste(frame, chip, 77, 44)
+        ink.paste(frame, chip, 77 if long_tag else 36, 44 if long_tag else 22)
         src = source_line(ch, self.lang)
         if src:
-            img = faded(self._fit_ui(ui_text(src, 34, self.skin.soft, self.skin.fonts)), alpha)
-            ink.paste(frame, img, 1920 - 77 - img.width, 44)
+            raw = ui_text(src, 34, self.skin.soft, self.skin.fonts)
+            long_src = raw.width > int(self.size[0] * .92)
+            img = faded(self._fit_ui(raw), alpha)
+            ink.paste(frame, img, 1920 - (77 if long_src else 40) - img.width, 44 if long_src else 26)
         footer = self.ctx.T(self.ep.get('footer'))
         if footer:
-            img = self._fit_ui(ui_text(footer, 24, self.skin.faint, self.skin.fonts))
-            ink.paste(frame, img, 77, 1036 - img.height)
+            raw = ui_text(footer, 24, self.skin.faint, self.skin.fonts)
+            long_footer = raw.width > int(self.size[0] * .92)
+            img = self._fit_ui(raw)
+            ink.paste(frame, img, 77 if long_footer else 40, 1036 - img.height if long_footer else 1080 - 34)
 
     def _fit_ui(self, img):
         w = int(self.size[0] * .92)
@@ -662,8 +706,10 @@ class Production:
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
             return
-        img = self._fit_ui(self.skin.caption_image(c['text'], self.lang))
-        ink.paste(frame, img, (self.size[0] - img.width) / 2, 1036 - img.height)
+        raw = self.skin.caption_image(c['text'], self.lang)
+        img = self._fit_ui(raw)
+        bottom = 1036 if raw.width > int(self.size[0] * .92) else 1046
+        ink.paste(frame, img, (self.size[0] - img.width) / 2, bottom - img.height)
 
 
 def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None):

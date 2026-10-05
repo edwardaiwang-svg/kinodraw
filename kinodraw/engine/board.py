@@ -275,7 +275,8 @@ class Scheduler:
         for k in range(len(units) - 1, -1, -1):
             next_trig[k] = upcoming
             if not all(e.after is not None for e in units[k][1]):
-                upcoming = min(e.trigger for e in units[k][1])
+                upcoming = (min(e.trigger for e in units[k][1]) if all(e.atomic for e in units[k][1])
+                            else units[k][0][1])
         hand_free, last_pen = -1e9, None
         placed, started, dropped = [], set(), set()
         state = {'stretch': -1, 'arrive': 0., 'base': 0}
@@ -295,7 +296,8 @@ class Scheduler:
                 state['base'] = int(round(L / g.col))
 
         for k, ((s, trig, _), els) in enumerate(units):
-            trig = min(e.trigger for e in els)
+            if all(e.atomic for e in els):
+                trig = min(e.trigger for e in els)
             enter(s)
             arrive, base = state['arrive'], state['base']
             page_change = planned[s + 1] if s + 1 < len(planned) else math.inf

@@ -18,7 +18,7 @@ from . import skin
 from .storyboard import normalize
 
 FPS = 30
-CHAPTER_GAP = .15
+CHAPTER_GAP = .6
 TRANSITION = .35         # quick pullback, pin and agenda settle
 END_CARD = 5.0            # pan to the closing page, write it, and let it be read
 CREDIT = 2.0              # then "Made with ..." under it (the project's credit setting can turn it off)
@@ -60,7 +60,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         pause = 0. if take else min(.1, max(0., float(pauses.get(beat['id'], 0.))))
         if pause:
             used_pauses[beat['id']] = round(pause, 3)
-        end = speech_end + min(.1, ZH_DWELL if lang == 'zh' else 0.) + pause
+        end = speech_end + (ZH_DWELL if lang == 'zh' else 0.) + pause
         nxt = beats[i + 1] if i + 1 < len(beats) else None
         chapter_change = nxt is not None and nxt['chapter'] != beat['chapter']
         info = {'start': round(start, 4), 'speech_end': round(speech_end, 4), 'char_times': clip['char_times']}
