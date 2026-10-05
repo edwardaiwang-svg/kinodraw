@@ -77,7 +77,98 @@ def mentions(name, text) -> bool:
     return bool(name and re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I))
 
 
-def detect_cast(script_beats) -> list[dict]:
+MARK_CUES = (
+    ('mane_black', r'\bblack\s+mane\b'), ('mane_gold', r'\bgold(?:en)?\s+mane\b'),
+    ('mane_none', r'\b(?:no|without)\s+(?:a\s+)?mane\b|\bcub\b'),
+    ('stripes', r'\b(?:tigress|tiger|stripes?|striped)\b'), ('spots', r'\b(?:spots?|spotted)\b'),
+    ('scar_nose', r'\bscar(?:red)?\s+nose\b|\bscars?\s+(?:on|across|over)\s+(?:(?:his|her|the|a)\s+)?nose\b'),
+    ('scar_eye', r'\bscarred\s+eye\b|\bscars?\s+(?:on|across|over|above)\s+(?:(?:his|her|the|a|left|right)\s+){0,3}eye\b'),
+    ('crown', r'\b(?:king|queen|crown)\b'), ('glasses', r'\bglasses\b'),
+    ('freckles', r'\bfreckles\b'), ('fluffy', r'\bfluffy\b'),
+)
+
+
+def _mark_evidence(cue):
+    present, absent = set(), set()
+    # A fresh coordinated predicate ends the previous predicate's negation scope.
+    for clause in re.split(r'[,;.!?\n]|\bbut\b|\band\s+(?=(?:is|was|has|had)\b)', cue):
+        if re.search(r'\b(?:might|may|perhaps|maybe|possibly|either|whether|or)\b', clause):
+            continue
+        for mark, pattern in MARK_CUES:
+            for hit in re.finditer(pattern, clause):
+                prefix = clause[:hit.start()]
+                negative = re.search(r"\b(?:no|not|never|without)\b|\b\w+n['’]t\b", prefix)
+                if negative and not re.search(r'\bnot only\b', prefix):
+                    absent.add(mark)
+                else:
+                    present.add(mark)
+    # A cub's usual lack of a mane yields to an explicitly described mane.
+    if present & {'mane_black', 'mane_gold'} and not re.search(r'\b(?:no|without)\s+(?:a\s+)?mane\b', cue):
+        present.discard('mane_none')
+    if 'mane_none' in present:
+        absent.update(('mane_black', 'mane_gold'))
+    if 'mane_black' in present:
+        absent.update(('mane_none', 'mane_gold'))
+    if 'mane_gold' in present:
+        absent.update(('mane_none', 'mane_black'))
+    ambiguous = present & absent
+    return present - ambiguous, absent - ambiguous
+
+
+def _positive_cue(cue):
+    return '; '.join(clause for clause in re.split(r'[,;.!?\n]|\b(?:but|and|with)\b|(?=\bwithout\b)', cue)
+                     if not re.search(r"\b(?:no|not|never|without|might|may|perhaps|maybe|possibly|either|whether|or)\b|"
+                                      r"\b\w+n['’]t\b", clause))
+
+
+def _owned_possessives(text, found):
+    """Resolve singular body descriptions only when a sentence has one clear subject.
+
+    In "He nudged Pendo with his scarred nose", Pendo is the object. A plural or
+    competing subject clears the antecedent instead of donating its traits to a name.
+    """
+    owned, subject, gender = {}, None, None
+    verbs = r'(?:is|was|has|had|did|would|' + '|'.join(ACTION_CUES.values()) + r'|\w+ed)\b'
+    for sentence in re.finditer(r'[^.!?\n]+', text):
+        body = sentence.group().strip(' \t\"“”')
+        local = [(n, start, end) for n, start, end in found
+                 if sentence.start() <= start < sentence.end()]
+        subjects = [(n, start) for n, start, end in local
+                    if re.match(r'\s+' + verbs, text[end:sentence.end()], re.I)]
+        plural = re.search(r'\b(?:they|their)\b', body, re.I)
+        embedded_subject = re.search(r'.+\b(?:he|she)\b', body, re.I)
+        coordinated = any(re.search(r'\b(?:and|or)\s+(?:the\s+)?$', text[end:start], re.I)
+                          for _, start in subjects for _, _, end in local if end < start)
+        if plural or coordinated or embedded_subject or len(subjects) > 1:
+            subject = None
+        elif re.match(r'(?:he|she)\b', body, re.I):
+            pronoun_gender = 'female' if body.lower().startswith('she') else 'male'
+            if subjects or gender != pronoun_gender:
+                subject = None
+            gender = pronoun_gender
+        elif len(subjects) == 1:
+            subject = subjects[0][0]
+            male = re.search(r'\b(?:king|he|his|male)\b', body, re.I)
+            female = re.search(r'\b(?:queen|she|her|female)\b', body, re.I)
+            gender = 'male' if male and not female else 'female' if female and not male else None
+        else:
+            subject = None
+        if subject is None:
+            continue
+        for hit in re.finditer(r'\b(?:his|her)\s+((?:(?!mother\b|father\b|sister\b|brother\b)[\w,-]+\s+){0,4}'
+                               r'(?:mane|nose|eye)\b)', body, re.I):
+            if gender and gender != ('male' if hit.group().lower().startswith('his') else 'female'):
+                continue
+            # Preserve negation/uncertainty from the body phrase's own clause.
+            prefix = re.split(r'[,;]|\bbut\b|\band\s+(?=(?:is|was|has|had)\b)',
+                              body[:hit.start()], flags=re.I)[-1]
+            if re.search(r"\b(?:no|not|never|without|might|may|perhaps|maybe)\b|\b\w+n['’]t\b", prefix, re.I):
+                continue
+            owned.setdefault(subject, []).append(hit[1])
+    return owned
+
+
+def _detect_cast(script_beats):
     text = '\n'.join(b['spoken'] for b in script_beats)
     found = []
     for m in NAME_RE.finditer(text):
@@ -90,7 +181,9 @@ def detect_cast(script_beats) -> list[dict]:
         if words and not any(w in STOP_NAMES for w in words):
             found.append((' '.join(words), start, m.end()))
     names = list(dict.fromkeys(n for n, _, _ in found))
+    possessives = _owned_possessives(text, found)
     cast = []
+    evidence = {}
     for name in names:
         contexts = []
         named = False
@@ -118,39 +211,33 @@ def detect_cast(script_beats) -> list[dict]:
             # proximity (especially an object followed by someone else's description) cannot.
             local = before[noun.start():] if noun else ''
             if introduced and not location and SPECIES_RE.search(introduced.group()):
-                local += introduced.group()
+                local += '; ' + introduced.group()
             group = re.match(r'\s+and the other (lionesses|tigresses|lions|tigers)\b', after, re.I)
             if group:
-                local += ' ' + {'lionesses': 'lioness', 'tigresses': 'tigress',
+                local += '; ' + {'lionesses': 'lioness', 'tigresses': 'tigress',
                                 'lions': 'lion', 'tigers': 'tiger'}[group[1].lower()]
-            attribute = re.match(r'\s+(?:is|was|has|had)\s+(.+)', after, re.I)
-            if attribute:
+            tail = after[introduced.end():].lstrip(',') if introduced else after
+            attribute = re.match(r'\s+(?:is|was|has|had)\s+(.+)', tail, re.I)
+            if attribute and not re.search(r'\b(?:and|or)\s+(?:the\s+)?$', before, re.I):
                 owned = re.split(r"\b(?:of|behind|beside|against|with|when|while)\b|"
                                  r"\b(?:his|her|their)\s+(?:mother|father|sister|brother)\b",
                                  attribute[1], maxsplit=1, flags=re.I)[0]
-                local += ' ' + owned
+                local += '; ' + owned
             title = next((w for w in text[start:end].split() if w in TITLES), '')
-            contexts.append(title + ' ' + local)
+            contexts.append(title + '; ' + local)
         if not named:
             continue
-        description = next((s for s in contexts if SPECIES_RE.search(s)), '')
-        cue = ' '.join(contexts).lower()
+        description = next((_positive_cue(s.lower()) for s in contexts if SPECIES_RE.search(_positive_cue(s.lower()))), '')
+        raw_cue = '; '.join(contexts + possessives.get(name, [])).lower()
+        cue = _positive_cue(raw_cue)
         species_hit = SPECIES_RE.search(description)
         species = species_hit.group().lower() if species_hit else 'lion' if re.search(r'\bmane\b', cue) else 'human'
         kind, family = SPECIES[species]
         age = ('baby' if re.search(r'\b(cub|baby|puppy|kitten|hatchling)\b', cue) else
                'young' if species in ('boy', 'girl') or re.search(r'\b(young|child|teen)\b', cue) else
                'old' if re.search(r'\b(old|elderly|ancient)\b', cue) else 'adult')
-        marks = []
-        for mark, pattern in (
-            ('mane_black', r'black\s+mane'), ('mane_gold', r'gold(?:en)?\s+mane'),
-            ('mane_none', r'no\s+mane|\bcub\b'), ('stripes', r'tigress|tiger|stripe'),
-            ('spots', r'spot'), ('scar_nose', r'scar(?:red)?\s+nose|scar\s+(?:on|across)\s+(?:his|her|the)\s+nose'),
-            ('scar_eye', r'scar.{0,25}eye'), ('crown', r'\bking\b|\bqueen\b|crown'),
-            ('glasses', r'glasses'), ('freckles', r'freckles'), ('fluffy', r'fluffy'),
-        ):
-            if re.search(pattern, cue):
-                marks.append(mark)
+        present, absent = _mark_evidence(raw_cue)
+        marks = [mark for mark, _ in MARK_CUES if mark in present]
         sex = ('female' if species in ('tigress', 'lioness', 'girl', 'woman', 'cow') or
                re.search(r'\b(she|her|female|mother|queen)\b', cue) else
                'male' if species in ('boy', 'man') or re.search(r'\b(he|his|male|father|king)\b', cue) else 'unknown')
@@ -164,7 +251,27 @@ def detect_cast(script_beats) -> list[dict]:
                      'size': 1.4 if 'massive' in cue else .55 if age == 'baby' else 1.0,
                      'palette': {'body': COLOURS[len(cast) % len(COLOURS)], 'accent': '#F2D4A4', 'eye': '#202020'},
                      'marks': marks or ['none'], 'temperament': temperament})
-    return cast
+        traits = {}
+        if species_hit:
+            traits.update(species=species, kind=kind, family=family)
+        if re.search(r'\b(cub|baby|puppy|kitten|hatchling|young|child|teen|old|elderly|ancient|adult)\b', cue) or species in ('boy', 'girl'):
+            traits['age'] = age
+        if sex != 'unknown':
+            traits['sex'] = sex
+        if re.search(r'\bmassive\b', cue):
+            traits['size'] = 1.4
+        evidence[name_key(name)] = {'traits': traits, 'marks': present, 'absent_marks': absent,
+                                    'baby_size': .55 if traits.get('age') == 'baby' else None}
+    return cast, evidence
+
+
+def detect_cast(script_beats) -> list[dict]:
+    return _detect_cast(script_beats)[0]
+
+
+def cast_evidence(script_beats) -> dict:
+    """Explicit actor-owned cues only; creative defaults are not source evidence."""
+    return _detect_cast(script_beats)[1]
 
 
 def actions(beat, cast) -> list[dict]:
