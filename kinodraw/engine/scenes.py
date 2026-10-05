@@ -39,6 +39,7 @@ class Ctx:
         self.beat = None
         self.text_w = layout.g.cell_w
         self.text_h = layout.g.rows[0][1] - layout.g.rows[0][0]
+        self.page_x = None              # explicit camera/page origin; otherwise use the layout's current page
 
     # ---- language + time helpers
     def T(self, pair, default=''):
@@ -68,12 +69,19 @@ class Ctx:
         if max_w is None:
             inset = math.ceil(self.layout.g.size[0] * .04) + (0 if self.skin.locked_camera else 12)
             max_w = self.text_w - 2 * max(0, inset - self.layout.g.cell_x0)
-        width = max(1, max_w - 12)
+        # Explicit builder widths are legacy wrap targets. Reserve padding only
+        # when the resulting drawing would actually overflow its slot.
+        width = max(1, max_w)
         lines, size = ink.fit_text(s, self.lang, width, max_lines, size,
                                   min_size=min_size, fonts=self.fonts)
+        if max(ink.text_width(line, self.lang, size, self.fonts) for line in lines or ['']) + 12 > max_w:
+            width = max(1, max_w - 12)
+            lines, size = ink.fit_text(s, self.lang, width, max_lines, size,
+                                      min_size=min_size, fonts=self.fonts)
         while size > 2:
             asc, desc = ink.hand_font(self.lang, size, self.fonts).getmetrics()
-            if int(size * 1.18) * (len(lines) - 1) + asc + desc + 12 <= self.text_h:
+            if int(size * 1.18) * (len(lines) - 1) + asc + desc + 12 <= self.text_h \
+                    and math.ceil(max(self.width(line, size) for line in lines or [''])) + 12 <= max_w:
                 break
             size -= 2
             lines = ink.wrap_words(s, self.lang, size, width, fonts=self.fonts)
@@ -102,7 +110,13 @@ class Ctx:
         if isinstance(drawing, ink.TextDrawing):
             g = self.layout.g
             margin_x, margin_y = math.ceil(g.size[0] * .04), math.ceil(g.size[1] * .04)
-            left = math.floor(x / g.col) * g.col
+            # Quotes may stop at any column; ordinary page text must not be
+            # nudged at every interior column boundary.
+            if kw.get('atomic'):
+                left = math.floor(x / g.col) * g.col
+            else:
+                origin = self.page_x if self.page_x is not None else self.layout.page_start * g.col
+                left = origin + math.floor((x - origin) / g.size[0]) * g.size[0]
             x = max(x, left + margin_x + (0 if self.skin.locked_camera else 12))
             y = min(max(y, margin_y), g.size[1] - margin_y - drawing.size[1])
         if self.skin.textured:

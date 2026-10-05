@@ -601,6 +601,9 @@ def wrap_words(text, lang, size, max_width, kind='hand', fonts: Fonts = FONTS):
             continue
         trial = cur + u
         if cur and width(trial.rstrip()) > max_width:
+            if lang == 'zh' and re.match(r'[，。！？；：、）」』”’%]', u):
+                cur = trial
+                continue
             lines.append(cur.rstrip())
             cur = u.lstrip() if lang in ('en', 'es') else u
         else:
