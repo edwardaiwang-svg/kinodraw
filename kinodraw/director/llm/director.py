@@ -70,9 +70,7 @@ class LLMDirector:
         lang, out = self.lang, []
         for b in beats:
             text = b['display'][lang]
-            hits = self.rules.matcher.lexical(text)[:self.k]
-            seen = {h.id for h in hits}
-            hits += [h for h in self.rules.matcher.semantic(text, self.k) if h.id not in seen][:self.k - len(hits) + 4]
+            hits = self.rules.candidates(text, b['chapter'], self.k)
             out.append({
                 'beat_id': b['id'],
                 'kind': 'takeaway' if b['kind'] == 'take' else 'narration',
@@ -81,6 +79,7 @@ class LLMDirector:
                 'candidates': [{'id': h.id, 'desc': self.rules.matcher.entries[h.id].get('desc', '')[:70]}
                                for h in hits],
                 'rules_draft': [_summary(v, lang) for v in b['visuals']],
+                **{key: b[key] for key in ('character', 'atmosphere') if key in b},
             })
         title = (chapter.get('title') or {}).get(lang, '')
         return {'language': 'Spanish' if lang == 'es' else lang, 'video_title': board['title'][lang], 'section_title': title,
@@ -92,7 +91,9 @@ class LLMDirector:
         lang, lim = self.lang, LIMITS[self.lang]
         section_text = ' '.join(b['display'][lang] for b in beats)
         by_id = {b['id']: b for b in beats}
-        allowed = {p['beat_id']: {c['id'] for c in p['candidates']} | set(NARRATOR_POSES) for p in payload['beats']}
+        allowed = {p['beat_id']: {c['id'] for c in p['candidates']} |
+                   (set() if self.rules._characters_in(p['text'])
+                    else set(NARRATOR_POSES)) for p in payload['beats']}
         pages = 0
         for item in answer.get('beats') or []:
             beat = by_id.get(item.get('beat_id'))

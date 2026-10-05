@@ -147,6 +147,23 @@ for (pose, cues), words in zip(NARRATOR_CUES, (
     cues['es'] = words
 
 
+ANIMALS = set('lion lioness cub tiger tigress hyena dog puppy wolf fox cat kitten bear elephant giraffe '
+              'zebra monkey ape deer rabbit horse bird eagle owl mouse rat snake bee'.split())
+ANATOMY = re.compile(r'\b(?:lungs?|nose|tooth|teeth|molar|anatomical heart|brain|hands?|feet|foot|arms?|legs?|body part)\b', re.I)
+FACES = re.compile(r'\b(?:face|smile|grin|laughing|Santa Claus)\b', re.I)
+TRAITS = re.compile(r'\b(?:(?:lion|tiger|wolf|bear) cub|black mane|scarred nose|lioness|tigress|lion|tiger|cub|hyena)\b', re.I)
+ATMOSPHERE = re.compile(r'\b(?:shooting star|fog|mist|night|stars?|rain|dust|dawn)\b', re.I)
+ATMOSPHERE_PICTURE = re.compile(r'\b(?:foggy|fog|mist|night|stars?|rain|dust|dawn|sunrise|cloud|comet|moon)\b', re.I)
+FIGURATIVE = re.compile(r'\b(?:like|as)\s+(?:(?:a|an|the|his|her|its)\s+)?([a-z]+)|'
+                        r'\b(heart) of (?:the |a |an )?(?:savanna|pride|forest|jungle)|'
+                        r'\b(blazing) eyes\b', re.I)
+FIGURE_WORDS = {'armor': {'armor', 'helmet', 'shield'}, 'armour': {'armour', 'helmet', 'shield'},
+                'heart': {'heart'}, 'blazing': {'fire', 'flame'}, 'thunder': {'thunder', 'lightning'}}
+SUBJECT_VERBS = AUX | PAST | set('breathes laughs roars hunts swipes rattles visits studies treats examines '
+                               'smiles wears feels stands stays trembles shrinks watches'.split())
+GROUP_SPLIT = re.compile(r'\b(?:while|whereas|but|instead|apart|separately)\b', re.I)
+
+
 def singular_words(phrase: str, lang: str = 'en') -> set:
     if lang == 'es':
         phrase = es_gloss(phrase)
@@ -162,6 +179,8 @@ class RulesDirector:
         pic_ids, pic_vecs = catalog_vectors(lang, 'picture')   # what each drawing shows, keywords left out
         at = {i: k for k, i in enumerate(pic_ids)}
         self.pics = pic_vecs[[at[i] for i in self.ids]]
+        self.characters: dict = {}
+        self.references: dict = {}
         self.topic: dict = {}                                   # chapter -> rank of every picture for its subject
         self.pictures: dict = {}                                # word -> the picture it got first
         self.banned_words = {singular(w) if lang in ('en', 'es') else w
@@ -170,6 +189,7 @@ class RulesDirector:
     # ------------------------------------------------------------ entry point
     def direct(self, board: dict) -> dict:
         lang = self.lang
+        self._meaning_hints(board)
         chapters = {c['id']: c for c in normalize(board)['chapters']}
         recent: deque = deque(maxlen=RECENT)          # pictures still on the board
         heroes: dict = {}                             # chapter -> {doodle: best score}, for takeaway margins
@@ -191,7 +211,8 @@ class RulesDirector:
             text = beat['display'][lang]
             norm = numbers.normalize(text, lang)
             if kind == 'take':
-                best = sorted(heroes.get(beat['chapter'], {}).items(), key=lambda kv: -kv[1])[:2]
+                best = sorted(((did, score) for did, score in heroes.get(beat['chapter'], {}).items()
+                               if self._meaning_allows(did, None, text)), key=lambda kv: -kv[1])[:2]
                 for k, (did, _) in enumerate(best):
                     beat['visuals'].append({**self._cluster(beat, [self._item(did)], k), 'size': 'margin'})
                 continue
@@ -220,7 +241,8 @@ class RulesDirector:
                     taken.add(sentence_of(pos))
                     budget -= 1
             question = next((k for k, s_ in enumerate(sentences) if s_.endswith(('?', '？'))), None)
-            if question is not None and question not in taken and budget > 0 and since_narrator >= 3:
+            if question is not None and question not in taken and budget > 0 and since_narrator >= 3 \
+                    and not self._characters_in(text):
                 q = sentences[question]
                 label = q if len(q) <= LABEL_MAX[lang] else None
                 planned.append((spans[question][0], self._cluster(
@@ -277,7 +299,8 @@ class RulesDirector:
                             self.pictures.setdefault(self._key(h.phrase), h.id)
                             section = heroes.setdefault(beat['chapter'], {})
                             section[h.id] = max(section.get(h.id, 0), h.score)
-            if (not planned and (self.lang == 'es' or since_narrator >= 2)) or (since_narrator >= 5 and budget > 0):
+            if not self._characters_in(text) and (
+                    (not planned and (self.lang == 'es' or since_narrator >= 2)) or (since_narrator >= 5 and budget > 0)):
                 pose = self._narrator_pose(text) or ('explain' if not planned else None)
                 if pose:
                     planned.append((len(text), self._cluster(beat, [self._item(f'narrator_{pose}')], len(planned))))
@@ -366,7 +389,7 @@ class RulesDirector:
                 if PEOPLE_OF[self.lang].search(plain[max(0, a - 32):a]) and not self._shows_people(hit.id):
                     continue                          # "a team of printers" are people, not machines
                 if key in GENERIC[self.lang] or NUMERAL.fullmatch(key) or self._banned(key) \
-                        or not self._belongs(hit.id, hit.phrase, chapter):
+                        or not self._candidate_allowed(hit, sentence, chapter):
                     continue
                 if key in PHENOMENA[self.lang] and self.matcher.entries[hit.id]['set'] == 'fluent':
                     continue
@@ -401,6 +424,7 @@ class RulesDirector:
             for i in np.argsort(-sims)[:3]:
                 did = self.ids[i]
                 if (sims[i] >= MEANING_ONLY[self.lang] and did not in recent and did not in found
+                        and self._meaning_allows(did, None, sentence)
                         and self.matcher.entries[did]['set'] == 'bespoke' and self.topic[chapter][i] <= MEANING_TOPIC_RANK
                         and not any(s < lead for s in named)
                         and (sims[i] >= MEANING_STRONG[self.lang] or self._shares(did, words))):
@@ -451,6 +475,144 @@ class RulesDirector:
         return any(w in key for w in self.banned_words)
 
     # ---------------------------------------------------------- meaning rules
+    def _characters_in(self, text):
+        return [name for name in self.characters if re.search(rf"\b{re.escape(name)}\b", text)] or self.references.get(text, [])
+
+    def _meaning_hints(self, board):
+        """Plain beat fields survive normalization; renderers can use them when cast/scenes arrive."""
+        self.characters, self.references = {}, {}
+        if self.lang != 'en':
+            return
+        texts = [b['display'][self.lang] for b in board['beats'] if b['kind'] == 'narration']
+        occurrences = {}
+        for text in texts:
+            for m in re.finditer(r"\b[A-Z][a-z]+\b", text):
+                name = m.group()
+                if name.lower() not in EN_STOP | DETERMINERS | PREPS | CONNECTIVES | AUX | ANIMALS \
+                        and not ATMOSPHERE.fullmatch(name) and name.lower() not in {'king', 'queen'}:
+                    occurrences.setdefault(name, []).append(text)
+        for name, nearby in occurrences.items():
+            if len(nearby) < 2:
+                continue
+            traits = []
+            for text in nearby:
+                for sentence in script.sentences(text, self.lang) or [text]:
+                    names = [m for m in re.finditer(r'\b[A-Z][a-z]+\b', sentence)
+                             if len(occurrences.get(m.group(), [])) >= 2]
+                    for match in TRAITS.finditer(sentence):
+                        if not names:
+                            continue
+                        nearest = min(names, key=lambda m: abs(m.start() - match.start()))
+                        if nearest.group() == name and abs(nearest.start() - match.start()) < 80:
+                            trait = match.group().lower()
+                            if trait not in traits:
+                                traits.append(trait)
+            self.characters[name] = {'name': name, 'traits': traits}
+        scene, previous = None, None
+        for beat in board['beats']:
+            text = beat['display'][self.lang]
+            beat.pop('character', None)
+            beat.pop('atmosphere', None)
+            names = self._characters_in(text)
+            if not names and re.match(r'^(?:He|She|His|Her)\b', text) and previous:
+                names = previous
+            if re.search(r'\bthe king\b', text, re.I):
+                kings = [n for n in self.characters if any('King ' + n in t for t in occurrences[n])]
+                if len(kings) == 1:
+                    names = list(dict.fromkeys(names + kings))
+            for sentence in script.sentences(text, self.lang) or [text]:
+                direct = self._characters_in(sentence)
+                if direct:
+                    names = list(dict.fromkeys(names + direct))
+                elif names and re.match(r'^(?:He|She|His|Her|The king|the king)\b', sentence):
+                    self.references[sentence] = names
+            if names:
+                self.references[text] = names
+                beat['character'] = [dict(self.characters[n]) for n in names]
+            previous = names if beat['kind'] == 'narration' else None
+            words = list(dict.fromkeys(m.group().lower() for m in ATMOSPHERE.finditer(text)))
+            if words and beat['kind'] == 'narration':
+                scene = scene or beat['id']
+                beat['atmosphere'] = {'words': words, 'scene': scene}
+            else:
+                scene = None
+
+    def _animal_subject(self, text):
+        if self.lang != 'en':
+            return False
+        names = self._characters_in(text)
+        if any(any(singular(w) in ANIMALS for t in self.characters[n]['traits'] for w in t.split()) for n in names):
+            return True
+        for clause in re.split(r'[.!?;]|\b(?:while|but|whereas)\b', text):
+            subject = []
+            for word in re.findall(r"[A-Za-z]+", clause):
+                low = word.lower()
+                if subject and (low in SUBJECT_VERBS or low.endswith(('ed', 'ing'))):
+                    break
+                subject.append(word)
+            if any(singular(w.lower()) in ANIMALS for w in subject):
+                return True
+        return False
+
+    def _meaning_allows(self, did, phrase, sentence):
+        if self.lang != 'en':
+            return True
+        entry = self.matcher.entries[did]
+        desc = entry.get('desc', '')
+        words = {singular(w) for w in re.findall(r'[a-z]+', desc.lower())}
+        names = self._characters_in(sentence)
+        animal = self._animal_subject(sentence)
+        if animal and (self._shows_people(did) or (ANATOMY.search(desc) and (entry['set'] == 'fluent' or not words & ANIMALS))
+                       or (entry['set'] == 'fluent' and FACES.search(desc))):
+            return False
+        depicts_character = bool(words & ANIMALS) or self._shows_people(did) or FACES.search(desc) or 'crown' in words
+        if names and depicts_character:             # stock pictures cannot distinguish a cast
+            return False
+        for match in FIGURATIVE.finditer(sentence):
+            noun = next(g.lower() for g in match.groups() if g)
+            if words & FIGURE_WORDS.get(noun, {singular(noun)}):
+                return False
+        if entry['set'] == 'fluent' and ATMOSPHERE.search(sentence) \
+                and (ATMOSPHERE_PICTURE.search(desc) or ATMOSPHERE.search(phrase or '')):
+            return False
+        if re.search(r'\b(?:paw|paws)\b', sentence, re.I) and not re.search(r'\b(?:prints?|tracks?)\b', sentence, re.I) \
+                and ('print' in words or 'footprint' in words):
+            return False
+        if re.search(r'\b(?:sharp|rattling) teeth\b', sentence, re.I) and words & {'tooth', 'teeth', 'molar'} \
+                and not words & ANIMALS:
+            return False
+        if re.search(r'\btiny squeak\b', sentence, re.I) and words & {'warning', 'exclamation'}:
+            return False
+        split = GROUP_SPLIT.search(sentence)
+        if split:
+            before = {singular(w.lower()) for w in re.findall(r'[A-Za-z]+', sentence[:split.start()])} & ANIMALS
+            after = {singular(w.lower()) for w in re.findall(r'[A-Za-z]+', sentence[split.end():])} & ANIMALS
+            if before and after and before != after:
+                shown = words | singular_words((phrase or '').lower())
+                if shown & (after - before):
+                    return False
+        return True
+
+    def _candidate_allowed(self, hit, sentence, chapter):
+        key = self._key(hit.phrase) if hit.phrase else ''
+        return (key not in GENERIC[self.lang] and not self._banned(key)
+                and self._belongs(hit.id, hit.phrase, chapter)
+                and self._meaning_allows(hit.id, hit.phrase, sentence))
+
+    def candidates(self, text, chapter, k):
+        """The cloud gets the same meaning gates, before the candidate limit is applied."""
+        hits = self.matcher.lexical(text, every_phrase=True) + self.matcher.semantic(text, k + 4)
+        sentences = script.sentences(text, self.lang) or [text]
+        out, seen = [], set()
+        for hit in hits:
+            if hit.id in seen:
+                continue
+            local = next((s for s in sentences if hit.phrase and hit.phrase in s), None)
+            if all(self._candidate_allowed(hit, s, chapter) for s in ([local] if local else sentences)):
+                out.append(hit)
+                seen.add(hit.id)
+        return out[:k + 4]
+
     def _key(self, phrase):
         if self.lang == 'es':
             return es_gloss(phrase)
@@ -701,7 +863,7 @@ class RulesDirector:
                     if hit.id not in recent and float(self.vecs[self.pos[hit.id]] @ vec) >= \
                             AGREE[self.lang][self.matcher.entries[hit.id]['set']][1] and \
                             self._key(hit.phrase) not in GENERIC[self.lang] and \
-                            self._belongs(hit.id, hit.phrase, beat['chapter']):
+                            self._candidate_allowed(hit, sentence, beat['chapter']):
                         v['doodle'] = hit.id
                         break
             trig = self._spoken(norm, token, m.start())
