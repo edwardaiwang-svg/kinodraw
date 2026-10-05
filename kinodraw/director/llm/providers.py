@@ -180,10 +180,21 @@ class CommandProvider:
     def direct_section(self, payload: dict, usage: Usage) -> dict:
         return _parse(self._ask(SYSTEM, SECTION_SCHEMA, payload, usage))
 
+    def direct_plan(self, payload: dict, usage: Usage) -> dict:
+        from ..v3.prompt import SYSTEM as PLAN_SYSTEM
+        from ..v3.schema import PLAN_SCHEMA
+        try:
+            answer = json.loads(self._ask(PLAN_SYSTEM, PLAN_SCHEMA, payload, usage, strict=True))
+        except json.JSONDecodeError as error:
+            raise ProviderError(f'the v3 answer was not valid JSON ({error})') from error
+        if not isinstance(answer, dict):
+            raise ProviderError('the v3 answer must be a JSON object')
+        return answer
+
     def pick_style(self, payload: dict, usage: Usage) -> dict:
         return _parse_style(self._ask(STYLE_SYSTEM, style_schema(_ids(payload)), payload, usage))
 
-    def _ask(self, system: str, schema: dict, payload: dict, usage: Usage) -> str:
+    def _ask(self, system: str, schema: dict, payload: dict, usage: Usage, strict=False) -> str:
         request = json.dumps({'model': self.model, 'system': system, 'user': json.dumps(payload, ensure_ascii=False),
                               'schema': schema}, ensure_ascii=False)
         try:
@@ -195,7 +206,7 @@ class CommandProvider:
             raise ProviderError(f'command exited with {done.returncode}: {done.stderr.strip()[-300:]}')
         usage.add(f'command:{self.model}', 0, 0)       # tokens and cost are the program's business
         out = done.stdout.strip()
-        return out[out.find('{'):out.rfind('}') + 1] if not out.startswith('{') else out
+        return out if strict or out.startswith('{') else out[out.find('{'):out.rfind('}') + 1]
 
 
 def _parse(text: str) -> dict:
@@ -235,6 +246,11 @@ def make_provider(kind: str, model: str | None = None, base_url: str | None = No
     if kind == 'command':
         return CommandProvider(model)
     if kind == 'cloud':
-        from .cloud import CloudProvider
+        from .cloud import CloudProvider as BaseCloudProvider
+
+        class CloudProvider(BaseCloudProvider):
+            def direct_plan(self, payload: dict, usage: Usage) -> dict:
+                raise ProviderError('KinoDraw Cloud contract v3 not deployed yet')
+
         return CloudProvider(lang)               # a language it never plans asks it for nothing
     raise ValueError(f'unknown provider {kind!r}')
