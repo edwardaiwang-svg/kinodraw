@@ -328,7 +328,31 @@ def _direction(args):
 MODES = ['rules', 'cloud', 'openai', 'anthropic', 'compat', 'command']
 
 
+def cmd_qa(args):
+    from .qa.probes import probe
+    timeline = json.loads(Path(args.timeline).read_text(encoding='utf-8')) if args.timeline else None
+    beats = json.loads(Path(args.beat_grid).read_text(encoding='utf-8')) if args.beat_grid else None
+    report = probe(Path(args.video), timeline=timeline, beat_grid=beats)
+    print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False, allow_nan=False))
+    if not report.package_ok or not report.flash_ok:
+        raise SystemExit(1)
+
+
+def _qa_flags(parser):
+    parser.add_argument('video', help='finished video to inspect offline')
+    parser.add_argument('--timeline', help='build/timeline.json with explicit holds and end-card intervals')
+    parser.add_argument('--beat-grid', help='JSON array of music beat timestamps in seconds')
+    parser.set_defaults(func=cmd_qa)
+
+
 def main(argv=None):
+    # Standalone QA must not trigger app migration or import the rendering pipeline.
+    qa_argv = sys.argv[1:] if argv is None else list(argv)
+    if qa_argv and qa_argv[0] == 'qa':
+        parser = argparse.ArgumentParser(prog='kinodraw qa')
+        _qa_flags(parser)
+        cmd_qa(parser.parse_args(qa_argv[1:]))
+        return
     from . import paths
     from .pipeline import ASPECTS
     from .engine.storyboard import DIALS, LOOKS
@@ -337,6 +361,7 @@ def main(argv=None):
         print(paths.NOT_MOVED, *(f'  still in {p}' for p in paths.left_behind), sep='\n', file=sys.stderr)
     ap = argparse.ArgumentParser(prog='kinodraw', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='command', required=True)
+    _qa_flags(sub.add_parser('qa', help='offline encoded-video QA report as JSON'))
     for name, fn in (('make', cmd_make), ('new', cmd_new)):
         p = sub.add_parser(name)
         p.add_argument('script', help='a .md/.txt/.docx file, or the text itself in quotes')

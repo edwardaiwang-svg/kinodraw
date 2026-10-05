@@ -130,6 +130,8 @@ def test_thumbnail_sizes_and_landscape_bytes(tmp_path, look):
 def test_encoded_qa_checks_requested_size(tmp_path, monkeypatch):
     video = tmp_path / 'video.mp4'
     video.write_bytes(b'fake video')
+    from kinodraw.qa import probes
+    monkeypatch.setattr(probes, 'probe', lambda *args, **kwargs: probes.QAReport(str(video), 1))
     monkeypatch.setattr(package, '_probe', lambda p: {
         'size': re.match(r'(\d+)x(\d+)', '1080x1920'), 'frames': 30, 'audio': True, 'errors': [], 'chapters': []})
     monkeypatch.setattr(package, 'read_wav', lambda p: (np.zeros((package.SR, 2)), package.SR))
