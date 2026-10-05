@@ -175,7 +175,7 @@ def _fake_alignment(monkeypatch, project, poor=(), match=.6, missing=None):
             'sha256': server.sha(recording), 'match': match,
             'beats': [{'id': bid, 'match': .6, 'check': False} for bid, _ in beats],
             'sentences': [{'beat': bid, 'text': s, 'fit': .8 if n in poor else .9, 'check': n in poor}
-                          for n, (bid, s) in enumerate(lines, 1)]}))
+                          for n, (bid, s) in enumerate(lines, 1)]}), encoding='utf-8')
         if match < voice.MATCH:
             raise ValueError('take.wav does not sound like a reading of this script')
         return {bid: voice.Clip(Path('clip.wav'), 1., [0.] * len(text)) for bid, text in beats}

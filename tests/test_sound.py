@@ -193,14 +193,14 @@ def _mix_before(storyboard, tl, out_dir):
 @pytest.mark.parametrize('music', [True, False, {'primary': 'inventing_flight'}], ids=['music', 'silent', 'own-track'])
 def test_the_whiteboard_mix_is_unchanged(tmp_path, music):
     board, tl = _project(tmp_path, music=music)
-    (tmp_path / 'cues.json').write_text(json.dumps({'cues': _cues()}))    # cues alone do not change the whiteboard
+    (tmp_path / 'cues.json').write_text(json.dumps({'cues': _cues()}), encoding='utf-8')   # cues alone do not change the whiteboard
     assert mix.mix(board, tl, tmp_path).read_bytes() == _mix_before(board, tl, tmp_path).read_bytes()
 
 
 def test_animated_looks_are_mastered_with_their_sound_effects(tmp_path):
     board, tl = _project(tmp_path, look='collage')
     cues = _cues() + [{'t': 6.0, 'kind': 'cut', 'id': 'cut-a'}]
-    (tmp_path / 'cues.json').write_text(json.dumps({'cues': cues}))
+    (tmp_path / 'cues.json').write_text(json.dumps({'cues': cues}), encoding='utf-8')
     x = mix.read_wav(mix.mix(board, tl, tmp_path))[0]
     assert abs(master.loudness(x, SR) + 14) < 1 and master.true_peak(x, SR) <= -.95
     plain = mix.read_wav(mix.mix(dict(board, sfx=False), tl, tmp_path))[0]

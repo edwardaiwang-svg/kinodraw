@@ -201,8 +201,8 @@ def test_the_cli_and_the_studio_make_chalkboard_and_notebook_videos(tmp_path, mo
     for look in SKINS:
         assert f'{look}/explain' in offered
     monkeypatch.setattr(server, 'projects_root', lambda: tmp_path)
-    jid = server.create_project({'text': (FIX / 'tiny.md').read_text(), 'title': 'Notes', 'look': 'notebook',
-                                 'story': 'explain'})['job']
+    jid = server.create_project({'text': (FIX / 'tiny.md').read_text(encoding='utf-8'), 'title': 'Notes',
+                                 'look': 'notebook', 'story': 'explain'})['job']
     import time
     for _ in range(500):
         if server.JOBS.get(jid)['state'] in ('done', 'failed'):
@@ -252,8 +252,9 @@ def test_an_english_key_phrase_is_highlighted_as_a_word_not_inside_another_word(
 def test_the_studio_offers_its_styles_from_the_registry(monkeypatch):
     from kinodraw.studio import server
     static = Path(server.__file__).parent / 'static'
-    assert '<option value="chalkboard' not in (static / 'index.html').read_text()   # no second list in the page
-    assert 'STATE.styles' in (static / 'app.js').read_text()
+    # no second list in the page
+    assert '<option value="chalkboard' not in (static / 'index.html').read_text(encoding='utf-8')
+    assert 'STATE.styles' in (static / 'app.js').read_text(encoding='utf-8')
     styles_offered = server.state()['styles']
     assert [s['value'].split('/')[0] for s in styles_offered] == styles.ids(ready=True)
     assert {'value': 'collage/promo', 'label': styles.get('collage')['name']['en']} in styles_offered

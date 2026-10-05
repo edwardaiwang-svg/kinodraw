@@ -419,7 +419,7 @@ def main() -> None:
     src = Path(sys.argv[1]).expanduser()
     repo = src / 'fluentui-emoji'
     commit = subprocess.run(['git', '-C', str(repo), 'rev-parse', 'HEAD'], check=True,
-                            capture_output=True, text=True).stdout.strip()
+                            capture_output=True, text=True, encoding='utf-8').stdout.strip()
     zh = load_zh(src)
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob('fl_*.svg'):

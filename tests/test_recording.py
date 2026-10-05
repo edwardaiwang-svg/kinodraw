@@ -36,7 +36,7 @@ def test_a_project_is_narrated_from_its_recording_once_it_has_one(tmp_path, monk
     def cut(*args):
         calls.append(args)
         (project / 'voice' / 'recording-align.json').write_text(json.dumps(
-            {'match': .6, 'beats': [{'id': 'b002', 'match': .3, 'check': True}]}))
+            {'match': .6, 'beats': [{'id': 'b002', 'match': .3, 'check': True}]}), encoding='utf-8')
         return {}
     monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('guide.wav'), 1., [0.] * len(text)))
     monkeypatch.setattr(voice, 'from_recording', cut)
@@ -103,7 +103,7 @@ def take(tmp_path_factory):
 def aligned(take, tmp_path_factory):
     cache = tmp_path_factory.mktemp('project') / 'voice'
     clips = voice.from_recording(take[0], BEATS, 'en', cache)
-    return clips, json.loads((cache / 'recording-align.json').read_text()), cache
+    return clips, json.loads((cache / 'recording-align.json').read_text(encoding='utf-8')), cache
 
 
 @needs_models
@@ -152,7 +152,7 @@ def test_one_wrong_sentence_is_marked_and_its_beat_mates_are_not(tmp_path):
     this beat, and would mark sentences 1 and 3 with it if it did not)."""
     take = _sentence_take(tmp_path / 'take.wav', replace={2: 'The council met on Tuesday.'})
     voice.from_recording(take, BEATS, 'en', tmp_path / 'voice')
-    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
     assert [n for n, row in enumerate(report['sentences'], 1) if row['check']] == [2]
 
 
@@ -163,7 +163,7 @@ def test_a_skipped_sentence_is_marked_itself_not_the_next_beat(tmp_path):
     from run to run, so that one is allowed either way)."""
     take = _sentence_take(tmp_path / 'take.wav', skip=(7,))
     voice.from_recording(take, BEATS, 'en', tmp_path / 'voice')
-    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
     marked = {n for n, row in enumerate(report['sentences'], 1) if row['check']}
     assert 7 in marked and marked <= {6, 7, 8}, marked             # 6 to 8 are beat b003
 
@@ -267,7 +267,7 @@ def test_a_take_that_leaves_out_one_part_is_refused_and_names_it(tmp_path):
     assert 'Part of the script seems to be missing from your recording, around the part that says "Honey is one of ' \
            'the oldest foods people still eat." Read the whole script once through' in message
     assert f'kinodraw voice "{project}" --recording none' in message and 'Traceback' not in message
-    report = json.loads((project / 'voice' / 'recording-align.json').read_text())
+    report = json.loads((project / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
     assert next(row for row in report['beats'] if row['id'] == 'b002')['missing']
     assert not (project / 'build' / 'timeline.json').exists()                  # nothing goes on to render
 
@@ -391,7 +391,7 @@ def test_your_own_voice_works_where_text_files_are_not_utf8_by_default(tmp_path)
     env = {**os.environ, 'PYTHONUTF8': '0', 'PYTHONCOERCECLOCALE': '0', 'PYTHONIOENCODING': 'utf-8',
            'LC_ALL': 'en_US.ISO8859-1', 'LANG': 'en_US.ISO8859-1'}
     probe = subprocess.run([sys.executable, '-c', 'import locale, sys; print(locale.getpreferredencoding(False), '
-                            'sys.getfilesystemencoding())'], env=env, capture_output=True, text=True).stdout.split()
+                            'sys.getfilesystemencoding())'], env=env, capture_output=True, text=True, encoding='utf-8').stdout.split()
     if probe[0].lower().replace('-', '') == 'utf8' or probe[1].lower().replace('-', '') != 'utf8':
         pytest.skip(f'no non-UTF-8 text default with UTF-8 file names here: {probe}')
     project, script = tmp_path / 'Vidéo 我的', tmp_path / 'honey.md'
@@ -439,7 +439,7 @@ def test_a_chinese_take_is_cut_and_timed_as_well_as_an_english_one(tmp_path):
     path = tmp_path / 'take.wav'
     voice._write_wav(path, x + rng.normal(0, NOISE, len(x)).astype(np.float32))
     clips = voice.from_recording(path, ZH, 'zh', tmp_path / 'voice')
-    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text())
+    report = json.loads((tmp_path / 'voice' / 'recording-align.json').read_text(encoding='utf-8'))
     errors = []
     for k, ((bid, text), row) in enumerate(zip(ZH, report['beats'])):
         before = truth[k - 1]['end'] if k else 0.

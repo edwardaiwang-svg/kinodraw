@@ -72,7 +72,7 @@ def main():
         env.pop(var, None)
     env['NO_PROXY'] = '127.0.0.1,localhost'
     studio = subprocess.Popen([os.environ.get('KINODRAW_PYTHON', sys.executable), '-c', STUDIO], cwd=ROOT, env=env,
-                              stdout=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, text=True, encoding='utf-8')
     try:
         url = studio.stdout.readline().strip()
         assert url.startswith('http://127.0.0.1:'), url

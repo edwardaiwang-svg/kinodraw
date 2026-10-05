@@ -345,7 +345,7 @@ const api = () => new Promise((resolve) => { release = resolve; });
 let current = 'A', board = { project: 'A' }, dirty = false;
 const T = 't';
 '''
-    out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True, encoding='utf-8').stdout
     return json.loads(out)
 
 
@@ -416,7 +416,7 @@ async function upload() {                       // the user picks a file in Choo
 const shown = () => ({ doodle: board.beats[0].visuals[0].items[0].doodle, dirty, told: toasts.length > 0 });
 const moved = () => ({ ok: true, storyboard: { project: 'A', lang: 'en', beats: [{ id: 'b1', visuals: [{ items: [{ doodle: 'old' }] }] }] } });
 '''
-    out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True, encoding='utf-8').stdout
     return json.loads(out)
 
 

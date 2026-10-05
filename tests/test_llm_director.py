@@ -123,14 +123,15 @@ def test_command_provider_pipes_json_both_ways(tmp_path):
                     "req = json.load(sys.stdin)\n"
                     "assert set(req) == {'model', 'system', 'user', 'schema'} and req['model'] == 'm1'\n"
                     "section = json.loads(req['user'])\n"
-                    "print(json.dumps({'section_title': section['section_title'], 'hook': '', 'takeaway': '', 'beats': []}))\n")
+                    "print(json.dumps({'section_title': section['section_title'], 'hook': '', 'takeaway': '', 'beats': []}))\n",
+                    encoding='utf-8')
     provider = CommandProvider('m1', command=f'"{sys.executable}" "{tool}"')
     usage = Usage()
     out = provider.direct_section({'section_title': 'Part 1', 'beats': []}, usage)
     assert out['section_title'] == 'Part 1' and usage.calls == 1 and usage.cost_usd is None
     assert SECTION_SCHEMA['type'] == 'object'
     failing = tmp_path / 'fail.py'
-    failing.write_text("import sys\nsys.exit('no subscription')\n")
+    failing.write_text("import sys\nsys.exit('no subscription')\n", encoding='utf-8')
     with pytest.raises(ProviderError, match='no subscription'):
         CommandProvider('m1', command=f'"{sys.executable}" "{failing}"').direct_section({'section_title': 'x'}, Usage())
 

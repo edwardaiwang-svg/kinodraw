@@ -157,7 +157,7 @@ def test_cache_excludes_credentials_but_tracks_endpoint_model_voice_and_speed(tm
     other, more = speech_servers()
     assert voice_server.synthesize(text, 'en', cache, voice_server.Server(other, 'model-a', 'voice-a')).wav != a.wav
     assert len(more) == 1
-    assert all('test-token' not in file.read_text() for file in cache.glob('*.json'))
+    assert all('test-token' not in file.read_text(encoding='utf-8') for file in cache.glob('*.json'))
 
 
 def test_server_timings_skip_measured_sentence_pauses_and_keep_caption_spelling(tmp_path, speech_servers):
@@ -375,7 +375,7 @@ def test_studio_saves_only_valid_config_and_keys_stay_private(studio_http, speec
     assert cfg['voice_server']['url'] == url and cfg['voice_server']['model'] == 'test-model'
     assert cfg['voice_server']['voice'] == 'test-voice' and cfg['voice_server']['on'] is True
     assert saved == [(url, 'test-token')] and not calls
-    assert 'test-token' not in studio_server.CONFIG.read_text()
+    assert 'test-token' not in studio_server.CONFIG.read_text(encoding='utf-8')
     assert 'test-token' not in json.dumps(info)
     for update in ({**body, 'url': 'file:///tmp/speech'}, {**body, 'model': ''},
                    {**body, 'on': False, 'url': 'ftp://x'}, {**body, 'on': False, 'url': ''}):
@@ -475,7 +475,7 @@ def test_published_credits_describe_server_and_preserve_local_and_own_voice(tmp_
     build = folder / 'build'
     build.mkdir()
     for ext in ('srt', 'vtt'):
-        (build / f'captions.{ext}').write_text('captions')
+        (build / f'captions.{ext}').write_text('captions', encoding='utf-8')
     tl = {'duration': 1, 'chapters': [{'id': c['id'], 'title': c['title'].get(lang, ''), 'start': 0}
                                      for c in board['chapters']]}
     pipeline._save(build / 'timeline.json', tl)
@@ -486,18 +486,19 @@ def test_published_credits_describe_server_and_preserve_local_and_own_voice(tmp_
     monkeypatch.setattr(package, 'thumbnail', lambda *a, **k: None)
     pipeline.finish(folder)
     description = next(folder.glob('*-description.txt'))
-    credit = description.read_text()
+    credit = description.read_text(encoding='utf-8')
     assert 'test-model' in credit and 'test-voice' in credit and 'Kokoro' not in credit
     cfg = pipeline.settings(folder)
     cfg['recording'] = 'recording.wav'
     pipeline._save(folder / 'project.json', cfg)
     pipeline.finish(folder)
-    assert own in description.read_text() and 'test-model' not in description.read_text()
+    credit = description.read_text(encoding='utf-8')
+    assert own in credit and 'test-model' not in credit
     cfg.pop('recording')
     cfg.pop('voice_server')
     pipeline._save(folder / 'project.json', cfg)
     pipeline.finish(folder)
-    assert kokoro in description.read_text()
+    assert kokoro in description.read_text(encoding='utf-8')
 
 
 def test_cli_new_uses_env_defaults_and_explicit_server_overrides(tmp_path, monkeypatch):

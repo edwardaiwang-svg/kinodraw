@@ -11,7 +11,7 @@ FIX = Path(__file__).parent / 'fixtures'
 
 def test_new_project_writes_the_dials_into_the_storyboard(tmp_path):
     pipeline.new_project(FIX / 'tiny.md', tmp_path / 'p', direction={'look': 'collage', 'story': 'promo', 'motion': None})
-    board = json.loads((tmp_path / 'p' / 'storyboard.json').read_text())
+    board = json.loads((tmp_path / 'p' / 'storyboard.json').read_text(encoding='utf-8'))
     assert board['look'] == 'collage' and board['story'] == 'promo'
     assert board.get('motion') in (None, 'lively')                              # an unset dial keeps its default
 
@@ -66,9 +66,9 @@ def test_the_command_line_can_name_the_brand(tmp_path, monkeypatch):
     cli.main(['new', script, '-o', str(tmp_path / 'p'), '--look', 'collage', '--story', 'promo', '--brand', 'Khan Academy',
               '--brand-url', 'khanacademy.org', '--brand-cta', 'Start learning'])
     cli.main(['new', script, '-o', str(tmp_path / 'q'), '--look', 'collage', '--story', 'promo'])
-    assert json.loads((tmp_path / 'p' / 'storyboard.json').read_text())['brand'] == \
+    assert json.loads((tmp_path / 'p' / 'storyboard.json').read_text(encoding='utf-8'))['brand'] == \
         {'name': 'Khan Academy', 'url': 'khanacademy.org', 'cta': 'Start learning'}
-    assert 'brand' not in json.loads((tmp_path / 'q' / 'storyboard.json').read_text())     # left to the script
+    assert 'brand' not in json.loads((tmp_path / 'q' / 'storyboard.json').read_text(encoding='utf-8'))   # left to the script
 
 
 def test_a_revealed_name_of_several_words_wins_over_the_website(tmp_path):

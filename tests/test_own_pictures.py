@@ -145,7 +145,7 @@ def test_svg_traces_or_falls_back_to_reveal_and_unreadable_is_plain(project):
     drawing = ink.picture_drawing(file, (200, 100))
     assert isinstance(drawing, ink.RevealDrawing) and drawing.image.getbbox()
     broken = path / 'pictures/broken.png'
-    broken.write_text('not a picture')
+    broken.write_text('not a picture', encoding='utf-8')
     with pytest.raises(ValueError, match='KinoDraw couldn’t open the picture “broken.png”'):
         ink.picture_drawing(broken, (200, 100))
 

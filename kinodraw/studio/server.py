@@ -421,7 +421,7 @@ def list_pictures(name: str) -> list[dict]:
     """The project's pictures available for manual picking, in filename order."""
     folder = _project(name) / PICTURES
     pictures = []
-    for path in sorted(folder.glob('*')):
+    for path in sorted(folder.glob('*'), key=lambda p: p.name):   # by name: Windows paths sort ignoring case
         if path.name.startswith('.') or path.suffix.lower() not in PICTURE_TYPES:
             continue
         if resolve(OWN + path.name, folder.parent):

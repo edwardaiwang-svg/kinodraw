@@ -14,7 +14,8 @@ SKIP_DIRS = {'.git', '.venv', 'private_presets', 'node_modules', 'dist', 'build'
 BINARY = {'.png', '.jpg', '.jpeg', '.mp4', '.mp3', '.wav', '.ttf', '.otf', '.npz', '.icns', '.ico', '.gif', '.onnx', '.bin'}
 # The private names live outside the repository (private_presets/ is git-ignored), so the list itself never ships.
 TERMS_FILE = ROOT / 'private_presets' / 'publish_terms.txt'
-PRIVATE = [t.strip() for t in TERMS_FILE.read_text().splitlines() if t.strip() and not t.startswith('#')] \
+PRIVATE = [t.strip() for t in TERMS_FILE.read_text(encoding='utf-8').splitlines()
+           if t.strip() and not t.startswith('#')] \
     if TERMS_FILE.exists() else []
 KEYS = [r'sk-[A-Za-z0-9_-]{20,}', r'sk-ant-[A-Za-z0-9_-]+', r'AKIA[0-9A-Z]{16}', r'ghp_[A-Za-z0-9]{30,}',
         r'github_pat_[A-Za-z0-9_]{22,}', r'hf_[A-Za-z0-9]{30,}',

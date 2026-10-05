@@ -61,7 +61,7 @@ def test_link_previews_and_search_engines_get_a_title_description_and_image():
     from PIL import Image
     assert Image.open(SITE.parent / image).size == (1200, 630)
     sitemap = (SITE.parent / 'sitemap.xml').read_text(encoding='utf-8')
-    assert f'<loc>{home}</loc>' in sitemap and home + 'sitemap.xml' in (SITE.parent / 'robots.txt').read_text()
+    assert f'<loc>{home}</loc>' in sitemap and home + 'sitemap.xml' in (SITE.parent / 'robots.txt').read_text(encoding='utf-8')
 
 
 def test_the_download_offers_every_computer_and_finds_the_installers_ci_publishes():
@@ -102,7 +102,7 @@ def _check_platform_rows(rows, prelude=''):
     assert function, 'no pure platform detector'
     program = prelude + function.group(0) + '\nconst rows = ' + json.dumps(rows) + ';\n'
     program += 'console.log(JSON.stringify(rows.map(([ua, data, touch]) => kinodrawPlatform(ua, data ?? undefined, touch))));'
-    run = subprocess.run([node, '-e', program], capture_output=True, text=True, check=True)
+    run = subprocess.run([node, '-e', program], capture_output=True, text=True, check=True, encoding='utf-8')
     results = json.loads(run.stdout)
     assert len(results) == len(rows)
     for row, result in zip(rows, results):

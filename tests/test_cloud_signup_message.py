@@ -113,6 +113,6 @@ const fetch = async () => ({ ok: false, statusText: 'Service Unavailable',
   json: async () => ({ error: 'Sign-in emails can\\'t go out right now; try again later.', code: 'email_unavailable' }) });
 '''
     run = stage + api + '\n(async () => {\n' + handler + '\nconsole.log(JSON.stringify({ toasts, note: els["#c-note"] }));\n})();'
-    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True, encoding='utf-8').stdout)
     assert out['toasts'] == []                                    # no passing toast: the sentence stays in Settings
     assert out['note']['textContent'] == "Sign-in emails can't go out right now; try again later." and not out['note']['hidden']

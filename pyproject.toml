@@ -41,3 +41,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["kinodraw"]
+
+[tool.pytest.ini_options]
+# Windows reads and writes text as cp1252 unless told otherwise, so KinoDraw names utf-8 everywhere; run
+# `python -X warn_default_encoding -W error::EncodingWarning -m pytest` to find any place that doesn't. The packages
+# below are other people's code and leave it out only on plain-ASCII files (os.devnull; the embedding models' JSON,
+# pinned by sha256 in kinodraw/director/match.py), so they don't fail that run.
+filterwarnings = [
+    "ignore::EncodingWarning:imageio_ffmpeg",
+    "ignore::EncodingWarning:fastembed",
+]

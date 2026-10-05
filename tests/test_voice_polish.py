@@ -252,5 +252,5 @@ def test_the_studio_picks_voices_for_the_language_the_script_will_be_read_in():
              '', '蜂蜜 honey bees work hard all day', '¿Cómo comen las plantas? Las plantas usan la luz del sol.',
              'El Niño warms the Pacific and changes the weather.']
     out = subprocess.run([node, '-e', source + f'\nconsole.log(JSON.stringify({json.dumps(texts)}.map(scriptLang)))'],
-                         capture_output=True, text=True, check=True).stdout
+                         capture_output=True, text=True, check=True, encoding='utf-8').stdout
     assert json.loads(out) == [ingest.detect_lang(t) for t in texts]

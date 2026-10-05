@@ -34,8 +34,9 @@ def _old_install(base: Path):
     (old / 'Cache' / 'embed').mkdir(parents=True)
     (old / 'Cache' / 'embed' / 'model.onnx').write_bytes(b'embed')
     (base / 'Videos' / 'Doodle Studio' / 'My Video').mkdir(parents=True)
-    (base / 'Videos' / 'Doodle Studio' / 'My Video' / 'project.json').write_text('{}')
-    (old / 'studio.json').write_text(json.dumps({'projects': str(base / 'Videos' / 'Doodle Studio'), 'credit': False}))
+    (base / 'Videos' / 'Doodle Studio' / 'My Video' / 'project.json').write_text('{}', encoding='utf-8')
+    (old / 'studio.json').write_text(json.dumps({'projects': str(base / 'Videos' / 'Doodle Studio'), 'credit': False}),
+                                     encoding='utf-8')
     return old
 
 
@@ -51,7 +52,7 @@ def test_the_first_run_moves_doodle_studios_folders(tmp_path, monkeypatch):
     assert (new / 'Cache' / 'embed' / 'model.onnx').read_bytes() == b'embed'
     assert (tmp_path / 'Videos' / 'KinoDraw' / 'My Video' / 'project.json').exists()
     assert not (tmp_path / 'Local' / 'DoodleStudio').exists() and not (tmp_path / 'Videos' / 'Doodle Studio').exists()
-    settings = json.loads((new / 'studio.json').read_text())
+    settings = json.loads((new / 'studio.json').read_text(encoding='utf-8'))
     assert settings == {'projects': str(tmp_path / 'Videos' / 'KinoDraw'), 'credit': False}   # the saved folder follows
 
 
@@ -63,7 +64,7 @@ def test_migration_runs_once_and_never_overwrites(tmp_path, monkeypatch):
     assert len(migrate(legacy_moves(), tmp_path / 'none.json')) == 2       # data (with config and cache), projects
     assert migrate(legacy_moves(), tmp_path / 'none.json') == []
     for new in (tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw', tmp_path / 'Videos' / 'KinoDraw'):   # a non-empty new
-        (new / 'keep.txt').write_text('mine')                                                     # folder is never replaced
+        (new / 'keep.txt').write_text('mine', encoding='utf-8')                                   # folder is never replaced
     again = _old_install(tmp_path)                                          # an old copy reappears: it stays put
     assert migrate(legacy_moves(), tmp_path / 'none.json') == [] and (again / 'models').is_dir()
     assert (tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw' / 'models' / 'voices-v1.0.bin').exists()
@@ -100,7 +101,7 @@ def test_a_doodle_studio_sign_in_is_not_shown_as_a_kinodraw_one(tmp_path, monkey
     from kinodraw.studio import server
     _fake_dirs(monkeypatch, tmp_path)
     old = _old_install(tmp_path)
-    (old / 'saved-keys.json').write_text(json.dumps(['cloud-token', 'openai']))
+    (old / 'saved-keys.json').write_text(json.dumps(['cloud-token', 'openai']), encoding='utf-8')
     new = tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw'
     monkeypatch.setattr(providers, 'SAVED', new / 'saved-keys.json')
     monkeypatch.setattr(server, 'CONFIG', new / 'studio.json')
@@ -112,7 +113,8 @@ def test_a_doodle_studio_sign_in_is_not_shown_as_a_kinodraw_one(tmp_path, monkey
     state = server.state()
     assert not state['cloud_signed_in'] and state['default_director'] == 'rules'     # the sign-in prompt shows
     assert not any(state['keys'].values())                                           # "re-enter any saved keys"
-    assert (new / 'models' / 'voices-v1.0.bin').exists() and json.loads((new / 'studio.json').read_text())['credit'] is False
+    assert (new / 'models' / 'voices-v1.0.bin').exists()
+    assert json.loads((new / 'studio.json').read_text(encoding='utf-8'))['credit'] is False
     providers.remember('openai')                          # KinoDraw's own list is never touched by a later run
     assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [] and providers.saved() == {'openai'}
 
@@ -123,7 +125,7 @@ def _env_probe(env: dict) -> list:
             'print(json.dumps([str(voice.MODEL_DIR), str(match.CACHE), cloud.URL, cloud._token()]))')
     clean = {k: v for k, v in os.environ.items() if not k.startswith(('KINODRAW_', 'DOODLE_'))}
     out = subprocess.run([sys.executable, '-c', code], cwd=ROOT, env=clean | env, capture_output=True, text=True,
-                         check=True).stdout
+                         check=True, encoding='utf-8').stdout
     return json.loads(out.strip().splitlines()[-1])
 
 
@@ -207,9 +209,9 @@ def test_a_folder_that_could_not_move_comes_over_on_a_later_launch(tmp_path, mon
     assert set(paths.left_behind) == {old, videos / 'Doodle Studio'}
     (new / 'models').mkdir(parents=True)                       # KinoDraw downloads the English voice again,
     (new / 'models' / 'voices-v1.0.bin').write_bytes(b'new voice')
-    (new / 'studio.json').write_text(json.dumps({'credit': True}))     # saves a setting, makes the sample video
+    (new / 'studio.json').write_text(json.dumps({'credit': True}), encoding='utf-8')   # saves a setting, makes the sample video
     (videos / 'KinoDraw' / 'My Video').mkdir(parents=True)
-    (videos / 'KinoDraw' / 'My Video' / 'project.json').write_text('{"kinodraw": 1}')
+    (videos / 'KinoDraw' / 'My Video' / 'project.json').write_text('{"kinodraw": 1}', encoding='utf-8')
     locked.discard(old)                                        # next launch, a model file is still in use
     assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [(videos / 'Doodle Studio', videos / 'KinoDraw')]
     assert paths.left_behind == [old] and (new / 'Cache' / 'embed' / 'model.onnx').read_bytes() == b'embed'
@@ -218,9 +220,9 @@ def test_a_folder_that_could_not_move_comes_over_on_a_later_launch(tmp_path, mon
     assert (new / 'models' / 'kokoro-zh.onnx').read_bytes() == b'zh'
     assert (new / 'models' / 'voices-v1.0.bin').read_bytes() == b'new voice'        # KinoDraw's own file stays
     assert (old / 'models' / 'voices-v1.0.bin').read_bytes() == b'voice'            # nothing is deleted
-    assert (videos / 'KinoDraw' / 'My Video' / 'project.json').read_text() == '{"kinodraw": 1}'
-    assert (videos / 'KinoDraw' / 'My Video (Doodle Studio)' / 'project.json').read_text() == '{}'
-    assert json.loads((new / 'studio.json').read_text()) == {'projects': str(videos / 'KinoDraw'), 'credit': True}
+    assert (videos / 'KinoDraw' / 'My Video' / 'project.json').read_text(encoding='utf-8') == '{"kinodraw": 1}'
+    assert (videos / 'KinoDraw' / 'My Video (Doodle Studio)' / 'project.json').read_text(encoding='utf-8') == '{}'
+    assert json.loads((new / 'studio.json').read_text(encoding='utf-8')) == {'projects': str(videos / 'KinoDraw'), 'credit': True}
     assert REAL_MIGRATE(legacy_moves(), new / 'studio.json') == [] and paths.left_behind == []   # done for good
     assert not (paths.config_dir() / paths.PENDING).exists()
 
@@ -254,10 +256,10 @@ def test_a_projects_folder_inside_doodle_studios_follows_it(tmp_path, monkeypatc
     old = _old_install(tmp_path)
     videos, new = tmp_path / 'Videos', tmp_path / 'Local' / 'KinoDraw' / 'KinoDraw'
     (videos / 'Doodle Studio' / 'Class' / 'Lesson 1').mkdir(parents=True)
-    (videos / 'Doodle Studio' / 'Class' / 'Lesson 1' / 'project.json').write_text('{}')
-    (old / 'studio.json').write_text(json.dumps({'projects': str(videos / 'Doodle Studio' / 'Class')}))
+    (videos / 'Doodle Studio' / 'Class' / 'Lesson 1' / 'project.json').write_text('{}', encoding='utf-8')
+    (old / 'studio.json').write_text(json.dumps({'projects': str(videos / 'Doodle Studio' / 'Class')}), encoding='utf-8')
     assert len(REAL_MIGRATE(legacy_moves(), new / 'studio.json')) == 2
-    assert json.loads((new / 'studio.json').read_text()) == {'projects': str(videos / 'KinoDraw' / 'Class')}
+    assert json.loads((new / 'studio.json').read_text(encoding='utf-8')) == {'projects': str(videos / 'KinoDraw' / 'Class')}
     assert (videos / 'KinoDraw' / 'Class' / 'Lesson 1' / 'project.json').exists()
 
 

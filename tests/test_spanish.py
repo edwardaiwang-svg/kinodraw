@@ -52,7 +52,8 @@ def test_studio_detect_matches_the_server(tmp_path):
     texts = ENGLISH_WITH_SPANISH_NAMES + SPANISH_SHORT + [(FIX / 'miel_es.md').read_text(encoding='utf-8')]
     (tmp_path / 'detect.js').write_text(source + f'\nconsole.log(JSON.stringify({json.dumps(texts)}.map(scriptLang)));',
                                         encoding='utf-8')
-    out = subprocess.run(['node', str(tmp_path / 'detect.js')], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(['node', str(tmp_path / 'detect.js')], capture_output=True, text=True, check=True,
+                         encoding='utf-8').stdout
     assert json.loads(out) == [ingest.detect_lang(t) for t in texts]
 
 
@@ -287,14 +288,15 @@ def test_spanish_sources_and_published_metadata(tmp_path, monkeypatch):
 
     monkeypatch.setattr(package, '_run', run)
     package.mux(tl, tmp_path / 'silent.mp4', tmp_path / 'mix.wav', output, 'es', board['title']['es'], tmp_path)
-    assert 'language=spa' in (tmp_path / 'chapters.ffmetadata').read_text()
+    assert 'language=spa' in (tmp_path / 'chapters.ffmetadata').read_text(encoding='utf-8')
     assert calls and output.exists()
     write_captions(tl['captions'], tmp_path)
     package.publish(board, tl, 'es', tmp_path, tmp_path, 'miel', tmp_path)
-    description = (tmp_path / 'miel-description.txt').read_text()
+    description = (tmp_path / 'miel-description.txt').read_text(encoding='utf-8')
     assert 'Capítulos' in description and 'Hecho con KinoDraw.' in description
-    assert '¡Gracias por ver!' in (tmp_path / 'miel-transcript.md').read_text()
+    assert '¡Gracias por ver!' in (tmp_path / 'miel-transcript.md').read_text(encoding='utf-8')
     assert (tmp_path / 'miel-thumbnail.png').is_file()
-    assert '¿Sabías' in (tmp_path / 'miel.srt').read_text() and '¡Gracias por ver!' in (tmp_path / 'miel.vtt').read_text()
+    assert '¿Sabías' in (tmp_path / 'miel.srt').read_text(encoding='utf-8')
+    assert '¡Gracias por ver!' in (tmp_path / 'miel.vtt').read_text(encoding='utf-8')
     ch = {'kind': 'section', 'speaker': {'name': {'es': 'Ana'}, 'show': {'es': 'Ciencia'}, 'date': {'es': '2026'}}}
     assert render.source_line(ch, 'es') == 'Fuente: Ana · Ciencia, 2026'

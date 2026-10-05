@@ -336,7 +336,7 @@ const fetch = async () => reply;
   out.push([await needsCloudSignIn('rules', 'en')]);
   console.log(JSON.stringify(out));
 })();'''
-    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True, encoding='utf-8').stdout)
     assert out == [[False, 0, 0, True], [True, ['Sign in, please.'], 1, None, 'Sign in, please.'], [False]]
 
 
@@ -363,7 +363,7 @@ const fetch = async (url) => (asked.push(url), { ok: false, statusText: 'Forbidd
   out.push([await needsCloudSignIn('cloud', 'en'), toasts.length, opened.length, asked.length, cloudAsks]);
   console.log(JSON.stringify(out));
 })();'''
-    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True, encoding='utf-8').stdout)
     assert out == [[False, 0, 0, 0, ''], [True, 1, 1, 1, 'Sign in, please.']]
 
 
@@ -403,7 +403,7 @@ const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="
   out.push([asked, STATE.cloud]);
   console.log(JSON.stringify(out));
 })();'''
-    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True, encoding='utf-8').stdout)
     unknown, asks, allowed, spanish = out
     assert 'while KinoDraw Cloud allows it' in unknown                 # Settings before the cloud was asked: no promise
     assert asks == ['Sign in with your email in Settings, or choose Offline.'] * 2
@@ -426,5 +426,5 @@ for (const STATE of [{ cloud_available: true, cloud: null, install_id: null },
   out.push((cloud.match(/This installation's ID: <code>(\\w+)<\\/code>.*?privacy@doodlecloud\\.org/) || [null, null])[1]);
 }
 console.log(JSON.stringify(out));"""
-    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True).stdout)
+    out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True, encoding='utf-8').stdout)
     assert out == [None, 'a1', 'b2']

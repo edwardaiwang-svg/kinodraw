@@ -220,13 +220,13 @@ def test_own_key_directors_pick_through_the_same_call(studio, fake_cloud, tmp_pa
     program = tmp_path / 'pick.py'                              # "My own command": gets the schema, prints the pick
     program.write_text('import json, sys\nreq = json.load(sys.stdin)\n'
                        'json.dump({"seen": req}, open(sys.argv[1], "w"))\n'
-                       'print(json.dumps({"style": "notebook/explain", "reason": "Study notes"}))\n')
+                       'print(json.dumps({"style": "notebook/explain", "reason": "Study notes"}))\n', encoding='utf-8')
     log = tmp_path / 'seen.json'
     monkeypatch.setenv('KINODRAW_DIRECTOR_COMMAND', f'"{sys.executable}" "{program}" "{log}"')
     monkeypatch.setattr(providers, 'api_key', lambda name: providers.paths.getenv(providers.KEY_ENV[name]))
     _, board, cfg, _ = studio(director='command', title='By command')
     assert board['look'] == 'notebook' and cfg['style_pick']['by'] == 'command'
-    seen = json.loads(log.read_text())['seen']
+    seen = json.loads(log.read_text(encoding='utf-8'))['seen']
     assert seen['schema']['properties']['style']['enum'] == [o['id'] for o in json.loads(seen['user'])['options']]
     fake_cloud.pick = {'style': 'pixel_quest/explain', 'reason': 'Playful'}   # an OpenAI-compatible server
     _, board, cfg, _ = studio(director='compat', title='By server', model='local-model', base_url=fake_cloud.url + '/v1')

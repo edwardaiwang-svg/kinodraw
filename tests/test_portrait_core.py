@@ -40,7 +40,7 @@ def native(board, tmp_path_factory):
 
 
 def test_registry_and_measured_layout(monkeypatch):
-    entries = json.loads(styles.REGISTRY.read_text())['looks']
+    entries = json.loads(styles.REGISTRY.read_text(encoding='utf-8'))['looks']
     for entry in entries:
         look = entry['id']
         assert entry['portrait'] == styles.portrait(look) == 'letterbox'
@@ -188,7 +188,7 @@ def test_segments_forward_only_explicit_portrait(tmp_path, monkeypatch, portrait
     def popen(cmd):
         commands.append(cmd)
         segment = Path(cmd[cmd.index('--output') + 1])
-        Path(str(segment) + '.json').write_text(json.dumps({'warnings': []}))
+        Path(str(segment) + '.json').write_text(json.dumps({'warnings': []}), encoding='utf-8')
         return SimpleNamespace(wait=lambda: 0)
     monkeypatch.setattr(render.subprocess, 'Popen', popen)
     monkeypatch.setattr(render.subprocess, 'run', lambda *a, **k: None)
@@ -219,7 +219,7 @@ def test_manifest_records_only_explicit_portrait(tmp_path, monkeypatch, portrait
     if portrait is not None:
         args += ['--portrait', portrait]
     render.main(args)
-    manifest = json.loads(Path(str(output) + '.json').read_text())
+    manifest = json.loads(Path(str(output) + '.json').read_text(encoding='utf-8'))
     assert ('portrait' in manifest) == (portrait is not None)
     if portrait is not None:
         assert manifest['portrait'] == portrait

@@ -63,7 +63,7 @@ def test_studio_creates_and_changes_format(tmp_path, monkeypatch):
     monkeypatch.setattr(providers, 'saved', lambda: set())
     monkeypatch.setattr(director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
     assert [f['value'] for f in server.state()['formats']] == list(pipeline.ASPECTS)
-    created = server.create_project({'text': TINY.read_text(), 'aspect': '9:16'})
+    created = server.create_project({'text': TINY.read_text(encoding='utf-8'), 'aspect': '9:16'})
     deadline = time.monotonic() + 10
     while server.JOBS.get(created['job'])['state'] not in ('done', 'failed') and time.monotonic() < deadline:
         time.sleep(.02)
@@ -72,7 +72,7 @@ def test_studio_creates_and_changes_format(tmp_path, monkeypatch):
     project = tmp_path / created['project']
     assert pipeline.settings(project)['aspect'] == '9:16'
     with pytest.raises(ValueError, match='aspect must'):
-        server.create_project({'text': TINY.read_text(), 'aspect': '4:3'})
+        server.create_project({'text': TINY.read_text(encoding='utf-8'), 'aspect': '4:3'})
 
     httpd, url = server.serve(0)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -106,7 +106,7 @@ def test_registry_restrictions_and_default(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='does not support'):
         cli.main(['new', str(TINY), '-o', str(tmp_path / 'bad'), '--aspect', '9:16'])
     with pytest.raises(ValueError, match='does not support'):
-        server.create_project({'text': TINY.read_text(), 'aspect': '9:16'})
+        server.create_project({'text': TINY.read_text(encoding='utf-8'), 'aspect': '9:16'})
     with pytest.raises(ValueError, match='does not support'):
         server.set_format('default', {'aspect': '9:16'})
     assert pipeline.settings(project)['aspect'] == '16:9'
@@ -153,7 +153,7 @@ def test_render_passes_format_to_production_and_segments(tmp_path, monkeypatch, 
     monkeypatch.setattr(pipeline.renderer, 'encode', lambda *a: None)
     pipeline.render(tmp_path, workers=workers)
     assert calls == ([('segments', {'aspect': aspect})] if workers == 2 else []) + [('production', {'aspect': aspect})]
-    assert json.loads((build / 'cues.json').read_text()) == {'cues': ['cue']}
+    assert json.loads((build / 'cues.json').read_text(encoding='utf-8')) == {'cues': ['cue']}
 
 
 @pytest.mark.parametrize('aspect', pipeline.ASPECTS)
