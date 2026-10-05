@@ -259,6 +259,8 @@ def studio(tmp_path, monkeypatch):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def call(path, body=None):
+        if body is not None and path.endswith('/reorder'):
+            body = {'revision': server._store(root / 'Honey').load()['revision'], **body}
         data = None if body is None else json.dumps(body).encode()
         request = urllib.request.Request(url + path.lstrip('/'), data=data,
                                          headers={'X-Studio-Token': server.Handler.token})
@@ -326,6 +328,18 @@ def test_a_rejected_reorder_does_not_write_the_storyboard(studio, invalid):
     assert path.read_bytes() == before
 
 
+def test_stale_reorder_is_a_conflict_and_preserves_newer_board(studio):
+    store = server._store(studio.project)
+    old = store.load()
+    newer = deepcopy(old['storyboard'])
+    newer['title']['en'] = 'Newer saved title'
+    store.save(newer, expected_revision=old['revision'])
+    status, result = studio('/api/projects/Honey/reorder',
+        {'revision': old['revision'], 'storyboard': old['storyboard'], 'beat': studio.beat, 'visual': 1, 'to': 0})
+    assert status == 409 and result['code'] == 'revision_conflict'
+    assert store.load()['storyboard'] == newer
+
+
 def _run_reorder_js(script):
     """Run the Studio's reorderPicture with a held-back server reply, in node with tiny stand-ins for the page."""
     import shutil
@@ -343,6 +357,8 @@ const toast = () => {}, renderBoard = () => { rendered++; }, showBeatPreview = (
 const document = { querySelector: () => null };
 const api = () => new Promise((resolve) => { release = resolve; });
 let current = 'A', board = { project: 'A' }, dirty = false;
+let revision = 'test', history = [], future = [], lastEdit = '';
+const editState = () => JSON.stringify(board), updateHistory = () => {};
 const T = 't';
 '''
     out = subprocess.run([node, '-e', stage + source + script], capture_output=True, text=True, check=True, encoding='utf-8').stdout
@@ -403,6 +419,8 @@ const toast = (msg) => toasts.push(msg), renderBoard = () => {}, showBeatPreview
 const modal = () => $('#modal-body'), closeModal = () => {}, esc = (s) => s, doodleSrc = (id) => id;
 const document = { querySelector: () => null };
 let current = 'A', dirty = false;
+let revision = 'test', history = [], future = [], lastEdit = '';
+const editState = () => JSON.stringify(board), updateHistory = () => {};
 let board = { project: 'A', lang: 'en', beats: [{ id: 'b1', visuals: [{ items: [{ doodle: 'old' }] }] }] };
 const T = 't';
 function markDirty() { dirty = true; }
