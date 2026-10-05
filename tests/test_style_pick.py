@@ -1,6 +1,7 @@
 """"Choose for me" on the Style menu: the video's director picks a style that works for this video (director/style.py).
 KinoDraw Cloud is a local fake here; nothing reaches the real service."""
 import json
+import re
 import socket
 import sys
 import threading
@@ -11,9 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from kinodraw import ingest, pipeline, styles
+from kinodraw import ingest, pipeline, script, styles
 from kinodraw.director import style
 from kinodraw.director.llm import cloud, providers
+from kinodraw.director.v3.rules import from_rules
+from kinodraw.director.v3.schema import PLAN_SCHEMA
 from kinodraw.studio import server
 
 MATH = ('# Fractions made easy\n\nA fraction is part of a whole, and math teachers love fractions.\n\n'
@@ -31,6 +34,7 @@ class FakeCloud:
 
     def __init__(self):
         self.pick, self.seen = {'style': 'chalkboard/explain', 'reason': 'A math lesson suits a chalkboard'}, []
+        self.plan = None
         self.anonymous, self.refused = [], set()     # tokens /v1/anonymous gives out in turn; tokens /v1/style refuses (401)
         fake = self
 
@@ -45,7 +49,13 @@ class FakeCloud:
                     self.send_response(401)
                     self.end_headers()
                     return
-                if self.path == '/v1/style':
+                if self.path == '/v3/videos':
+                    out = {'video_id': 'test-v3-video'}
+                elif self.path == '/v3/plan' and fake.plan is not None:
+                    assert body['video_id'] == 'test-v3-video'
+                    out = {'plan': fake.plan, 'contract_version': 3,
+                           'usage': {'model': 'gpt-6-luna', 'input_tokens': 300, 'output_tokens': 200}}
+                elif self.path == '/v1/style':
                     out = {'pick': fake.pick, 'usage': {'model': 'gpt-6-luna', 'input_tokens': 300, 'output_tokens': 20}}
                 elif self.path == '/v1/anonymous' and fake.anonymous:     # open access on; otherwise a 404, as before it
                     out = {'token': fake.anonymous.pop(0), 'plan': 'free', 'remaining': None, 'anonymous': True}
@@ -76,6 +86,7 @@ def fake_cloud(monkeypatch, tmp_path):
     monkeypatch.setattr(cloud, 'URL', fake.url)
     monkeypatch.setattr(cloud, 'INSTALL_ID', tmp_path / 'install-id')     # signed out, the app asks for an anonymous token
     monkeypatch.setattr(cloud, '_anon_token', None)
+    monkeypatch.setattr(providers, 'SAVED', tmp_path / 'saved-keys.json')
     monkeypatch.setenv('KINODRAW_CLOUD_TOKEN', 'test-token')
     yield fake
     fake.httpd.shutdown()
@@ -89,7 +100,8 @@ def studio(tmp_path, monkeypatch):
     monkeypatch.setattr(server.director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
 
     def create(**body):
-        created = server.create_project({'text': MATH, 'title': 'Fractions', 'look': 'auto', **body})
+        created = server.create_project({'text': MATH, 'title': 'Fractions', 'look': 'auto',
+                                         'director_v3': False, **body})
         job = server.JOBS.get(created['job'])
         deadline = time.monotonic() + 20
         while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:
@@ -170,7 +182,11 @@ def test_with_no_sign_in_a_spanish_video_is_chosen_for_offline_without_asking_th
     _, _, cfg, _ = studio(director='cloud', text=SPANISH, title='Abejas', lang='es')
     pick = cfg['style_pick']
     assert pick['by'] == 'rules'
-    assert pick['note'] == 'KinoDraw Cloud AI chooses for English and Chinese videos only; the offline word rules chose'
+    assert cfg['director'] == 'rules' and cfg['director_v3'] is False
+    # Studio routes Spanish offline before choosing; the legacy Cloud chooser still explains its language gate.
+    direct_pick = style.choose(ingest.read(SPANISH), 'cloud', 'es', '16:9')
+    assert direct_pick['by'] == pick['by'] and direct_pick['style'] == pick['style']
+    assert direct_pick['note'] == 'KinoDraw Cloud AI chooses for English and Chinese videos only; the offline word rules chose'
     assert fake_cloud.seen == [] and not cloud.INSTALL_ID.exists()
 
 
@@ -237,11 +253,13 @@ def test_own_key_directors_pick_through_the_same_call(studio, fake_cloud, tmp_pa
 def test_re_planning_keeps_the_pick(studio, fake_cloud, monkeypatch):
     _, _, cfg, name = studio(director='cloud')
     monkeypatch.setattr(style, 'choose', lambda *a, **k: pytest.fail('re-plan picked a style again'))
-    job = server.JOBS.get(server.redirect(name, {'director': 'cloud'})['job'])
-    while job['state'] not in ('done', 'failed'):
+    path = server.projects_root() / name
+    revision = server._store(path).load()['revision']
+    job = server.JOBS.get(server.redirect(name, {'director': 'cloud', 'revision': revision})['job'])
+    deadline = time.monotonic() + 20
+    while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:
         time.sleep(.02)
     assert job['state'] == 'done', job['error']
-    path = server.projects_root() / name
     assert pipeline.storyboard(path)['look'] == 'chalkboard' and pipeline.settings(path)['style_pick'] == cfg['style_pick']
     assert len(fake_cloud.seen) == 1
 
@@ -252,7 +270,16 @@ def test_the_style_menu_offers_choose_for_me_named_by_its_director():
     assert 'id="style-auto" value="auto"' in js and 'Choose for me (${' in js
     for mode, who in style.BY.items():                         # the menu names who decides, as the pick does
         assert f"{mode}: '{who.removeprefix('the ')}'" in js, mode
-    assert f'first {style.EXCERPT} characters' in js            # what the AI sees, as the page says
+    note = re.search(r'^function autoNote\(.*?^}', js, re.S | re.M)[0]
+    picker = re.search(r'^const PICKER = .*?;', js, re.S | re.M)[0]
+    import subprocess
+    notes = json.loads(subprocess.run(['node', '-e', picker + '\n' + note +
+                                      '\nconsole.log(JSON.stringify(Object.keys(PICKER).map(autoNote)));'],
+                                     capture_output=True, text=True, check=True, timeout=10).stdout)
+    assert 'planning text is not uploaded' in notes[0]
+    for text in notes[1:]:
+        assert 'receives the full story and planning prompt' in text
+        assert 'Use Offline to keep planning on this computer' in text
     assert 'id="style-note"' in html and 'id="p-style"' in html
 
 
@@ -268,8 +295,11 @@ def test_kinodraw_cloud_does_not_choose_for_a_spanish_script(studio, fake_cloud)
           'Para sumar fracciones, busca un denominador común.\n\n## Fin\n\nYa está.\n')
     _, _, cfg, _ = studio(director='cloud', text=es, title='Fracciones', lang='es')
     assert fake_cloud.seen == []                                # nothing sent, nothing metered, as the visuals director
-    pick = cfg['style_pick']
+    assert cfg['director'] == 'rules' and cfg['director_v3'] is False
+    pick = style.choose(ingest.read(es), 'cloud', 'es', '16:9')
+    assert (pick['by'], pick['style']) == (cfg['style_pick']['by'], cfg['style_pick']['style'])
     assert pick['by'] == 'rules' and 'English and Chinese videos only' in pick['note'], pick
+    assert fake_cloud.seen == []
 
 
 def test_emoji_text_fits_the_cloud_limits_and_a_split_emoji_in_the_reason_saves():
@@ -281,3 +311,86 @@ def test_emoji_text_fits_the_cloud_limits_and_a_split_emoji_in_the_reason_saves(
     assert units(sent['excerpt']) >= style.EXCERPT - 1 and sent['excerpt'].startswith('We ship')   # cut, not dropped
     reason = style._clip('A launch party \ud83c')               # a reason the server cut through an emoji
     assert reason == 'A launch party' and reason.encode('utf-8')
+
+
+@pytest.mark.parametrize('lang', ['en', 'zh'])
+def test_studio_defaults_to_v3_cloud_and_saves_the_whole_plan(studio, fake_cloud, monkeypatch, lang):
+    if lang == 'en':
+        paragraphs = [
+            'Leo the lion carries a book through the library and reads beside the window. ' * 10,
+            'Mia the mouse sorts maps on the table and labels the roads with a pencil. ' * 10,
+            'The owl checks the shelves and carefully returns each borrowed book to its place. ' * 10,
+        ]
+        end_fact = 'The final source fact is that the bronze key opens the violet cabinet.'
+        headings = ['The library', 'The maps', 'The cabinet']
+    else:
+        paragraphs = [
+            '小狮子 Leo 拿着一本书走进图书馆，在窗边读书，把看到的故事记在笔记本上。' * 20,
+            '小老鼠 Mia 在桌上整理地图，用铅笔标出每条道路，还把不同的地点写在纸上。' * 20,
+            '猫头鹰检查每一排书架，认真把借来的书放回原处，并核对书上的名字和标签。' * 20,
+        ]
+        end_fact = '最后一个原文事实是青铜钥匙可以打开紫色柜子。'
+        headings = ['图书馆', '地图', '柜子']
+    text = '# Lesson\n\n' + '\n\n'.join(f'## {h}\n\n{p}' for h, p in zip(headings, paragraphs))
+    text += '\n\n' + end_fact
+    doc = ingest.read(text, title='Default v3')
+    doc.lang = lang
+    assert len(doc.sections) == 3 and all(len(' '.join(s.paragraphs)) > 600 for s in doc.sections)
+    assert end_fact not in text[:600] and end_fact not in ' '.join(doc.sections[0].paragraphs)
+    expected_board = script.build(doc, story='story')
+    expected_spoken = [b['spoken'][lang] for b in expected_board['beats']]
+    assert len(expected_spoken) > 3 and sum(map(len, expected_spoken)) > 600
+    fake_cloud.plan = from_rules(expected_board)
+    fake_cloud.plan['style']['whiteboard_skin'] = 'notebook'
+    fake_cloud.plan['cast'] = [{
+        'id': 'leo', 'name': 'Leo', 'kind': 'quadruped', 'species': 'lion', 'family': 'feline',
+        'age': 'young', 'sex': 'unknown', 'size': 1.0,
+        'palette': {'body': '#d8a64b', 'accent': '#754b24', 'eye': '#222222'},
+        'marks': ['mane_none'], 'temperament': 'gentle',
+    }]
+    providers.validate_structure(fake_cloud.plan, PLAN_SCHEMA)
+    monkeypatch.delenv('KINODRAW_CLOUD_TOKEN')
+    monkeypatch.setattr(cloud, '_token', lambda: None)
+    fake_cloud.anonymous = ['anon-default']
+    assert server.state()['default_director'] == 'cloud' and not server.state()['cloud_signed_in']
+    created = server.create_project({'text': text, 'title': 'Default v3', 'lang': lang, 'look': 'auto'})
+    job = server.JOBS.get(created['job'])
+    deadline = time.monotonic() + 20
+    while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:
+        time.sleep(.02)
+    assert job['state'] == 'done', job['error']
+    path = server.projects_root() / created['project']
+    cfg, board = pipeline.settings(path), pipeline.storyboard(path)
+    assert cfg['director_v3'] is True and cfg['director'] == 'cloud'
+    assert cfg['plan_v3'] == fake_cloud.plan
+    assert cfg['series_bible']['cast'] == fake_cloud.plan['cast']
+    assert cfg['scene_treatments'] == fake_cloud.plan['scenes'] and board['look'] == 'notebook'
+    assert not cfg['plan_v3_report']['fallback'] and 'style_pick' not in cfg
+    assert [(c['path'], c['auth']) for c in fake_cloud.seen] == [
+        ('/v1/anonymous', None), ('/v3/videos', 'Bearer anon-default'), ('/v3/plan', 'Bearer anon-default')]
+    sent = fake_cloud.seen[-1]['body']['storyboard']
+    assert sent['language'] == lang
+    assert [b['spoken'] for b in sent['beats']] == expected_spoken
+    assert [b['spoken'][lang] for b in board['beats']] == expected_spoken
+    assert end_fact in sent['beats'][-1]['spoken']
+    assert end_fact in board['beats'][-1]['spoken'][lang]
+    assert fake_cloud.seen[-2]['body']['characters'] == sum(
+        max(len(b['text']), len(b['spoken'])) for b in sent['beats'])
+    print(json.dumps({'language': lang, 'section_characters': [len(' '.join(s.paragraphs)) for s in doc.sections],
+                      'sent_beats': len(sent['beats']), 'spoken_characters': sum(map(len, expected_spoken)),
+                      'end_fact': end_fact, 'cached_cast_and_treatments': True}, ensure_ascii=False))
+    assert not server.state()['cloud_signed_in']
+
+
+def test_v3_spanish_defaults_to_rules_without_uploads(studio, fake_cloud, monkeypatch):
+    _no_network(monkeypatch)
+    created = server.create_project({'text': SPANISH, 'title': 'Spanish v3', 'lang': 'es', 'look': 'auto'})
+    job = server.JOBS.get(created['job'])
+    deadline = time.monotonic() + 20
+    while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:
+        time.sleep(.02)
+    assert job['state'] == 'done', job['error']
+    cfg = pipeline.settings(server.projects_root() / created['project'])
+    assert cfg['director_v3'] is True and cfg['director'] == 'rules'
+    assert cfg['plan_v3_report']['provider'] == 'rules' and not cfg['plan_v3_report']['fallback']
+    assert fake_cloud.seen == [] and not cloud.INSTALL_ID.exists()

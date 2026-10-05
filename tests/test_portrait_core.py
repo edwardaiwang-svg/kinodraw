@@ -1,6 +1,7 @@
 """Native portrait composition, capability routing and measured pacing."""
 import json
 import sys
+import threading
 import warnings
 from pathlib import Path
 from types import SimpleNamespace
@@ -183,27 +184,126 @@ def test_hidden_flag_writes_native_stills(board, tmp_path):
 
 
 @pytest.mark.parametrize('portrait', [None, 'native'])
-def test_segments_forward_only_explicit_portrait(tmp_path, monkeypatch, portrait):
-    commands = []
-    def popen(cmd):
-        commands.append(cmd)
-        segment = Path(cmd[cmd.index('--output') + 1])
-        Path(str(segment) + '.json').write_text(json.dumps({'warnings': []}), encoding='utf-8')
-        return SimpleNamespace(wait=lambda: 0)
+@pytest.mark.parametrize('saved_timeline', [True, False], ids=['timeline', 'synthetic'])
+def test_segments_forward_only_explicit_portrait(tmp_path, monkeypatch, portrait, saved_timeline):
+    from kinodraw.package import _probe
+    from kinodraw.progress import RenderContext, encoded_frames
+    project = tmp_path / 'project'
+    pipeline.new_project('# Lesson\n\nCount three circles.\n\n## First\n\nA short line.\n\n'
+                         '## Second\n\nThis longer line gives the clock a different interval between beats.',
+                         project, lang='en')
+    ep = pipeline.storyboard(project)
+    timing = timeline.layout(ep, 'en', timeline.synthetic_clips(ep, 'en'))
+    starts = [timing['beats'][b]['start'] for b in timing['beat_order']]
+    intervals = [round(b - a, 4) for a, b in zip(starts, starts[1:])]
+    assert len(set(intervals)) > 1
+    timeline_path = project / 'saved-timeline.json' if saved_timeline else None
+    if timeline_path is not None:
+        timeline_path.write_text(json.dumps(timing), encoding='utf-8')
+    start = .4
+    output = tmp_path / 'silent.mp4'
+    tiny = SimpleNamespace(size=(160, 90), frame=lambda t: Image.new('RGB', (160, 90), 'white'))
+    render.encode(tiny, 0, 2, output, 20)
+    previous = output.read_bytes()
+    commands, manifests, worker_progress, processes, updates, decode_progress = [], [], [], [], [], []
+    real_popen = render.subprocess.Popen
+    decoders, commits = [], []
+
+    def popen(cmd, *args, **kwargs):
+        # Forward every invocation, including join and full decode validation, to the real process factory.
+        assert output.read_bytes() == previous
+        if cmd[:3] == [sys.executable, '-m', 'kinodraw.engine.render']:
+            commands.append((cmd, kwargs))
+        if '-f' in cmd and cmd[cmd.index('-f') + 1] == 'concat':
+            for worker_cmd, worker_kw in commands:
+                segment = Path(worker_cmd[worker_cmd.index('--output') + 1])
+                manifests.append(json.loads(Path(str(segment) + '.json').read_text(encoding='utf-8')))
+                worker_progress.append(encoded_frames(worker_kw['env']['KINODRAW_WORKER_PROGRESS']))
+        if '-err_detect' in cmd:
+            decode_progress.append(Path(cmd[cmd.index('-progress') + 1]))
+        process = real_popen(cmd, *args, **kwargs)
+        processes.append(process)
+        if '-err_detect' in cmd:
+            decoders.append(process)
+        return process
+
+    def reported(progress):
+        updates.append(progress)
+        if progress.frames < progress.total:
+            assert output.read_bytes() == previous
+
+    ctx = RenderContext(callback=reported)
+    real_commit = ctx.token.commit
+
+    def commit(source, target):
+        if Path(target) == output:
+            assert output.read_bytes() == previous
+            assert len(decoders) == len(decode_progress) == 1, 'publish before decoder launch'
+            assert all(p.returncode == 0 for p in processes), 'publish before real processes completed'
+            assert all(p.returncode == 0 for p in decoders), 'publish before decoder completed'
+            assert [encoded_frames(p) for p in decode_progress] == [60], 'publish before full frame validation'
+            assert all('progress=end' in p.read_text(encoding='utf-8') for p in decode_progress)
+            commits.append({'decoder_returncodes': [p.returncode for p in decoders],
+                            'decoded_frames_before_publish': [encoded_frames(p) for p in decode_progress]})
+        return real_commit(source, target)
+
+    monkeypatch.setattr(ctx.token, 'commit', commit)
     monkeypatch.setattr(render.subprocess, 'Popen', popen)
-    monkeypatch.setattr(render.subprocess, 'run', lambda *a, **k: None)
-    render.render_segments(tmp_path, tmp_path / 'storyboard.json', 'en', tmp_path / 'timeline.json',
-                           0, 60, tmp_path / 'silent.mp4', 2, aspect='9:16', portrait=portrait)
+    deadline = threading.Timer(180, ctx.token.cancel)
+    deadline.start()
+    try:
+        warnings = render.render_segments(project, project / 'storyboard.json', 'en', timeline_path,
+                                          start, 60, output, 2, aspect='9:16', portrait=portrait, context=ctx)
+    finally:
+        deadline.cancel()
+        ctx.token.cancel()
+        assert not ctx.token.owned_pids
+        assert all(not ctx.token._group_exists(p.pid) for p in processes)
+        assert not list(tmp_path.glob('.segments-*'))
+        print(json.dumps({'owned_groups_absent': True, 'private_staging_removed': True,
+                          'prior_output_still_present': output.read_bytes() == previous}))
     assert len(commands) == 2
-    for i, cmd in enumerate(commands):
-        expected = [sys.executable, '-m', 'kinodraw.engine.render', '--project', str(tmp_path), '--episode',
-                    str(tmp_path / 'storyboard.json'), '--lang', 'en', '--crf', '20', '--aspect', '9:16',
-                    '--timeline', str(tmp_path / 'timeline.json')]
+    stages = set()
+    for i, (cmd, kwargs) in enumerate(commands):
+        segment = Path(cmd[cmd.index('--output') + 1])
+        stages.add(segment.parent)
+        assert segment.parent.parent == output.parent and segment.parent.name.startswith('.segments-')
+        assert kwargs['start_new_session'] is True
+        assert Path(kwargs['env']['KINODRAW_WORKER_PROGRESS']) == segment.with_suffix('.progress')
+        expected = [sys.executable, '-m', 'kinodraw.engine.render', '--project', str(project), '--episode',
+                    str(project / 'storyboard.json'), '--lang', 'en', '--crf', '20', '--aspect', '9:16']
+        expected += ['--timeline', str(timeline_path)] if saved_timeline else ['--synthetic']
         if portrait is not None:
             expected += ['--portrait', portrait]
-        expected += ['--start', repr(float(i)), '--frames', '30', '--output',
-                     str(tmp_path / '.silent.segments' / f'{i:02d}.mp4')]
+        expected += ['--start', repr(start + i), '--frames', '30', '--output',
+                     str(segment.parent / f'{i:02d}.mp4')]
         assert cmd == expected
+        assert '--size' not in cmd
+        assert manifests[i]['frames'] == 30 and manifests[i]['start'] == start + i
+        assert manifests[i]['aspect'] == '9:16' and manifests[i]['synthetic_timing'] is (not saved_timeline)
+        if saved_timeline:
+            assert str(timeline_path) in manifests[i]['inputs']
+        if portrait is None:
+            assert 'portrait' not in manifests[i]
+        else:
+            assert manifests[i]['portrait'] == portrait
+    assert len(stages) == 1 and worker_progress == [30, 30]
+    assert warnings == manifests[0]['warnings']
+    assert len(decode_progress) == 1 and all(p.returncode == 0 for p in processes)
+    assert commits == [{'decoder_returncodes': [0], 'decoded_frames_before_publish': [60]}]
+    assert output.read_bytes() != previous
+    # Restore the forwarding factory before probing the committed output.
+    monkeypatch.setattr(render.subprocess, 'Popen', real_popen)
+    probed = _probe(output)
+    assert probed['frames'] == 60 and probed['size'].groups() == ('1080', '1920') and not probed['errors']
+    assert updates[-1].frames == updates[-1].total == 60 and updates[-1].eta == 0
+    assert all(0 <= p.frames <= 60 and p.total == 60 for p in updates)
+    assert not ctx.token.owned_pids and not list(tmp_path.glob('.segments-*'))
+    print(json.dumps({'portrait': portrait, 'saved_timeline': saved_timeline, 'timeline_starts': starts,
+                      'worker_bounds': [[m['start'], m['frames']] for m in manifests], 'commit': commits,
+                      'worker_encoded_frames': worker_progress, 'joined_decoded_frames': probed['frames'],
+                      'output_size': probed['size'].groups(), 'private_staging_removed': True,
+                      'prior_output_preserved_until_commit': True}))
 
 
 @pytest.mark.parametrize('portrait', [None, 'native'])

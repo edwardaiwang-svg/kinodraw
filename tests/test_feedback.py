@@ -187,7 +187,7 @@ def test_a_cloud_that_never_answers_is_given_up_on_soon_with_the_same_sentence(s
 
 
 def test_feedback_is_sent_with_an_offline_project_and_no_keychain(studio, fake_cloud, monkeypatch, tmp_path):
-    """Offline is the default director and nobody signed in; sending feedback still makes no token, even when the
+    """Cloud is offered by default but nobody signed in; sending feedback still makes no token, even when the
     keychain is missing (as CI's fail backend)."""
     from keyring.backends import fail
     seen, _ = fake_cloud
@@ -195,7 +195,8 @@ def test_feedback_is_sent_with_an_offline_project_and_no_keychain(studio, fake_c
     for name in ('get_password', 'set_password'):
         monkeypatch.setattr(keyring, name, getattr(broken, name))
     state = studio('/api/state')[1]
-    assert state['default_director'] == 'rules' and not state['cloud_signed_in']
+    assert state['default_director'] == 'cloud' and not state['cloud_signed_in']
+    assert state['cloud'] is None and cloud._anon_token is None and seen == []
     assert studio('/api/feedback', FORM)[0] == 200
     assert [(path, auth) for path, auth, _ in seen] == [('/v1/feedback', None)] and cloud._anon_token is None
     assert studio('/api/state')[1]['install_id'] == cloud.install_id()        # Settings shows it, to ask for deletion

@@ -264,10 +264,11 @@ def studio(fake_cloud, keychain, tmp_path, monkeypatch):
     httpd.shutdown()
 
 
-def test_the_studio_offers_cloud_with_no_sign_in_and_still_starts_offline(studio, fake_cloud, keychain):
+def test_the_studio_defaults_to_cloud_without_implying_a_sign_in(studio, fake_cloud, keychain):
     seen, _ = fake_cloud
     state = studio('/api/state')[1]
-    assert state['cloud_available'] and not state['cloud_signed_in'] and state['default_director'] == 'rules'
+    assert state['cloud_available'] and not state['cloud_signed_in'] and state['default_director'] == 'cloud'
+    assert state['cloud'] is None and cloud._anon_token is None and not cloud.INSTALL_ID.exists()
     assert seen == []                                                     # nothing leaves before Cloud is chosen
     assert state['install_id'] is None                                   # no ID is made before Cloud is chosen
     status, reply = studio('/api/cloud/anonymous', 'POST')
@@ -386,7 +387,10 @@ let reply, lang = 'en';
 const voiceLang = () => lang;
 const fetch = async (url) => (asked.push(url), reply);
 const syncStyle = () => {};     // 0.3.0's Style menu follows the director; not under test here
-const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="muted">([^<]*)/)[1].trim(); };
+const settingsText = () => { ''' + settings + ''' return {
+  text: cloud.match(/<p class="muted">([^<]*)/)[1].trim(),
+  privacy: cloud.match(/<a href="([^"]+)"[^>]*>What is sent \\(privacy\\)<\\/a>/)?.[1]
+}; };
 '''
     run = stage + api + '\n' + note + '\n' + pick + '''
 (async () => {
@@ -405,10 +409,15 @@ const settingsText = () => { ''' + settings + ''' return cloud.match(/<p class="
 })();'''
     out = json.loads(subprocess.run([node, '-e', run], capture_output=True, text=True, check=True, encoding='utf-8').stdout)
     unknown, asks, allowed, spanish = out
-    assert 'while KinoDraw Cloud allows it' in unknown                 # Settings before the cloud was asked: no promise
-    assert asks == ['Sign in with your email in Settings, or choose Offline.'] * 2
-    assert allowed == ['KinoDraw Cloud, free plan: unlimited videos (fair use).',
-                       'Free, with no account or API key. Signing in with your email is optional.']
+    privacy = 'https://edwardaiwang-svg.github.io/kinodraw/privacy.html'
+    upload = ' Planning uploads your full story and prompt to the selected provider. Choose Offline for local planning.'
+    assert 'while KinoDraw Cloud allows it' in unknown['text']          # no promise before the cloud was asked
+    assert unknown['privacy'] == privacy
+    error = 'Sign in with your email in Settings, or choose Offline.'
+    assert asks == [error + upload, {'text': error, 'privacy': privacy}]
+    assert allowed == ['KinoDraw Cloud, free plan: unlimited videos (fair use).' + upload,
+                       {'text': 'Free, with no account or API key. Signing in with your email is optional.',
+                        'privacy': privacy}]
     assert spanish == [[], None]
 
 
