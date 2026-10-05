@@ -133,7 +133,7 @@ def test_semantic_face_coat_and_action_details_render(heroes):
             assert part(doc, name) is not None
         assert 'clip-path="url(#coat)"' in doc
     roar = svg(heroes[2], 'roar', .9)
-    assert len([e for e in ET.fromstring(roar).iter() if e.attrib.get('data-part') == 'canine']) == 2
+    assert len([e for e in ET.fromstring(roar).iter() if e.attrib.get('data-part') == 'canine']) == 4
     for name in ('jaw', 'mouth', 'sound_arc', 'scar_nose'):
         assert part(roar, name) is not None
     swipe = svg(heroes[2], 'swipe', .55)
@@ -185,3 +185,125 @@ def test_other_semantic_families_share_the_motion_contract(hint, kind):
     assert not np.array_equal(pixels(g, 'look', .8), pixels(g, t=.8))
     with pytest.raises(ValueError):
         svg(g, 'unknown')
+
+
+def test_tapered_limbs_have_masses_bent_joints_and_cub_paws(heroes):
+    for g in heroes:
+        rig = build(g)
+        assert rig.legs['front_near'].joint[0] < rig.legs['front_near'].root[0]
+        assert rig.legs['hind_near'].joint[0] > rig.legs['hind_near'].root[0]
+        assert rig.legs['front_near'].end[0] < rig.legs['front_near'].root[0]
+        for leg in rig.legs.values():
+            assert leg.end[1] + 1 + leg.width * .40 == pytest.approx(0.)
+        doc = svg(g, style='line_art')
+        assert part(doc, 'front_near').attrib['fill'] == 'white'
+        assert part(doc, 'front_near_mass') is not None
+        assert part(doc, 'front_near_joint') is not None
+        assert float(part(doc, 'front_near').attrib['stroke-width']) > 3 * float(part(doc, 'toe').attrib['stroke-width'])
+    paw = part(svg(heroes[0]), 'front_near_paw')
+    assert float(paw.attrib['rx']) > build(heroes[0]).legs['front_near'].width * .85
+    assert part(svg(heroes[1]), 'leg_stripe') is not None
+
+
+@pytest.mark.parametrize('name', ['walk', 'run'])
+def test_gait_lifts_diagonal_paws_and_bobs_the_body(heroes, name):
+    poses = [action_pose(name, t) for t in (.55, .65, .80, .95)]
+    lifts = []
+    for p in poses:
+        assert p.legs[0] == pytest.approx(p.legs[3])
+        assert p.legs[1] == pytest.approx(p.legs[2])
+        assert p.legs[0] == pytest.approx(-p.legs[1])
+        assert p.knees[0] == pytest.approx(p.knees[3])
+        assert p.knees[1] == pytest.approx(p.knees[2])
+        assert sum(k < -1 for k in p.knees) == 2
+        rig = build(heroes[1], p)
+        heights = [leg.end[1] + p.dy + 1 + leg.width * .40 for leg in rig.legs.values()]
+        lifts.append(max(heights) - min(heights))
+        assert max(heights) == pytest.approx(0., abs=.01)
+    assert max(lifts) > (18 if name == 'walk' else 30)
+    assert max(p.dy for p in poses) - min(p.dy for p in poses) > 2
+    cue = Action(name, start=5.)
+    shifted = action_pose(cue, 5.65)
+    assert shifted.legs == pytest.approx(poses[1].legs)
+    assert shifted.knees == pytest.approx(poses[1].knees)
+    assert shifted.dy == pytest.approx(poses[1].dy)
+
+
+def test_storybook_faces_and_species_surfaces(heroes):
+    cub, tiger, lion = heroes
+    for g in heroes:
+        doc = svg(g)
+        for name in ('inner_ear', 'iris', 'pupil', 'eye_highlight', 'nose_top', 'chin', 'belly', 'underside_shade', 'rim_highlight'):
+            assert part(doc, name) is not None
+    assert 37 < build(tiger).head.rx < 41
+    assert part(svg(cub), 'forehead_tuft') is not None
+    assert part(svg(tiger), 'cheek_ruff').attrib['fill'] == '#FFF1D8'
+    assert part(svg(tiger), 'lash') is not None
+    lioness = from_text_hint('Lioness', 'adult female lioness')
+    assert not build(lioness).mane and build(lioness).body.ry < build(lion).body.ry
+    mane = ET.fromstring(svg(lion))
+    assert sum(e.attrib.get('data-part') == 'mane_layer' for e in mane.iter()) == 2
+    assert part(svg(lion), 'chest_mane') is not None
+    scar = part(svg(lion), 'scar_nose').attrib['d'].replace('M', '').replace('L', ' ').split()
+    x1, y1, x2, y2 = map(float, scar)
+    assert x1 > x2 and y1 < build(lion).head.rx * -.4 and y2 > build(lion).head.rx * .4
+
+
+def test_roar_anticipation_hinged_jaw_fierce_eyes_and_brief_shake(heroes):
+    cue = Action('roar')
+    down, back, hit = [action_pose(cue, u * cue.seconds) for u in (.10, .24, .48)]
+    assert down.head_y > 15 and down.jaw == 0
+    assert back.head_x < -5 and back.head_y < -10
+    assert hit.head_x > 20 and hit.head_y < -9 and hit.lean > 15
+    assert hit.fierce > .9 and hit.mane > 10 and abs(hit.mane_lag) > .1
+    doc = svg(heroes[2], cue, .48 * cue.seconds)
+    hinge = part(doc, 'jaw_hinge')
+    assert float(hinge.attrib['data-angle']) >= 40
+    assert sum(e.attrib.get('data-part') == 'canine' for e in hinge.iter()) == 2
+    assert part(doc, 'tongue') is not None
+    assert sum(e.attrib.get('data-part') == 'sound_arc' for e in ET.fromstring(doc).iter()) == 3
+    early = part(svg(heroes[2], cue, .44 * cue.seconds), 'sound_arc').attrib['d']
+    later = part(svg(heroes[2], cue, .60 * cue.seconds), 'sound_arc').attrib['d']
+    assert early != later
+    shake = action_pose(cue, .43 * cue.seconds)
+    assert shake.screen_shake > 3 and action_pose(cue, .70 * cue.seconds).screen_shake == 0
+    metadata = next(e for e in ET.fromstring(svg(heroes[2], cue, .43 * cue.seconds)).iter() if e.tag.endswith('metadata'))
+    assert float(metadata.attrib['data-screen-shake']) == pytest.approx(shake.screen_shake, abs=.001)
+    assert abs(action_pose(cue, cue.seconds - .0001).mane_lag) < .001
+    for t in (0., 1., 1.5):
+        alpha = pixels(heroes[2], cue, t)[:, :, 3]
+        assert not any(edge.any() for edge in (alpha[0], alpha[-1], alpha[:, 0], alpha[:, -1]))
+
+
+def test_hyena_slope_thick_neck_dark_muzzle_and_cackle():
+    g = from_text_hint('Hyena', 'adult spotted hyena')
+    rig = build(g)
+    assert rig.legs['front_near'].root[1] < rig.legs['hind_near'].root[1] - 25
+    doc = svg(g)
+    assert part(doc, 'muzzle').attrib['fill'] == '#493F38'
+    assert float(part(doc, 'neck').attrib['stroke-width']) > 50
+    assert part(doc, 'back_fringe').attrib['fill'] == '#3E3531'
+    p = action_pose('laugh', .85)
+    assert p.head_pitch < -30 and p.jaw > .5 and p.dy < -2
+    assert part(svg(g, 'laugh', .9), 'cackle') is not None
+
+
+def test_whimper_stays_closed_and_nudge_reaches_cub_then_springs_back(heroes):
+    cub, _, lion = heroes
+    p = action_pose('whimper', .8)
+    assert p.jaw == 0 and p.worry > .9 and p.ears > 60 and p.crouch > 15
+    assert p.dx != 0
+    doc = svg(cub, 'whimper', .8)
+    assert part(doc, 'mouth_line') is not None and 'data-part="tear"' not in doc
+    ear, upright = part(doc, 'ear_shell'), part(svg(cub), 'ear_shell')
+    assert float(ear.attrib['ry']) < float(upright.attrib['ry']) * .6
+    assert float(ear.attrib['cy']) > float(upright.attrib['cy']) + 10
+    nudge = Action('nudge')
+    p = action_pose(nudge, .5 * nudge.seconds)
+    nose = build(lion, p).parts['nose'][1] * lion.size
+    cub_nose = build(cub).parts['nose'][1] * cub.size
+    assert abs(nose - cub_nose) < 10
+    reactions = [target_response(nudge, u * nudge.seconds) for u in (.48, .65, .85)]
+    assert reactions[0].dx > 0 and reactions[1].dx < 0
+    assert abs(reactions[-1].dx) < abs(reactions[0].dx)
+    assert reactions[0].lean != 0 and reactions[0].head_pitch != 0

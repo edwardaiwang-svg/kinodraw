@@ -1,10 +1,11 @@
 """Render the procedural cast, eight-frame action strips, and a ten-second life/action movie.
 
 Run from the worktree root: python scripts/creature_preview.py
-All evidence is written under /tmp/kd1005/a5-creatures/.
+All evidence is written under /tmp/kd1005/a5b-polish/.
 """
 from dataclasses import replace
 from pathlib import Path
+import math
 import subprocess
 import sys
 
@@ -13,9 +14,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from kinodraw.engine.creatures import Action, Palette, from_text_hint, raster  # noqa: E402
-from kinodraw.engine.creatures.actions import target_response  # noqa: E402
+from kinodraw.engine.creatures.actions import action_pose, target_response  # noqa: E402
 
-OUT = Path('/tmp/kd1005/a5-creatures')
+OUT = Path('/tmp/kd1005/a5b-polish')
 PAPER = '#FAF7EF'
 FONT = ImageFont.load_default(size=19)
 SMALL = ImageFont.load_default(size=15)
@@ -37,13 +38,13 @@ def label(image, text, xy=(14, 12), small=False):
 
 
 def lineup(heroes, style):
-    cw, ch = 390, 315
+    cw, ch = 450, 360
     sheet = Image.new('RGBA', (3 * cw, 2 * ch + 45), PAPER)
     label(sheet, 'Procedural cast / ' + style, (18, 12))
     for i, genome in enumerate(heroes):
         cell = Image.new('RGBA', (cw, ch), PAPER)
-        ImageDraw.Draw(cell).line((15, 279, cw - 15, 279), fill='#D8D0C3', width=1)
-        cell.alpha_composite(raster(genome, t=1., style=style, height=260), (0, 58))
+        ImageDraw.Draw(cell).line((15, 327, cw - 15, 327), fill='#D8D0C3', width=1)
+        cell.alpha_composite(raster(genome, t=1., style=style, height=300), (0, 58))
         label(cell, genome.name)
         label(cell, f'{genome.age} {genome.species} / size {genome.size:g}', (14, 36), small=True)
         sheet.alpha_composite(cell, ((i % 3) * cw, 45 + (i // 3) * ch))
@@ -53,26 +54,28 @@ def lineup(heroes, style):
     return sheet
 
 
-def pair_frame(source, target, action, t, laugh=False, size=(480, 310)):
+def pair_frame(source, target, action, t, laugh=False, size=(520, 360)):
     cell = Image.new('RGBA', size, PAPER)
     if laugh:
-        cell.alpha_composite(raster(source, action, t, height=230), (-27, 67))
-        cell.alpha_composite(ImageOps.mirror(raster(target, action, t + .07, height=230)), (143, 67))
+        cell.alpha_composite(raster(source, action, t, height=270), (0, 60))
+        cell.alpha_composite(ImageOps.mirror(raster(target, action, t, height=270)), (170, 60))
     else:
-        cell.alpha_composite(raster(source, action, t, height=255), (-30, 66))
+        cell.alpha_composite(raster(source, action, t, height=300), (0, 55))
         response = target_response(action, t)
-        response = replace(response, dx=-response.dx, head_pitch=-response.head_pitch)
-        cell.alpha_composite(ImageOps.mirror(raster(target, response, t, height=255)), (80, 66))
+        response = replace(response, dx=-response.dx, head_pitch=-response.head_pitch, lean=-response.lean)
+        cell.alpha_composite(ImageOps.mirror(raster(target, response, t, height=300)), (145, 55))
     return cell
 
 
 def action_strips(heroes):
-    pendo, _, kojo, _, hyena, other = heroes
+    pendo, mara, kojo, _, hyena, other = heroes
     cases = [('kojo_roar', kojo, 'roar'), ('pendo_whimper', pendo, 'whimper'),
              ('kojo_nudge_pendo', kojo, 'nudge'), ('kojo_breathe_heavy', kojo, 'breathe_heavy'),
-             ('kojo_swipe', kojo, 'swipe'), ('hyenas_laugh', hyena, 'laugh'), ('pendo_walk', pendo, 'walk')]
+             ('kojo_swipe', kojo, 'swipe'), ('hyenas_laugh', hyena, 'laugh'), ('pendo_walk', pendo, 'walk'),
+             ('mara_run', mara, 'run'), ('pendo_tremble', pendo, 'tremble'), ('mara_sit', mara, 'sit'),
+             ('mara_look', mara, 'look'), ('mara_pounce', mara, 'pounce'), ('pendo_hide', pendo, 'hide')]
     times = (0., .14, .28, .42, .56, .70, .84, 1.)
-    cw, ch = 480, 310
+    cw, ch = 520, 360
     for key, genome, name in cases:
         action = Action(name)
         sheet = Image.new('RGBA', (cw * 4, ch * 2 + 45), PAPER)
@@ -83,7 +86,7 @@ def action_strips(heroes):
                 cell = pair_frame(genome, pendo if name == 'nudge' else other, action, t, name == 'laugh')
             else:
                 cell = Image.new('RGBA', (cw, ch), PAPER)
-                cell.alpha_composite(raster(genome, action, t, height=270), (37, 55))
+                cell.alpha_composite(raster(genome, action, t, height=300), (35, 50))
             label(cell, f'{i + 1}/8  t={t:.2f}s', small=True)
             cell.convert('RGB').save(OUT / 'frames' / f'{key}_{i:02d}.png')
             sheet.alpha_composite(cell, ((i % 4) * cw, 45 + (i // 4) * ch))
@@ -95,7 +98,7 @@ def action_strips(heroes):
 def movie(heroes):
     pendo, mara, kojo = heroes[:3]
     actors = [(pendo, 25, [Action('whimper', 2.), Action('walk', 6.4)]),
-              (mara, 440, [Action('look', 3.), Action('pounce', 6.)]),
+              (mara, 440, [Action('look', 3.), Action('run', 6.)]),
               (kojo, 865, [Action('roar', 2.2), Action('breathe_heavy', 5.), Action('swipe', 8.5)])]
     width, height, fps = 1280, 520, 30
     path = OUT / 'heroes_10s.mp4'
@@ -109,9 +112,12 @@ def movie(heroes):
                 t = frame / fps
                 image = Image.new('RGBA', (width, height), PAPER)
                 label(image, 'Life layer: breathe / blink / ears / tail / weight shift' if t < 2 else 'Continuous action envelopes over the life layer', (28, 22))
-                ImageDraw.Draw(image).line((25, 429, width - 25, 429), fill='#D8D0C3', width=2)
+                ImageDraw.Draw(image).line((25, 437, width - 25, 437), fill='#D8D0C3', width=2)
+                hint = max(action_pose(cue, t).screen_shake for _, _, cues in actors for cue in cues)
+                shake_x = round(hint * math.sin(t * 91))
+                shake_y = round(hint * math.sin(t * 73) * .5)
                 for genome, x, cues in actors:
-                    image.alpha_composite(raster(genome, cues, t, height=275), (x - 18, 198))
+                    image.alpha_composite(raster(genome, cues, t, height=275), (x - 18 + shake_x, 190 + shake_y))
                     label(image, genome.name, (x + 135, 458))
                     active = next((cue.name for cue in cues if cue.start < t < cue.start + cue.seconds), 'idle')
                     label(image, active, (x + 135, 484), small=True)

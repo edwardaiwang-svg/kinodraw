@@ -90,52 +90,57 @@ def build(genome: Genome, pose: Pose = Pose(), t: float = 0.) -> Rig:
     variation = g.stream('anatomy').uniform(.98, 1.02)
     body_rx = (62. if baby else 76. if young else 88.) * variation
     body_y = -56. if baby else -78. if young else -91.
-    body_ry = 35. if baby else 42. if young else 45.
-    head_r = (39. if baby else 33. if young else 30.) * variation
+    slender = g.sex == 'female' and not baby
+    body_ry = 39. if baby else 38. if slender else 42. if young else 45.
+    head_r = (50. if baby else 42. if young else 39.) * variation
     head_x = 35. if baby else 58. if young else 73.
-    head_y = -91. if baby else -120. if young else -139.
+    head_y = -95. if baby else -123. if young else -134.
     if hyena:
         body_rx *= .86
-        head_r *= .92
-        head_y += 16
-    body = Ellipse(-35., body_y + pose.crouch, body_rx, body_ry * (1 + pose.breath))
-    chest = Ellipse(body.x + body.rx * .67, body.y - (8 if hyena else 1),
-                    33. if not baby else 27., (48. if hyena else body_ry) * (1 + pose.breath * 1.2))
+        head_r *= .91
+        head_y += 4
+        body_ry = 37. if young else 40.
+    body = Ellipse(-35. + pose.lean * .6, body_y + pose.crouch, body_rx, body_ry * (1 + pose.breath))
+    chest = Ellipse(body.x + body.rx * .67 + pose.lean * .60,
+                    body.y - (18 if hyena else 1) + pose.lean * .38,
+                    35. if not baby else 29., (49. if hyena else body_ry) * (1 + pose.breath * 1.5))
     head = Ellipse(head_x + pose.head_x, head_y + pose.head_y + pose.crouch * .65,
-                   head_r * (1.06 if canine else 1.), head_r * (1.02 if baby else 1.08))
-    parts = _face_parts(head, pose, head.rx * .43 if hyena or canine else 0.)
+                   head_r * (1.06 if canine else 1.), head_r * (1. if baby or slender else 1.08))
+    parts = _face_parts(head, pose, head.rx * (.27 if hyena else .43 if canine else 0.))
     parts['tail_root'] = body.x - body.rx * .94, body.y - 2
     legs = {}
     for i, name in enumerate(('hind_far', 'hind_near', 'front_far', 'front_near')):
         front, far = i >= 2, i % 2 == 0
-        x = body.x + body.rx * (.70 if front else -.70) + (-11 if far else 4)
-        rest_y = body_y + (4 if front else 7)
-        root = x, rest_y + pose.crouch
+        x = body.x + body.rx * (.70 if front else -.70) + (-13 if far else 4)
+        rest_y = body_y + (-12 if front and hyena else 20 if hyena else 5 if front else 12)
+        root = x + pose.lean * .25, rest_y + pose.crouch + pose.lean * (.28 if front else -.12)
         length = -rest_y + 5
         stride = math.sin(math.radians(pose.legs[i])) * length * .55
-        target = x + (8 if front else -4) + stride, -max(0., -pose.knees[i]) * .48
+        width = 23. if baby else 25. if front else 31.
+        target = x + (-7 if front else -10) + stride, -1 - width * .40 - pose.dy - max(0., -pose.knees[i]) * .65
         if name == 'front_near' and abs(pose.swipe) > .001:
             angle = math.radians(105 * pose.swipe)
             target = x + length * math.sin(angle), root[1] + length * math.cos(angle)
-        joint, end = two_bone(root, target, length * .52, length * .52, -1 if front else 1)
-        legs[name] = Limb(root, joint, end, 14. if baby else 17. if front else 19.)
+        joint, end = two_bone(root, target, length * .54, length * .50, 1 if front else -1)
+        legs[name] = Limb(root, joint, end, width)
         parts[name + '_paw'] = end
-    tail_length = 13. if baby else 12. if hyena or canine else 19.
-    tail = spring_chain(parts['tail_root'], (tail_length,) * 5, -130, t, 14 + pose.tail)
+    tail_length = 13. if baby else 12. if hyena or canine else 16.5
+    tail = spring_chain(parts['tail_root'], (tail_length,) * 5, -155 if baby else -150, t, 14 + pose.tail)
     mane_radius, mane = 0., ()
     if g.species == 'lion' and g.sex == 'male' and g.age in ('adult', 'old') and 'mane_none' not in g.marks:
-        mane_radius = head_r * (2.22 if 'mane_black' in g.marks else 1.78)
+        mane_radius = head_r * (2.08 if 'mane_black' in g.marks else 1.85)
         rng = g.stream('pattern:mane')
         chains = []
-        for i in range(22):
-            angle = 2 * math.pi * i / 22
-            root = head.x + mane_radius * .7 * math.cos(angle), head.y + mane_radius * .7 * math.sin(angle)
-            length = mane_radius * rng.uniform(.24, .38)
+        for i in range(16):
+            angle = 2 * math.pi * i / 16
+            root = (head.x + pose.mane_lag + mane_radius * .66 * math.cos(angle),
+                    head.y - pose.mane_lag * .5 + mane_radius * .66 * math.sin(angle))
+            length = mane_radius * rng.uniform(.25, .35) * (1 + max(0., pose.mane) * .007)
             chains.append(spring_chain(root, (length * .5, length * .5), math.degrees(angle), t,
-                                       8 + pose.mane + pose.head_pitch * .4, frequency=1.8))
+                                       7 + pose.mane + pose.head_pitch * .5, frequency=1.8))
         mane = tuple(chains)
     return Rig(g, pose, body, chest, head, parts, legs, tail=tail, mane=mane,
-               mane_radius=mane_radius, eye_radius=head_r * (.16 if baby else .12))
+               mane_radius=mane_radius, eye_radius=head_r * (.205 if baby else .14))
 
 
 def _face_parts(head, pose, snout=0.):
@@ -143,8 +148,8 @@ def _face_parts(head, pose, snout=0.):
     angle = math.radians(pose.head_pitch)
     def point(x, y):
         return head.x + x * math.cos(angle) - y * math.sin(angle), head.y + x * math.sin(angle) + y * math.cos(angle)
-    return {'head': (head.x, head.y), 'jaw': point(r * .36 + snout, r * (.72 + pose.jaw * .3)),
-            'mouth': point(r * .38 + snout, r * (.55 + pose.jaw * .18)), 'nose': point(r * .38 + snout, r * .25),
+    return {'head': (head.x, head.y), 'jaw': point(r * .36 + snout, r * (.76 + pose.jaw * .65)),
+            'mouth': point(r * .38 + snout, r * (.60 + pose.jaw * .35)), 'nose': point(r * .38 + snout, r * .28),
             'ear_left': point(-r * .65, -r * .8), 'ear_right': point(r * .64, -r * .81),
             'eye_left': point(-r * .24, -r * .13), 'eye_right': point(r * .55, -r * .14)}
 
