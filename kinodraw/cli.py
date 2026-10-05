@@ -345,6 +345,61 @@ def _qa_flags(parser):
     parser.set_defaults(func=cmd_qa)
 
 
+DEVELOPER_COMMANDS = ('mcp', 'starter', 'chart-add', 'validate', 'preview')
+
+
+def cmd_developer(args):
+    """Local developer commands deliberately bypass app migration and voice/provider settings."""
+    from . import mcp_server, starters
+    try:
+        if args.command == 'mcp':
+            raise SystemExit(mcp_server.main(['--root', args.root]))
+        if args.command == 'starter' and args.list:
+            print(mcp_server.dumps(starters.list_starters()))
+            return
+        if not args.root:
+            raise ValueError('--root is required when creating a starter project')
+        service = mcp_server.Developer(args.root)
+        if args.command == 'starter':
+            if not args.name or not args.out:
+                raise ValueError('starter NAME --root ROOT -o PROJECT is required')
+            result = service.create_project(args.out, starter=args.name)
+        elif args.command == 'chart-add':
+            result = service.chart_add(args.project, args.beat, args.source)
+        elif args.command == 'preview':
+            result = service.preview_png(args.project, args.time)
+        else:
+            result = service.validate_project(args.project)
+        print(mcp_server.dumps(result))
+        if args.command == 'validate' and not result['ok']:
+            raise SystemExit(1)
+    except (ValueError, OSError, TypeError, KeyError, RuntimeError, OverflowError) as error:
+        print(error, file=sys.stderr)
+        raise SystemExit(1)
+
+
+def _developer_flags(sub):
+    p = sub.add_parser('mcp', help='offline newline-framed stdio MCP server')
+    p.add_argument('--root', required=True, help='absolute existing workspace directory')
+    p.set_defaults(func=cmd_developer)
+    p = sub.add_parser('starter', help='list or create an editable fictional example')
+    p.add_argument('name', nargs='?')
+    p.add_argument('--list', action='store_true')
+    p.add_argument('--root')
+    p.add_argument('-o', '--out', help='new project path relative to root')
+    p.set_defaults(func=cmd_developer)
+    for name in ('chart-add', 'validate', 'preview'):
+        p = sub.add_parser(name)
+        p.add_argument('project', help='project path relative to root')
+        p.add_argument('--root', required=True)
+        if name == 'chart-add':
+            p.add_argument('--beat', required=True)
+            p.add_argument('--source', required=True, help='attributed chart JSON path relative to root')
+        elif name == 'preview':
+            p.add_argument('--time', type=float, default=0)
+        p.set_defaults(func=cmd_developer)
+
+
 def main(argv=None):
     # Standalone QA must not trigger app migration or import the rendering pipeline.
     qa_argv = sys.argv[1:] if argv is None else list(argv)
@@ -352,6 +407,12 @@ def main(argv=None):
         parser = argparse.ArgumentParser(prog='kinodraw qa')
         _qa_flags(parser)
         cmd_qa(parser.parse_args(qa_argv[1:]))
+        return
+    if qa_argv and qa_argv[0] in DEVELOPER_COMMANDS:
+        parser = argparse.ArgumentParser(prog='kinodraw')
+        _developer_flags(parser.add_subparsers(dest='command', required=True))
+        args = parser.parse_args(qa_argv)
+        args.func(args)
         return
     from . import paths
     from .pipeline import ASPECTS
@@ -361,6 +422,7 @@ def main(argv=None):
         print(paths.NOT_MOVED, *(f'  still in {p}' for p in paths.left_behind), sep='\n', file=sys.stderr)
     ap = argparse.ArgumentParser(prog='kinodraw', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='command', required=True)
+    _developer_flags(sub)
     _qa_flags(sub.add_parser('qa', help='offline encoded-video QA report as JSON'))
     for name, fn in (('make', cmd_make), ('new', cmd_new)):
         p = sub.add_parser(name)
