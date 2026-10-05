@@ -716,6 +716,18 @@ def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16
     """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
     A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does. ``portrait`` can
     override the look's 9:16 layout for comparisons; the registry decides by default."""
+    config_path = Path(project_dir) / 'project.json'
+    config = json.loads(config_path.read_text(encoding='utf-8')) if config_path.is_file() else {}
+    plan = config.get('plan_v3') if config.get('director_v3') else None
+    if (not relaxed and plan and plan['style']['mode'] != 'whiteboard'
+            and any(s['treatment'] != 'whiteboard' for s in plan['scenes'])):
+        from .hybrid import HybridProduction
+        prod = HybridProduction(episode, tline, lang, project_dir, plan,
+                                Production(episode, tline, lang, project_dir))
+        if aspect == '9:16':
+            from .vertical import PortraitFrame
+            return PortraitFrame(prod, native=False)
+        return prod
     layout = pace_layout(episode, aspect, portrait)
     if drawable(episode.get('look') or 'whiteboard') == 'collage':
         if layout == 'portrait':

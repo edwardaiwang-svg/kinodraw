@@ -1,0 +1,486 @@
+"""Saved Director-v3 scenes on the narration timeline, evaluated only from absolute time.
+
+The whiteboard is constructed directly: fallback must never recurse through dispatch.
+No provider is called here; workers consume the same persisted plan and local props.
+"""
+from __future__ import annotations
+
+import bisect
+import copy
+import hashlib
+import math
+import re
+import textwrap
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+from PIL import Image, ImageColor
+
+from .. import library
+from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
+from .atmos import Atmosphere, compose
+from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
+from .creatures import Genome, Action, raster
+from .creatures.actions import ACTIONS, add, target_response
+
+
+def seed(value):
+    return int.from_bytes(hashlib.sha256(str(value).encode()).digest()[:4], 'big')
+
+
+def action_char(text, actor, verb, cast):
+    """Locate a cue in its nearest named subject's clause, preserving source offsets."""
+    names = sorted({name_key(g.name) for g in cast.values()}, key=lambda n: (-len(n), n))
+    pattern = '|'.join(re.escape(n) for n in names if n)
+    owners = list(re.finditer(r'(?<!\w)(?:' + pattern + r')(?!\w)', text, re.I)) if pattern else []
+    for hit in re.finditer(r'\b(?:' + ACTION_CUES.get(verb, r'(?!)') + r')\b', text, re.I):
+        owner = next((m for m in reversed(owners) if m.end() <= hit.start()), None)
+        if owner is None or owner.group().casefold() != name_key(cast[actor].name):
+            continue
+        tail = text[owner.end():hit.start()]
+        # An introductory noun phrase describes the owner, rather than a fresh subject.
+        intro = re.match(r'^,\s+(?:a|an)\s+[^,]+,', tail, re.I)
+        if intro:
+            tail = tail[intro.end():]
+        if re.search(r'[.!?;\n]|\b(?:while|whereas|when)\b|'
+                     r'\b(?:but|and)\s+(?:the|a|an|he|she|it|they)\b', tail, re.I):
+            continue
+        clause = re.split(r'\bbut\b', tail, flags=re.I)[-1]
+        if re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", clause, re.I):
+            continue
+        return hit.start()
+    # Preserve the existing fallback for planned idle/implicit actions, without borrowing a verb.
+    return next((m.end() for m in owners if m.group().casefold() == name_key(cast[actor].name)), 0)
+
+
+def hyena_quantity(text):
+    """Use explicit counts; an unspecified plural supports only two representatives."""
+    numbers = {'no': 0, 'zero': 0, 'a': 1, 'an': 1, 'single': 1, 'one': 1,
+               'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6,
+               'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10}
+    counts, unspecified = [], False
+    for noun in re.finditer(r'\bhyenas?\b', text, re.I):
+        clause = re.split(r'[.!?;\n]', text[:noun.start()])[-1]
+        quantity = re.search(r'\b(' + '|'.join(numbers) + r'|\d+)\s+(?:(?!(?:of|and)\b)[a-z]+\s+){0,2}$', clause, re.I)
+        if quantity:
+            word = quantity[1].lower()
+            counts.append(int(word) if word.isdigit() else numbers[word])
+        else:
+            plural = noun.group().lower() == 'hyenas'
+            counts.append(2 if plural else 1)
+            unspecified |= plural
+    # Repeated references to a group do not imply additional animals.
+    return max(counts, default=0), unspecified
+
+
+def cast_genome(entry):
+    """Translate contract traits without inferring traits from another actor's words."""
+    value = dict(entry)
+    value['seed'] = seed(entry['id'])
+    value['temperament'] = {'gentle': 'calm', 'timid': 'shy', 'wise': 'calm', 'sly': 'bold'}.get(
+        entry['temperament'], entry['temperament'])
+    if 'mane_black' in value['marks'] or 'mane_gold' in value['marks']:
+        if value['sex'] == 'unknown':
+            value['sex'] = 'male'
+    return Genome.from_dict(value)
+
+
+@dataclass
+class Span:
+    start: float
+    end: float
+    spec: dict
+    motion: MotionScene | None = None
+    atmos: Atmosphere | None = None
+    actors: tuple = ()
+    actions: tuple = ()
+    join: float = 0.
+    join_length: float = 0.
+    source_chart: bool = False
+
+
+class HybridProduction:
+    vertical = False
+
+    def __init__(self, episode, tline, lang, project_dir, plan, whiteboard):
+        self.ep, self.tl, self.lang = episode, tline, lang
+        self.plan, self.whiteboard = plan, whiteboard
+        self.cutaway = copy.copy(whiteboard)
+        self.cutaway.cap_starts = []  # joins carry one sharp caption at actual narration time
+        self.size, self.duration = whiteboard.size, tline['duration']
+        self.ctx, self.els = whiteboard.ctx, whiteboard.els
+        self.warnings = list(whiteboard.warnings)
+        self.by_id = {b['id']: b for b in beats(episode, lang)}
+        self.cast = {c['id']: cast_genome(c) for c in plan['cast']}
+        for c in plan['cast']:
+            if c['family'] not in ('feline', 'canine', 'human', 'other'):
+                self.warnings.append(f"hybrid: cast family {c['family']} uses quadruped fallback")
+            dropped = set(c['marks']) - set(self.cast[c['id']].marks) - {'none'}
+            if dropped:
+                self.warnings.append(f"hybrid: cast {c['id']} unsupported marks {sorted(dropped)}")
+        self.style = plan['style']
+        # Same score selection as finish; the decoded recording starts on beat zero.
+        from ..audio import score
+        self.score_beats = np.array([])
+        if self.style['music_mood'] != 'none' and episode.get('music', True):
+            mood = self.style['music_mood']
+            bpm = (score.tags()[score.choose(mood, self.style['tempo_bpm'])]['bpm']
+                   if any(mood in tag['moods'] for tag in score.tags().values()) else self.style['tempo_bpm'])
+            self.score_beats = score.beat_grid(self.duration, bpm)
+        self.spans = []
+        specs = plan['scenes']
+        covered = [bid for s in specs for bid in s['beat_ids']]
+        if covered != tline['beat_order']:
+            raise ValueError('Saved plan_v3 must cover timeline beat_order exactly; direct the changed script again')
+        for i, spec in enumerate(specs):
+            start = tline['beats'][spec['beat_ids'][0]]['start']
+            end = (tline['beats'][specs[i + 1]['beat_ids'][0]]['start'] if i + 1 < len(specs)
+                   else tline['end_card']['start'])
+            span = Span(start, end, spec)
+            span.join_length = min(.65, (end - start) / 3)
+            available = self.score_beats[(self.score_beats >= start - 1e-9) &
+                                         (self.score_beats <= end - span.join_length)]
+            span.join = float(available[0]) if len(available) else start
+            if i and len(self.score_beats) and not len(available):
+                self.warnings.append(f'hybrid: source span {spec["beat_ids"]} too short for a score-aligned join')
+            self._prepare(span, project_dir)
+            self.spans.append(span)
+        self.starts = [s.start for s in self.spans]
+        self.cuts = [s.join for s in self.spans[1:] if s.spec['transition_in'] == 'cut']
+        self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
+
+    def _prepare(self, span, project_dir):
+        spec = span.spec
+        duration = span.end - span.start
+        treatment = spec['treatment']
+        text = ' '.join(self.by_id[b]['spoken'] for b in spec['beat_ids'])
+        actors = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
+        if treatment in ('character', 'atmosphere') or spec['actions']:
+            actors += [key for key, g in self.cast.items() if mentions(g.name, text) and key not in actors]
+        actors += [a['actor'] for a in spec['actions'] if a['actor'] in self.cast and a['actor'] not in actors]
+        span.actors = tuple(dict.fromkeys(actors))
+        events = []
+        for a in spec['actions']:
+            if a['actor'] not in self.cast:
+                self.warnings.append(f"hybrid: unknown actor {a['actor']}")
+                continue
+            if a['verb'] not in ACTIONS and a['verb'] != 'idle':
+                self.warnings.append(f"hybrid: action {a['verb']} uses breathing/looking fallback")
+                continue
+            beat = self.by_id[a['at_beat']]
+            timing = self.tl['beats'][a['at_beat']]
+            char = action_char(beat['spoken'], a['actor'], a['verb'], self.cast)
+            ct = timing['char_times']
+            at = timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0)
+            remaining = max(.1, min(timing['speech_end'], span.end) - at)
+            action = Action(a['verb'], at - span.start, min(remaining, Action(a['verb']).seconds), a['intensity'] / 3)
+            target = next((key for key in actors if key != a['actor'] and mentions(
+                self.cast[key].name, beat['spoken'][char:])), None)
+            events.append((a['actor'], action, target))
+        span.actions = tuple(events)
+        character_intent = treatment == 'character' or spec['actions'] or any(
+            e['kind'] == 'cast' for e in spec['elements'])
+        if character_intent:
+            count, unspecified = hyena_quantity(text)
+            existing = sum(self.cast[key].species == 'hyena' for key in span.actors)
+            if unspecified and count > existing:
+                self.warnings.append('hybrid: hyena count unspecified; showing two representatives of the plural group')
+            for i in range(max(0, count - existing)):
+                key = f'crowd-hyena-{i}'
+                while key in span.actors or any(c['id'] == key for c in self.plan['cast']):
+                    i += 1
+                    key = f'crowd-hyena-{i}'
+                span.actors += (key,)
+                self.cast[key] = Genome.from_dict({'name': key, 'species': 'hyena', 'size': .75, 'seed': seed(key),
+                                                   'palette': {'body': '#998267', 'accent': '#DBC5A2', 'eye': '#C59243'}})
+        kind = spec['atmosphere']['kind']
+        aliases = {'night_stars': ['night_sky', 'starfield'],
+                   'fog_with_shooting_star': ['night_sky', 'starfield', 'shooting_star', 'fog'],
+                   'shooting_star': ['night_sky', 'starfield', 'shooting_star'], 'rays': ['light_rays']}
+        if kind != 'none':
+            layers = aliases.get(kind, [kind])
+            if kind == 'underwater':
+                layers = ['fog', 'light_rays']
+                self.warnings.append('hybrid: underwater uses fog/rays fallback')
+            layers = [({'kind': k, 'window': (min(.5, duration / 4), max(.6, duration * .8))}
+                       if k == 'shooting_star' else k) for k in layers]
+            span.atmos = Atmosphere(layers, {'background': self.style['palette']['background'],
+                'foreground': self.style['palette']['ink'], 'accent': self.style['palette']['accent']},
+                spec['atmosphere']['density'], seed(spec['beat_ids']))
+        if treatment == 'whiteboard':
+            return
+        if span.atmos is None and self.style['motion_floor'] != 'still':
+            span.atmos = Atmosphere('dust', {'background': self.style['palette']['background'],
+                'accent': self.style['palette']['accent2']}, .8, seed(spec['beat_ids']))
+        if treatment == 'character' and not span.actors:
+            self.warnings.append('hybrid: character scene without cast uses source whiteboard fallback')
+        p = self.style['palette']
+        elements = []
+        for e in spec['elements']:
+            if e['kind'] == 'picture':
+                try:
+                    path = library.resolve(e['ref'], Path(project_dir))
+                    elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450))
+                except (OSError, KeyError, ValueError, AttributeError):
+                    self.warnings.append(f"hybrid: missing prop {e['ref']}; unavailable picture omitted")
+        text_kind, ref = spec['text']['kind'], spec['text']['ref']
+        source = self.by_id.get(ref)
+        if text_kind == 'quote':
+            quotes = [v for v in source['visuals'] if v.get('type') == 'quote'] if source else []
+            value = quotes[0] if quotes else {}
+            body = self._label(value.get('text')) or (source['text'] if source else text)
+            who = self._label(value.get('who'))
+            atomic = '\n'.join(textwrap.wrap('“' + body + '”', 48)) + ('\n— ' + who if who else '')
+            elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
+        for e in spec['elements']:
+            if e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
+                elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
+                                              preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
+        if text_kind not in ('none', 'caption_only', 'quote'):
+            words = source['text'] if source else text
+            elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
+                'type_on' if treatment == 'kinetic_type' else 'word_pop', width=1500, size=72,
+                y=.25 if elements and spec['composition'] not in ('grid', 'split') else None))
+            if text_kind == 'counter':
+                number = re.search(r'(?<!\w)(-?\d[\d,]*(?:\.\d+)?)(%)?', words)
+                if number:
+                    elements[-1].value_to = float(number[1].replace(',', ''))
+                    elements[-1].suffix = number[2] or ''
+                    elements[-1].decimals = len(number[1].split('.')[1]) if '.' in number[1] else 0
+                    elements[-1].duration = min(1.8, max(.1, duration - .4))
+                else:
+                    self.warnings.append('hybrid: counter without numeric data uses readable source text')
+                    elements[-1].preset = 'type_on'
+        if treatment == 'chart':
+            for bid in spec['beat_ids']:
+                for visual in self.by_id[bid]['visuals']:
+                    if visual.get('type') in ('bars', 'line'):
+                        rows = visual['rows']
+                        elements.append(MotionElement(kind='chart', chart='line' if visual['type'] == 'line' else 'bar', values=tuple(r['value'] for r in rows),
+                            labels=tuple(r.get('label', {}).get(self.lang, '') if isinstance(r.get('label'), dict)
+                                         else r.get('label', '') for r in rows), width=1150, height=450))
+                    elif visual.get('type') == 'stat':
+                        value = self._label(visual['value'])
+                        label = self._label(visual.get('label'))
+                        elements.append(MotionElement(text=value + '\n' + label, preset='corner_caption', width=1100, size=100))
+                    elif visual.get('type') == 'grid100':
+                        filled = int(visual['filled'])
+                        cells = ''.join(f'<rect x="{(i % 10) * 44}" y="{(i // 10) * 44}" width="36" height="36" opacity="{1 if i < filled else .15}"/>' for i in range(100))
+                        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 440">{cells}</svg>'
+                        elements.append(MotionElement(kind='picture', svg=svg, width=520, height=520))
+                        elements.append(MotionElement(text=self._label(visual.get('title')), preset='corner_caption', y=.15, width=1400, size=60))
+                    else:
+                        span.source_chart = True
+                        self.warnings.append(f"hybrid: chart visual {visual.get('type')} requires source whiteboard cutaway")
+            if not elements:
+                self.warnings.append('hybrid: chart without supported graphics uses source whiteboard facts over motion backdrop')
+        camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
+        transition = spec['transition_in']
+        span.motion = MotionScene(elements, duration=max(.01, duration), composition='center' if
+            spec['composition'] == 'stage' else spec['composition'], camera=camera,
+            transition_in=transition,
+            palette=Palette(p['background'], p['ink'], p['accent']), energy=self.style['energy'],
+            motion_floor={'still': 0, 'breathing': .4, 'drifting': .7, 'lively': 1}[self.style['motion_floor']],
+            hold=min(1.1, max(.5, spec['hold_s'])), seed=seed(spec['beat_ids']), blur_samples=1, foreground_drift=48.)
+        for element in elements:
+            element.font = self.style['type']
+        if spec['composition'] in ('grid', 'split'):
+            cols = 2 if spec['composition'] == 'split' else math.ceil(math.sqrt(max(1, len(elements) + len(self._cast_groups(span)))))
+            rows = math.ceil(max(1, len(elements) + len(self._cast_groups(span))) / cols)
+            for i, element in enumerate(elements):
+                element.x, element.y = (i % cols + .5) / cols, (i // cols + .5) / rows
+                element.width = min(element.width, 1920 / cols * .8)
+                element.height = min(element.height, 1080 / rows * .65)
+
+    def _label(self, value):
+        return str(value.get(self.lang, next(iter(value.values()), ''))) if isinstance(value, dict) else str(value or '')
+
+    def _cast_groups(self, span):
+        # Interacting participants share a cell; unrelated actors retain independent slots.
+        groups = [[a] for a in span.actors if not a.startswith('crowd-hyena-')]
+        for actor, action, target in span.actions:
+            if not target or action.name != 'nudge':
+                continue
+            left = next(g for g in groups if actor in g)
+            right = next(g for g in groups if target in g)
+            if left is not right:
+                left.extend(right)
+                groups.remove(right)
+        return groups
+
+    def _actor_slot(self, span, key):
+        main = [a for a in span.actors if not a.startswith('crowd-hyena-')]
+        i, n = main.index(key), len(main)
+        if span.spec['composition'] in ('grid', 'split'):
+            groups = self._cast_groups(span)
+            group = next(g for g in groups if key in g)
+            offset = len(span.motion.elements)
+            total = offset + len(groups)
+            cols = 2 if span.spec['composition'] == 'split' else math.ceil(math.sqrt(total))
+            rows = math.ceil(total / cols)
+            slot = offset + groups.index(group)
+            within = .5 + (group.index(key) - (len(group) - 1) / 2) * .6 / max(1, len(group))
+            return (slot % cols + within) / cols, (slot // cols + .85) / rows, min(.65 / rows, 1.2 / (cols * len(group)))
+        x = {'left_third': 1/3, 'right_third': 2/3}.get(span.spec['composition'], .5) if n == 1 else .2 + .6 * i / max(1, n - 1)
+        return x, .8, min(.78, 1.5 / max(1, n))
+
+    def _actors(self, span, local, image):
+        main = [key for key in span.actors if not key.startswith('crowd-hyena-')]
+        crowd = [key for key in span.actors if key.startswith('crowd-hyena-')]
+        n = len(main)
+        w, h = image.size
+        for key in crowd + main:
+            is_crowd = key in crowd
+            i = (crowd if is_crowd else main).index(key)
+            g = self.cast[key]
+            actions = [a for actor, a, target in span.actions if actor == key]
+            from .creatures.actions import action_pose, Pose
+            pose = Pose()
+            for a in actions:
+                pose = add(pose, action_pose(a, local))
+            for actor, a, target in span.actions:
+                if target == key:
+                    pose = add(pose, target_response(a, local))
+            x, ground, relative_height = ((i + .5) / len(crowd), .42, .24) if is_crowd else self._actor_slot(span, key)
+            height = round(h * relative_height)
+            sprite = raster(g, pose, local, height=max(60, height))
+            bbox = sprite.getchannel('A').getbbox()
+            if bbox:
+                sprite = sprite.crop(bbox)
+            # Distinct slots keep faces separate; the nudge deforms both participants in their slots.
+            move = 0.
+            for actor, a, target in span.actions:
+                if a.name == 'nudge' and target and actor in main and target in main:
+                    if actor == key or target == key:
+                        # Keep interacting bodies close enough for a nudge, with separate face centers.
+                        other = target if actor == key else actor
+                        x += .055 if self._actor_slot(span, key)[0] < self._actor_slot(span, other)[0] else -.055
+                    u = (local - a.start) / a.seconds
+                    direction = 1 if self._actor_slot(span, target)[0] > self._actor_slot(span, actor)[0] else -1
+                    if 0 < u < 1 and actor == key:
+                        move += direction * w * .035 * math.sin(math.pi * u) ** 2
+                    elif target == key:
+                        move += direction * target_response(a, local).dx * w / 600
+            image.paste(sprite, (round(x * w + move - sprite.width / 2),
+                                 round(h * ground - sprite.height)), sprite)
+        return image
+
+    def _frame(self, span, t):
+        spec, local = span.spec, max(0, t - span.start)
+        if spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
+            return self.cutaway.frame(t).convert('RGB')
+        w, h = self.size
+        background = None
+        if span.atmos:
+            from .bold.render import _background
+            base = np.clip(_background(span.motion, local, w, h), 0, 255).astype(np.uint8)
+            background = np.clip(compose(base, span.atmos, local) * 255 + .5, 0, 255).astype(np.uint8)
+        array = render_frame(span.motion, local, w, h, background=background)
+        image = Image.fromarray(array)
+        if spec['treatment'] == 'chart' and (span.source_chart or not span.motion.elements):
+            # Use actual numeric data, never fabricate chart values.
+            board = self.cutaway.frame(t).convert('RGB')
+            image.paste(board.resize((round(w * .82), round(h * .82))), (round(w * .09), round(h * .09)))
+        if span.actors:
+            image = self._actors(span, local, image)
+        camera = spec['camera']
+        u = min(1., local / max(.01, span.end - span.start))
+        zoom = 1 + .045 * u if camera == 'slow_push' else 1.045 - .045 * u if camera == 'pull_back' else 1.
+        dx = (65 * u if camera == 'pan_right' else -65 * u if camera == 'pan_left' else 0) * w / 1920
+        dy = 0.
+        if camera == 'follow':
+            # Track the active actor's rendered position, or the moving foreground group.
+            active = next((actor for actor, a, _ in span.actions if a.start <= local <= a.start + a.seconds), None)
+            targets = [active] if active else [a for a in span.actors if not a.startswith('crowd-hyena-')]
+            if targets:
+                from .creatures.actions import action_pose
+                xs = []
+                for actor in targets:
+                    x = self._actor_slot(span, actor)[0]
+                    x += sum(action_pose(a, local).dx for key, a, _ in span.actions if key == actor) / 600
+                    xs.append(x)
+                dx = (sum(xs) / len(xs) - .5) * w * .35
+            elif span.motion.elements:
+                from .bold.render import element_pose
+                xs = [element_pose(span.motion, e, i, local)[0] for i, e in enumerate(span.motion.elements)]
+                dx = (sum(xs) / len(xs) / 1920 - .5) * w * .35
+            zoom = 1.06
+        if camera == 'shake':
+            strength = 2 * self.style['energy'] * math.exp(-local * 4)
+            dx, dy = strength * math.sin(local * 39), strength * math.sin(local * 31)
+        inv = 1 / zoom
+        if zoom != 1 or dx or dy:
+            image = image.transform((w, h), Image.AFFINE,
+                (inv, 0, w / 2 * (1 - inv) + dx, 0, inv, h / 2 * (1 - inv) + dy), Image.BICUBIC,
+                fillcolor=ImageColor.getrgb(self.style['palette']['background']))
+        return image.convert('RGB')
+
+    def frame(self, t):
+        if not self.spans or t < self.starts[0] or t >= self.tl['end_card']['start']:
+            return self.whiteboard.frame(t)
+        i = bisect.bisect_right(self.starts, t) - 1
+        span = self.spans[i]
+        # Selected whiteboard scenes retain their exact legacy bytes, including transitions.
+        if span.spec['treatment'] == 'whiteboard':
+            return self.whiteboard.frame(t)
+        local = t - span.join
+        kind = span.spec['transition_in']
+        if i and local < 0:
+            image = self._frame(self.spans[i - 1], min(t, span.start - 1 / 30))
+        else:
+            image = self._frame(span, t)
+            if i and kind != 'cut' and local < span.join_length:
+                previous = self._frame(self.spans[i - 1], span.start - 1 / 30)
+                array = render_transition(np.asarray(previous), np.asarray(image), local, *self.size,
+                                          kind=kind, duration=span.join_length)
+                image = Image.fromarray(array)
+        image = image.convert('RGBA')
+        self.whiteboard._caption(image, t)
+        return image.convert('RGB')
+
+    def cues(self):
+        cues = []
+        for i, span in enumerate(self.spans):
+            if span.spec['treatment'] == 'whiteboard':
+                continue
+            cues.append({'t': span.join if i else span.start, 'kind': 'cut' if span.spec['transition_in'] == 'cut' else 'whoosh',
+                         'strength': .35, 'id': f'hybrid.scene.{i}'})
+            for j, (actor, action, target) in enumerate(span.actions):
+                kind = {'roar': 'impact', 'nudge': 'tap', 'swipe': 'whoosh', 'pounce': 'pop'}.get(action.name)
+                if kind:
+                    at = span.start + action.start
+                    available = self.score_beats[(self.score_beats >= span.start) & (self.score_beats < span.end)]
+                    if len(available):
+                        at = float(available[np.argmin(abs(available - at))])
+                    cues.append({'t': at, 'kind': kind, 'strength': min(1, action.intensity),
+                                 'id': f'hybrid.action.{i}.{j}'})
+        return cues
+
+
+def prepare_props(plan, board, project, llm, candidates=None):
+    """Small callable-only A6 seam; saved generated refs are consumed offline by workers.
+
+    candidates is a per-beat list of scored match.Hit objects. Empty offers are weak.
+    The caller owns matching; there is no embedding download or implicit provider here.
+    """
+    from ..library.genprops import maybe_request_prop
+    notes = []
+    if llm is None:
+        return notes
+    by_id = {b['id']: b for b in beats(board)}
+    for scene in plan['scenes']:
+        if scene['treatment'] not in ('motion', 'atmosphere', 'whiteboard'):
+            continue
+        if any(e['kind'] == 'cast' for e in scene['elements']):
+            continue
+        description = ' '.join(by_id[b]['text'] for b in scene['beat_ids'])
+        offered = [hit for b in scene['beat_ids'] for hit in (candidates or {}).get(b, [])]
+        prop = maybe_request_prop(offered, description, list(plan['style']['palette'].values()),
+                                  'bold flat', llm, project=project, enabled=True)
+        if prop:
+            scene['elements'] = [e for e in scene['elements'] if e['kind'] != 'picture']
+            scene['elements'].append({'kind': 'picture', 'ref': prop.path.stem})
+        else:
+            notes.append(f"hybrid: no generated prop for {scene['beat_ids']}; library/source fallback")
+    return notes
