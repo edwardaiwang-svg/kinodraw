@@ -230,6 +230,10 @@ def request_prop(description, palette, style, llm, *, project=None) -> Generated
             actions.extend(stripped)
             svg = _style_check(svg, palette)
         except Exception as error:
+            from ..director.llm.providers import ProviderError, StructuredResponseError
+            if isinstance(error, ProviderError) and not (
+                    isinstance(error, StructuredResponseError) or getattr(error, 'transient', False)):
+                return None
             failure = str(error)[:500]
             failures.append(failure)
             prompt = _prompt(description, palette, style) + f'\nFailure: {failure}\nRepair once; return corrected SVG.'
