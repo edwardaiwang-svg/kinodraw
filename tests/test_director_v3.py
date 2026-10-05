@@ -480,8 +480,8 @@ def test_lion_story_introductions_and_species():
 
 @pytest.mark.parametrize('rename', [False, True])
 def test_full_lion_narration_has_only_actor_owned_traits(rename):
-    source = Path(__file__).resolve().parents[1] / 'docs/overnight-2026-10-05/evidence/director-final/lion-story.md'
-    text = source.read_text()
+    source = Path(__file__).parent / 'fixtures/lion_full.md'
+    text = source.read_text(encoding='utf-8')
     names = ('Pendo', 'Mara', 'Kojo')
     if rename:
         replacements = ('Tavi', 'Nala', 'Roko')
