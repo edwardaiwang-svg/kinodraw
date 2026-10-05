@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from .ingest import Document, Section
+from .ingest import Document, Section, CLOSERS, _outside_quotes, _sentence_spacing, _sentences, _title
 from .numbers import normalize
 
 EN_BEAT = (15, 35, 55)          # min / target / max words per beat
@@ -49,32 +49,16 @@ def size(text: str, lang: str) -> int:
 
 
 def sentences(paragraph: str, lang: str) -> list[str]:
-    if lang == 'zh':
-        parts = re.findall(r'[^。！？!?]+[。！？!?]+[”’」』）)]*|[^。！？!?]+$', paragraph)
-    elif lang == 'es':
-        protected = re.sub(r'\b(Sr|Sra|Srta|Dr|Dra|Prof|Ud|Uds|EE\.UU|etc)\.',
-                           lambda m: m.group(0).replace('.', '\0'), paragraph)
-        parts, start = [], 0
-        for m in re.finditer(r'[.!?]+[”’»")\]]*(?=\s+[¿¡«“"(\[]*[A-ZÁÉÍÓÚÑÜ0-9])', protected):
-            parts.append(protected[start:m.end()])
-            start = m.end()
-        parts = [p.replace('\0', '.') for p in parts + [protected[start:]]]
-    else:
-        protected = re.sub(r'\b(Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K|No)\.', lambda m: m.group(0).replace('.', '\0'),
-                           paragraph)
-        parts, start = [], 0
-        for m in re.finditer(r'[.!?]+[”’")\]]*(?=\s+[“"(\[]?[A-Z0-9])', protected):
-            parts.append(protected[start:m.end()])
-            start = m.end()
-        parts = [p.replace('\0', '.') for p in parts + [protected[start:]]]
-    return [p.strip() for p in parts if p.strip()]
+    return _sentences(paragraph, lang)
 
 
 def _split_long(sentence: str, lang: str, limit: int) -> list[str]:
     """Split one over-long sentence at the clause mark nearest its middle (recursively)."""
     if size(sentence, lang) <= limit:
         return [sentence]
-    marks = [m.end() for m in re.finditer(r'[,;:](?=\s)|—' if lang in ('en', 'es') else r'[，；：、]', sentence)]
+    outside = _outside_quotes(sentence)
+    marks = [m.end() for m in re.finditer(r'[,;:](?=\s)|[—–]' if lang in ('en', 'es') else r'[，；：、]', sentence)
+             if outside[m.end()] and sentence[m.end():].strip()]
     if not marks:
         return [sentence]
     mid = len(sentence) / 2
@@ -88,6 +72,7 @@ def beats_of(paragraphs: list[str], lang: str) -> list[str]:
     joiner = ' ' if lang in ('en', 'es') else ''
     out = []
     for para in paragraphs:
+        para = _sentence_spacing(para, lang)
         chunks, cur = [], []
         for unit in (u for s in sentences(para, lang) for u in _split_long(s, lang, hi)):
             if cur and (size(joiner.join(cur + [unit]), lang) > hi or size(joiner.join(cur), lang) >= target):
@@ -123,12 +108,7 @@ def _balanced_sections(paragraphs: list[str], lang: str) -> list[Section]:
 
 
 def _short_title(text: str, lang: str) -> str:
-    first = sentences(text, lang)[0] if text else ''
-    if lang == 'zh':
-        clause = re.split(r'[，。！？；：]', first)[0]
-        return clause if len(clause) <= 14 else clause[:13] + '…'
-    words = re.sub(r'[.!?]+$', '', first).split()
-    return ' '.join(words) if len(words) <= 7 else ' '.join(words[:6]) + '…'
+    return _title(text, lang)
 
 
 def _merge_to(sections: list[Section], limit: int, lang: str) -> list[Section]:
@@ -205,7 +185,7 @@ def sync_takes(board: dict) -> dict:
 def sentence_of(text: str, lang: str) -> str:
     """A heading used as a spoken sentence: keep a question mark, otherwise end with a full stop."""
     text = text.strip().rstrip('.。:：;；,，')
-    if text.endswith(('?', '？', '!', '！')):
+    if text.rstrip(CLOSERS).endswith(('.', '。', '?', '？', '!', '！', '…')):
         return text
     return text + ('.' if lang in ('en', 'es') else '。')
 
@@ -256,7 +236,7 @@ def build(doc: Document, story: str = 'explain') -> dict:
             beat('agenda', 'agenda', text, music=True)
     for k, s in enumerate(sections, 1):
         cid = f's{k}'
-        label = T['label'].format(n=k)
+        label = T['label'].format(n=k) if multi else ''
         chapters.append({'id': cid, 'kind': 'section' if multi else 'board', 'label': {lang: label},
                          'title': {lang: s.heading}})
         texts = beats_of(s.paragraphs, lang)

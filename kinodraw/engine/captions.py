@@ -12,12 +12,13 @@ from functools import lru_cache
 
 from PIL import Image, ImageDraw
 
+from ..ingest import CLOSERS, _outside_quotes, _sentence_spacing
 from . import ink
 
 SIZE = 70
 MAX_W = 1760
-EN_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’)])|—')
-ES_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’»)])|—')
+EN_PUNCT = re.compile(r'[,.;:?!…](?=\s|$|["”’」』)])|—')
+ES_PUNCT = re.compile(r'[,.;:?!…](?=\s|$|["”’»」』)])|—')
 ZH_PUNCT = re.compile(r'[，。；：？！、—]')
 EN_WEAK = {'a', 'an', 'the', 'of', 'to', 'and', 'or', 'in', 'on', 'at', 'for', 'by', 'with', 'from', 'as',
            'that', 'is', 'was', 'his', 'her', 'its', 'their', 'my', 'our', 'your', 'but', 'if', 'than'}
@@ -43,8 +44,16 @@ def clause_spans(text, lang):
 
 def units(text, lang):
     if lang in ('en', 'es'):
-        return re.findall(r'\S+\s*', text)
-    return re.findall(r"[A-Za-z0-9$.,%×\-–/+'’&]+\s*|.", text)
+        us = re.findall(r'\s*\S+\s*', text)
+    else:
+        us = re.findall(r"[A-Za-z0-9$.,%×\-–/+'’&]+\s*|.", text)
+    out = []
+    for u in us:
+        if out and u.strip() and all(ch in CLOSERS + '.,;:?!…，。；：？！、%' for ch in u.strip()):
+            out[-1] = out[-1].rstrip() + u
+        else:
+            out.append(u)
+    return out
 
 
 def width(text, lang, fonts=ink.FONTS):
@@ -53,7 +62,7 @@ def width(text, lang, fonts=ink.FONTS):
 
 def balanced_lines(text, lang, fonts=ink.FONTS):
     """Return <=2 lines (balanced) or None when the text cannot fit in two lines."""
-    text = text.strip()
+    text = _sentence_spacing(text, lang).strip()
     if width(text, lang, fonts) <= MAX_W:
         return [text]
     us = units(text, lang)
@@ -98,7 +107,22 @@ def split_long(text, lang, fits=fits):
 
 def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits):
     """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)]."""
+    display = _sentence_spacing(display, lang)
     sd, ss = clause_spans(display, lang), clause_spans(spoken, lang)
+    # Captions include closing marks; spoken spans still index the original character times.
+    for text, spans in ((display, sd), (spoken, ss)):
+        joined, start = [], 0
+        outside = _outside_quotes(text)
+        for _, end in spans:
+            if end <= start:
+                continue
+            while end < len(text) and text[end] in CLOSERS + '.,;:?!…，。；：？！、':
+                if text[end] == '"' and outside[end] and not outside[end + 1]:
+                    break
+                end += 1
+            joined.append((start, end))
+            start = end
+        spans[:] = joined
     if len(sd) != len(ss):
         # Fallback: proportional mapping (validator should prevent this).
         ss = [(round(a * len(spoken) / len(display)), round(b * len(spoken) / len(display))) for a, b in sd]
