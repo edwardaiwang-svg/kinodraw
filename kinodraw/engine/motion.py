@@ -106,6 +106,24 @@ def on_twos(t, fps=30):
     return (f - f % 2) / fps
 
 
+def snap_to_beat(t, bpm, subdivision=1, origin=0.):
+    """Nearest beat (or subdivision), with ties going to the later beat."""
+    if bpm <= 0 or subdivision <= 0:
+        raise ValueError('BPM and subdivision must be positive')
+    step = 60. / bpm / subdivision
+    return origin + math.floor((t - origin) / step + .5) * step
+
+
+def speed_kick(t, speed, decay=.7, fps=30):
+    """Closed-form displacement of a px/frame kick, whose speed decays every frame.
+
+    Continuous between frame times, so sub-frame rendering and arbitrary seeks agree.
+    """
+    if not 0 < decay < 1 or fps <= 0:
+        raise ValueError('Decay must be between 0 and 1; FPS must be positive')
+    return speed * (1 - decay ** (max(0., t) * fps)) / (1 - decay)
+
+
 def seeded(seed, *keys):
     """A random generator determined by its arguments alone (blake2b of their repr), never by global state."""
     digest = hashlib.blake2b(repr((seed,) + keys).encode(), digest_size=16).digest()
