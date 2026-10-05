@@ -140,28 +140,59 @@ def _stems(text: str) -> set:
 
 
 def headline(beat_texts: list[str], fallback: str, lang: str, claim: bool = False, keep_last: bool = False) -> str:
-    """Takeaway note text: the shortest complete sentence that fits a note and stands on its own (not "This is
-    called..." or "We call this..."), from the section's last paragraph that has one; in English, if none has,
-    the same with sentences of up to 18 words and 90 characters (still three lines on the note); else the
-    section title.
-
-    Never the sentence said just before the note (the section's last one, unless ``keep_last``): the narrator
-    would say it twice in a row. With ``claim`` (the writer gave the section its title), an English title that
-    makes a claim, three or more words that carry meaning ("Air scatters short waves"), is the section's main
-    point: the sentence has to say at least half of those words, or the title itself is the takeaway."""
+    """Select a complete source sentence central to the section, respecting a claim title and note size."""
     floor = 4 if lang in ('en', 'es') else 8
-    last = sentences(beat_texts[-1], lang)[-1] if beat_texts and not keep_last else None
+    source = [s for text in beat_texts for s in sentences(text, lang)]
+    last = source[-1] if source and not keep_last else None
     want = _stems(fallback) if claim and lang == 'en' else set()
     need = (len(want) + 1) // 2 if len(want) >= 3 else 0
+    def standalone(s, title=False):
+        return (bool(s.strip()) and (title or not CONTEXT[lang].match(s)) and not s.endswith(('?', '？'))
+                and not re.match(r'^(?:Soon|Then|Think about|Imagine|Long ago|So|But|And|Or)\b', s, re.I)
+                and not (title and re.match(r'^(?:why|how|what|which|who|when|where)\b|'
+                                            r'^(?:为什么|怎么|什么|¿|por qué\b|cómo\b|qué\b|cuál\b|quién\b|cuándo\b|dónde\b)', s, re.I))
+                and not (lang == 'en' and (NAMING.search(s) or re.search(r'\bis (?:called|named|known as)\b', s)))
+                and not (lang == 'es' and ES_NAMING.search(s)))
+    def eligible(s, cap, room):
+        return (floor <= size(s, lang) <= cap and len(s) <= (room or len(s))
+                and standalone(s) and len(_stems(s) & want) >= need)
+    def central(fits):
+        if len(fits) == 1:
+            return fits[0]
+        from .director.match import _model, _normalize
+        import numpy as np
+        vecs = _normalize(np.array(list(_model(lang).embed(source + [fallback] + fits)), np.float32))
+        center = vecs[:len(source)].mean(axis=0)
+        center /= np.linalg.norm(center) + 1e-9
+        scores = vecs[len(source) + 1:] @ (.8 * center + .2 * vecs[len(source)])
+        return fits[int(np.argmax(scores))]
     for cap, room in ((14, None), (18, 90)) if lang in ('en', 'es') else ((28, None),):
-        for text in reversed(beat_texts):
-            fits = [s for s in sentences(text, lang) if floor <= size(s, lang) <= cap and len(s) <= (room or len(s))
-                    and not CONTEXT[lang].match(s) and not (lang == 'en' and NAMING.search(s))
-                    and not (lang == 'es' and ES_NAMING.search(s)) and s != last
-                    and len(_stems(s) & want) >= need]
-            if fits:
-                return min(fits, key=lambda s: size(s, lang))
+        fits = [s for s in source if s != last and eligible(s, cap, room)]
+        # A final factual sentence beats a connector or question title when no earlier point fits.
+        if not fits and not need and last and eligible(last, cap, room) and (
+                lang == 'zh' or re.search(r'\b(?:was|were|had|felt|stopped|took|gave)\b', last)):
+            fits = [last]
+        if fits:
+            return central(fits)
+    if not standalone(fallback, title=True):
+        facts = [s for s in source if standalone(s)]
+        return central(facts) if facts else ''
     return sentence_of(fallback, lang)
+
+
+def hook(beat_texts: list[str], lang: str) -> str:
+    """A short source excerpt for the section card; never change the author's words."""
+    source = [s for text in beat_texts for s in sentences(text, lang)]
+    if not source:
+        return ''
+    text = next((s for s in source if s.endswith(('?', '？'))), source[0])
+    limit = 30 if lang != 'zh' else 15
+    if len(text) <= limit:
+        return text
+    clipped = text[:limit]
+    if lang != 'zh' and text[limit:limit + 1].isalnum():
+        clipped = clipped.rsplit(' ', 1)[0]
+    return clipped.rstrip(' ,，。.!?？') + '…'
 
 
 def take_text(head: str, lang: str) -> str:
@@ -240,18 +271,25 @@ def build(doc: Document, story: str = 'explain') -> dict:
         chapters.append({'id': cid, 'kind': 'section' if multi else 'board', 'label': {lang: label},
                          'title': {lang: s.heading}})
         texts = beats_of(s.paragraphs, lang)
+        if multi:
+            chapters[-1]['hook'] = {lang: hook(texts, lang)}
         head = headline(texts, s.heading, lang, titled[k - 1])
         closing = s.paragraphs[-1].strip()
         if multi and len(s.paragraphs) > 1 and sentences(closing, lang) == [closing] \
+                and size(closing, lang) <= (18 if lang in ('en', 'es') else 28) \
                 and headline([closing], s.heading, lang, titled[k - 1], keep_last=True) == closing:
             # a one-sentence closing paragraph that sums the section up is its takeaway, said once (as the note
             # is written), not read out and then repeated straight after as "Key takeaway: ..."
             head, texts = closing, beats_of(s.paragraphs[:-1], lang)
+        if multi and texts and sentences(texts[-1], lang)[-1] == head:
+            # Move a final summary to the note rather than saying it twice in succession.
+            texts[-1] = texts[-1][:-len(head)].rstrip()
+            texts = [text for text in texts if text]
         if multi:                                   # said while the section's title card is written
             beat(cid, 'opener', T['opener'].format(label=label, title=sentence_of(s.heading, lang)))
         for text in texts:
             beat(cid, 'narration', text)
-        if multi:                                   # said while the takeaway note is written
+        if multi and head:                          # no note when the source contains only questions/hooks
             beat(cid, 'take', take_text(head, lang), take={'headline': {lang: head}})
     chapters.append({'id': 'outro', 'kind': 'outro', 'label': {lang: T['outro_label']}, 'title': {lang: ''}})
     for text in beats_of(outro_paras, lang):
