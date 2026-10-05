@@ -216,12 +216,12 @@ def test_the_cut_keeps_the_top_of_a_real_voice(take, tmp_path):
     assert spectrum[np.abs(hz - 15000) < 20].max() > 30 * np.median(spectrum[(hz > 13000) & (hz < 17000)])
 
 
-def _skipping_take(tmp_path, beats, skip):
+def _skipping_take(tmp_path, beats, skip, speed=.9):
     """``beats`` read by another voice with the beats at ``skip`` left out, as a mono wav."""
     parts = [np.zeros(9600, np.float32)]
     for k, (_, text) in enumerate(beats):
         if k not in skip:
-            clip = voice.synthesize(text, 'en', tmp_path / 'reader', 'am_michael', .9)
+            clip = voice.synthesize(text, 'en', tmp_path / 'reader', 'am_michael', speed)
             parts += [voice._read_wav(clip.wav), np.zeros(14400, np.float32)]
     x = np.concatenate(parts)
     x = x + np.random.default_rng(0).normal(0, NOISE, len(x)).astype(np.float32)
@@ -246,8 +246,8 @@ def test_a_take_that_skips_sentences_says_what_to_do_instead_of_a_traceback(tmp_
         cli.main(['voice', str(project), '--recording', str(take)])
     message = str(end.value.code)
     assert 'Traceback' not in message and 'ValueError' not in message
-    assert 'Your recording skips or changes the part that says "And finally: Bees work hard."' in message
-    assert 'Read the whole script once through' in message
+    assert 'Part of the script seems to be missing from your recording, around the part that says "Here\'s what ' \
+           'we\'ll cover. First: It never spoils." Read the whole script once through' in message
     assert f'kinodraw voice "{project}" --recording none' in message
     cli.main(['voice', str(project), '--recording', 'none'])
     assert 'captions' in capsys.readouterr().out
@@ -270,6 +270,44 @@ def test_a_take_that_leaves_out_one_part_is_refused_and_names_it(tmp_path):
     report = json.loads((project / 'voice' / 'recording-align.json').read_text())
     assert next(row for row in report['beats'] if row['id'] == 'b002')['missing']
     assert not (project / 'build' / 'timeline.json').exists()                  # nothing goes on to render
+
+
+@needs_models
+@pytest.mark.parametrize('skip, part', [({1}, '"Honey is one of the oldest foods people still eat."'),
+                                        ({2, 3}, '"Here\'s what we\'ll cover. First: It never spoils."')])
+def test_a_take_read_a_little_faster_names_the_same_left_out_part_in_the_same_words(tmp_path, skip, part):
+    """Whether the alignment gives a left-out part no time at all or a sliver of the pause next to it turns on tiny
+    differences between takes (Kokoro's graph draws fresh noise on every run, and computers round differently), so the
+    same take was refused in two different sentences, naming either of two parts left out together. A left-out part is
+    found the same way either way, and the first one is named."""
+    project = tmp_path / 'video'
+    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    beats = [(beat['id'], beat['spoken']['en']) for beat in board['beats']]
+    take = _skipping_take(tmp_path, beats, skip, .92)
+    with pytest.raises(SystemExit) as end:
+        cli.main(['voice', str(project), '--recording', str(take)])
+    assert f'Part of the script seems to be missing from your recording, around the part that says {part} Read the ' \
+           'whole script once through' in str(end.value.code)
+
+
+@needs_models
+def test_a_voice_clip_that_comes_out_as_noise_is_made_again(tmp_path, monkeypatch):
+    """Kokoro's graph draws random noise on every run; a run that came out with one non-finite sample was trimmed by
+    kokoro-onnx to no audio at all, and the voice step stopped with numpy's "zero-size array to reduction operation
+    maximum which has no identity"."""
+    import onnxruntime
+    run, runs = onnxruntime.InferenceSession.run, []
+
+    def once_not_a_number(self, *args, **kwargs):
+        out = run(self, *args, **kwargs)
+        runs.append(len(out[0]))
+        if len(runs) == 1:
+            out[0].reshape(-1)[100] = np.nan
+        return out
+    monkeypatch.setattr(onnxruntime.InferenceSession, 'run', once_not_a_number)
+    clip = voice.synthesize('Honey is one of the oldest foods people still eat.', 'en', tmp_path, 'af_heart')
+    audio = voice._read_wav(clip.wav)
+    assert len(runs) == 2 and clip.duration > 1 and len(audio) > voice.SR and np.abs(audio).max() > .05
 
 
 def test_the_studio_shows_a_recording_problem_as_a_plain_sentence(monkeypatch):

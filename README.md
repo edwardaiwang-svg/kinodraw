@@ -13,7 +13,7 @@ Paste a script and KinoDraw produces a finished MP4. A drawing hand sketches car
 - **1,760+ doodles.** It ships 279 original drawings in one bold outlined style (plus a recurring narrator character) and 1,483 Microsoft Fluent Emoji redrawn to match.
 - **It explains, not just decorates.** Numbers become big stats and 100-square grids, dates become timelines, "X is called Y" becomes a sticky-note definition, and quotes become quote cards. Every section ends with a takeaway note that pins onto the agenda.
 - **Everything is editable.** Swap any doodle, fix a label, retitle a section, preview a frame, then make the video.
-- **Optional AI director.** It can plan the visuals with GPT-6 Luna or Claude: through KinoDraw Cloud (free plan, no key needed), or with your own OpenAI, Anthropic or OpenAI-compatible key.
+- **Optional AI director.** It can plan the visuals with GPT-6 Luna or Claude: through KinoDraw Cloud (free, no account or key needed), or with your own OpenAI, Anthropic or OpenAI-compatible key.
 - **Style: Choose for me.** The video's director picks the style (whiteboard, chalkboard, notebook, Pixel Quest, Mosaic, or a paper-collage promo when you name a product) and says why: KinoDraw Cloud's GPT-6 Luna, your own AI key, or, offline, word rules on your computer. It only picks a style that works in the format you chose.
 
 ## Install
@@ -27,7 +27,7 @@ The app isn't notarized by Apple or signed for Windows yet, so the first launch 
 
 **Coming from Doodle Studio?** Close Doodle Studio, then open KinoDraw: it moves your Doodle Studio projects, settings
 and downloaded voice over the first time it opens (if Doodle Studio was still open, KinoDraw says so and finishes the move
-the next time it opens). Sign in to KinoDraw Cloud and re-enter any saved API keys once, then delete *Doodle Studio.app*
+the next time it opens). Re-enter any saved API keys once (KinoDraw Cloud needs no sign-in), then delete *Doodle Studio.app*
 (or the *Doodle Studio* folder on Windows and Linux).
 
 **Command line** (Python 3.10–3.12):
@@ -51,7 +51,7 @@ Plain text, Markdown or a .docx file works.
 | Director | Cost | Notes |
 |---|---|---|
 | **Offline** (always available) | free | Matches the words of each sentence to the doodle library on your computer. The visual plan stays on your machine. |
-| **KinoDraw Cloud** | free: 5 videos a month | GPT-6 Luna plans each section. No key needed; sign in with an email code. Paid plans with more videos and Claude Opus 5.5 come later. |
+| **KinoDraw Cloud** | free | GPT-6 Luna plans each section. No account and no key needed; signing in with an email code is optional. Paid plans with more videos and Claude Opus 5.5 come later. |
 | **Your OpenAI key** (Advanced) | about $0.02 per 15-min video | Default `gpt-6-luna`. In the app, turn on Settings → Advanced directors to see these last four options. |
 | **Your Anthropic key** | about $1 per 15-min video | `claude-opus-5`, `claude-opus-5-5`, or the cheaper `claude-haiku-4-5`. |
 | **OpenAI-compatible** | varies | OpenRouter, DeepInfra, Groq, or a local Ollama or LM Studio. |

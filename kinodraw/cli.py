@@ -14,7 +14,8 @@
   kinodraw finish MyVideo                       music, mux, captions, chapters, QA
   kinodraw setup [--lang en zh]                 download the voice models once
   kinodraw doodles "rocket launch" [--lang en]  search the doodle library
-  kinodraw login you@example.com                KinoDraw Cloud (free plan: AI-directed videos, no API key needed)
+  kinodraw login you@example.com                sign in to KinoDraw Cloud (optional: --director cloud is free with no account)
+  kinodraw cloud-id                             this installation's KinoDraw Cloud ID (to ask for its data to be deleted)
   kinodraw key set openai|anthropic|compat      store your own API key in the OS keychain
   kinodraw key set voice-server --url URL       ... the key of your voice server (sent only to that address)
   kinodraw key set command                      store a command to use as the director (Advanced)
@@ -206,6 +207,15 @@ def cmd_login(args):
           f"{'unlimited videos (fair use)' if left is None else f'{left} videos left this month'}")
 
 
+def cmd_cloud_id(args):
+    from .director.llm import cloud
+    kept = cloud.kept_install_id()
+    if not kept:
+        print('  no KinoDraw Cloud ID on this computer: one is made the first time KinoDraw Cloud is used')
+        return
+    print(f'  {kept}\n  to delete what KinoDraw Cloud keeps for this installation, email privacy@doodlecloud.org this ID')
+
+
 def cmd_key(args):
     import getpass
     import os
@@ -353,6 +363,7 @@ def main(argv=None):
     p.add_argument('email')
     p.add_argument('--code')
     p.set_defaults(func=cmd_login)
+    sub.add_parser('cloud-id').set_defaults(func=cmd_cloud_id)
     p = sub.add_parser('key')
     p.add_argument('action', choices=['set'])
     p.add_argument('provider', choices=['openai', 'anthropic', 'compat', 'command', 'voice-server'])

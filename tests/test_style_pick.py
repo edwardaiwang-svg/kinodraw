@@ -29,6 +29,7 @@ class FakeCloud:
 
     def __init__(self):
         self.pick, self.seen = {'style': 'chalkboard/explain', 'reason': 'A math lesson suits a chalkboard'}, []
+        self.anonymous, self.refused = [], set()     # tokens /v1/anonymous gives out in turn; tokens /v1/style refuses (401)
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -38,8 +39,14 @@ class FakeCloud:
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
                 fake.seen.append({'path': self.path, 'body': body, 'auth': self.headers.get('Authorization')})
+                if self.path == '/v1/style' and fake.seen[-1]['auth'] in fake.refused:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
                 if self.path == '/v1/style':
                     out = {'pick': fake.pick, 'usage': {'model': 'gpt-6-luna', 'input_tokens': 300, 'output_tokens': 20}}
+                elif self.path == '/v1/anonymous' and fake.anonymous:     # open access on; otherwise a 404, as before it
+                    out = {'token': fake.anonymous.pop(0), 'plan': 'free', 'remaining': None, 'anonymous': True}
                 elif self.path.endswith('/chat/completions'):      # an OpenAI-compatible server (own-key path)
                     out = {'id': 'x', 'object': 'chat.completion', 'created': 0, 'model': body['model'],
                            'choices': [{'index': 0, 'finish_reason': 'stop',
@@ -62,9 +69,11 @@ class FakeCloud:
 
 
 @pytest.fixture
-def fake_cloud(monkeypatch):
+def fake_cloud(monkeypatch, tmp_path):
     fake = FakeCloud()
     monkeypatch.setattr(cloud, 'URL', fake.url)
+    monkeypatch.setattr(cloud, 'INSTALL_ID', tmp_path / 'install-id')     # signed out, the app asks for an anonymous token
+    monkeypatch.setattr(cloud, '_anon_token', None)
     monkeypatch.setenv('KINODRAW_CLOUD_TOKEN', 'test-token')
     yield fake
     fake.httpd.shutdown()
@@ -122,6 +131,31 @@ def test_a_pick_outside_the_offer_is_not_used(studio, fake_cloud, monkeypatch):
     _, _, cfg, _ = studio(director='cloud', title='Signed out')
     assert cfg['style_pick']['by'] == 'rules' and 'sign in' in cfg['style_pick']['note']
 
+
+
+def test_with_no_sign_in_kinodraw_cloud_picks_with_the_anonymous_token(studio, fake_cloud, monkeypatch):
+    """As the AI director does (0.2.1): no email sign-in, so the app asks once for an anonymous token and picks with it;
+    a kept token the cloud no longer knows is forgotten and a new one asked for once."""
+    import keyring
+    saved = {}
+    monkeypatch.setattr(keyring, 'get_password', lambda service, name: saved.get((service, name)))
+    monkeypatch.setattr(keyring, 'set_password', lambda service, name, value: saved.__setitem__((service, name), value))
+    monkeypatch.setattr(keyring, 'delete_password', lambda service, name: saved.pop((service, name), None))
+    monkeypatch.delenv('KINODRAW_CLOUD_TOKEN')
+    monkeypatch.setattr(cloud, '_token', lambda: None)
+    fake_cloud.anonymous = ['anon-1', 'anon-2']
+    _, board, cfg, _ = studio(director='cloud', title='Anonymous')
+    assert cfg['style_pick']['by'] == 'cloud' and board['look'] == 'chalkboard'
+    assert [(c['path'], c['auth']) for c in fake_cloud.seen] == [('/v1/anonymous', None), ('/v1/style', 'Bearer anon-1')]
+    assert saved == {('KinoDraw', 'cloud-anon-token'): 'anon-1'}
+    fake_cloud.seen.clear()
+    fake_cloud.refused.add('Bearer anon-1')                    # another cloud's token, or a revoked one
+    monkeypatch.setattr(cloud, '_anon_token', None)            # a new process: the keychain's token is used first
+    _, _, cfg, _ = studio(director='cloud', title='Renewed')
+    assert cfg['style_pick']['by'] == 'cloud'
+    assert [(c['path'], c['auth']) for c in fake_cloud.seen] == [
+        ('/v1/style', 'Bearer anon-1'), ('/v1/anonymous', None), ('/v1/style', 'Bearer anon-2')]
+    assert saved == {('KinoDraw', 'cloud-anon-token'): 'anon-2'}
 
 def test_only_styles_that_render_the_format_and_language_are_offered(studio, fake_cloud, monkeypatch):
     looks = tuple({**e, 'aspect': ['16:9']} if e['id'] == 'mosaic' else e for e in styles._looks())
