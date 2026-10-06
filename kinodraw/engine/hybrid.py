@@ -115,7 +115,15 @@ class Span:
 
 
 class HybridProduction:
-    vertical = False
+    @property
+    def vertical(self):
+        return self.whiteboard.vertical
+
+    @vertical.setter
+    def vertical(self, value):
+        # The outer portrait compositor owns chrome/captions for every scene.
+        self.whiteboard.vertical = value
+        self.cutaway.vertical = value
 
     def __init__(self, episode, tline, lang, project_dir, plan, whiteboard):
         self.ep, self.tl, self.lang = episode, tline, lang
@@ -200,9 +208,6 @@ class HybridProduction:
             beat = self.by_id[a['at_beat']]
             timing = self.tl['beats'][a['at_beat']]
             char = self._source_action_char(beat, a['actor'], a['verb'])
-            if char is None:
-                self.warnings.append(f"hybrid: {a['verb']} by {a['actor']} at {a['at_beat']} lacks an unambiguous positive source cue; skipped")
-                continue
             target = None
             if a['verb'] == 'sleep':
                 contact = self._sleep_contact(beat, a['actor'])
@@ -210,6 +215,9 @@ class HybridProduction:
                     char, target = contact
                     if target not in actors:
                         actors.append(target)
+            if char is None:
+                self.warnings.append(f"hybrid: {a['verb']} by {a['actor']} at {a['at_beat']} lacks an unambiguous positive source cue; skipped")
+                continue
             if a['verb'] == 'nudge' and treatment in ('character', 'atmosphere'):
                 char = self._nudge_char(beat['spoken'], a['actor'], char)
                 target = self._nudge_target(beat, a['actor'], char) if char is not None else None
@@ -1031,7 +1039,8 @@ class HybridProduction:
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
                                           *self.size, kind='match', duration=last.join_length)
                 image = Image.fromarray(array).convert('RGBA')
-                self.whiteboard._caption(image, t)
+                if not self.vertical:
+                    self.whiteboard._caption(image, t)
                 return image.convert('RGB')
             return self.whiteboard.frame(t)
         i = bisect.bisect_right(self.starts, t) - 1
@@ -1059,7 +1068,8 @@ class HybridProduction:
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)
         image = image.convert('RGBA')
-        self.whiteboard._caption(image, t)
+        if not self.vertical:
+            self.whiteboard._caption(image, t)
         return image.convert('RGB')
 
     def cues(self):

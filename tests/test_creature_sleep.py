@@ -122,3 +122,4 @@ def test_sleep_contact_never_borrows_a_negated_or_other_actors_sleep(tmp_path, c
     prod, child, _ = sleeping_story(tmp_path, closing)
     beat = prod.by_id[prod.spans[-1].spec['beat_ids'][-1]]
     assert prod._sleep_contact(beat, child) is None
+    assert not any(actor == child and action.name == 'sleep' for actor, action, _ in prod.spans[-1].actions)
