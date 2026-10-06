@@ -12,7 +12,7 @@ from kinodraw.engine.source_diagrams import resolve
 from source_diagram_helpers import build
 
 OUT = Path(__file__).resolve().parents[1] / 'docs/overnight-2026-10-05/evidence/source-diagrams/final-contract-repair/own-rawframes'
-OUT.mkdir(exist_ok=True)
+OUT.mkdir(parents=True, exist_ok=True)
 
 
 def record(name, data):
