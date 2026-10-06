@@ -81,7 +81,7 @@ def element_pose(scene, element, i, t):
     corner = element.kind == 'text' and element.preset == 'corner_caption'
     drift = .7 if corner else scene.foreground_drift
     x += floor * drift * math.sin(t * 1.13 + phase)
-    y += floor * drift * .7 * math.sin(t * 1.67 + phase * .8)
+    y += floor * drift * .7 * math.cos(t * 1.13 + phase)
     scale *= 1 + floor * (.003 if corner else .015) * math.sin(t * 1.91 + phase)
     alpha = enter * (1 - floor * .035 * (1 + math.sin(t * 2.3 + phase)))
     if element.end is not None:
@@ -101,7 +101,7 @@ def _group(body, pose):
 
 
 @lru_cache(maxsize=128)
-def _picture(svg_id, raw, width, height, color, cover=False, prefix='picture_'):
+def _picture(svg_id, raw, width, height, color, cover=False, prefix='picture_', preserve_palette=False):
     if raw is None:
         path = library.resolve(svg_id)
         if path is None or path.suffix != '.svg':
@@ -124,14 +124,14 @@ def _picture(svg_id, raw, width, height, color, cover=False, prefix='picture_'):
                 raise ValueError('SVG pictures cannot contain external resources or event handlers')
             if 'url(' in value and not value.startswith('url(#'):
                 raise ValueError('SVG pictures cannot contain external resources')
-            if name in {'fill', 'stroke', 'stop-color'} and value not in {'none', 'transparent'} and not value.startswith('url('):
+            if not preserve_palette and name in {'fill', 'stroke', 'stop-color'} and value not in {'none', 'transparent'} and not value.startswith('url('):
                 node.set(key, color)
             if name == 'style':
                 for declaration in value.split(';'):
                     prop, _, val = declaration.partition(':')
                     prop, val = prop.strip(), val.strip()
                     if prop in {'fill', 'stroke', 'stop-color'}:
-                        node.set(prop, val if val in {'none', 'transparent'} or val.startswith('url(#') else color)
+                        node.set(prop, val if preserve_palette or val in {'none', 'transparent'} or val.startswith('url(#') else color)
                     elif prop in {'opacity', 'fill-opacity', 'stroke-opacity', 'stroke-width', 'stroke-linecap',
                                   'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'fill-rule', 'clip-rule',
                                   'clip-path', 'mask', 'display', 'visibility', 'font-size', 'font-weight',
@@ -152,7 +152,8 @@ def _picture(svg_id, raw, width, height, color, cover=False, prefix='picture_'):
     root.set('y', str(-height / 2))
     root.set('width', str(width))
     root.set('height', str(height))
-    root.set('fill', color)
+    if not preserve_palette:
+        root.set('fill', color)
     if cover:
         root.set('preserveAspectRatio', 'xMidYMid slice')
     text_root = deepcopy(root)
@@ -278,25 +279,28 @@ def _text(element, scene, t, color):
             shown -= len(line) + 1
         return out
     if element.preset in {'word_pop', 'cascade'}:
-        pieces = text.split() if element.preset == 'word_pop' else list(text)
-        widths = [font.getlength(p) * size / font.size for p in pieces]
+        rows = [line.split() if element.preset == 'word_pop' else list(line) for line in text.split('\n')]
         gap = size * .28 if element.preset == 'word_pop' else 0
-        x = -(sum(widths) + gap * max(0, len(pieces) - 1)) / 2
-        poses = m.letter_cascade(len(pieces), t, element.start, dur=TEXT_ENTER)
-        out = ''
-        for i, (piece, width) in enumerate(zip(pieces, widths)):
-            delay = i * (.1 if element.preset == 'word_pop' else .035)
-            p = m.expo_out((t - element.start - delay) / TEXT_ENTER)
-            if element.preset == 'word_pop':
-                scale = m.pop(t, element.start + delay, dur=TEXT_ENTER)['scale'] if scene.energy >= 4 else p
-                dy, rotation, alpha = 16 * (1 - p), 0, p
-            else:
-                pose = poses[i]
-                scale = pose['scale'] if scene.energy >= 4 else .6 + .4 * p
-                dy, rotation, alpha = pose['dy'], pose['rotation'], pose['alpha']
-            out += (f'<g transform="translate({x + width / 2:.6f} {dy:.6f}) rotate({rotation:.6f}) scale({scale:.6f})" '
-                    f'opacity="{alpha:.6f}">{_text_tag(piece, size, color)}</g>')
-            x += width + gap
+        poses = m.letter_cascade(sum(map(len, rows)), t, element.start, dur=TEXT_ENTER)
+        out, i = '', 0
+        for row, pieces in enumerate(rows):
+            widths = [font.getlength(piece) * size / font.size for piece in pieces]
+            x = -(sum(widths) + gap * max(0, len(pieces) - 1)) / 2
+            for piece, width in zip(pieces, widths):
+                delay = i * (.1 if element.preset == 'word_pop' else .035)
+                p = m.expo_out((t - element.start - delay) / TEXT_ENTER)
+                if element.preset == 'word_pop':
+                    scale = m.pop(t, element.start + delay, dur=TEXT_ENTER)['scale'] if scene.energy >= 4 else p
+                    dy, rotation, alpha = 16 * (1 - p), 0, p
+                else:
+                    pose = poses[i]
+                    scale = pose['scale'] if scene.energy >= 4 else .6 + .4 * p
+                    dy, rotation, alpha = pose['dy'], pose['rotation'], pose['alpha']
+                dy += (row - (len(rows) - 1) / 2) * size * 1.15
+                out += (f'<g transform="translate({x + width / 2:.6f} {dy:.6f}) rotate({rotation:.6f}) scale({scale:.6f})" '
+                        f'opacity="{alpha:.6f}">{_text_tag(piece, size, color)}</g>')
+                x += width + gap
+                i += 1
         return out
     lines = text.split('\n')
     body = ''.join(_text_tag(line, size, color, y=(i - (len(lines) - 1) / 2) * size * 1.15, spacing=spacing)
@@ -315,7 +319,7 @@ def _element_content(scene, e, i, t, geometry=None):
     elif e.kind == 'picture':
         cover = scene.composition == 'full_bleed'
         width, height = (W * 1.06, H * 1.06) if cover else (e.width, e.height)
-        art, text = _picture(e.svg_id, e.svg, width, height, color, cover, f'picture{i}_')
+        art, text = _picture(e.svg_id, e.svg, width, height, color, cover, f'picture{i}_', e.preserve_svg_palette)
     elif e.kind == 'chart':
         art, text = chart_svg(e, t, color, scene.palette.foreground)
     elif e.kind == 'particle_field':

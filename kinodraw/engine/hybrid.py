@@ -304,7 +304,8 @@ class HybridProduction:
             if e['kind'] == 'picture' and not span.diagram:
                 try:
                     path = library.resolve(e['ref'], Path(project_dir))
-                    elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450))
+                    elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450,
+                                                  preserve_svg_palette=e['ref'].startswith('gen-')))
                 except (OSError, KeyError, ValueError, AttributeError):
                     self.warnings.append(f"hybrid: missing prop {e['ref']}; unavailable picture omitted")
         text_kind, ref = spec['text']['kind'], spec['text']['ref']
@@ -380,6 +381,19 @@ class HybridProduction:
                         self.warnings.append(f"hybrid: chart visual {visual.get('type')} requires source whiteboard cutaway")
             if not elements:
                 self.warnings.append('hybrid: chart without supported graphics uses source whiteboard facts over motion backdrop')
+        if not span.actors and not span.diagram and not numeric_chart and treatment in ('motion', 'kinetic_type'):
+            pictures = [e for e in elements if e.kind == 'picture']
+            copy_elements = [e for e in elements if e.kind == 'text' and e.preset not in ('corner_caption', 'counter')]
+            # Source copy remains verbatim, but line breaks give kinetic headlines
+            # enough ink to read and move; a prop gets its own space below the copy.
+            for e in copy_elements:
+                e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
+                e.size = 96
+            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed'):
+                for e in copy_elements:
+                    e.y, e.width = .23, 1400
+                for e in pictures:
+                    e.y = .60
         camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
         transition = spec['transition_in']
         span.motion = MotionScene(elements, duration=max(.01, duration), composition='center' if
@@ -387,7 +401,8 @@ class HybridProduction:
             transition_in=transition,
             palette=Palette(p['background'], p['ink'], p['accent']), energy=self.style['energy'],
             motion_floor={'still': 0, 'breathing': .4, 'drifting': .7, 'lively': 1}[self.style['motion_floor']],
-            hold=min(1.1, max(.5, spec['hold_s'])), seed=seed(spec['beat_ids']), blur_samples=1, foreground_drift=48.)
+            hold=min(1.1, max(.5, spec['hold_s'])), seed=seed(spec['beat_ids']), blur_samples=1,
+            foreground_drift=84. if treatment == 'kinetic_type' else 48.)
         for element in elements:
             element.font = self.style['type']
         if span.source_character:

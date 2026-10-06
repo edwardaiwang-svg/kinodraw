@@ -305,8 +305,11 @@ class PanelMotion:
             drawing = ink.TextDrawing(lines, 'en', font_size, fonts=skin.fonts, color=palette['ink'])
             self.labels.append(drawing.state(drawing.duration)[0])
 
-    def _ambient(self, t):
-        a, end = self.window[1], self.speech_end
+    def _ambient(self, t, phase=0.):
+        # The cards ease into place before the spoken glide clause ends. Carry
+        # the bounded ambient arc through that glide instead of leaving a
+        # motionless gap between their arrival and the final source word.
+        a, end = self.window[0], self.speech_end
         if self.floor == 'still' or not a < t < end:
             return 0.
         before, after = a, end
@@ -318,8 +321,8 @@ class PanelMotion:
             elif start > t:
                 after = min(after, start)
         envelope = ease((t-before)/.4) * ease((after-t)/.4)
-        amplitude = self.size[1] * {'breathing': .014, 'drifting': .021, 'lively': .028}[self.floor]
-        return amplitude * math.sin((t-a)*1.1) * envelope
+        amplitude = self.size[1] * {'breathing': .03, 'drifting': .045, 'lively': .06}[self.floor]
+        return amplitude * math.sin((t-a)*1.1 + phase) * envelope
 
     def boxes(self,t):
         w,h = self.size
@@ -332,7 +335,8 @@ class PanelMotion:
         for i in range(n):
             u=ease((t-a)/(b-a)*1.3-i*.1)
             x,y = ((w-cw)/2,h*.17+i*h*.60/n) if square else (w*.10+i*(cw+gap),h*.28)
-            out.append((x+(1-u)*w*.04+self._ambient(t), y-(1-u)*h*(.1 if square else .15),cw,ch))
+            out.append((x+(1-u)*w*.04+self._ambient(t),
+                        y-(1-u)*h*(.1 if square else .15)+self._ambient(t, math.pi/2)*.7,cw,ch))
         return tuple(out)
 
     def paint(self,image,t):

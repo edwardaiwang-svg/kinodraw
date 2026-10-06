@@ -53,6 +53,7 @@ class MotionElement:
     emissive: bool = False
     font: str = 'rounded'
     kick: float = 0.                  # initial px/frame, with .7 decay at 30 fps
+    preserve_svg_palette: bool = False  # generated artwork already follows the authored palette
 
     def __post_init__(self):
         if self.kind not in KINDS or self.preset not in PRESETS:
