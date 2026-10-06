@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields
 
 DURATIONS = {'roar': 2.4, 'whimper': 2.2, 'tremble': 2.2, 'nudge': 1.8, 'laugh': 2.4,
              'swipe': 1.4, 'walk': 3., 'run': 2.5, 'sit': 2.4, 'look': 2., 'pounce': 1.8,
-             'hide': 2.4, 'breathe_heavy': 3.5, 'sleep': 2.8}
+             'hide': 2.4, 'breathe_heavy': 3.5, 'sleep': 2.8, 'bare_teeth': 3.}
 ACTIONS = tuple(DURATIONS)
 TREMBLE_CYCLES = 16.
 # Whole-cue horizontal travel, in the rig's 600-unit drawing space before genome size; the pose cycle itself stays in
@@ -140,9 +140,9 @@ def action_pose(action: Action | str, t: float, *, until: float | None = None) -
         # A whole-body shiver. 16 cycles per cue is ~7 Hz (about four video frames a cycle at 30 fps), and the
         # preview's eight samples (0.14 of the cue apart) advance 0.24 of a cycle each, so no sample pair aliases.
         shiver = math.sin(2. * math.pi * TREMBLE_CYCLES * u)
-        p = Pose(dx=13. * shiver * w, dy=-3.5 * abs(shiver) * w, squash=.05 * math.sin(2. * math.pi * TREMBLE_CYCLES * u + 1.2) * w,
-                 head_x=-4 * w, head_y=7 * w, head_pitch=6 * w, ears=60 * w + 14 * shiver * w,
-                 worry=w, crouch=14 * w, lean=-3 * w, legs=(4 * shiver * w, -4 * shiver * w, -4 * shiver * w, 4 * shiver * w))
+        p = Pose(dx=22. * shiver * w, dy=-3.5 * abs(shiver) * w, squash=.05 * math.sin(2. * math.pi * TREMBLE_CYCLES * u + 1.2) * w,
+                 head_x=-4 * w, head_y=2 * w, head_pitch=6 * w, ears=20 * w + 14 * shiver * w,
+                 worry=w, crouch=4 * w, lean=-3 * w, legs=(4 * shiver * w, -4 * shiver * w, -4 * shiver * w, 4 * shiver * w))
     elif name == 'whimper':
         # Head dips and the ears go back; the closed-mouth whimper marks pulse (about 2.3 Hz) over a small shiver.
         pulse = .5 + .5 * math.sin(2. * math.pi * 5. * u - math.pi / 2)
@@ -159,6 +159,9 @@ def action_pose(action: Action | str, t: float, *, until: float | None = None) -
         p = Pose(dy=-11 * bounce, squash=.07 * shake(u, 8), head_pitch=-38 * w,
                  head_x=-9 * w, head_y=-16 * w, jaw=.84 * w * (.75 + .25 * bounce),
                  cackle=w, ears=-12 * w)
+    elif name == 'bare_teeth':
+        p = Pose(jaw=.65 * w, fierce=w, head_pitch=-12 * w,
+                 head_x=12 * w, ears=-12 * w, crouch=5 * w)
     elif name == 'swipe':
         p = Pose(legs=(0., 0., 0., -95 * hit), knees=(0., 0., 0., -25 * w),
                  head_x=5 * hit, squash=.04 * hit, swipe=hit, mane=4 * shake(u, 5))
@@ -193,6 +196,10 @@ def action_pose(action: Action | str, t: float, *, until: float | None = None) -
         p = Pose(breath=.10 * breath * w, head_y=4 * breath * w, jaw=.25 * w,
                  puffs=max(0., -breath) * w, ears=5 * w)
     strength = min(2., max(0., action.intensity))
+    if name in ('whimper', 'tremble') and strength > 0:
+        # A soft emotional cue still needs its categorical posture/cadence.
+        # At one third strength both used to read as the same small crouch.
+        strength = max(.85, strength)
     return add(blend(Pose(), p, min(1., strength)), blend(Pose(), p, max(0., strength - 1.)))
 
 

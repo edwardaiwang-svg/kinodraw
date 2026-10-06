@@ -197,6 +197,22 @@ class HybridProduction:
             # mentions (such as a parent already away hunting) do not add actors.
             actors += [key for key, g in self.cast.items() if mentions(g.name, text) and key not in actors]
         actors += [a['actor'] for a in spec['actions'] if a['actor'] in self.cast and a['actor'] not in actors]
+        actors = list(dict.fromkeys(actors))
+        character_intent = treatment == 'character' or spec['actions'] or any(
+            e['kind'] == 'cast' for e in spec['elements'])
+        if character_intent:
+            count, unspecified = hyena_quantity(text)
+            existing = sum(self.cast[key].species == 'hyena' for key in actors)
+            if unspecified and count > existing:
+                self.warnings.append('hybrid: hyena count unspecified; showing two representatives of the plural group')
+            for i in range(max(0, count - existing)):
+                key = f'crowd-hyena-{i}'
+                while key in actors or any(c['id'] == key for c in self.plan['cast']):
+                    i += 1
+                    key = f'crowd-hyena-{i}'
+                actors.append(key)
+                self.cast[key] = Genome.from_dict({'name': key, 'species': 'hyena', 'size': .75, 'seed': seed(key),
+                                                   'palette': {'body': '#998267', 'accent': '#DBC5A2', 'eye': '#C59243'}})
         span.actors = tuple(dict.fromkeys(actors))
         events = []
         for a in spec['actions']:
@@ -219,7 +235,7 @@ class HybridProduction:
             if char is None:
                 self.warnings.append(f"hybrid: {a['verb']} by {a['actor']} at {a['at_beat']} lacks an unambiguous positive source cue; skipped")
                 continue
-            if a['verb'] == 'nudge' and treatment in ('character', 'atmosphere'):
+            if a['verb'] == 'nudge':
                 char = self._nudge_char(beat['spoken'], a['actor'], char)
                 target = self._nudge_target(beat, a['actor'], char) if char is not None else None
                 if target is None:
@@ -231,27 +247,19 @@ class HybridProduction:
             at = timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0)
             remaining = max(.1, min(timing['speech_end'], span.end) - at)
             action = Action(a['verb'], at - span.start, min(remaining, Action(a['verb']).seconds), a['intensity'] / 3)
-            if a['verb'] != 'sleep' and (a['verb'] != 'nudge' or treatment not in ('character', 'atmosphere')):
-                target = next((key for key in actors if key != a['actor'] and mentions(
-                    self.cast[key].name, beat['spoken'][char:])), None)
+            if a['verb'] == 'swipe':
+                target = self._swipe_target(beat, a['actor'], char, actors)
+                if target and target not in actors:
+                    actors.append(target)
+            elif a['verb'] == 'hide':
+                target = self._hide_target(beat, a['actor'], char)
+                if target and target not in actors:
+                    actors.append(target)
             events.append((a['actor'], action, target))
         span.actors = tuple(dict.fromkeys(actors))
         span.actions = tuple(events)
-        character_intent = treatment == 'character' or spec['actions'] or any(
-            e['kind'] == 'cast' for e in spec['elements'])
-        if character_intent:
-            count, unspecified = hyena_quantity(text)
-            existing = sum(self.cast[key].species == 'hyena' for key in span.actors)
-            if unspecified and count > existing:
-                self.warnings.append('hybrid: hyena count unspecified; showing two representatives of the plural group')
-            for i in range(max(0, count - existing)):
-                key = f'crowd-hyena-{i}'
-                while key in span.actors or any(c['id'] == key for c in self.plan['cast']):
-                    i += 1
-                    key = f'crowd-hyena-{i}'
-                span.actors += (key,)
-                self.cast[key] = Genome.from_dict({'name': key, 'species': 'hyena', 'size': .75, 'seed': seed(key),
-                                                   'palette': {'body': '#998267', 'accent': '#DBC5A2', 'eye': '#C59243'}})
+        self._group_actions(span, events)
+        span.actions = tuple(events)
         kind = spec['atmosphere']['kind']
         aliases = {'night_stars': ['night_sky', 'starfield'],
                    'fog_with_shooting_star': ['night_sky', 'starfield', 'shooting_star', 'fog'],
@@ -421,6 +429,102 @@ class HybridProduction:
 
     def _label(self, value):
         return str(value.get(self.lang, next(iter(value.values()), ''))) if isinstance(value, dict) else str(value or '')
+
+    def _group_actions(self, span, events):
+        """Give source-owned plural representatives the actions spoken about them."""
+        hyenas = [key for key in span.actors if self.cast[key].species == 'hyena']
+        if not hyenas:
+            return
+        for bid in span.spec['beat_ids']:
+            beat, timing = self.by_id[bid], self.tl['beats'][bid]
+            for verb, pattern in (
+                ('laugh', r'\bhyenas?\s+(?:were\s+|began\s+|started\s+)?(laugh\w*|cackl\w*)\b|\b(Laughing)\.\s+A\s+cackle\s+of\s+(?:spotted\s+)?hyenas\b'),
+                ('bare_teeth', r'\bhyenas?\s+(?:drew\s+closer,\s*)?(baring|bared|bare)\s+(?:their\s+)?(?:sharp\s+)?teeth\b'),
+                ('walk', r'\bhyenas?\s+(drew\s+closer|approach\w*|emerged)\b'),
+                ('run', r'\bhyenas?\s+(scattered|fled)\b'),
+            ):
+                hit = re.search(pattern, beat['spoken'], re.I)
+                if not hit or NEGATED_ACTION.search(hit.group()):
+                    continue
+                char = hit.start(1) if hit[1] is not None else hit.start(2)
+                ct = timing['char_times']
+                at = timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0)
+                remaining = max(.1, min(timing['speech_end'], span.end) - at)
+                target = None
+                if verb == 'walk':
+                    source = list(self.by_id.values())
+                    index = next(i for i, b in enumerate(source) if b['id'] == bid)
+                    previous = source[index - 1] if index else None
+                    threat = beat['spoken']
+                    if previous and previous['section'] == beat['section']:
+                        threat = previous['spoken'] + '\n' + threat
+                    # Continued approach inherits the explicitly threatened cub
+                    # from the immediately preceding source, not all cast mentions.
+                    if re.search(r'\b(?:unprotected\s+)?cubs?\b', threat, re.I):
+                        children = [key for key, g in self.cast.items()
+                                    if g.age == 'baby' and mentions(g.name, threat)]
+                        if len(children) == 1:
+                            target = children[0]
+                            if target not in span.actors:
+                                span.actors += (target,)
+                for key in hyenas:
+                    if not any(actor == key and a.name == verb for actor, a, _ in events):
+                        events.append((key, Action(verb, at - span.start,
+                                                  min(remaining, Action(verb).seconds)), target))
+
+    def _swipe_target(self, beat, actor, char, actors):
+        # Targets belong to the swipe's clause, never a later roar or bystander.
+        tail = re.split(r'[.!?;\n]', beat['spoken'][char:], maxsplit=1)[0]
+        obj = re.search(r'^(?:swip\w*\s+(?:at\s+)?)|\b(?:sent|sending|struck|hit)\s+', tail, re.I)
+        if not obj:
+            return None
+        phrase = tail[obj.end():]
+        if tail[:obj.end()].lower().strip().endswith(('swipe', 'swiped')) and re.match(r'of\b', phrase, re.I):
+            sent = re.search(r'\b(?:sent|sending|struck|hit)\s+', phrase, re.I)
+            if not sent:
+                return None
+            phrase = phrase[sent.end():]
+        phrase = re.split(r'\b(?:with|while|whereas|but)\b|,', phrase, maxsplit=1, flags=re.I)[0]
+        named = [key for key in self.cast if key != actor and re.match(
+            r'(?:the\s+)?(?:King\s+|Queen\s+)?' + re.escape(name_key(self.cast[key].name)) + r'(?!\w)', phrase, re.I)]
+        if named:
+            rest = re.split(r'\b(?:with|into|away|flying)\b', phrase, maxsplit=1, flags=re.I)[0]
+            competing = [key for key in self.cast if key != actor and mentions(self.cast[key].name, rest)]
+            return named[0] if competing == named else None
+        if re.match(r'(?:the\s+)?(?:lead\s+)?hyena\b', phrase, re.I):
+            candidates = [key for key in actors if self.cast[key].species == 'hyena']
+            if len(candidates) == 1 or re.match(r'(?:the\s+)?lead\s+hyena\b', phrase, re.I):
+                return next(iter(candidates), None)
+        return None
+
+    def _parent_target(self, beat, actor, relation):
+        child = re.escape(name_key(self.cast[actor].name))
+        parents = set()
+        for source in self.by_id.values():
+            if source['section'] == beat['section']:
+                for key, g in self.cast.items():
+                    if key == actor or g.age == 'baby':
+                        continue
+                    parent = re.escape(name_key(g.name))
+                    pattern = (r'(?<!\w)' + child + r'(?!\w)[^.!?;\n]{0,140}\b(?:his|her|their)\s+' +
+                               relation + r'\s*,?\s*(?:the\s+)?(?:great\s+)?(?:king\s+)?' + parent + r'(?!\w)')
+                    if re.search(pattern, source['spoken'], re.I):
+                        parents.add(key)
+            if source['id'] == beat['id']:
+                break
+        return next(iter(parents)) if len(parents) == 1 else None
+
+    def _hide_target(self, beat, actor, char):
+        tail = re.split(r'[.!?;\n]', beat['spoken'][char:], maxsplit=1)[0]
+        hit = re.match(r'hid(?:e|es|ing)?\s+behind\s+(.+)', tail, re.I)
+        if not hit:
+            return None
+        phrase = hit[1]
+        named = [key for key, g in self.cast.items() if key != actor and mentions(g.name, phrase)]
+        if named:
+            return named[0] if len(named) == 1 else None
+        relation = re.match(r"(?:his|her|their)\s+(mother|father)['’]s\s+paws\b", phrase, re.I)
+        return self._parent_target(beat, actor, relation[1]) if relation else None
 
     def _source_action_char(self, beat, actor, verb):
         """Use a named subject or its unambiguous singular pronoun at the spoken cue.
@@ -647,7 +751,7 @@ class HybridProduction:
         span.motion.elements = paged
         # Measure stable resting silhouettes once. One scale per interaction group
         # preserves baby/adult size differences and leaves room for action/life poses.
-        main = [a for a in span.actors if not a.startswith('crowd-hyena-')]
+        main = list(span.actors)
         bounds = {key: raster(self.cast[key], 'idle', 0., height=400).getchannel('A').getbbox() for key in main}
         stage_left, stage_right = ((.04, .50) if left_actor else (.50, .96)) if panel else (.075, .925)
         stage_top, ground = (.12, .73) if panel else (.39, .74)
@@ -673,32 +777,54 @@ class HybridProduction:
             group_width = sum(increments[:-1]) + widths[-1]
             tallest = max(bounds[key][3] - bounds[key][1] for key in main)
             scale = min(cell_w * .88 / max(1, group_width), stage_h * .86 / tallest)
-            if all(self.cast[key].age == 'baby' for key in group):
-                # Keep a separately staged infant legible without filling an
-                # adult's silhouette-sized slot. Interacting groups retain one
-                # exact scale so the adult can reach its actual receiver.
+            baby_group = all(self.cast[key].age == 'baby' for key in group)
+            hyena_group = all(self.cast[key].species == 'hyena' for key in group)
+            if baby_group or hyena_group:
+                # Keep independently staged babies and threat representatives
+                # legible. Interacting groups retain one exact scale so the
+                # adult can reach its actual receiver.
                 own_height = max(bounds[key][3] - bounds[key][1] for key in group)
-                scale = min(cell_w * .88 / max(1, group_width), max(scale, self.size[1] * .14 / own_height))
+                legible_height = .14 if baby_group else .17
+                scale = min(cell_w * .88 / max(1, group_width), max(scale, self.size[1] * legible_height / own_height))
             travelling = any(actor in group and a.name in ('walk', 'run') for actor, a, _ in span.actions)
             if travelling:
-                scale = min(scale, cell_w * .65 / max(1, group_width))
+                travel_width = .82 if hyena_group else .65
+                scale = min(scale, cell_w * travel_width / max(1, group_width))
             # Face the nudge pair inward; actor order is owned by the source action.
             paired = len(group) > 1
             left = (self.size[0] * stage_left + (i + .04) * cell_w if travelling else
                     self.size[0] * stage_left + (i + .5) * cell_w - group_width * scale / 2)
             for j, key in enumerate(group):
-                mirror = paired and j > 0 and any(a.name == 'nudge' and target == key for _, a, target in span.actions)
+                mirror = paired and j > 0 and any(a.name in ('nudge', 'swipe') and target == key for _, a, target in span.actions)
                 bbox = bounds[key]
                 edge = 600 - bbox[2] if mirror else bbox[0]
                 anchor = left + (300 - edge) * scale
                 span.actor_layout[key] = (anchor / self.size[0], ground, 400 * scale / self.size[1], mirror, i)
                 left += increments[j] * scale
+        # A swipe has to reach its source receiver; separate silhouette slots
+        # alone can leave the striking paw nowhere near the intruder's body.
+        for actor, action, target in span.actions:
+            if action.name == 'walk' and target and self.cast[actor].species == 'hyena':
+                x, ground, height, _, group = span.actor_layout[actor]
+                span.actor_layout[actor] = (x, ground, height, span.actor_layout[target][0] < x, group)
+            if action.name != 'swipe' or not target:
+                continue
+            own, other = self.cast[actor], self.cast[target]
+            x, ground, height, _, group = span.actor_layout[actor]
+            _, _, _, mirror, _ = span.actor_layout[target]
+            contact = build(own, Pose(swipe=1.)).legs['front_near'].end
+            head = build(other).head
+            scale = self.size[1] * height / RIG_HEIGHT
+            target_x = x + (contact[0] * own.size + (head.x if mirror else -head.x) * other.size) * scale / self.size[0]
+            span.actor_layout[target] = (target_x, ground, height, mirror, group)
 
     def _cast_groups(self, span):
         # Interacting participants share a cell; unrelated actors retain independent slots.
-        groups = [[a] for a in span.actors if not a.startswith('crowd-hyena-')]
+        groups = [[a] for a in span.actors if span.source_character or not a.startswith('crowd-hyena-')]
         for actor, action, target in span.actions:
-            if not target or action.name not in ('nudge', 'sleep'):
+            if not target or action.name not in ('nudge', 'sleep', 'hide', 'swipe'):
+                continue
+            if not any(target in g for g in groups):
                 continue
             left = next(g for g in groups if actor in g)
             right = next(g for g in groups if target in g)
@@ -810,9 +936,10 @@ class HybridProduction:
         self._travelled = {}
         # Receivers sit in front of the nudging adult's mane/head, keeping both faces visible.
         sleepers = {actor for actor, a, target in span.actions if a.name == 'sleep' and target}
-        ordered = sorted(span.actors, key=lambda key: (key in sleepers,
+        covers = {target for actor, a, target in span.actions if a.name == 'hide' and target}
+        ordered = sorted(span.actors, key=lambda key: (key in covers, key in sleepers,
                          span.actor_layout[key][4], span.actor_layout[key][3])
-                         if key in span.actor_layout else (False, -1, False))
+                         if key in span.actor_layout else (False, False, -1, False))
         for key in ordered:
             g = self.cast[key]
             if key not in span.actor_layout:
@@ -826,7 +953,6 @@ class HybridProduction:
             else:
                 slot = span.actor_layout[key]
             x, ground, height, mirror, group = slot
-            mirror = mirror and any(a.name == 'nudge' and target == key for _, a, target in span.actions)
             pose = Pose()
             cues = [a for actor, a, _ in span.actions if actor == key]
             for actor, action, target in span.actions:
@@ -851,6 +977,15 @@ class HybridProduction:
                         contact_x = target_x + (parent_body.x * other.size -
                                                (own_head.x + own_head.rx * .35) * g.size) * scale / w
                         x += (contact_x - x) * acting.sleep
+                    if action.name == 'hide' and target in span.actor_layout:
+                        other = self.cast[target]
+                        target_x, _, target_height, _, _ = span.actor_layout[target]
+                        paw = build(other).legs['front_near'].root
+                        own_head = build(g).head
+                        scale = h * target_height / RIG_HEIGHT
+                        contact_x = target_x + ((paw[0] - 45) * other.size - own_head.x * g.size) * scale / w
+                        u = (local - action.start) / action.seconds
+                        x += (contact_x - x) * window(u, .24, .80)
                 elif target == key:
                     response = target_response(action, local)
                     pose = add(pose, response)
@@ -859,6 +994,16 @@ class HybridProduction:
                         recoil = window((u - .4) / .6, .25, .6)
                         pose = add(pose, Pose(dx=(-8 if mirror else 8) * recoil,
                                               lean=(-5 if mirror else 5) * recoil, head_pitch=-5 * recoil))
+                    elif action.name == 'swipe':
+                        # The receiver leaves the paw after impact and stays
+                        # displaced; easing from the hit prevents a cue-end snap.
+                        u = (local - action.start) / action.seconds
+                        recoil = smooth((u - .38) / .62)
+                        scale = h * height / RIG_HEIGHT
+                        x += 180 * recoil * self.cast[actor].size * scale / w
+                        ground -= 60 * math.sin(math.pi * recoil) * scale / h
+                        pose = add(pose, Pose(lean=(-20 if mirror else 20) * recoil,
+                                              head_pitch=15 * recoil, worry=recoil))
             phase = seed((span.spec['beat_ids'], group)) / 2**32 * math.tau
             awake = 1. - min(1., pose.sleep)
             # An asleep child follows its contact partner's group translation;
@@ -894,11 +1039,30 @@ class HybridProduction:
                 # A5's eased travel is retained in this stable-root composition.
                 # Leave room for the authored idle sway and the whole-scene pan.
                 right = x * w + bbox[2] - 300 * scale
-                room = max(0., w * (1 - TRAVEL_MARGIN) + min(0., self._pan(span, local, w))
-                           - right - 60 * floor)
+                destination = next((target for actor, a, target in span.actions
+                                    if actor == key and a.name == 'walk' and target in span.actor_layout), None)
+                direction = -1 if destination and span.actor_layout[destination][0] < x else 1
+                left = x * w + bbox[0] - 300 * scale
+                room = (max(0., left - w * TRAVEL_MARGIN - max(0., self._pan(span, local, w)) - 60 * floor)
+                        if direction < 0 else
+                        max(0., w * (1 - TRAVEL_MARGIN) + min(0., self._pan(span, local, w)) - right - 60 * floor))
+                if destination:
+                    target_x, _, target_height, target_mirror, target_group = span.actor_layout[destination]
+                    target_phase = seed((span.spec['beat_ids'], target_group)) / 2**32 * math.tau
+                    target_x += floor * 60 * math.sin(local * 1.13 + target_phase) / w
+                    target_pixels = max(60, round(h * target_height))
+                    target_sprite = raster(self.cast[destination], 'idle', 0., height=target_pixels)
+                    if target_mirror:
+                        target_sprite = ImageOps.mirror(target_sprite)
+                    target_box = target_sprite.getchannel('A').getbbox()
+                    target_scale = target_pixels / RIG_HEIGHT
+                    target_edge = target_x * w + target_box[2 if direction < 0 else 0] - 300 * target_scale
+                    clearance = 45 * h / 1080
+                    approach = left - target_edge - clearance if direction < 0 else target_edge - right - clearance
+                    room = min(room, max(0., approach))
                 travel = min(room, self._travel(span, key, local, sprite_height))
-                self._travelled[key] = travel
-                x += travel / w
+                self._travelled[key] = direction * travel
+                x += direction * travel / w
                 # Pounces, jaw/head action and idle sway also need the complete
                 # silhouette inside the final camera's safe edges.
                 left = x * w + bbox[0] - 300 * scale
