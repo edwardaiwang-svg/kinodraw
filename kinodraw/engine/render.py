@@ -75,6 +75,8 @@ class Production:
                                    or scene['text']['kind'] not in ('none', 'caption_only')
                                    or any(e['kind'] == 'text' for e in scene['elements']))
                               for bid in scene['beat_ids']} if plan else set()
+        self._scientific_beats = {bid for scene in plan['scenes'] if scene['treatment'] == 'chart'
+                                  for bid in scene['beat_ids']} if plan and plan['style']['mode'] != 'whiteboard' else set()
         from .source_diagrams import resolve as resolve_diagram
         requested = {e['ref'] for scene in plan['scenes'] for e in scene['elements']
                      if e['kind'] == 'diagram'} if plan else set()
@@ -170,6 +172,12 @@ class Production:
                     deferred.append(v)
                 elif vt == 'stock':
                     pass
+                elif vt == 'scientific':
+                    # Source arrays are rendered by the chart treatment, never approximated as icons.
+                    if beat['id'] not in self._scientific_beats:
+                        box, _ = self.layout.wide()
+                        self._source_lines(beat, [{'span': [0, len(beat['spoken'][self.lang])]}], box)
+                        self.warnings.append(f"{beat['id']}: scientific plot withheld in whiteboard mode; source narration shown")
                 else:
                     self.warnings.append(f"{beat['id']}: unsupported visual type {vt}")
             except Exception as error:  # noqa: BLE001 - keep rendering; report

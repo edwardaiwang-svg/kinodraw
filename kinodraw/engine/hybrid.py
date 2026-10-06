@@ -102,6 +102,7 @@ class Span:
     join: float = 0.
     join_length: float = 0.
     source_chart: bool = False
+    scientific: tuple = ()
     diagram: object | None = None
     diagrams: tuple = ()
     source_proof: bool = False
@@ -284,6 +285,16 @@ class HybridProduction:
                     self.warnings.append('hybrid: counter without numeric data uses readable source text')
                     elements[-1].preset = 'type_on'
         if treatment == 'chart':
+            from ..scientific import ScientificPlot
+            span.scientific = tuple(ScientificPlot(v['plot']) for bid in spec['beat_ids']
+                                    for v in self.by_id[bid]['visuals'] if v.get('type') == 'scientific')
+            if span.scientific:
+                if len(span.scientific) > 4:
+                    raise ValueError('split scientific scenes with more than four plots into separate beats')
+                # Scientific frames own their exact-black canvas and fixed axis mapping.
+                span.atmos = None
+                span.actors = ()
+                return
             for bid in spec['beat_ids']:
                 for visual in self.by_id[bid]['visuals']:
                     if visual.get('type') in ('bars', 'line'):
@@ -462,6 +473,9 @@ class HybridProduction:
         spec, local = span.spec, max(0, t - span.start)
         if span.source_proof or spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
             return self.cutaway.frame(t).convert('RGB')
+        if span.scientific:
+            from ..scientific import render_plots
+            return render_plots(span.scientific, local, span.end - span.start, self.size)
         w, h = self.size
         background = None
         if span.atmos:

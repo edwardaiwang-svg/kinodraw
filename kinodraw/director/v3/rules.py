@@ -120,6 +120,14 @@ def from_rules(board: dict, candidates=None) -> dict:
         if atmo != 'none':
             scene['elements'].append({'kind': 'atmosphere', 'ref': atmo})
         plan['scenes'].append(scene)
+    if any(v.get('type') == 'scientific' for b in script for v in b['visuals']):
+        plan['style']['mode'] = 'hybrid'
+        for scene in plan['scenes']:
+            if any(v.get('type') == 'scientific' for bid in scene['beat_ids']
+                   for v in next(b for b in script if b['id'] == bid)['visuals']):
+                scene.update(treatment='chart', elements=[], actions=[], camera='static',
+                             atmosphere={'kind': 'none', 'density': 0}, transition_in='cut',
+                             text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
     return validate(plan, board, candidates)[0]
 
 

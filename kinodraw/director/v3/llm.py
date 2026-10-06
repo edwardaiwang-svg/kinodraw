@@ -25,7 +25,12 @@ def plan_v3(doc_or_script, provider=None):
                           ingest.read(doc_or_script), story='story'))
     lang = board['lang']
     pictures = PictureDirector(lang)
+    scientific = {b['id']: [copy.deepcopy(v) for v in b.get('visuals', []) if v.get('type') == 'scientific']
+                  for b in board['beats']}
     pictures.direct(board)
+    for b in board['beats']:
+        if scientific[b['id']]:
+            b['visuals'] = scientific[b['id']]
     name = provider if isinstance(provider, str) else (
         getattr(provider, 'name', type(provider).__name__) if provider is not None else 'rules')
     repairs, reason, candidates = [], None, None
@@ -47,6 +52,10 @@ def plan_v3(doc_or_script, provider=None):
             for b in payload['beats']:
                 b.update(section_id=normalized[b['beat_id']]['section'],
                          kind=normalized[b['beat_id']]['kind'], spoken=normalized[b['beat_id']]['spoken'])
+            from ...scientific import summary as scientific_summary
+            for b in payload['beats']:
+                if scientific[b['beat_id']]:
+                    b['scientific_plots'] = [scientific_summary(v['plot']) for v in scientific[b['beat_id']]]
             payload['section_ids'] = list(dict.fromkeys(b['section_id'] for b in payload['beats']))
             payload['look_ids'] = [look['id'] for look in styles.looks()]
             candidates = {b['beat_id']: b['candidates'] for b in payload['beats']}

@@ -551,7 +551,7 @@ def _output_stem(board, cfg):
     sources = {Path(cfg[key]).name.casefold() for key in ('script', 'recording') if cfg.get(key)}
     candidate, number = stem, 1
     while any((candidate + suffix).casefold() in sources for suffix in
-              ('.mp4', '.srt', '.vtt', '-chapters.txt', '-transcript.md', '-description.txt', '-thumbnail.png')):
+              ('.mp4', '.srt', '.vtt', '-chapters.txt', '-transcript.md', '-description.txt', '-thumbnail.png', '-sources.json')):
         candidate = stem + (' (video)' if number == 1 else f' (video {number})')
         number += 1
     return candidate
@@ -578,7 +578,7 @@ def _commit_outputs(stage, project, context):
         # excluded individually below, even when they occupy a generated slot.
         stems = {_output_stem(board, cfg), _output_stem(board, {**cfg, 'script': None, 'recording': None})}
         root_outputs.update(stem + suffix for stem in stems for suffix in
-            ('.mp4', '.srt', '.vtt', '-chapters.txt', '-transcript.md', '-description.txt', '-thumbnail.png'))
+            ('.mp4', '.srt', '.vtt', '-chapters.txt', '-transcript.md', '-description.txt', '-thumbnail.png', '-sources.json'))
     outputs = []
     for output in sorted(stage.rglob('*')):
         rel = output.relative_to(stage)

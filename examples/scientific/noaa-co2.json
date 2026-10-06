@@ -1,0 +1,220 @@
+{
+  "format": "kinodraw-scientific",
+  "version": 1,
+  "title": "A measured atmosphere",
+  "mode": "observed",
+  "axes": {
+    "x": {
+      "label": "Year",
+      "unit": "calendar year"
+    },
+    "y": {
+      "label": "Annual mean CO2",
+      "unit": "ppm"
+    }
+  },
+  "provenance": {
+    "citation": "NOAA GML / Lan; Mauna Loa annual means, 1975–2021",
+    "url": "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.txt",
+    "license": "NOAA public-domain data; credit required; https://gml.noaa.gov/about/disclaimer.html",
+    "version": "File creation 2026-09-05; raw SHA256 3eea72f254116cd43275fa33b0ed201b14550e6ba21e4d6b4482c24a95f98ab7",
+    "accessed": "2026-10-06",
+    "transforms": "Subset 1975–2021 (NOAA-era record). Annual mean column unchanged. Provider uncertainty column not plotted; values are not individual readings. Independent linear axes; straight segments connect adjacent annual means, no interpolation of measurements."
+  },
+  "tracks": [
+    {
+      "label": "Annual means; lines connect samples, not extra observations",
+      "encoding": "series",
+      "points": [
+        [
+          1975,
+          331.13
+        ],
+        [
+          1976,
+          332.03
+        ],
+        [
+          1977,
+          333.84
+        ],
+        [
+          1978,
+          335.41
+        ],
+        [
+          1979,
+          336.84
+        ],
+        [
+          1980,
+          338.76
+        ],
+        [
+          1981,
+          340.12
+        ],
+        [
+          1982,
+          341.48
+        ],
+        [
+          1983,
+          343.15
+        ],
+        [
+          1984,
+          344.87
+        ],
+        [
+          1985,
+          346.35
+        ],
+        [
+          1986,
+          347.61
+        ],
+        [
+          1987,
+          349.31
+        ],
+        [
+          1988,
+          351.69
+        ],
+        [
+          1989,
+          353.2
+        ],
+        [
+          1990,
+          354.45
+        ],
+        [
+          1991,
+          355.7
+        ],
+        [
+          1992,
+          356.54
+        ],
+        [
+          1993,
+          357.21
+        ],
+        [
+          1994,
+          358.96
+        ],
+        [
+          1995,
+          360.97
+        ],
+        [
+          1996,
+          362.74
+        ],
+        [
+          1997,
+          363.88
+        ],
+        [
+          1998,
+          366.84
+        ],
+        [
+          1999,
+          368.54
+        ],
+        [
+          2000,
+          369.71
+        ],
+        [
+          2001,
+          371.32
+        ],
+        [
+          2002,
+          373.45
+        ],
+        [
+          2003,
+          375.98
+        ],
+        [
+          2004,
+          377.7
+        ],
+        [
+          2005,
+          379.98
+        ],
+        [
+          2006,
+          382.09
+        ],
+        [
+          2007,
+          384.02
+        ],
+        [
+          2008,
+          385.83
+        ],
+        [
+          2009,
+          387.64
+        ],
+        [
+          2010,
+          390.1
+        ],
+        [
+          2011,
+          391.85
+        ],
+        [
+          2012,
+          394.06
+        ],
+        [
+          2013,
+          396.74
+        ],
+        [
+          2014,
+          398.81
+        ],
+        [
+          2015,
+          401.01
+        ],
+        [
+          2016,
+          404.41
+        ],
+        [
+          2017,
+          406.76
+        ],
+        [
+          2018,
+          408.72
+        ],
+        [
+          2019,
+          411.65
+        ],
+        [
+          2020,
+          414.21
+        ],
+        [
+          2021,
+          416.41
+        ]
+      ]
+    }
+  ]
+}

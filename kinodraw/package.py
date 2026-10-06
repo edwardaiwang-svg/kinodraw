@@ -256,4 +256,13 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
         head = 'Capítulos'
     (folder / f'{stem}-description.txt').write_text(
         f"{storyboard['title'][lang]}\n\n{head}\n" + '\n'.join(chapters) + f'\n\n{credit}\n', encoding='utf-8')
+    from .scientific import attributions
+    scientific_sources = attributions(storyboard)
+    if scientific_sources:
+        (folder / f'{stem}-sources.json').write_text(
+            json.dumps({'scientific_plots': scientific_sources}, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        with (folder / f'{stem}-description.txt').open('a', encoding='utf-8') as description:
+            description.write('\nScientific sources\n' + '\n'.join(
+                f"{s['title']} ({s['mode']}): {s['provenance']['citation']} — {s['provenance']['url']}"
+                for s in scientific_sources) + '\n')
     thumbnail(storyboard, lang, folder / f'{stem}-thumbnail.png', project_dir, size=size)

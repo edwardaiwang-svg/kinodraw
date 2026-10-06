@@ -1,0 +1,45 @@
+{
+  "format": "kinodraw-scientific",
+  "version": 1,
+  "title": "The oscillator in phase space",
+  "mode": "analytical",
+  "axes": {
+    "x": {
+      "label": "Displacement x",
+      "unit": "m",
+      "domain": [
+        -1.2,
+        1.2
+      ]
+    },
+    "y": {
+      "label": "Velocity v",
+      "unit": "m/s",
+      "domain": [
+        -2.4,
+        2.4
+      ]
+    }
+  },
+  "provenance": {
+    "citation": "OpenStax University Physics Vol. 1, §15.1 (equations); KinoDraw example parameters",
+    "url": "https://openstax.org/books/university-physics-volume-1/pages/15-1-simple-harmonic-motion",
+    "license": "Equation is mathematical fact; example payload CC0; OpenStax text CC BY 4.0, no copied illustration",
+    "version": "Closed-form harmonic oscillator, no numerical solver or noise",
+    "accessed": "2026-10-06",
+    "transforms": "Sample x(t)=A cos(omega*t+phase), v(t)=-A*omega*sin(omega*t+phase); phase-space trajectory. Parameters are illustrative, not measured. Initial position A, initial velocity zero. Independent linear axes; progressive sample reveal."
+  },
+  "model": {
+    "kind": "harmonic_oscillator",
+    "projection": "phase",
+    "parameters": {
+      "amplitude_m": 1,
+      "omega_rad_s": 2,
+      "phase_rad": 0,
+      "start_s": 0,
+      "end_s": 3.141592653589793
+    },
+    "samples": 512,
+    "seed": 0
+  }
+}

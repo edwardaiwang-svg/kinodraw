@@ -17,7 +17,7 @@ from .annotate import ROLES, SCENES, _words
 SLOT_TYPES = {'cluster', 'quote', 'glossary', 'stat'}
 PAGE_TYPES = {'ladder', 'bars', 'coins', 'grid100', 'lanes', 'range', 'zones', 'levels', 'table', 'dial', 'flow',
               'split', 'calendar'}
-OTHER_TYPES = {'emphasis', 'stock'}
+OTHER_TYPES = {'emphasis', 'stock', 'scientific'}
 EN_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’)])|—')
 ES_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’»)])|—')
 ZH_PUNCT = re.compile(r'[，。；：？！、—]')
@@ -173,6 +173,12 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
             visual_ids.add(vid)
             if vtype not in SLOT_TYPES | PAGE_TYPES | OTHER_TYPES:
                 errors.append(f'{bid}/{vid}: unknown visual type {vtype!r}')
+            if vtype == 'scientific':
+                from ..scientific import validate as validate_scientific
+                try:
+                    validate_scientific(v.get('plot'))
+                except ValueError as error:
+                    errors.append(f'{bid}/{vid}: {error}')
             for where, trig in _triggers(v):
                 ref = by_id.get(trig.get('beat'), b)
                 phrase = trig.get(lang)

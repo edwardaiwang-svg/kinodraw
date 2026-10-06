@@ -264,10 +264,15 @@ class Developer:
         source_path = self.path(source)
         if source_path.suffix.lower() != '.json':
             raise ValueError('chart source must be a local .json file')
+        from .scientific import MAX_BYTES
+        if source_path.stat().st_size > MAX_BYTES:
+            raise ValueError('chart source exceeds 2 MiB')
         raw = source_path.read_bytes()
         data = loads(raw.decode('utf-8'), parse_float=_chart_float)
         if not isinstance(data, dict):
             raise ValueError('chart source must be an object')
+        if data.get('format') == 'kinodraw-scientific':
+            return self._scientific_add(path, saved, beat, source_path, raw, data)
         provenance = _text(data.get('source'), 'source attribution')
         title = _text(data.get('title'), 'chart title')
         unit = data.get('unit', '')
@@ -300,6 +305,51 @@ class Developer:
         updated = store.save(board, cfg, expected_revision=saved['revision'], label='Before MCP chart')
         return {'visual': visual['id'], 'source_sha256': digest, 'rows': len(mapped),
                 'revision': updated['revision']}
+
+    def _scientific_add(self, path, saved, beat, source_path, raw, data):
+        from .scientific import validate as validate_scientific
+        from .director.validate import validate
+        from .director.v3.rules import from_rules
+        from .project_store import ProjectStore
+        data = validate_scientific(data)
+        cfg, board = saved['settings'], saved['storyboard']
+        target = next((b for b in board['beats'] if b['id'] == beat), None)
+        if target is None:
+            raise ValueError(f'unknown beat: {beat}')
+        digest = hashlib.sha256(raw).hexdigest()
+        relative = Path('assets/scientific') / (digest + '.json')
+        visual = {'id': 'science_' + uuid.uuid4().hex, 'type': 'scientific', 'plot': data,
+                  'source_file': relative.as_posix(), 'source_sha256': digest}
+        target.setdefault('visuals', []).append(visual)
+        report = validate(board, path)
+        if not report['ok']:
+            raise ValueError('invalid storyboard: ' + '; '.join(report['errors']))
+        plan = cfg.get('plan_v3') or from_rules(board)
+        plan['style']['mode'] = 'hybrid'
+        scene = next(s for s in plan['scenes'] if beat in s['beat_ids'])
+        scene.update(treatment='chart', elements=[], actions=[], camera='static',
+                     atmosphere={'kind': 'none', 'density': 0}, transition_in='cut',
+                     text={'kind': 'caption_only', 'ref': beat})
+        if sum(v.get('type') == 'scientific' for b in board['beats'] if b['id'] in scene['beat_ids']
+               for v in b.get('visuals', [])) > 4:
+            raise ValueError('split scientific scenes with more than four plots into separate beats')
+        cfg.update(director_v3=True, plan_v3=plan)
+        asset = self.path(str(path.relative_to(self.root) / relative))
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        created = not asset.exists()
+        if created:
+            with asset.open('xb') as stream:
+                stream.write(raw)
+        elif hashlib.sha256(asset.read_bytes()).hexdigest() != digest:
+            raise ValueError('scientific source asset hash differs')
+        try:
+            updated = ProjectStore(path).save(board, cfg, expected_revision=saved['revision'], label='Before scientific chart')
+        except Exception:
+            if created:
+                asset.unlink(missing_ok=True)
+            raise
+        return {'visual': visual['id'], 'source_sha256': digest, 'source_file': relative.as_posix(),
+                'mode': data['mode'], 'revision': updated['revision']}
 
     @staticmethod
     def _save(path, data):
@@ -552,7 +602,7 @@ TOOLS = [
      'inputSchema': _schema({**PROJECT, 'script': TEXT, 'starter': TEXT, 'lang': {'type': 'string', 'enum': ['en', 'zh', 'es']}, 'title': TEXT}, ['project'])},
     {'name': 'validate_project', 'description': 'Validate a confined storyboard with the existing pipeline validator.',
      'inputSchema': _schema(PROJECT, ['project'])},
-    {'name': 'chart_add', 'description': 'Append a real bars visual from an attributed local JSON source, preserving supplied nonnegative values; no inferred or fabricated data.',
+    {'name': 'chart_add', 'description': 'Append attributed bars or a bounded kinodraw-scientific/1 observation/model plot from local JSON; retain scientific source assets and exact coordinates, with no fetching or code evaluation.',
      'inputSchema': _schema({**PROJECT, 'beat': TEXT, 'source': TEXT}, ['project', 'beat', 'source'])},
     {'name': 'preview_png', 'description': 'Render an actual PNG with the existing renderer and estimated timing, without voice or network.',
      'inputSchema': _schema({**PROJECT, 'time': {'type': 'number', 'minimum': 0}}, ['project'])},
