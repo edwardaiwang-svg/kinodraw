@@ -238,6 +238,44 @@ def test_command_line_keeps_pronunciations_with_the_project_and_refuses_a_bad_fi
     assert pipeline.settings(tmp_path / 'Good')['speed'] == 1.1
 
 
+@pytest.mark.parametrize('lang,voice_id,text', [
+    ('en', 'am_puck', 'Bees make honey.'),
+    ('zh', 'zf_003', '蜜蜂制造蜂蜜。'),
+    ('es', 'em_santa', 'Las abejas producen miel.'),
+])
+def test_added_voices_round_trip_through_cli_and_studio(studio, tmp_path, lang, voice_id, text):
+    project = studio.root / f'New-{lang}'
+    cli.main(['new', text, '-o', str(project), '--lang', lang, '--voice', voice_id])
+    assert pipeline.settings(project)['voice'] == voice_id
+    status, settings = studio(f'/api/projects/{project.name}/voice')
+    assert status == 200 and settings['lang'] == lang and settings['voice'] == voice_id
+    status, saved = studio(f'/api/projects/{project.name}/voice', settings, 'PUT')
+    assert status == 200 and saved == settings
+
+
+def test_studio_language_menu_renders_the_shared_catalog(studio):
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('node is not installed')
+    status, state = studio('/api/state')
+    assert status == 200
+    js = (server.STATIC / 'app.js').read_text(encoding='utf-8')
+    source = re.search(r'^function voiceOptions\(.*?^}', js, re.S | re.M)[0]
+    escaped = re.search(r'^const esc = .*?;$', js, re.M)[0]
+    program = ('const STATE = ' + json.dumps(state) + ';\n' + escaped + '\n' + source
+               + '\nconsole.log(JSON.stringify(Object.fromEntries(Object.keys(STATE.voices)'
+                 '.map(lang => [lang, voiceOptions(lang, STATE.voices[lang][0].id)]))));')
+    result = subprocess.run([node, '-e', program], capture_output=True, text=True, check=True)
+    menus = json.loads(result.stdout)
+    for lang, choices in voice.VOICES.items():
+        assert state['voices'][lang] == [{'id': vid, 'name': name} for vid, name in choices]
+        assert re.findall(r'<option value="([^"]+)"', menus[lang]) == [vid for vid, _ in choices]
+        assert menus[lang].count(' selected') == 1
+        assert f'value="{voice.LANGS[lang]["voice"]}" selected' in menus[lang]
+
+
 def test_the_studio_picks_voices_for_the_language_the_script_will_be_read_in():
     import shutil
     import subprocess

@@ -50,10 +50,15 @@ LANGS = {
 VOICES = {
     'en': [('af_heart', 'Heart, US woman (default)'), ('af_bella', 'Bella, US woman'),
            ('af_nicole', 'Nicole, US woman, soft'), ('am_michael', 'Michael, US man'),
-           ('am_fenrir', 'Fenrir, US man, deep'), ('bf_emma', 'Emma, UK woman'), ('bm_george', 'George, UK man')],
+           ('am_fenrir', 'Fenrir, US man, deep'), ('bf_emma', 'Emma, UK woman'), ('bm_george', 'George, UK man'),
+           ('af_aoede', 'Aoede, US woman'), ('af_kore', 'Kore, US woman'), ('af_sarah', 'Sarah, US woman'),
+           ('am_puck', 'Puck, US man'), ('bf_isabella', 'Isabella, UK woman'), ('bm_fable', 'Fable, UK man')],
     'zh': [('zf_001', 'Mei, Mandarin woman (default)'), ('zf_002', 'Lan, Mandarin woman'),
-           ('zm_010', 'Wei, Mandarin man'), ('zm_020', 'Jun, Mandarin man')],
-    'es': [('ef_dora', 'Dora, Latin American woman (default)'), ('em_alex', 'Alex, Latin American man')],
+           ('zm_010', 'Wei, Mandarin man'), ('zm_020', 'Jun, Mandarin man'),
+           ('zf_003', 'Mandarin woman 003'), ('zf_004', 'Mandarin woman 004'),
+           ('zm_009', 'Mandarin man 009'), ('zm_011', 'Mandarin man 011')],
+    'es': [('ef_dora', 'Dora, Latin American woman (default)'), ('em_alex', 'Alex, Latin American man'),
+           ('em_santa', 'Santa, Spanish man')],
 }
 SPEEDS = (0.85, 1.15)
 SR = 24000
