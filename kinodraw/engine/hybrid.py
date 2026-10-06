@@ -33,12 +33,12 @@ def seed(value):
     return int.from_bytes(hashlib.sha256(str(value).encode()).digest()[:4], 'big')
 
 
-def action_char(text, actor, verb, cast):
+def action_char(text, actor, verb, cast, cue=None):
     """Locate a cue in its nearest named subject's clause, preserving source offsets."""
     names = sorted({name_key(g.name) for g in cast.values()}, key=lambda n: (-len(n), n))
     pattern = '|'.join(re.escape(n) for n in names if n)
     owners = list(re.finditer(r'(?<!\w)(?:' + pattern + r')(?!\w)', text, re.I)) if pattern else []
-    for hit in re.finditer(r'\b(?:' + ACTION_CUES.get(verb, r'(?!)') + r')\b', text, re.I):
+    for hit in re.finditer(r'\b(?:' + (cue or ACTION_CUES.get(verb, r'(?!)')) + r')\b', text, re.I):
         owner = next((m for m in reversed(owners) if m.end() <= hit.start()), None)
         if owner is None or owner.group().casefold() != name_key(cast[actor].name):
             continue
@@ -50,12 +50,15 @@ def action_char(text, actor, verb, cast):
         if re.search(r'[.!?;\n]|\b(?:while|whereas|when)\b|'
                      r'\b(?:but|and)\s+(?:the|a|an|he|she|it|they)\b', tail, re.I):
             continue
+        if re.search(r'\b(?:him|her|them)\s*$', tail, re.I):
+            continue
         clause = re.split(r'\bbut\b', tail, flags=re.I)[-1]
         if re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", clause, re.I):
             continue
         return hit.start()
-    # Preserve the existing fallback for planned idle/implicit actions, without borrowing a verb.
-    return next((m.end() for m in owners if m.group().casefold() == name_key(cast[actor].name)), 0)
+    if verb == 'idle':
+        return next((m.end() for m in owners if m.group().casefold() == name_key(cast[actor].name)), None)
+    return None
 
 
 def hyena_quantity(text):
@@ -162,13 +165,16 @@ class HybridProduction:
             if i and len(self.score_beats) and not len(available):
                 self.warnings.append(f'hybrid: source span {spec["beat_ids"]} too short for a score-aligned join')
             self._prepare(span, project_dir)
+            if span.scientific or (self.spans and self.spans[-1].scientific):
+                span.join = span.start
             if self.native and span.atmos:
                 span.atmos.internal_size = self.size
             if self.square and span.motion:
                 self._reflow_square(span)
             self.spans.append(span)
         self.starts = [s.start for s in self.spans]
-        self.cuts = [s.join for s in self.spans[1:] if s.spec['transition_in'] == 'cut']
+        self.cuts = [s.join for i, s in enumerate(self.spans[1:], 1)
+                     if s.spec['transition_in'] == 'cut' or s.scientific or self.spans[i - 1].scientific]
         self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
 
     def _prepare(self, span, project_dir):
@@ -194,6 +200,9 @@ class HybridProduction:
             beat = self.by_id[a['at_beat']]
             timing = self.tl['beats'][a['at_beat']]
             char = self._source_action_char(beat, a['actor'], a['verb'])
+            if char is None:
+                self.warnings.append(f"hybrid: {a['verb']} by {a['actor']} at {a['at_beat']} lacks an unambiguous positive source cue; skipped")
+                continue
             target = None
             if a['verb'] == 'sleep':
                 contact = self._sleep_contact(beat, a['actor'])
@@ -287,10 +296,14 @@ class HybridProduction:
             value = quotes[0] if quotes else {}
             body = self._label(value.get('text')) or (source['text'] if source else text)
             who = self._label(value.get('who'))
-            atomic = '\n'.join(textwrap.wrap('“' + body + '”', 48)) + ('\n— ' + who if who else '')
+            atomic = '“' + body + '”'
+            if not span.source_character:
+                atomic = '\n'.join(textwrap.wrap(atomic, 48))
+            atomic += '\n— ' + who if who else ''
             elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
             if span.source_character and source:
                 elements[-1].start = self._source_text_start(span, source, body)
+                elements[-1]._quote_source = (source, body)
         for e in spec['elements']:
             if not span.diagram and e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
                 elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
@@ -408,19 +421,28 @@ class HybridProduction:
         ownership of the next action.
         """
         direct = action_char(beat['spoken'], actor, verb, self.cast)
-        if verb == 'tremble':
-            implied = re.match(r"(?:['’]s\s+)?\s*(heart\s+hammered\b|shrank\s+back\b)", beat['spoken'][direct:], re.I)
-            if implied:
-                return direct + implied.start(1)
-        cue = r'\b(?:' + ACTION_CUES.get(verb, r'(?!)') + r')\b'
-        if re.match(cue, beat['spoken'][direct:], re.I):
+        if direct is not None:
             return direct
+        if verb == 'tremble':
+            implied = action_char(beat['spoken'], actor, verb, self.cast,
+                                  r'heart\s+hammered|shrank\s+back')
+            if implied is not None:
+                return implied
+        pattern = ACTION_CUES.get(verb, r'(?!)')
+        if verb == 'sleep':
+            pattern += r'|asleep'
+            # "asleep" is a state predicate, not the nearest named object's cue.
+            name = re.escape(name_key(self.cast[actor].name))
+            for state in re.finditer(r'(?<!\w)' + name + r'(?!\w)\s+(?:was|is|lay|fell)\s+(?:fast\s+)?(asleep)\b', beat['spoken'], re.I):
+                return state.start(1)
+        cue = r'\b(?:' + pattern + r')\b'
         source = list(self.by_id.values())
         index = next(i for i, b in enumerate(source) if b['id'] == beat['id'])
         previous = source[index - 1]['spoken'] if index and source[index - 1]['section'] == beat['section'] else ''
         text = previous + '\n' + beat['spoken']
         offset = len(previous) + 1
         owner = None
+        referents = []
         for sentence in re.finditer(r'[^.!?;\n]+', text):
             body = sentence.group()
             named = []
@@ -428,19 +450,23 @@ class HybridProduction:
                 name = re.escape(name_key(genome.name))
                 # A name followed by a predicate is a subject; "over Pendo"
                 # and "nudged Pendo with his nose" remain objects.
-                if re.search(r'(?<!\w)' + name + r"(?!\w)(?:['’]s\s+(?:heart|body|head))?\s+(?:was|is|had|has|would|stood|lowered|burst|shrank|tried|returned|hammered|walk\w*|run\w*|ran|nudg\w*|roar\w*)\b", body, re.I):
+                if re.search(r'(?<!\w)' + name + r"(?!\w)(?:['’]s\s+(?:heart|body|head))?\s+(?:was|is|had|has|would|stood|lowered|burst|shrank|tried|returned|hammered|curl\w*|rest\w*|sleep\w*|slept|watch\w*|walk\w*|run\w*|ran|nudg\w*|roar\w*)\b", body, re.I):
                     named.append(key)
             pronoun = re.search(r'\b(he|she|his|her)\b', body, re.I)
+            current = [key for key, genome in self.cast.items() if mentions(genome.name, body)]
             if len(named) == 1:
                 owner = named[0]
             elif len(named) > 1 or re.search(r'\b(they|their)\b', body, re.I):
                 owner = None
             elif not pronoun:
                 owner = None
+            if named or not pronoun:
+                referents = current
             if owner != actor or not pronoun:
                 continue
             sex = 'female' if pronoun[1].lower() in ('she', 'her') else 'male'
-            if self.cast[actor].sex not in ('unknown', sex):
+            compatible = [key for key in referents if self.cast[key].sex in ('unknown', sex)]
+            if self.cast[actor].sex not in ('unknown', sex) or compatible != [actor]:
                 owner = None
                 continue
             for hit in re.finditer(cue, body, re.I):
@@ -448,7 +474,7 @@ class HybridProduction:
                 prefix = re.split(r'[,;]|\bbut\b', body[:hit.start()], flags=re.I)[-1]
                 if absolute >= offset and not re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", prefix, re.I):
                     return absolute - offset
-        return direct  # planned idle/implicit acting keeps its established fallback
+        return None
 
     def _nudge_char(self, text, actor, direct):
         """A pronoun cue needs one named subject in the immediately preceding sentence."""
@@ -559,10 +585,12 @@ class HybridProduction:
         width = 730 if panel else 880 if self.square else 1640
         top, bottom = (.14, .65) if panel else (.08, .34)
         elements = span.motion.elements
+        paged = []
         for i, e in enumerate(elements):
             e.x, e.y = text_x, top + (i + .5) * (bottom - top) / max(1, len(elements))
             e.width, e.height = width, 1080 * (bottom - top) / max(1, len(elements)) - 30
             if e.kind != 'text':
+                paged.append(e)
                 continue
             quote = e.preset == 'corner_caption'
             e.size = 48
@@ -575,12 +603,39 @@ class HybridProduction:
             wrapped, _, size, _ = _text_metrics(e.text, e.size, e.width, True, e.font)
             rows = max(1, int(e.height / (size * 1.15)))
             if quote and len(wrapped.splitlines()) > rows:
-                # Quotes stay atomic and complete. Allocate their full panel height.
+                # Every card appears atomically, at its own words inside the complete
+                # dialogue. Keep a readable font and page inside the safe cast panel.
                 e.height = 1080 * (bottom - top) - 30
+                e.y = (top + bottom) / 2
                 rows = max(1, int(e.height / (size * 1.15)))
+                lines = wrapped.splitlines()
+                source, body = e._quote_source
+                spoken_offset = source['spoken'].find(body)
+                positions = [j for j, ch in enumerate(body) if not ch.isspace()]
+                consumed = 0
+                cards = []
+                for j in range(0, len(lines), rows):
+                    card = copy.copy(e)
+                    card.text = '\n'.join(lines[j:j + rows])
+                    if spoken_offset >= 0 and positions:
+                        char = spoken_offset + positions[min(consumed, len(positions) - 1)]
+                        timing = self.tl['beats'][source['id']]
+                        ct = timing['char_times']
+                        card.start = timing['start'] - span.start + (ct[min(char, len(ct) - 1)] if ct else 0)
+                    else:
+                        card.start = e.start + j / max(1, len(lines)) * max(0, span.end - span.start - e.start)
+                    consumed += len(re.sub(r'\s|[“”]', '', card.text))
+                    cards.append(card)
+                for card, following in zip(cards, cards[1:]):
+                    card.end = following.start
+                cards[-1].end = span.end - span.start
+                paged.extend(cards)
+                continue
             if not quote and len(wrapped.splitlines()) > rows:
                 wrapped = '\n'.join(wrapped.splitlines()[:rows])
             e.text = wrapped
+            paged.append(e)
+        span.motion.elements = paged
         # Measure stable resting silhouettes once. One scale per interaction group
         # preserves baby/adult size differences and leaves room for action/life poses.
         main = [a for a in span.actors if not a.startswith('crowd-hyena-')]
@@ -851,7 +906,7 @@ class HybridProduction:
                                      round(ground * h + bbox[1] - 358 * scale)), sprite)
         return image
 
-    def _frame(self, span, t):
+    def _frame(self, span, t, *, quotes=True):
         spec, local = span.spec, max(0, t - span.start)
         if span.source_proof or spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
             return self.cutaway.frame(t).convert('RGB')
@@ -925,7 +980,8 @@ class HybridProduction:
                                           _SceneLayers(span.motion, w, h))
             array = np.asarray(image, dtype=np.float32).copy()
             for i, e in enumerate(span.motion.elements):
-                if e.kind == 'text':
+                if e.kind == 'text' and (e.preset != 'corner_caption' or (quotes and
+                                        e.start <= local < (e.end if e.end is not None else math.inf))):
                     renderer._composite(array, self._text_layers[key], i, [local], 'text')
             image = Image.fromarray(np.clip(array + .5, 0, 255).astype(np.uint8))
         return image.convert('RGB')
@@ -966,11 +1022,11 @@ class HybridProduction:
         end_start = self.tl['end_card']['start']
         if t >= end_start:
             last = self.spans[-1]
-            if (last.spec['treatment'] != 'whiteboard' and not last.source_proof
+            if (last.spec['treatment'] != 'whiteboard' and not last.source_proof and not last.scientific
                     and t < end_start + last.join_length):
                 # Keep the existing endcard clock; ease out of a cinematic scene
                 # instead of making an extra unaligned hard cut at its boundary.
-                previous = self._frame(last, end_start - 1 / 30)
+                previous = self._frame(last, end_start - 1 / 30, quotes=False)
                 current = self.whiteboard.frame(t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
                                           *self.size, kind='match', duration=last.join_length)
@@ -985,16 +1041,20 @@ class HybridProduction:
             return self.whiteboard.frame(t)
         local = t - span.join
         kind = span.spec['transition_in']
-        if span.diagram and t >= span.diagram.window[0]:
+        if span.scientific or (i and self.spans[i - 1].scientific):
+            # Scientific panels follow the source clock and retain their exact
+            # canvas/axis transform through both sides of every scene boundary.
+            image = self._frame(span, t)
+        elif span.diagram and t >= span.diagram.window[0]:
             # The spoken glide cue owns these panels. A score-delayed join must
             # not hide their labels or substitute the previous scene.
             image = self._frame(span, t)
         elif i and local < 0:
-            image = self._frame(self.spans[i - 1], min(t, span.start - 1 / 30))
+            image = self._frame(self.spans[i - 1], min(t, span.start - 1 / 30), quotes=False)
         else:
             image = self._frame(span, t)
             if i and kind != 'cut' and local < span.join_length:
-                previous = self._frame(self.spans[i - 1], span.start - 1 / 30)
+                previous = self._frame(self.spans[i - 1], span.start - 1 / 30, quotes=False)
                 array = render_transition(np.asarray(previous), np.asarray(image), local, *self.size,
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)
@@ -1007,7 +1067,8 @@ class HybridProduction:
         for i, span in enumerate(self.spans):
             if span.spec['treatment'] == 'whiteboard':
                 continue
-            cues.append({'t': span.join if i else span.start, 'kind': 'cut' if span.spec['transition_in'] == 'cut' else 'whoosh',
+            neutral = span.scientific or (i and self.spans[i - 1].scientific)
+            cues.append({'t': span.join if i else span.start, 'kind': 'cut' if span.spec['transition_in'] == 'cut' or neutral else 'whoosh',
                          'strength': .35, 'id': f'hybrid.scene.{i}'})
             for j, (actor, action, target) in enumerate(span.actions):
                 kind = {'roar': 'impact', 'nudge': 'tap', 'swipe': 'whoosh', 'pounce': 'pop'}.get(action.name)
