@@ -30,3 +30,14 @@ See `edu/README.md` in the source checkout for OAuth setup and focused test
 commands, and the shipped [privacy policy](privacy.html).
 No build, browser installation, account login, upload or publication is performed
 by these instructions or by the local gallery helper.
+
+## Dated local load check
+
+On 2026-10-06, a retained development package for source snapshot `773cbe4`
+(version `0.1.0`) loaded in a fresh Chromium profile: its service worker started
+and its welcome page opened. The package used existing generated `vendor/` and
+`assets/` dependencies rather than a fresh regeneration. External network access
+was blocked; Google sign-in, video synthesis, upload and Classroom posting were
+not exercised. This establishes unpacked loading only.
+
+![The actual locally loaded Classroom welcome page](development-welcome.png)
