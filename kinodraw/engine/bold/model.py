@@ -91,6 +91,7 @@ class MotionScene:
     grain: float = 0.                 # optional, applied below the sharp text layer
     glow: float = .7
     blur_samples: int = 3
+    continuous_drift: bool = False  # hybrid requests a foreground arc without simultaneous turning points
 
     def __post_init__(self):
         self.elements = [MotionElement(**e) if isinstance(e, dict) else e for e in self.elements]

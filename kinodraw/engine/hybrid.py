@@ -402,7 +402,7 @@ class HybridProduction:
             palette=Palette(p['background'], p['ink'], p['accent']), energy=self.style['energy'],
             motion_floor={'still': 0, 'breathing': .4, 'drifting': .7, 'lively': 1}[self.style['motion_floor']],
             hold=min(1.1, max(.5, spec['hold_s'])), seed=seed(spec['beat_ids']), blur_samples=1,
-            foreground_drift=84. if treatment == 'kinetic_type' else 48.)
+            foreground_drift=84. if treatment == 'kinetic_type' else 48., continuous_drift=True)
         for element in elements:
             element.font = self.style['type']
         if span.source_character:

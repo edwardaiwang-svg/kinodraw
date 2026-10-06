@@ -69,6 +69,7 @@ def test_source_copy_and_generated_prop_have_separate_vertical_space(tmp_path):
     timing = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'), credit=False)
     prod = render.make_production(board, timing, 'en', tmp_path)
     elements = prod.spans[-1].motion.elements
+    assert prod.spans[-1].motion.continuous_drift
     picture = next(e for e in elements if e.kind == 'picture')
     copy = next(e for e in elements if e.kind == 'text')
     assert picture.preserve_svg_palette
@@ -78,7 +79,8 @@ def test_source_copy_and_generated_prop_have_separate_vertical_space(tmp_path):
 
 
 def test_motion_has_a_vertical_component_when_horizontal_drift_turns():
-    scene = MotionScene(elements=[MotionElement(text='Workspace')], motion_floor=.7, foreground_drift=84)
+    scene = MotionScene(elements=[MotionElement(text='Workspace')], motion_floor=.7,
+                        foreground_drift=84, continuous_drift=True)
     # Every short settled interval has visible travel, including horizontal
     # turning points; unrelated horizontal/vertical sine periods can both stall.
     for i in range(20, 160):

@@ -81,7 +81,8 @@ def element_pose(scene, element, i, t):
     corner = element.kind == 'text' and element.preset == 'corner_caption'
     drift = .7 if corner else scene.foreground_drift
     x += floor * drift * math.sin(t * 1.13 + phase)
-    y += floor * drift * .7 * math.cos(t * 1.13 + phase)
+    y += floor * drift * .7 * (math.cos(t * 1.13 + phase) if scene.continuous_drift
+                               else math.sin(t * 1.67 + phase * .8))
     scale *= 1 + floor * (.003 if corner else .015) * math.sin(t * 1.91 + phase)
     alpha = enter * (1 - floor * .035 * (1 + math.sin(t * 2.3 + phase)))
     if element.end is not None:

@@ -330,11 +330,20 @@ class PanelMotion:
         square = w == h
         gap = w*.025
         cw,ch = (w*.65,h*min(.14,.52/n)) if square else ((w*.76-gap*(n-1))/n,h*.33)
+        step = h*.60/n
+        if square and n > 1:
+            # Reserve room for the entire shared hover arc above the captions;
+            # a four-card square stack otherwise leaves only ten pixels below it.
+            hover = h * {'still': 0., 'breathing': .03, 'drifting': .045, 'lively': .06}[self.floor] * .7
+            # Shorten cards along with the stack so their original gaps remain
+            # available for the staggered glide, rather than overlapping borders.
+            ch -= max(0., h*.17+(n-1)*step+ch+hover-h*.75)/n
+            step = min(step, (h*.75-h*.17-ch-hover)/(n-1))
         a,b = self.window
         out=[]
         for i in range(n):
             u=ease((t-a)/(b-a)*1.3-i*.1)
-            x,y = ((w-cw)/2,h*.17+i*h*.60/n) if square else (w*.10+i*(cw+gap),h*.28)
+            x,y = ((w-cw)/2,h*.17+i*step) if square else (w*.10+i*(cw+gap),h*.28)
             out.append((x+(1-u)*w*.04+self._ambient(t),
                         y-(1-u)*h*(.1 if square else .15)+self._ambient(t, math.pi/2)*.7,cw,ch))
         return tuple(out)
