@@ -169,16 +169,21 @@ def _style_check(svg, palette):
 
 def _prompt(description, palette, style):
     return (f'Draw ONE original prop: {description}\nStyle direction: {style}\n'
-            'Return only SVG XML, no markdown. viewBox="0 0 512 512", width="512", height="512". '
+            'Produce SVG XML, no markdown; if the transport requires JSON, put this XML in its svg string. '
+            'Start with <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" '
+            'width="512" height="512" stroke="#1B1B1B" stroke-width="6" '
+            'stroke-linecap="round" stroke-linejoin="round"> so every shape inherits the ink contract. '
             'Use 5–40 path/shape elements (path rect circle ellipse line polyline polygon) and optional g. '
             'Bold friendly flat cartoon, big silhouette first, interiors next, details last. '
             'BBox fills 40–95% of viewBox with at least 12 px padding; no detail smaller than 6 px. '
             f'Only these colours: {", ".join(palette)} plus black #000000, ink #1B1B1B and white #FFFFFF; '
             'none is allowed. Every filled shape has a black ink outline except accents with data-noink="1". '
             'At least three ink strokes, total outline length at least 512 px. stroke-width="6" for main '
-            'shapes or "4" for details, stroke-linecap="round", stroke-linejoin="round". '
+            'shapes or "4" for details, stroke-linecap="round", stroke-linejoin="round", '
+            'including closed rectangles, circles and paths. Never use coloured or white strokes. '
             'Inline attributes only; no text, images, external references, CSS, opacity, defs, use, '
-            'gradients, filters, masks, animation, scripts, entities or logos. One darker shading tone at most.')
+            'gradients, filters, masks, animation, scripts, entities or logos. One darker shading tone at most. '
+            'Check every shape against all ink, palette and geometry rules before returning it.')
 
 
 def _read(path):
@@ -236,7 +241,9 @@ def request_prop(description, palette, style, llm, *, project=None) -> Generated
                 return None
             failure = str(error)[:500]
             failures.append(failure)
-            prompt = _prompt(description, palette, style) + f'\nFailure: {failure}\nRepair once; return corrected SVG.'
+            prompt = (_prompt(description, palette, style) + f'\nFailure: {failure}\n'
+                      'Repair once; recheck the entire contract, not only this first reported error; '
+                      'return corrected SVG.')
             continue
         info = {'model': str(getattr(llm, 'model', 'unknown (injected callable)')),
                 'prompt_hash': hashes[0], 'prompt_hashes': hashes, 'context_hash': context_hash,

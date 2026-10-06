@@ -229,6 +229,39 @@ def test_art_attempts_are_not_multiplied_and_style_repair_is_recorded(tmp_path, 
     assert 'Failure:' in json.loads(calls[1]['messages'][-1]['content'])['untrusted_art_request']
 
 
+@pytest.mark.parametrize('kind', ['openai', 'compat', 'anthropic'])
+def test_live_rejection_repair_keeps_authoritative_ink_contract(tmp_path, kind):
+    """Replay the actual Luna battery failure, through the selected-provider adapter."""
+    from kinodraw.library.genprops import sanitize_svg, _style_check
+    rejected = (Path(__file__).parent / 'fixtures' / 'svg_prop_live_battery_rejected.svg').read_text()
+    accepted = (Path(__file__).parent / 'fixtures' / 'svg_prop_live_battery_accepted.svg').read_text()
+    palette = ['#17212b', '#1d70a5', '#d99a00', '#ffffff']
+    clean, actions = sanitize_svg(rejected)
+    assert actions == []
+    with pytest.raises(ValueError, match='outline caps and joins must be round'):
+        _style_check(clean, palette)
+    provider, calls, _ = fake_provider(kind, [json.dumps({'svg': rejected}), json.dumps({'svg': accepted})])
+    usage = providers.Usage()
+    prop = request_prop('How a battery works', palette, 'bold flat',
+                        make_prop_llm(provider, usage), project=tmp_path)
+    assert prop is not None and prop.provenance['repairs'] == 1
+    assert prop.provenance['failures'] == ['outline caps and joins must be round']
+    assert prop.svg == _style_check(sanitize_svg(accepted)[0], palette)
+    assert len(calls) == usage.calls == 2
+    for call in calls:
+        system = (call['system'][0]['text'] if kind == 'anthropic'
+                  else call['messages'][0]['content'])
+        assert 'Every stroked shape' in system and 'including closed shapes' in system
+        for required in ('stroke="#1B1B1B"', 'stroke-width="6"',
+                         'stroke-linecap="round"', 'stroke-linejoin="round"'):
+            assert required in system
+        brief = json.loads(call['messages'][-1]['content'])['untrusted_art_request']
+        assert 'Return only SVG XML' not in brief
+        assert '<svg xmlns="http://www.w3.org/2000/svg"' in brief
+        assert 'Check every shape' in brief
+    assert 'recheck the entire contract' in json.loads(calls[1]['messages'][-1]['content'])['untrusted_art_request']
+
+
 @pytest.mark.parametrize('bad', [
     '<!DOCTYPE svg [<!ENTITY remote SYSTEM "https://example.invalid/x">]><svg>&remote;</svg>',
     '<svg viewBox="0 0 512 512"><image href="https://example.invalid/x"/></svg>',
