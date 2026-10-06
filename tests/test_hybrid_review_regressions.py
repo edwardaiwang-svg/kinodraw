@@ -17,7 +17,8 @@ def save(tmp_path, board, plan, tl, size=None, aspect='16:9'):
 
 
 @pytest.mark.parametrize('names', [('Nia', 'Sora', 'Taro'), ('Ayo', 'Luma', 'Beko')])
-@pytest.mark.parametrize('source', ['{actor} never roared.', '{actor} watched {child}. She roared.',
+@pytest.mark.parametrize('source', ['{actor} never roared.', '{actor} no longer roared.',
+                                   '{actor} watched {child}. She roared.',
                                    '{actor} watched the clouds.'])
 def test_unsupported_saved_action_does_not_change_real_frame(tmp_path, names, source):
     child, _, actor = names
@@ -35,6 +36,28 @@ def test_unsupported_saved_action_does_not_change_real_frame(tmp_path, names, so
     assert all(prod.frame(t).tobytes() == idle.frame(t).tobytes() for t in times)
     assert not span.actions
     assert any('roar' in w and 'source' in w and 'skipped' in w for w in prod.warnings)
+
+
+def test_no_longer_asleep_is_not_a_sleep_action(tmp_path):
+    _, board, plan, tl = production(tmp_path, ['Taro watched the clouds. He was no longer asleep.'], floor='still')
+    next(c for c in plan['cast'] if c['id'] == 'taro')['sex'] = 'male'
+    scene = plan['scenes'][-1]
+    scene['actions'] = [{'actor': 'taro', 'verb': 'sleep', 'at_beat': scene['beat_ids'][0], 'intensity': 3}]
+    prod = save(tmp_path, board, plan, tl)
+    scene['actions'] = []
+    idle = save(tmp_path, board, plan, tl)
+    span = prod.spans[-1]
+    assert not span.actions
+    assert prod.frame(span.end - .1).tobytes() == idle.frame(span.end - .1).tobytes()
+
+
+def test_not_only_is_an_affirmative_action(tmp_path):
+    _, board, plan, tl = production(tmp_path, ['Taro not only roared, but also swiped his paw.'], floor='still')
+    scene = plan['scenes'][-1]
+    scene['actions'] = [{'actor': 'taro', 'verb': verb, 'at_beat': scene['beat_ids'][0], 'intensity': 3}
+                        for verb in ('roar', 'swipe')]
+    prod = save(tmp_path, board, plan, tl)
+    assert [action.name for _, action, _ in prod.spans[-1].actions] == ['roar', 'swipe']
 
 
 @pytest.mark.parametrize('size,aspect', [(None, '16:9'), ((1080, 1080), '1:1'), (None, '9:16')])

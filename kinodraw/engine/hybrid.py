@@ -27,6 +27,7 @@ from .creatures.actions import ACTIONS, add, cue_pose, target_response, travel_x
 from .creatures.draw import H as RIG_HEIGHT
 
 TRAVEL_MARGIN = .03  # share of the frame width a walking or running actor keeps clear of the right edge
+NEGATED_ACTION = re.compile(r"\b(?:never|cannot|no\s+longer)\b|\bnot\b(?!\s+only\b)|\b\w+n['’]t\b", re.I)
 
 
 def seed(value):
@@ -53,7 +54,7 @@ def action_char(text, actor, verb, cast, cue=None):
         if re.search(r'\b(?:him|her|them)\s*$', tail, re.I):
             continue
         clause = re.split(r'\bbut\b', tail, flags=re.I)[-1]
-        if re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", clause, re.I):
+        if NEGATED_ACTION.search(clause):
             continue
         return hit.start()
     if verb == 'idle':
@@ -480,7 +481,7 @@ class HybridProduction:
             for hit in re.finditer(cue, body, re.I):
                 absolute = sentence.start() + hit.start()
                 prefix = re.split(r'[,;]|\bbut\b', body[:hit.start()], flags=re.I)[-1]
-                if absolute >= offset and not re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", prefix, re.I):
+                if absolute >= offset and not NEGATED_ACTION.search(prefix):
                     return absolute - offset
         return None
 
@@ -497,7 +498,7 @@ class HybridProduction:
             current = sentences[-1]
             if len(sentences) < 2 or not re.match(r'^\s*' + pronoun + r'\b', current, re.I):
                 continue
-            if re.search(r"\b(?:not|never|cannot|but|while|whereas|when)\b|\b\w+n['’]t\b", current, re.I):
+            if NEGATED_ACTION.search(current) or re.search(r'\b(?:but|while|whereas|when)\b', current, re.I):
                 continue
             previous = sentences[-2]
             owners = [key for key, g in self.cast.items() if mentions(g.name, previous)]
