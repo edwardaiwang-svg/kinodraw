@@ -292,5 +292,7 @@ def test_real_byok_plan_saved_and_reused(tmp_path, monkeypatch):
     report = pipeline.direct_v3(project, provider=provider)
     assert not report['fallback'] and pipeline.settings(project)['plan_v3'] == expected
     assert report['usage']['calls'] == 1
+    # The plan request is followed by the weak-match prop request; reuse sends nothing.
+    assert [c['response_format']['json_schema']['name'] for c in calls] == ['video_plan', 'svg_prop']
     pipeline.direct_v3(project, provider=provider)
-    assert len(calls) == 1
+    assert len(calls) == 2

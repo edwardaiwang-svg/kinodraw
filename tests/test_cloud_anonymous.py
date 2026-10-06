@@ -200,13 +200,12 @@ SPANISH = ('# Las abejas\n\nLas abejas visitan muchas flores para hacer miel.\n\
 def test_a_language_the_cloud_does_not_plan_never_asks_it_for_a_token(fake_cloud, keychain, tmp_path, open_access):
     """A Spanish video with KinoDraw Cloud and no sign-in is planned offline, open access on or off: nothing is sent,
     no installation ID is made and no sign-in is asked for."""
-    from kinodraw import director
+    from kinodraw import director, pipeline
     seen, replies = fake_cloud
     if not open_access:
         replies['/v1/anonymous'] = (403, {'error': SENTENCE})
     project = tmp_path / 'p'
-    project.mkdir()
-    (project / 'storyboard.json').write_text(json.dumps(script.build(ingest.read(SPANISH))), encoding='utf-8')
+    pipeline.new_project(SPANISH, project)
     report = director.direct(project, 'cloud')
     assert report['notes'] == ['The offline director planned this video (KinoDraw Cloud plans English and Chinese '
                                'videos only; no cloud video was used)']
@@ -387,6 +386,7 @@ let reply, lang = 'en';
 const voiceLang = () => lang;
 const fetch = async (url) => (asked.push(url), reply);
 const syncStyle = () => {};     // 0.3.0's Style menu follows the director; not under test here
+const writerNote = () => {};    // the writer entry's own note follows the director; not under test here
 const settingsText = () => { ''' + settings + ''' return {
   text: cloud.match(/<p class="muted">([^<]*)/)[1].trim(),
   privacy: cloud.match(/<a href="([^"]+)"[^>]*>What is sent \\(privacy\\)<\\/a>/)?.[1]
