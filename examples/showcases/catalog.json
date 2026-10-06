@@ -1,0 +1,7 @@
+[
+  {"id":"lion","title":"Pendo and the Roar That Saved the Pride","category":"Story","summary":"A fictional cub-and-pride story; the source narration is retained, including its lioness wording.","script":"lion.md"},
+  {"id":"explainer","title":"How a battery works","category":"Explainer","summary":"A short illustrative energy explainer, not a technical battery specification.","script":"explainer.md"},
+  {"id":"product-launch","title":"Introducing a simpler workspace","category":"Product launch","summary":"A fictional product and invitation, with no live sign-up destination.","script":"product-launch.md"},
+  {"id":"lesson","title":"A multiplication lesson","category":"Lesson","summary":"Three rows of five dots introduce multiplication and its commutative property.","script":"lesson.md"},
+  {"id":"news","title":"The latest transport report","category":"News / data","summary":"Fictional transport figures and council event; these are not a real survey or news report.","script":"news.md"}
+]

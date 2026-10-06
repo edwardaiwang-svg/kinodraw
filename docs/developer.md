@@ -1,8 +1,9 @@
 # Local developer tools
 
 Run from the repository with the existing Python environment. No installation,
-API key, keychain access, narration, search-model download, or app-folder migration
-is needed for these commands. The existing `new`, `voice`, `render`, and `finish`
+API key, keychain access, search-model download, or app-folder migration
+is needed for these creation, validation and synthetic-preview commands. Narrated
+MCP modes opt into local synthesis or an existing measured narration cache. The existing `new`, `voice`, `render`, and `finish`
 commands retain their flags and behavior.
 
 ```sh
@@ -59,8 +60,9 @@ Use an actual beat ID from `demo/storyboard.json`:
 "$P" -m kinodraw.cli chart-add demo --root "$ROOT" --beat b002 --source counts.json
 ```
 
-`chart-add` appends a current `bars` visual, runs the existing validator, and saves
-the storyboard only when valid. Values come directly from the source file. The
+`chart-add` accepts this original bar format and the bounded scientific
+`kinodraw-scientific/1` format. For bar inputs it appends a current `bars` visual,
+runs the existing validator, and saves the storyboard only when valid. Values come directly from the source file. The
 visual keeps the source filename, its SHA-256, and a visible source footnote.
 Attribution is supplied by the caller; it is not independent verification of the
 data. Missing values, booleans, strings, non-finite numbers, duplicate JSON keys,
@@ -72,6 +74,12 @@ convert exactly to the current renderer's float. Ordinary decimal values such as
 The existing bar renderer clamps negatives
 and displays at most six rows, so this interface refuses negative values and
 sources outside one to six rows instead of silently changing their meaning.
+
+Scientific observations and the analytical harmonic-oscillator model use exact
+coordinates and explicit units/provenance through the same entry point. Scientific
+imports retain the content-hashed input in the project, select a v3 chart treatment,
+and export a source appendix. See [scientific examples and limits](../examples/scientific/README.md).
+The one-to-six nonnegative-row restrictions above apply to bars, not scientific plots.
 
 ## Stdio MCP
 
@@ -98,13 +106,13 @@ receive no response and cannot launch tool calls.
 | --- | --- | --- |
 | `create_project` | `project`, exactly one of `script` / `starter`; optional `lang`, `title` | Editable pipeline storyboard skeleton |
 | `validate_project` | `project` | Existing validator errors and warnings; invalid boards return `isError` |
-| `chart_add` | `project`, `beat`, `source` | Source-backed `bars` visual and source hash |
+| `chart_add` | `project`, `beat`, `source` | Attributed bars or validated scientific plot, retained input/hash |
 | `preview_png` | `project`, optional `time` (default 0) | PNG path plus MCP image content |
-| `render` | `project`, optional `start` (0), `duration` (1 second) | Opaque owned job ID and PID, not a completion claim |
-| `status` | `job` | Actual process state and exit code |
+| `render` | `project`, optional `mode` (`synthetic`, `make`, `cached`); `start`/`duration` for synthetic only | Opaque owned job ID and PID; poll status for actual completion |
+| `status` | `job` | Actual process state/exit code; narrated stages and encoded-frame progress |
 | `cancel` | `job` | Reaped owned process group and actual exit code |
 
-Preview and render use `engine.timeline.synthetic_clips` / `layout` and the existing
+Preview and default `mode=synthetic` render use `engine.timeline.synthetic_clips` / `layout` and the existing
 `engine.render.make_production` / `encode`. Timing is estimated and labeled
 `synthetic_timing`; MP4 output is silent. PNG size is 960×540, or 540×960 for a
 vertical project. Files receive unique names in `build/developer/`. The render
@@ -119,14 +127,43 @@ the real exit code; success also requires an output file. Job history is in memo
 and does not survive a server restart. Partial cancelled artifacts remain available
 for inspection.
 
-Writer, export, ZIP packaging, and progress notifications are not advertised.
+Explicit `mode=make` produces a complete narrated movie using checksum-verified
+local Kokoro models; `mode=cached` reuses a matching measured timeline and narration.
+Neither accepts a partial interval. Both validate decoded video/audio and the six
+sidecars before reporting success. Polling `status` exposes real stage/encoded-frame
+progress; this is not a JSON-RPC push notification. See [narrated MCP details](mcp.md)
+for prerequisites, preserved source bytes, guards and cancellation/publication rules.
+
+Writer, a separate export tool, ZIP packaging, and push progress notifications are not advertised.
 Unknown tools return a truthful `isError`. Future modules need an explicit adapter
 and real checks before appearing in `tools/list`.
+
+## Native landscape 4K
+
+The full pipeline supports landscape 3840×2160 as a native size, with saved
+layout and target-resolution vector/hybrid rendering:
+
+```sh
+python -m kinodraw.cli make examples/showcases/explainer.md -o projects/explainer-4k --director rules --director-v3 --aspect 16:9 --size 3840 2160
+```
+
+This is a full pipeline command, so normal setup/migration and first-use local
+model downloads apply. Use a fresh destination. Supported other natural sizes
+are 1920×1080, 1080×1080 and 1080×1920; arbitrary dimensions and 4K collage are
+refused. A supported size is not a render-time or memory promise. Native-size
+checks live in `tests/test_native_pipeline.py`, `tests/test_native_workers.py`
+and `tests/test_native_hybrid.py`.
+
+## Local gallery and portable launch kit
+
+[Browse shipped source examples](gallery/index.html) or [package actual accepted
+outputs](launch-kit/README.md). The local helper decodes media, validates project
+ZIPs and records content hashes; it does not publish or upload.
 
 ## Focused verification
 
 ```sh
-"$P" -m pytest -q tests/test_mcp_server.py tests/test_starters.py tests/test_developer_cli.py tests/test_text_files.py
+"$P" -m pytest -q tests/test_mcp_server.py tests/test_starters.py tests/test_developer_cli.py tests/test_text_files.py tests/test_mcp_narrated.py tests/test_scientific.py
 ```
 
 These checks launch real stdio clients and CLI subprocesses, create and validate

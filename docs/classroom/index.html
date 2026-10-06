@@ -50,7 +50,8 @@
       <h1>KinoDraw <span>for Classroom</span></h1>
       <p class="lead">Turn your lesson script into a hand-drawn video, read aloud, and add it to your Google Classroom
         class. It is all made right in Chrome: there is nothing else to install.</p>
-      <a class="btn primary" id="add-to-chrome" aria-disabled="true">Add to Chrome · coming soon</a>
+      <a class="btn primary" href="development.md">Developer build instructions</a>
+      <p class="small">A public Chrome Web Store install is not available. The source build is for developer testing; live Google sign-in and posting require the configured teacher account and OAuth approval.</p>
       <p class="small">A Chrome extension for teachers. It works with the Google account you teach with, in Chrome on
         Windows, Mac and Chromebooks.</p>
     </div>
@@ -100,8 +101,7 @@
   <section>
     <h2>For school IT</h2>
     <ul>
-      <li>Install it for teachers only: Admin console → Devices → Chrome → Apps &amp; extensions → Users &amp; browsers
-        → the teachers' organizational unit → Add from Chrome Web Store → Force install.</li>
+      <li>A public Chrome Web Store listing is not available. For a developer pilot, build and test the unpacked extension using the <a href="development.md">source instructions</a>; do not treat this as a school-wide deployment.</li>
       <li>Allow its Google sign-in: Security → Access and data control → API controls → App access control → trust the
         OAuth client <code>292748984382-7uf3qe28fadngtjln2p6e77jgmmf87qi.apps.googleusercontent.com</code>.</li>
       <li>Keep Apps → Google Workspace → Classroom → Data access → Classroom API turned on.</li>

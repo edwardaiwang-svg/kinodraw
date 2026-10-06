@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "lion",
+      "video": "lion/final.mp4",
+      "script": "lion/script.md",
+      "project": "lion/project.zip",
+      "captions": "lion/final.vtt",
+      "description": "lion/final-description.txt",
+      "sources": "lion/final-sources.json",
+      "screenshot": "lion/contact-sheet.png"
+    }
+  ]
+}
