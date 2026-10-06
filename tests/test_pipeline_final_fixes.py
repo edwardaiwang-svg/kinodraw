@@ -265,8 +265,9 @@ def test_direct_v3_same_provider_options_and_objects_preserved(tmp_path, monkeyp
     class Selected(Exception):
         pass
     def inspect(cfg):
-        assert cfg['director'] == 'compat'
-        assert all(cfg[k] == v for k, v in options.items())
+        assert cfg['director'] == 'compat' and cfg['model'] == options['model']
+        # Saved endpoints and commands are never provider inputs (tests/test_project_provider_trust.py).
+        assert not cfg.keys() & {'base_url', 'command'}
         assert provider != 'object'
         return selected
     def plan(board, provider=None):

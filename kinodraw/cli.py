@@ -68,7 +68,9 @@ def cmd_new(args):
     if pronounce:
         (Path(args.out) / pipeline.PRONOUNCE).write_text(Path(pronounce).read_text(encoding='utf-8'), encoding='utf-8')
     if getattr(args, 'director_v3', False):
-        report = pipeline.direct_v3(Path(args.out))
+        chosen = director.provider_for({'director': args.director, 'lang': board['lang'], 'model': getattr(args, 'model', None),
+                                        'base_url': getattr(args, 'base_url', None)})
+        report = pipeline.direct_v3(Path(args.out), provider=chosen)
     else:
         report = director.direct(Path(args.out), args.director, getattr(args, 'model', None), getattr(args, 'base_url', None),
                                  _progress)

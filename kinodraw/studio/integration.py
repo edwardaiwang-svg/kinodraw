@@ -8,7 +8,7 @@ import uuid
 import zipfile
 
 from .. import pipeline, voice_server
-from ..director import provider_for
+from ..director import PROVIDER_INPUTS, provider_for
 from ..director.llm.providers import ProviderError, Usage
 from ..project_store import ProjectStore, RevisionConflict
 
@@ -209,6 +209,9 @@ def importzip(stream, length):
             saved = store._state()  # read only: no recovery, lock creation or semantic rewriting
             store._validate(saved)
             board, cfg = saved['storyboard'], saved['settings']
+            forbidden = [key for key in PROVIDER_INPUTS if key in cfg]
+            if forbidden:
+                raise ValueError('Project ZIP settings cannot contain director provider inputs: ' + ', '.join(forbidden))
             for field in ('chapters', 'beats'):
                 if (not isinstance(board.get(field), list) or not board[field]
                         or not all(isinstance(item, dict) for item in board[field])):

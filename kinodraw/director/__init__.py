@@ -11,20 +11,23 @@ from pathlib import Path
 
 from .validate import validate
 
+PROVIDER_INPUTS = ('command', 'base_url', 'key', 'token')
+
 
 def provider_settings(settings, kind, **overrides):
-    """Keep saved options only while using the same provider."""
+    """Keep saved model options; executable, endpoint and auth require current input."""
     cfg = deepcopy(settings)
+    for key in PROVIDER_INPUTS:
+        cfg.pop(key, None)
     if kind != (cfg.get('director') or cfg.get('provider') or 'rules'):
-        for key in ('model', 'base_url', 'command'):
-            cfg.pop(key, None)
+        cfg.pop('model', None)
     cfg['director'] = kind
     cfg.update({key: value for key, value in overrides.items() if value is not None})
     return cfg
 
 
 def provider_for(settings):
-    """Canonical saved/env auth, with optional transient request overrides."""
+    """Trusted request options, falling back to user-level saved/env auth."""
     from .llm.providers import AnthropicProvider, CommandProvider, OpenAIProvider, make_provider
     kind = settings.get('director') or settings.get('provider') or 'rules'
     if kind == 'rules':

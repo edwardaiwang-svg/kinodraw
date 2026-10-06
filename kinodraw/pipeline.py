@@ -134,8 +134,8 @@ def direct_v3(project_dir: Path, provider=None, *, prop_llm=None, prop_candidate
         from .director import provider_settings
         cfg = provider_settings(cfg, provider)
     if isinstance(selected, str) and selected != 'rules':
-        from .director import provider_for
-        selected = provider_for({**cfg, 'director': selected})
+        from .director import provider_for, provider_settings
+        selected = provider_for(provider_settings(cfg, selected))
     plan, report = plan_v3(board, provider=selected)
     import copy
     bible = cfg.get('series_bible') or {'cast': copy.deepcopy(plan['cast'])}

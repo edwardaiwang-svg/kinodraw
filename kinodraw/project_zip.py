@@ -1,4 +1,4 @@
-"""Lossless project archives with bounded, verified, transactional import."""
+"""Project archives with bounded, verified, transactional import."""
 from __future__ import annotations
 
 import ctypes
@@ -11,6 +11,8 @@ import sys
 import tempfile
 import unicodedata
 import zipfile
+
+from .director import PROVIDER_INPUTS
 
 MANIFEST = 'kinodraw-manifest.json'
 MAX_FILES = 10000
@@ -64,7 +66,7 @@ def _rename_noreplace(source, destination):
 def export_project(project, output, *, max_files=MAX_FILES, max_bytes=MAX_BYTES):
     """Include all regular project files, including saved v3 state and recordings.
 
-    No regeneration or semantic rewriting; output must be outside the project.
+    No regeneration; omit executable, endpoint and auth settings. Output must be outside the project.
     """
     project, output = Path(project).resolve(), Path(output).absolute()
     if output.resolve().is_relative_to(project):
@@ -95,6 +97,15 @@ def export_project(project, output, *, max_files=MAX_FILES, max_bytes=MAX_BYTES)
         # Stored entries avoid producing an archive rejected by our bomb ratio bound.
         with zipfile.ZipFile(temp, 'w', compression=zipfile.ZIP_STORED) as z:
             for rel, path in sorted(files):
+                if rel == 'project.json':
+                    cfg = json.loads(path.read_text(encoding='utf-8'))
+                    if isinstance(cfg, dict) and any(key in cfg for key in PROVIDER_INPUTS):
+                        data = (json.dumps({k: v for k, v in cfg.items() if k not in PROVIDER_INPUTS},
+                                           ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+                        z.writestr(rel, data)
+                        manifest['files'][rel] = {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+                        total += len(data) - path.stat().st_size
+                        continue
                 z.write(path, rel)
                 manifest['files'][rel] = {'size': path.stat().st_size, 'sha256': _hash(path)}
             metadata = json.dumps(manifest, sort_keys=True).encode('utf-8')

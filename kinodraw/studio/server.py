@@ -690,6 +690,7 @@ def redirect(name: str, body: dict) -> dict:
         store.snapshot('Before replan', expected)
         cfg = director.provider_settings(state['settings'], mode,
             **{k: body[k] for k in ('model', 'base_url', 'command') if k in body})
+        request = {**director.provider_settings(cfg, mode), **body, 'director': mode, 'lang': cfg['lang']}
         # Plan in an owned scratch folder; only a complete validated result is committed.
         with tempfile.TemporaryDirectory(prefix='replan-', dir=store.meta) as folder:
             scratch = Path(folder)
@@ -699,10 +700,10 @@ def redirect(name: str, body: dict) -> dict:
                 for key in ('plan_v3', 'plan_v3_report', 'scene_treatments'):
                     cfg.pop(key, None)
                 atomic_save_json(scratch / 'project.json', cfg)
-                report = pipeline.direct_v3(scratch, provider=STUDIO_HOOKS.get('provider', lambda b: mode)({**cfg, **body, 'director': mode, 'lang': cfg['lang']}))
+                report = pipeline.direct_v3(scratch, provider=STUDIO_HOOKS.get('provider', lambda b: mode)(request))
             else:
                 atomic_save_json(scratch / 'project.json', cfg)
-                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress, provider=STUDIO_HOOKS.get('provider', lambda b: None)({**cfg, **body, 'director': mode, 'lang': cfg['lang']}))
+                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress, provider=STUDIO_HOOKS.get('provider', lambda b: None)(request))
             progress.check_cancelled()
             planned = ProjectStore(scratch).load()
             integration.validate_references(planned['storyboard'], planned['settings'], scratch)
