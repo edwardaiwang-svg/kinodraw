@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from .providers import (AnthropicProvider, CommandProvider, OpenAIProvider,
-                        StructuredResponseError, Usage, validate_structure)
+                        ProviderError, StructuredResponseError, Usage, validate_structure)
 
 
 PROP_SCHEMA = {'type': 'object', 'properties': {'svg': {'type': 'string'}},
@@ -33,12 +33,22 @@ def make_prop_llm(provider, usage: Usage):
 
     def llm(prompt):
         payload = {'untrusted_art_request': prompt}
-        if isinstance(provider, OpenAIProvider):
-            text = provider._ask(PROP_SYSTEM, PROP_SCHEMA, 'svg_prop', payload, usage, whole=True)
-        elif isinstance(provider, AnthropicProvider):
-            text = provider._ask(PROP_SYSTEM, PROP_SCHEMA, payload, usage, 'svg_prop', whole=True)
-        else:
-            text = provider._ask(PROP_SYSTEM, PROP_SCHEMA, payload, usage, strict=True)
+        before = usage.calls
+        try:
+            if isinstance(provider, OpenAIProvider):
+                text = provider._ask(PROP_SYSTEM, PROP_SCHEMA, 'svg_prop', payload, usage, whole=True)
+            elif isinstance(provider, AnthropicProvider):
+                text = provider._ask(PROP_SYSTEM, PROP_SCHEMA, payload, usage, 'svg_prop', whole=True)
+            else:
+                text = provider._ask(PROP_SYSTEM, PROP_SCHEMA, payload, usage, strict=True)
+        except ProviderError:
+            # A failed transport may still have consumed billable work. Count the
+            # art attempt without inventing tokens or claiming a known total cost.
+            # Refusals and malformed responses are already metered by _ask.
+            if usage.calls == before:
+                model = f'command:{provider.model}' if isinstance(provider, CommandProvider) else provider.model
+                usage.add(model, None, None)
+            raise
         try:
             value = json.loads(text or '')
         except (ValueError, TypeError) as error:

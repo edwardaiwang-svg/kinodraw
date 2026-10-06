@@ -141,7 +141,9 @@ def test_request_prop_authorization_failure_is_terminal(tmp_path, kind, status):
     usage = providers.Usage()
     assert request_prop('paw', PALETTE, 'flat', make_prop_llm(provider, usage), project=tmp_path) is None
     assert len(calls) == len(options) == 1
-    assert usage.calls == 0 and not (tmp_path / 'doodles').exists()  # No response metering.
+    assert usage.calls == 1 and usage.cost_usd is None
+    assert usage.input_tokens == usage.output_tokens == usage.cached_tokens == 0
+    assert not (tmp_path / 'doodles').exists()
 
 
 @pytest.mark.parametrize('transient', [None, False])
@@ -184,7 +186,9 @@ def test_real_command_authorization_failure_is_terminal(tmp_path, monkeypatch):
     assert [result.returncode for result in completed] == [1]
     assert completed[0].stderr.strip() == 'synthetic authorization failure'
     assert len(requests.read_text(encoding='utf-8').splitlines()) == 1
-    assert usage.calls == 0 and not (tmp_path / 'doodles').exists()  # No response metering.
+    assert usage.calls == 1 and usage.cost_usd is None
+    assert usage.by_model == {'command:explicit-prop-model': 1}
+    assert not (tmp_path / 'doodles').exists()
 
 
 @pytest.mark.parametrize('bad', ['not JSON', '[]', '{}', '{"svg": 3}', '{"svg": "x", "extra": 1}'])
@@ -206,7 +210,8 @@ def test_transient_failure_has_no_provider_retry(kind):
     with pytest.raises(providers.ProviderError) as failure:
         make_prop_llm(provider, usage)('paw')
     assert failure.value.transient and len(calls) == len(options) == 1
-    assert usage.calls == 0  # No response metering was available.
+    assert usage.calls == 1 and usage.cost_usd is None
+    assert usage.input_tokens == usage.output_tokens == usage.cached_tokens == 0
 
 
 @pytest.mark.parametrize('kind', ['openai', 'compat', 'anthropic'])

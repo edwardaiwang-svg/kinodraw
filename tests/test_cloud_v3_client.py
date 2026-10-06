@@ -88,7 +88,7 @@ def test_http_plan_ownership(server):
         provider.direct_plan({}, providers.Usage())
 
 
-def openai_fake(answers):
+def openai_fake(answers, *, prop_metered=True, prop_model=None):
     provider = providers.OpenAIProvider.__new__(providers.OpenAIProvider)
     provider.name, provider.model, provider.strict = 'openai', 'gpt-6-luna', True
     calls = []
@@ -97,8 +97,10 @@ def openai_fake(answers):
         value = answers.pop(0)
         if isinstance(value, Exception):
             raise value
-        return NS(usage=NS(prompt_tokens=100, completion_tokens=20,
-                          prompt_tokens_details=NS(cached_tokens=40)),
+        prop = kwargs['response_format'].get('json_schema', {}).get('name') == 'svg_prop'
+        return NS(model=prop_model if prop and prop_model else provider.model,
+                  usage=NS(prompt_tokens=100, completion_tokens=20,
+                           prompt_tokens_details=NS(cached_tokens=40)) if not prop or prop_metered else None,
                   choices=[NS(finish_reason='stop', message=NS(content=value, refusal=None))])
     provider.client = NS(chat=NS(completions=NS(create=create)))
     return provider, calls
@@ -283,16 +285,54 @@ def test_sdk_hidden_retries_disabled_only_for_structured_calls():
     assert options == [{'max_retries': 0, 'timeout': 180}]
 
 
-def test_real_byok_plan_saved_and_reused(tmp_path, monkeypatch):
+@pytest.mark.parametrize('mode', ['success', 'repair', 'timeout', 'unmetered', 'unknown_model'])
+def test_real_byok_plan_saved_and_reused(tmp_path, monkeypatch, mode):
     from kinodraw import pipeline
+    import socket
+    monkeypatch.setattr(socket.socket, 'connect', lambda *a, **k: pytest.fail('network connection'))
+    monkeypatch.setattr(providers, 'api_key', lambda *a: pytest.fail('credential lookup'))
     project = tmp_path / 'byok-project'
     pipeline.new_project(TEXT, project, direction={'story': 'story'}, director_v3=True)
     expected = plan_v3(pipeline.storyboard(project))[0]
-    provider, calls = openai_fake([json.dumps(expected)])
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" '
+           'fill="#1B1B1B" stroke="#1B1B1B" stroke-width="6" '
+           'stroke-linecap="round" stroke-linejoin="round">'
+           '<rect x="40" y="40" width="432" height="432"/>'
+           '<circle cx="160" cy="160" r="30"/><circle cx="350" cy="160" r="30"/>'
+           '<path d="M100 300 H400" fill="none"/><path d="M100 350 H400" fill="none"/></svg>')
+    answers = [json.dumps(expected)]
+    if mode == 'repair':
+        answers.append('[]')
+    elif mode == 'timeout':
+        answers.append(TimeoutError('synthetic transport timeout'))
+    answers.append(json.dumps({'svg': svg}))
+    provider, calls = openai_fake(answers, prop_metered=mode != 'unmetered',
+                                  prop_model='unpriced-prop-model' if mode == 'unknown_model' else None)
     report = pipeline.direct_v3(project, provider=provider)
-    assert not report['fallback'] and pipeline.settings(project)['plan_v3'] == expected
-    assert report['usage']['calls'] == 1
-    # The plan request is followed by the weak-match prop request; reuse sends nothing.
-    assert [c['response_format']['json_schema']['name'] for c in calls] == ['video_plan', 'svg_prop']
-    pipeline.direct_v3(project, provider=provider)
-    assert len(calls) == 2
+    saved = pipeline.settings(project)
+    assert not report['fallback'] and saved['plan_v3_report'] == report
+    generated = list((project / 'doodles').glob('gen-*.svg'))
+    assert len(generated) == 1 and not answers
+    ref = generated[0].stem
+    assert any(e.get('ref') == ref for scene in saved['plan_v3']['scenes'] for e in scene['elements'])
+    attempts = 3 if mode in ('repair', 'timeout') else 2
+    metered = 3 if mode == 'repair' else 1 if mode == 'unmetered' else 2
+    assert [c['response_format']['json_schema']['name'] for c in calls] == ['video_plan'] + ['svg_prop'] * (attempts - 1)
+    assert report['usage']['calls'] == len(calls) == attempts
+    assert report['usage']['input_tokens'] == metered * 60
+    assert report['usage']['output_tokens'] == metered * 20
+    assert report['usage']['cached_tokens'] == metered * 40
+    if mode in ('timeout', 'unmetered', 'unknown_model'):
+        assert report['usage']['cost_usd'] is None
+    else:
+        assert report['usage']['cost_usd'] == pytest.approx(metered * (60 * .1 + 20 * .5 + 40 * .01) / 1e6)
+    assert report['usage']['by_model'] == ({'gpt-6-luna': 1, 'unpriced-prop-model': 1}
+                                         if mode == 'unknown_model' else {'gpt-6-luna': attempts})
+    from kinodraw.director.llm.props import make_prop_llm
+    from kinodraw.engine.hybrid import prepare_props
+    cached_usage = providers.Usage()
+    assert prepare_props(expected, pipeline.storyboard(project), project,
+                         make_prop_llm(provider, cached_usage)) == []
+    assert cached_usage.calls == 0 and len(calls) == attempts
+    assert pipeline.direct_v3(project, provider=provider) == report
+    assert len(calls) == attempts  # Saved direction sends no new plan or art requests.
