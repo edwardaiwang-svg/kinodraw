@@ -146,7 +146,8 @@ def test_a_new_studio_project_starts_with_the_end_card_on(studio, monkeypatch):
     root, api = studio
     server._save_config({'projects': str(root), 'credit': False})             # an old Settings switch-off
     monkeypatch.setattr(server.director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
-    created = server.create_project({'text': TINY.read_text(encoding='utf-8'), 'title': 'Wasps'})
+    created = server.create_project({'text': TINY.read_text(encoding='utf-8'), 'title': 'Wasps',
+                                     'director': 'rules', 'director_v3': False})
     job = server.JOBS.get(created['job'])
     deadline = time.monotonic() + 10
     while job['state'] not in ('done', 'failed') and time.monotonic() < deadline:

@@ -38,4 +38,6 @@ class _Keychain(KeyringBackend):
 
 @pytest.fixture(autouse=True)
 def _keep_the_developers_own_keychain(monkeypatch):
+    from kinodraw.director.llm import cloud
     monkeypatch.setattr(keyring.core, '_keyring_backend', _Keychain())   # tests that stub keyring's functions still win
+    monkeypatch.setattr(cloud, '_anon_token', None)                    # the process fallback belongs to this test too
