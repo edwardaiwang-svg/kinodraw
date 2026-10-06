@@ -23,7 +23,10 @@ from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
 from .bold.render import _SceneLayers
 from .creatures import Genome, Action, raster
-from .creatures.actions import ACTIONS, add, target_response
+from .creatures.actions import ACTIONS, add, target_response, travel_x
+from .creatures.draw import H as RIG_HEIGHT
+
+TRAVEL_MARGIN = .03  # share of the frame width a walking or running actor keeps clear of the right edge
 
 
 def seed(value):
@@ -117,6 +120,7 @@ class HybridProduction:
         self.native = getattr(whiteboard, 'native', False)
         self.square = self.native and self.size[0] == self.size[1]
         self._square_layers = {}
+        self._travelled = {}
         self.ctx, self.els = whiteboard.ctx, whiteboard.els
         self.warnings = list(whiteboard.warnings)
         self.by_id = {b['id']: b for b in beats(episode, lang)}
@@ -384,11 +388,23 @@ class HybridProduction:
         x = {'left_third': 1/3, 'right_third': 2/3}.get(span.spec['composition'], .5) if n == 1 else .2 + .6 * i / max(1, n - 1)
         return x, .8, min(.78, (0.78 if self.square else 1.5) / max(1, n))
 
+    @staticmethod
+    def _pan(span, local, w):
+        """A pan camera's horizontal offset at this point of the span; negative moves the picture right."""
+        u = min(1., local / max(.01, span.end - span.start))
+        camera = span.spec['camera']
+        return (65 * u if camera == 'pan_right' else -65 * u if camera == 'pan_left' else 0) * w / 1920
+
+    def _travel(self, span, key, local, height):
+        """Pixels a walk/run cue has carried an actor: scenes, not the pose cycle, do the moving."""
+        return sum(travel_x(a, local) for actor, a, _ in span.actions if actor == key) * self.cast[key].size * height / RIG_HEIGHT
+
     def _actors(self, span, local, image):
         main = [key for key in span.actors if not key.startswith('crowd-hyena-')]
         crowd = [key for key in span.actors if key.startswith('crowd-hyena-')]
         n = len(main)
         w, h = image.size
+        self._travelled = {}
         for key in crowd + main:
             is_crowd = key in crowd
             i = (crowd if is_crowd else main).index(key)
@@ -412,7 +428,8 @@ class HybridProduction:
                 ratio = float(view[2]) / float(view[3])
                 slot_width = w * (.8 / max(1, n) if not is_crowd else .8 / len(crowd))
                 height = min(height, round(slot_width / ratio))
-            sprite = raster(g, pose, local, height=max(60, height))
+            sprite_height = max(60, height)
+            sprite = raster(g, pose, local, height=sprite_height)
             bbox = sprite.getchannel('A').getbbox()
             if bbox:
                 sprite = sprite.crop(bbox)
@@ -430,6 +447,13 @@ class HybridProduction:
                         move += direction * w * .035 * math.sin(math.pi * u) ** 2
                     elif target == key:
                         move += direction * target_response(a, local).dx * w / 600
+            # Travel carries the actor rightward but never past a margin at the frame edge, counted after pan_left
+            # moves the picture right; the follow camera reads the same clamped distance from self._travelled.
+            travel = self._travel(span, key, local, sprite_height)
+            travel = min(travel, max(0., w * (1 - TRAVEL_MARGIN) + min(0., self._pan(span, local, w))
+                                     - (x * w + move + sprite.width / 2)))
+            self._travelled[key] = travel
+            move += travel
             image.paste(sprite, (round(x * w + move - sprite.width / 2),
                                  round(h * ground - sprite.height)), sprite)
         return image
@@ -461,7 +485,7 @@ class HybridProduction:
         camera = spec['camera']
         u = min(1., local / max(.01, span.end - span.start))
         zoom = 1 + .045 * u if camera == 'slow_push' else 1.045 - .045 * u if camera == 'pull_back' else 1.
-        dx = (65 * u if camera == 'pan_right' else -65 * u if camera == 'pan_left' else 0) * w / 1920
+        dx = self._pan(span, local, w)
         dy = 0.
         if camera == 'follow':
             # Track the active actor's rendered position, or the moving foreground group.
@@ -473,6 +497,7 @@ class HybridProduction:
                 for actor in targets:
                     x = self._actor_slot(span, actor)[0]
                     x += sum(action_pose(a, local).dx for key, a, _ in span.actions if key == actor) / 600
+                    x += self._travelled.get(actor, 0.) / w
                     xs.append(x)
                 dx = (sum(xs) / len(xs) - .5) * w * .35
             elif span.motion.elements:

@@ -8,6 +8,10 @@ DURATIONS = {'roar': 2.4, 'whimper': 2.2, 'tremble': 2.2, 'nudge': 1.8, 'laugh':
              'swipe': 1.4, 'walk': 3., 'run': 2.5, 'sit': 2.4, 'look': 2., 'pounce': 1.8,
              'hide': 2.4, 'breathe_heavy': 3.5}
 ACTIONS = tuple(DURATIONS)
+TREMBLE_CYCLES = 16.
+# Whole-cue horizontal travel, in the rig's 600-unit drawing space before genome size; the pose cycle itself stays in
+# place (Pose.dx is never used for walk/run), so a scene or preview moves the character exactly once, by travel_x.
+TRAVEL = {'walk': 190., 'run': 330.}
 
 
 @dataclass(frozen=True)
@@ -122,9 +126,19 @@ def action_pose(action: Action | str, t: float) -> Pose:
                  head_pitch=12 * down - 20 * back - 12 * roar, dx=6 * roar, lean=18 * roar,
                  squash=-.045 * roar, mane=18 * roar + bounce, mane_lag=12 * (delayed - roar) + bounce,
                  sound=roar, sound_expand=u * w, fierce=roar, ears=-12 * roar, screen_shake=5 * impact)
-    elif name in ('whimper', 'tremble'):
-        p = Pose(dx=1.8 * shake(u, 14), head_y=11 * w, head_pitch=8 * w, squash=.12 * w,
-                 ears=72 * w, sound=-w, worry=w, crouch=17 * w)
+    elif name == 'tremble':
+        # A whole-body shiver. 16 cycles per cue is ~7 Hz (about four video frames a cycle at 30 fps), and the
+        # preview's eight samples (0.14 of the cue apart) advance 0.24 of a cycle each, so no sample pair aliases.
+        shiver = math.sin(2. * math.pi * TREMBLE_CYCLES * u)
+        p = Pose(dx=13. * shiver * w, dy=-3.5 * abs(shiver) * w, squash=.05 * math.sin(2. * math.pi * TREMBLE_CYCLES * u + 1.2) * w,
+                 head_x=-4 * w, head_y=7 * w, head_pitch=6 * w, ears=60 * w + 14 * shiver * w,
+                 worry=w, crouch=14 * w, lean=-3 * w, legs=(4 * shiver * w, -4 * shiver * w, -4 * shiver * w, 4 * shiver * w))
+    elif name == 'whimper':
+        # Head dips and the ears go back; the closed-mouth whimper marks pulse (about 2.3 Hz) over a small shiver.
+        pulse = .5 + .5 * math.sin(2. * math.pi * 5. * u - math.pi / 2)
+        p = Pose(dx=3.6 * math.sin(2. * math.pi * 11. * u) * w, head_y=22 * w - 10 * pulse * w, head_pitch=20 * w + 12 * pulse * w,
+                 head_x=-5 * w, squash=.1 * w, ears=80 * w, sound=-w * (.25 + .75 * pulse),
+                 worry=w, crouch=16 * w)
     elif name == 'nudge':
         lower = window(u, .30, .58)
         push = window((u - .28) / .72, .35, .45)
@@ -141,12 +155,12 @@ def action_pose(action: Action | str, t: float) -> Pose:
     elif name in ('walk', 'run'):
         phi = 2 * math.pi * (t - action.start) * (1.3 if name == 'walk' else 2.2)
         phases = (0., math.pi, math.pi, 0.)
-        amplitude = 28 if name == 'walk' else 48
+        amplitude = 36 if name == 'walk' else 48
         legs = tuple(amplitude * math.sin(phi + ph) * w for ph in phases)
-        knees = tuple(-(34 if name == 'walk' else 58) * max(0., math.cos(phi + ph)) * w for ph in phases)
+        knees = tuple(-(46 if name == 'walk' else 58) * max(0., math.cos(phi + ph)) * w for ph in phases)
         p = Pose(legs=legs, knees=knees, arms=(-legs[0], -legs[1]),
-                 dy=-(4 if name == 'walk' else 11) * (.5 + .5 * math.cos(2 * phi)) * w,
-                 head_y=2 * math.sin(phi) * w, head_pitch=3 * math.sin(phi) * w,
+                 dy=-(7 if name == 'walk' else 11) * (.5 + .5 * math.cos(2 * phi)) * w,
+                 head_y=(4 if name == 'walk' else 2) * math.sin(phi) * w, head_pitch=3 * math.sin(phi) * w,
                  lean=(3 if name == 'walk' else 9) * w, squash=.025 * math.sin(2 * phi) * w)
     elif name == 'sit':
         p = Pose(crouch=30 * w, head_y=-7 * w, legs=(65 * w, 65 * w, -8 * w, -8 * w),
@@ -158,14 +172,30 @@ def action_pose(action: Action | str, t: float) -> Pose:
                  crouch=12 * w * (1 - max(0., hit)), legs=(35 * hit, 30 * hit, -45 * hit, -35 * hit),
                  head_pitch=-10 * hit, tail=15 * hit)
     elif name == 'hide':
-        p = Pose(crouch=23 * w, squash=.2 * w, head_y=17 * w, head_x=-12 * w,
-                 ears=45 * w, worry=w, legs=(24 * w, 24 * w, -18 * w, -18 * w))
+        # Drop fast (first quarter), hold flat with a faint shiver, then rise. The head turns in and down, the ears
+        # lie flat and the body folds low and back.
+        hold = window(u, .24, .80)
+        p = Pose(crouch=34 * hold, squash=.11 * hold, head_y=30 * hold, head_x=-26 * hold, head_pitch=34 * hold,
+                 ears=85 * hold, worry=hold, lean=-9 * hold, dx=-1.6 * math.sin(2. * math.pi * 9. * u) * hold,
+                 legs=(34 * hold, 34 * hold, -26 * hold, -26 * hold), knees=(-30 * hold, -30 * hold, -20 * hold, -20 * hold))
     elif name == 'breathe_heavy':
         breath = math.sin(2 * math.pi * .85 * (t - action.start))
         p = Pose(breath=.10 * breath * w, head_y=4 * breath * w, jaw=.25 * w,
                  puffs=max(0., -breath) * w, ears=5 * w)
     strength = min(2., max(0., action.intensity))
     return add(blend(Pose(), p, min(1., strength)), blend(Pose(), p, max(0., strength - 1.)))
+
+
+def travel_x(action: Action | str, t: float) -> float:
+    """Distance a walk/run cue has carried the character by time t (rig units; multiply by genome size).
+
+    Eases in and out with the gait envelope and then holds, so the character does not snap back at the cue's end.
+    """
+    action = Action(action) if isinstance(action, str) else action
+    if action.name not in TRAVEL:
+        return 0.
+    u = (t - action.start) / action.seconds
+    return TRAVEL[action.name] * smooth(u) * min(2., max(0., action.intensity))
 
 
 def target_response(action: Action | str, t: float) -> Pose:

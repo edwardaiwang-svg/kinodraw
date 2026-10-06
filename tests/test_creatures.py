@@ -5,6 +5,7 @@ import math
 import xml.etree.ElementTree as ET
 
 import numpy as np
+from PIL import Image
 import pytest
 
 from kinodraw.engine.creatures import Action, Genome, Palette, from_text_hint, raster, svg
@@ -307,3 +308,149 @@ def test_whimper_stays_closed_and_nudge_reaches_cub_then_springs_back(heroes):
     assert reactions[0].dx > 0 and reactions[1].dx < 0
     assert abs(reactions[-1].dx) < abs(reactions[0].dx)
     assert reactions[0].lean != 0 and reactions[0].head_pitch != 0
+
+
+# --- A5 action strips: Pendo's small-cub actions must read, and gait travel is added once, by the scene ---
+PREVIEW_FRACTIONS = (0., .14, .28, .42, .56, .70, .84, 1.)  # scripts/creature_preview.py samples the cue at these
+
+
+def changed_percent_per_step(g, name):
+    """Percent of the 450x300 frame whose gray level changes by >24 between consecutive preview samples."""
+    cue = Action(name)
+    frames = []
+    for u in PREVIEW_FRACTIONS:
+        image = raster(g, cue, u * cue.seconds, height=300)
+        paper = Image.new('RGBA', image.size, '#FAF7EF')
+        paper.alpha_composite(image)
+        frames.append(np.asarray(paper.convert('L'), np.float32))
+    return [float((np.abs(a - b) > 24).mean() * 100) for a, b in zip(frames, frames[1:])]
+
+
+def test_tremble_and_whimper_are_different_poses_and_only_whimper_whimpers(heroes):
+    tremble, whimper = Action('tremble'), Action('whimper')
+    times = [u * tremble.seconds for u in PREVIEW_FRACTIONS[1:-1]]
+    assert any(action_pose(tremble, t) != action_pose(whimper, t) for t in times)
+    assert all(action_pose(tremble, t).sound == 0 for t in np.linspace(0, tremble.seconds, 60))
+    assert min(action_pose(whimper, t).sound for t in np.linspace(0, whimper.seconds, 60)) < -.8
+    assert 'whimper_mark' not in svg(heroes[0], tremble, .5 * tremble.seconds)
+    assert 'whimper_mark' in svg(heroes[0], whimper, .5 * whimper.seconds)
+    # The shiver is whole-body and beats at video rates: seen at 30 fps a full cycle takes about four frames (two sign flips).
+    shiver = [action_pose(tremble, k / 30 + .3).dx for k in range(60)]
+    flips = sum(1 for a, b in zip(shiver, shiver[1:]) if a * b < 0)
+    assert 24 <= flips <= 34
+    assert max(abs(x) for x in shiver) > 7
+
+
+def test_tremble_shiver_shows_at_every_preview_sample_and_scales_with_size(heroes):
+    cue = Action('tremble')
+    shown = [action_pose(cue, u * cue.seconds).dx for u in PREVIEW_FRACTIONS[1:-1]]
+    assert min(abs(x) for x in shown) > 1., shown  # the old 14-cycle shake aliased to 0.04 of a cycle per sample
+    assert max(shown) > 8 and min(shown) < -8  # and the samples reach both sides
+    cub = heroes[0]
+    big = replace(cub, size=1.4)
+    t = .3 * cue.seconds
+    def x_of(genome):
+        return float(ET.fromstring(svg(genome, cue, t)).find('.//{*}g').attrib['transform'].split('(')[1].split()[0])
+    assert abs(x_of(big) - 300) > 1.5 * abs(x_of(cub) - 300) > 0
+
+
+@pytest.mark.parametrize('name, floor', [('whimper', 2.2), ('tremble', 2.6), ('walk', 2.9)])
+def test_cub_actions_show_frame_to_frame_motion_at_every_step(heroes, name, floor):
+    # metrics-before.json: Pendo strips changed 1.7-1.9% a step (cells with label text) against 5-11% for
+    # Kojo; rendered without labels the old whimper/tremble middle steps changed 0.4-0.7%. Every step between
+    # the first and last sample must now exceed the floor, set above the old minimum and below the new one.
+    steps = changed_percent_per_step(heroes[0], name)[1:-1]
+    assert min(steps) > floor - 1., steps
+    assert sum(steps) / len(steps) > floor, steps
+
+
+def test_hide_drops_in_holds_low_and_reads_as_hiding(heroes):
+    cue = Action('hide')
+    idle = action_pose('idle', 0.)
+    early, hold = [action_pose(cue, u * cue.seconds) for u in (.12, .5)]
+    assert 0 < early.crouch < hold.crouch  # a clear transition in
+    held = [action_pose(cue, u * cue.seconds) for u in (.4, .5, .6)]
+    assert max(p.crouch for p in held) - min(p.crouch for p in held) < 1  # then a hold
+    assert hold.crouch > 30 and hold.ears > 80 and hold.head_pitch > 30 and hold.head_x < -20
+    assert hold.worry > .9 and hold.squash < .15 and hold.lean < 0 and idle.crouch == 0
+    steps = changed_percent_per_step(heroes[0], 'hide')[1:-1]
+    assert max(steps) > 3., steps  # the drop is visible at cub scale (old maximum 2.3)
+
+
+@pytest.mark.parametrize('name', ['walk', 'run'])
+def test_gait_travels_once_through_travel_x_and_never_through_the_pose(name):
+    from kinodraw.engine.creatures.actions import travel_x
+    cue = Action(name, start=2.)
+    assert all(action_pose(cue, 2. + f * cue.seconds).dx == 0 for f in np.linspace(.05, .95, 19))
+    path = [travel_x(cue, 2. + f * cue.seconds) for f in np.linspace(-.1, 1.2, 27)]
+    assert path[0] == 0 and all(b >= a for a, b in zip(path, path[1:]))
+    assert path[-1] == path[-2] > (150 if name == 'walk' else 280)  # carried, then held: nothing snaps back
+    assert travel_x(Action('roar'), 1.) == 0 and travel_x(Action(name, intensity=0.), 1.) == 0
+
+
+def test_scene_composer_moves_a_walking_actor_by_travel_x(tmp_path, monkeypatch):
+    import dataclasses
+    from kinodraw.engine import hybrid
+    from test_hybrid import fixture, save_production
+    board, plan, tl = fixture(tmp_path)
+    plan['scenes'][1].update(composition='left_third', treatment='character', elements=[], camera='static',
+                             text={'kind': 'none', 'ref': ''})
+    prod = save_production(tmp_path, board, plan, tl)
+    span = prod.spans[1]
+    key = span.actors[0]
+    cue = Action('walk', 0., duration=span.end - span.start)
+    prod.spans[1] = span = dataclasses.replace(span, actors=(key,), actions=((key, cue, None),))
+    heights = []
+
+    def block(g, pose, t, height=300, **k):
+        heights.append(height)
+        return Image.new('RGBA', (60, 40), (255, 0, 255, 255))
+    monkeypatch.setattr(hybrid, 'raster', block)
+
+    def center_x(local):
+        frame = np.asarray(prod._frame(span, span.start + local))
+        columns = np.nonzero((frame == (255, 0, 255)).all(axis=2).any(axis=0))[0]
+        return (columns.min() + columns.max()) / 2
+
+    moved = center_x(span.end - span.start - .01) - center_x(.01)
+    expected = prod._travel(span, key, span.end - span.start - .01, heights[-1]) - prod._travel(span, key, .01, heights[0])
+    assert heights[0] == heights[-1] and expected > 0 and moved == pytest.approx(expected, abs=2)
+
+
+@pytest.mark.parametrize('composition,names,intensity', [
+    ('center', ('kojo',), 1.),
+    ('right_third', ('kojo',), 1 / 3),
+    ('center', ('kojo', 'pendo'), 1.),
+])
+@pytest.mark.parametrize('verb', ['walk', 'run'])
+@pytest.mark.parametrize('camera', ['static', 'pan_left'])      # pan_left moves the whole picture right
+def test_scene_travel_keeps_the_sprite_inside_the_frame(tmp_path, monkeypatch, composition, names, intensity, verb,
+                                                        camera):
+    import dataclasses
+    from kinodraw.engine import hybrid
+    from test_hybrid import fixture, save_production
+    board, plan, tl = fixture(tmp_path)
+    plan['scenes'][1].update(composition=composition, treatment='character', elements=[], camera=camera,
+                             text={'kind': 'none', 'ref': ''})
+    prod = save_production(tmp_path, board, plan, tl)
+    span = prod.spans[1]
+    duration = span.end - span.start
+    keys = tuple(next(k for k in prod.cast if name in k) for name in names)
+    cues = tuple((key, Action(verb, 0., duration=duration, intensity=intensity), None) for key in keys)
+    span = dataclasses.replace(span, actors=keys, actions=cues)
+    w = prod.size[0]
+    real = hybrid.raster
+
+    def sprite_columns(local):
+        monkeypatch.setattr(hybrid, 'raster', real)
+        frame = np.asarray(prod._frame(span, span.start + local)).astype(int)
+        monkeypatch.setattr(hybrid, 'raster', lambda g, pose, t, height=300, **k: Image.new('RGBA', (4, 4), (0, 0, 0, 0)))
+        empty = np.asarray(prod._frame(span, span.start + local)).astype(int)
+        columns = np.nonzero((np.abs(frame - empty).sum(axis=2) > 30).any(axis=0))[0]
+        return columns.min(), columns.max()
+
+    start_left, _ = sprite_columns(.01)
+    for local in (.01, duration * .5, duration * .9, duration - .01):
+        left, right = sprite_columns(local)
+        # Travel only carries actors rightward and must stop short of the frame edge; the slot layout is not its concern.
+        assert right <= w - 1 - .02 * w and left >= min(start_left, .02 * w) - 1, (local, left, right)

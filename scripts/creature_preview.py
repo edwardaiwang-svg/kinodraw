@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from kinodraw.engine.creatures import Action, Palette, from_text_hint, raster  # noqa: E402
-from kinodraw.engine.creatures.actions import action_pose, target_response  # noqa: E402
+from kinodraw.engine.creatures.actions import TRAVEL, action_pose, target_response, travel_x  # noqa: E402
 
 OUT = Path('/tmp/kd1005/a5b-polish')
 PAPER = '#FAF7EF'
@@ -86,7 +86,13 @@ def action_strips(heroes):
                 cell = pair_frame(genome, pendo if name == 'nudge' else other, action, t, name == 'laugh')
             else:
                 cell = Image.new('RGBA', (cw, ch), PAPER)
-                cell.alpha_composite(raster(genome, action, t, height=300), (35, 50))
+                # Walk/run keep the pose cycle in place; travel is added here exactly as scenes add it, placed so the first and last frames both stay inside the cell.
+                run = (travel_x(action, t) - TRAVEL.get(name, 0.) * .35) * genome.size * 300 / 400
+                sprite = raster(genome, action, t, height=300)
+                if run:
+                    cell.paste(sprite, (round(35 + run), 50), sprite)  # paste accepts the negative start alpha_composite refuses
+                else:
+                    cell.alpha_composite(sprite, (35, 50))
             label(cell, f'{i + 1}/8  t={t:.2f}s', small=True)
             cell.convert('RGB').save(OUT / 'frames' / f'{key}_{i:02d}.png')
             sheet.alpha_composite(cell, ((i % 4) * cw, 45 + (i // 4) * ch))
