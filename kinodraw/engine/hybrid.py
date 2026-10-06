@@ -11,11 +11,11 @@ import hashlib
 import math
 import re
 import textwrap
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageColor
+from PIL import Image, ImageColor, ImageOps
 
 from .. import library
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
@@ -103,6 +103,9 @@ class Span:
     join_length: float = 0.
     source_chart: bool = False
     scientific: tuple = ()
+    source_character: bool = False
+    motion_art: MotionScene | None = None
+    actor_layout: dict | None = None
     diagram: object | None = None
     diagrams: tuple = ()
     source_proof: bool = False
@@ -121,6 +124,7 @@ class HybridProduction:
         self.native = getattr(whiteboard, 'native', False)
         self.square = self.native and self.size[0] == self.size[1]
         self._square_layers = {}
+        self._text_layers = {}
         self._travelled = {}
         self.ctx, self.els = whiteboard.ctx, whiteboard.els
         self.warnings = list(whiteboard.warnings)
@@ -173,7 +177,9 @@ class HybridProduction:
         treatment = spec['treatment']
         text = ' '.join(self.by_id[b]['spoken'] for b in spec['beat_ids'])
         actors = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
-        if treatment in ('character', 'atmosphere') or spec['actions']:
+        if not actors and (treatment in ('character', 'atmosphere') or spec['actions']):
+            # An explicit cast stage selects participants; incidental source
+            # mentions (such as a parent already away hunting) do not add actors.
             actors += [key for key, g in self.cast.items() if mentions(g.name, text) and key not in actors]
         actors += [a['actor'] for a in spec['actions'] if a['actor'] in self.cast and a['actor'] not in actors]
         span.actors = tuple(dict.fromkeys(actors))
@@ -187,14 +193,25 @@ class HybridProduction:
                 continue
             beat = self.by_id[a['at_beat']]
             timing = self.tl['beats'][a['at_beat']]
-            char = action_char(beat['spoken'], a['actor'], a['verb'], self.cast)
+            char = self._source_action_char(beat, a['actor'], a['verb'])
+            target = None
+            if a['verb'] == 'nudge' and treatment in ('character', 'atmosphere'):
+                char = self._nudge_char(beat['spoken'], a['actor'], char)
+                target = self._nudge_target(beat, a['actor'], char) if char is not None else None
+                if target is None:
+                    self.warnings.append(f"hybrid: nudge by {a['actor']} at {a['at_beat']} lacks an unambiguous source subject/target; skipped")
+                    continue
+                if target not in actors:
+                    actors.append(target)
             ct = timing['char_times']
             at = timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0)
             remaining = max(.1, min(timing['speech_end'], span.end) - at)
             action = Action(a['verb'], at - span.start, min(remaining, Action(a['verb']).seconds), a['intensity'] / 3)
-            target = next((key for key in actors if key != a['actor'] and mentions(
-                self.cast[key].name, beat['spoken'][char:])), None)
+            if a['verb'] != 'nudge' or treatment not in ('character', 'atmosphere'):
+                target = next((key for key in actors if key != a['actor'] and mentions(
+                    self.cast[key].name, beat['spoken'][char:])), None)
             events.append((a['actor'], action, target))
+        span.actors = tuple(dict.fromkeys(actors))
         span.actions = tuple(events)
         character_intent = treatment == 'character' or spec['actions'] or any(
             e['kind'] == 'cast' for e in spec['elements'])
@@ -242,6 +259,7 @@ class HybridProduction:
         span.diagram = span.diagrams[0] if span.diagrams else None
         if treatment == 'whiteboard' or span.source_proof:
             return
+        span.source_character = bool(span.actors) and not span.diagram and treatment in ('character', 'atmosphere')
         if span.atmos is None and not span.diagram and self.style['motion_floor'] != 'still':
             span.atmos = Atmosphere('dust', {'background': self.style['palette']['background'],
                 'accent': self.style['palette']['accent2']}, .8, seed(spec['beat_ids']))
@@ -265,10 +283,14 @@ class HybridProduction:
             who = self._label(value.get('who'))
             atomic = '\n'.join(textwrap.wrap('“' + body + '”', 48)) + ('\n— ' + who if who else '')
             elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
+            if span.source_character and source:
+                elements[-1].start = self._source_text_start(span, source, body)
         for e in spec['elements']:
             if not span.diagram and e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
                 elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
+                if span.source_character:
+                    elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
         if not span.diagram and text_kind not in ('none', 'caption_only', 'quote'):
             words = source['text'] if source else text
             elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
@@ -327,7 +349,11 @@ class HybridProduction:
             hold=min(1.1, max(.5, spec['hold_s'])), seed=seed(spec['beat_ids']), blur_samples=1, foreground_drift=48.)
         for element in elements:
             element.font = self.style['type']
-        if spec['composition'] in ('grid', 'split'):
+        if span.source_character:
+            self._layout_character(span)
+            span.motion_art = copy.copy(span.motion)
+            span.motion_art.elements = [e for e in elements if e.kind != 'text']
+        elif spec['composition'] in ('grid', 'split'):
             cols = 2 if spec['composition'] == 'split' else math.ceil(math.sqrt(max(1, len(elements) + len(self._cast_groups(span)))))
             rows = math.ceil(max(1, len(elements) + len(self._cast_groups(span))) / cols)
             for i, element in enumerate(elements):
@@ -341,6 +367,8 @@ class HybridProduction:
         The renderer positions centers as stage fractions, but native square
         sprites keep uniform pixel scale (letters and circles never stretch).
         """
+        if span.source_character:
+            return
         elements = span.motion.elements
         groups = self._cast_groups(span)
         if span.spec['composition'] in ('grid', 'split'):
@@ -366,6 +394,197 @@ class HybridProduction:
     def _label(self, value):
         return str(value.get(self.lang, next(iter(value.values()), ''))) if isinstance(value, dict) else str(value or '')
 
+    def _source_action_char(self, beat, actor, verb):
+        """Use a named subject or its unambiguous singular pronoun at the spoken cue.
+
+        The immediately previous beat may establish the subject of a continued
+        sentence sequence. Objects and possessive body descriptions do not take
+        ownership of the next action.
+        """
+        direct = action_char(beat['spoken'], actor, verb, self.cast)
+        if verb == 'tremble':
+            implied = re.match(r"(?:['’]s\s+)?\s*(heart\s+hammered\b|shrank\s+back\b)", beat['spoken'][direct:], re.I)
+            if implied:
+                return direct + implied.start(1)
+        cue = r'\b(?:' + ACTION_CUES.get(verb, r'(?!)') + r')\b'
+        if re.match(cue, beat['spoken'][direct:], re.I):
+            return direct
+        source = list(self.by_id.values())
+        index = next(i for i, b in enumerate(source) if b['id'] == beat['id'])
+        previous = source[index - 1]['spoken'] if index and source[index - 1]['section'] == beat['section'] else ''
+        text = previous + '\n' + beat['spoken']
+        offset = len(previous) + 1
+        owner = None
+        for sentence in re.finditer(r'[^.!?;\n]+', text):
+            body = sentence.group()
+            named = []
+            for key, genome in self.cast.items():
+                name = re.escape(name_key(genome.name))
+                # A name followed by a predicate is a subject; "over Pendo"
+                # and "nudged Pendo with his nose" remain objects.
+                if re.search(r'(?<!\w)' + name + r"(?!\w)(?:['’]s\s+(?:heart|body|head))?\s+(?:was|is|had|has|would|stood|lowered|burst|shrank|tried|returned|hammered|walk\w*|run\w*|ran|nudg\w*|roar\w*)\b", body, re.I):
+                    named.append(key)
+            pronoun = re.search(r'\b(he|she|his|her)\b', body, re.I)
+            if len(named) == 1:
+                owner = named[0]
+            elif len(named) > 1 or re.search(r'\b(they|their)\b', body, re.I):
+                owner = None
+            elif not pronoun:
+                owner = None
+            if owner != actor or not pronoun:
+                continue
+            sex = 'female' if pronoun[1].lower() in ('she', 'her') else 'male'
+            if self.cast[actor].sex not in ('unknown', sex):
+                owner = None
+                continue
+            for hit in re.finditer(cue, body, re.I):
+                absolute = sentence.start() + hit.start()
+                prefix = re.split(r'[,;]|\bbut\b', body[:hit.start()], flags=re.I)[-1]
+                if absolute >= offset and not re.search(r"\b(?:not|never|cannot)\b|\b\w+n['’]t\b", prefix, re.I):
+                    return absolute - offset
+        return direct  # planned idle/implicit acting keeps its established fallback
+
+    def _nudge_char(self, text, actor, direct):
+        """A pronoun cue needs one named subject in the immediately preceding sentence."""
+        cue = r'\b(?:' + ACTION_CUES['nudge'] + r')\b'
+        if re.match(cue, text[direct:], re.I):
+            return direct
+        pronoun = {'female': 'she', 'male': 'he'}.get(self.cast[actor].sex)
+        if not pronoun:
+            return None
+        for hit in re.finditer(cue, text, re.I):
+            sentences = re.split(r'[.!?;\n]', text[:hit.start()])
+            current = sentences[-1]
+            if len(sentences) < 2 or not re.match(r'^\s*' + pronoun + r'\b', current, re.I):
+                continue
+            if re.search(r"\b(?:not|never|cannot|but|while|whereas|when)\b|\b\w+n['’]t\b", current, re.I):
+                continue
+            previous = sentences[-2]
+            owners = [key for key, g in self.cast.items() if mentions(g.name, previous)]
+            if owners == [actor]:
+                return hit.start()
+        return None
+
+    def _nudge_target(self, beat, actor, char):
+        tail = re.split(r'[.!?;\n]|\bwith\b', beat['spoken'][char:], maxsplit=1, flags=re.I)[0]
+        named = [key for key, g in self.cast.items() if key != actor and mentions(g.name, tail)]
+        if named:
+            return named[0] if len(named) == 1 else None
+        if not re.match(r'nudg\w*\s+(?:his|her)\s+cub\b', tail, re.I):
+            return None
+        # Genome age is not parentage. Require an explicit, actor-owned relation,
+        # already spoken in this section; never use proximity or copy another genome.
+        relation = 'mother' if re.search(r'\bher\s+cub\b', tail, re.I) else 'father'
+        parent = re.escape(name_key(self.cast[actor].name))
+        children = set()
+        for source in self.by_id.values():
+            if source['section'] != beat['section']:
+                continue
+            for key, g in self.cast.items():
+                if key == actor or g.age != 'baby':
+                    continue
+                child = re.escape(name_key(g.name))
+                pattern = (r'(?<!\w)' + child + r'(?!\w)[^.!?;\n]{0,140}\b(?:his|her|their)\s+' +
+                           relation + r'\s*,?\s*' + parent + r'(?!\w)')
+                possessive = (r'(?<!\w)' + parent + r"['’]s\s+cub\s*,?\s*" + child + r'(?!\w)')
+                if re.search(pattern, source['spoken'], re.I) or re.search(possessive, source['spoken'], re.I):
+                    children.add(key)
+            if source['id'] == beat['id']:
+                break
+        return next(iter(children)) if len(children) == 1 else None
+
+    def _source_text_start(self, span, source, text=None):
+        timing = self.tl['beats'][source['id']]
+        char = source['spoken'].find(text) if text else 0
+        if char < 0:
+            # Unmatched display quotes must not precede their narration beat.
+            return timing['speech_end'] - span.start
+        ct = timing['char_times']
+        return timing['start'] - span.start + (ct[min(char, len(ct) - 1)] if ct else 0)
+
+    def _layout_character(self, span):
+        """Reserve a cast stage independently of the number/length of source labels."""
+        from .bold.render import _text_metrics
+        from .creatures.actions import Pose
+        from .creatures.rig import build
+        groups = self._cast_groups(span)
+        panel = not self.square and len(groups) == 1
+        left_actor = span.spec['composition'] == 'left_third'
+        text_x = .71 if panel and left_actor else .245 if panel else .5
+        width = 730 if panel else 880 if self.square else 1640
+        top, bottom = (.14, .65) if panel else (.08, .34)
+        elements = span.motion.elements
+        for i, e in enumerate(elements):
+            e.x, e.y = text_x, top + (i + .5) * (bottom - top) / max(1, len(elements))
+            e.width, e.height = width, 1080 * (bottom - top) / max(1, len(elements)) - 30
+            if e.kind != 'text':
+                continue
+            quote = e.preset == 'corner_caption'
+            e.size = 48
+            if not quote:
+                # A label is a verbatim source excerpt; narration and timed captions
+                # retain every word. Do not let a paragraph consume the cast stage.
+                sentence = re.split(r'(?<=[.!?])\s+', e.text.strip(), maxsplit=1)[0]
+                e.text = sentence
+                e.preset = 'type_on'
+            wrapped, _, size, _ = _text_metrics(e.text, e.size, e.width, True, e.font)
+            rows = max(1, int(e.height / (size * 1.15)))
+            if quote and len(wrapped.splitlines()) > rows:
+                # Quotes stay atomic and complete. Allocate their full panel height.
+                e.height = 1080 * (bottom - top) - 30
+                rows = max(1, int(e.height / (size * 1.15)))
+            if not quote and len(wrapped.splitlines()) > rows:
+                wrapped = '\n'.join(wrapped.splitlines()[:rows])
+            e.text = wrapped
+        # Measure stable resting silhouettes once. One scale per interaction group
+        # preserves baby/adult size differences and leaves room for action/life poses.
+        main = [a for a in span.actors if not a.startswith('crowd-hyena-')]
+        bounds = {key: raster(self.cast[key], 'idle', 0., height=400).getchannel('A').getbbox() for key in main}
+        stage_left, stage_right = ((.04, .50) if left_actor else (.50, .96)) if panel else (.075, .925)
+        stage_top, ground = (.12, .73) if panel else (.39, .74)
+        stage_w = self.size[0] * (stage_right - stage_left)
+        stage_h = self.size[1] * (ground - stage_top)
+        span.actor_layout = {}
+        for i, group in enumerate(groups):
+            cell_w = stage_w / len(groups)
+            widths = [bounds[key][2] - bounds[key][0] for key in group]
+            edges = [600 - bounds[key][2] if j else bounds[key][0] for j, key in enumerate(group)]
+            increments = [width - 18 for width in widths]
+            for j in range(len(group) - 1):
+                actor, target = group[j:j + 2]
+                if not any(a == actor and t == target and v.name == 'nudge' for a, v, t in span.actions):
+                    continue
+                own, other = self.cast[actor], self.cast[target]
+                head, receiver = build(own, Pose(), 0.).head, build(other, Pose(), 0.).head
+                # Leave space for the actor's finite head/body advance. Nose contact
+                # must not stack the two face centers or hide a small receiver.
+                separation = (head.x * own.size + receiver.x * other.size +
+                              .9 * (head.rx * own.size + receiver.rx * other.size) + 43 * own.size)
+                increments[j] = max(increments[j], separation + edges[j + 1] - edges[j])
+            group_width = sum(increments[:-1]) + widths[-1]
+            tallest = max(bounds[key][3] - bounds[key][1] for key in main)
+            scale = min(cell_w * .88 / max(1, group_width), stage_h * .86 / tallest)
+            if all(self.cast[key].age == 'baby' for key in group):
+                # Keep a separately staged infant legible without filling an
+                # adult's silhouette-sized slot. Interacting groups retain one
+                # exact scale so the adult can reach its actual receiver.
+                own_height = max(bounds[key][3] - bounds[key][1] for key in group)
+                scale = min(cell_w * .88 / max(1, group_width), max(scale, self.size[1] * .14 / own_height))
+            travelling = any(actor in group and a.name in ('walk', 'run') for actor, a, _ in span.actions)
+            if travelling:
+                scale = min(scale, cell_w * .65 / max(1, group_width))
+            # Face the nudge pair inward; actor order is owned by the source action.
+            paired = len(group) > 1
+            left = (self.size[0] * stage_left + (i + .04) * cell_w if travelling else
+                    self.size[0] * stage_left + (i + .5) * cell_w - group_width * scale / 2)
+            for j, key in enumerate(group):
+                mirror = paired and j > 0
+                bbox = bounds[key]
+                edge = 600 - bbox[2] if mirror else bbox[0]
+                anchor = left + (300 - edge) * scale
+                span.actor_layout[key] = (anchor / self.size[0], ground, 400 * scale / self.size[1], mirror, i)
+                left += increments[j] * scale
+
     def _cast_groups(self, span):
         # Interacting participants share a cell; unrelated actors retain independent slots.
         groups = [[a] for a in span.actors if not a.startswith('crowd-hyena-')]
@@ -380,6 +599,8 @@ class HybridProduction:
         return groups
 
     def _actor_slot(self, span, key):
+        if span.source_character and span.actor_layout and key in span.actor_layout:
+            return span.actor_layout[key][:3]
         main = [a for a in span.actors if not a.startswith('crowd-hyena-')]
         i, n = main.index(key), len(main)
         if span.spec['composition'] in ('grid', 'split'):
@@ -411,6 +632,8 @@ class HybridProduction:
         return sum(travel_x(a, local) for actor, a, _ in span.actions if actor == key) * self.cast[key].size * height / RIG_HEIGHT
 
     def _actors(self, span, local, image):
+        if span.source_character:
+            return self._character_actors(span, local, image)
         main = [key for key in span.actors if not key.startswith('crowd-hyena-')]
         crowd = [key for key in span.actors if key.startswith('crowd-hyena-')]
         n = len(main)
@@ -469,6 +692,104 @@ class HybridProduction:
                                  round(h * ground - sprite.height)), sprite)
         return image
 
+    def _character_actors(self, span, local, image):
+        from .creatures.actions import action_pose, Pose, window, smooth
+        from .creatures.life import idle_pose
+        from .creatures.rig import build
+        w, h = image.size
+        floor = span.motion.motion_floor
+        self._travelled = {}
+        # Receivers sit in front of the nudging adult's mane/head, keeping both faces visible.
+        ordered = sorted(span.actors, key=lambda key: (span.actor_layout[key][4], span.actor_layout[key][3])
+                         if key in span.actor_layout else (-1, False))
+        for key in ordered:
+            g = self.cast[key]
+            if key not in span.actor_layout:
+                # Source plural representatives remain behind the main cast.
+                crowd = [k for k in span.actors if k not in span.actor_layout]
+                panel = not self.square and len(self._cast_groups(span)) == 1
+                fraction = (crowd.index(key) + .5) / len(crowd)
+                side = .15 if span.spec['composition'] == 'left_third' else .57
+                slot = ((side + .28 * fraction, .26, .13, False, len(span.actor_layout)) if panel else
+                        (.15 + .70 * fraction, .51, .16, False, len(span.actor_layout)))
+            else:
+                slot = span.actor_layout[key]
+            x, ground, height, mirror, group = slot
+            mirror = mirror and any(a.name == 'nudge' and target == key for _, a, target in span.actions)
+            pose = Pose()
+            for actor, action, target in span.actions:
+                if actor == key:
+                    acting = action_pose(action, local)
+                    if action.name == 'nudge' and target:
+                        acting = action_pose(Action('nudge', action.start, action.seconds, max(.85, action.intensity)), local)
+                        u = (local - action.start) / action.seconds
+                        own_head = build(g, Pose(), 0.).head.y * g.size
+                        other = self.cast[target]
+                        target_head = build(other, Pose(), 0.).head.y * other.size
+                        lower = window(u, .30, .58)
+                        acting = add(acting, Pose(head_y=((target_head - own_head) / g.size - 68 * max(.85, action.intensity)) * lower,
+                                                  dx=18 * window(u, .3, .65)))
+                    pose = add(pose, acting)
+                elif target == key:
+                    response = target_response(action, local)
+                    pose = add(pose, response)
+                    if action.name == 'nudge':
+                        u = (local - action.start) / action.seconds
+                        recoil = window((u - .4) / .6, .25, .6)
+                        pose = add(pose, Pose(dx=(-8 if mirror else 8) * recoil,
+                                              lean=(-5 if mirror else 5) * recoil, head_pitch=-5 * recoil))
+            phase = seed((span.spec['beat_ids'], group)) / 2**32 * math.tau
+            draw_time = local if floor or any(
+                (actor == key or target == key) and a.start < local < a.start + a.seconds
+                for actor, a, target in span.actions) else 0.
+            if floor:
+                # Composed foreground drift and visible idle acting continue after
+                # finite cues. Paired actors share drift, preserving their contact.
+                journeys = [a.start + a.seconds for actor, a, _ in span.actions
+                            if actor == key and a.name in ('walk', 'run')]
+                settled = smooth((local - max(journeys)) / .5) if journeys else 1.
+                x += settled * floor * 60 * math.sin(local * 1.13 + phase) / w
+                ground += floor * 31 * math.sin(local * 1.67 + phase * .8) / h
+                pose = add(pose, Pose(breath=.04 * floor * math.sin(local * 2.5 + phase),
+                                     head_pitch=10 * floor * math.sin(local * 1.5 + phase),
+                                     head_y=8 * floor * math.sin(local * 2.3 + phase),
+                                     tail=20 * floor * math.sin(local * 1.7 + phase)))
+            else:
+                idle = idle_pose(g, draw_time)
+                pose = add(pose, Pose(**{f.name: tuple(-v for v in getattr(idle, f.name))
+                                        if isinstance(getattr(idle, f.name), tuple) else -getattr(idle, f.name)
+                                        for f in fields(Pose)}))
+            sprite_height = max(60, round(h * height))
+            sprite = raster(g, pose, draw_time, height=sprite_height)
+            scale = sprite_height / 400
+            if mirror:
+                sprite = ImageOps.mirror(sprite)
+            bbox = sprite.getchannel('A').getbbox()
+            if bbox:
+                # A5's eased travel is retained in this stable-root composition.
+                # Leave room for the authored idle sway and the whole-scene pan.
+                right = x * w + bbox[2] - 300 * scale
+                room = max(0., w * (1 - TRAVEL_MARGIN) + min(0., self._pan(span, local, w))
+                           - right - 60 * floor)
+                travel = min(room, self._travel(span, key, local, sprite_height))
+                self._travelled[key] = travel
+                x += travel / w
+                # Pounces, jaw/head action and idle sway also need the complete
+                # silhouette inside the final camera's safe edges.
+                left = x * w + bbox[0] - 300 * scale
+                right = x * w + bbox[2] - 300 * scale
+                panel = not self.square and len(self._cast_groups(span)) == 1
+                left_stage, right_stage = ((.04, .50) if span.spec['composition'] == 'left_third' else (.50, .96)) if panel else (TRAVEL_MARGIN, 1 - TRAVEL_MARGIN)
+                low = w * left_stage + max(0., self._pan(span, local, w))
+                high = w * right_stage + min(0., self._pan(span, local, w))
+                x += (max(0., low - left) - max(0., right - high)) / w
+                # Retain the SVG's ground/root anchor. Recentring each cropped pose
+                # used to cancel body translation and make interacting actors icons.
+                sprite = sprite.crop(bbox)
+                image.paste(sprite, (round(x * w + bbox[0] - 300 * scale),
+                                     round(ground * h + bbox[1] - 358 * scale)), sprite)
+        return image
+
     def _frame(self, span, t):
         spec, local = span.spec, max(0, t - span.start)
         if span.source_proof or spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
@@ -482,10 +803,11 @@ class HybridProduction:
             from .bold.render import _background
             base = np.clip(_background(span.motion, local, w, h), 0, 255).astype(np.uint8)
             background = np.clip(compose(base, span.atmos, local) * 255 + .5, 0, 255).astype(np.uint8)
+        scene = span.motion_art or span.motion
         if self.square:
-            array = self._square_frame(span.motion, local, w, h, background)
+            array = self._square_frame(scene, local, w, h, background)
         else:
-            array = render_frame(span.motion, local, w, h, background=background)
+            array = render_frame(scene, local, w, h, background=background)
         image = Image.fromarray(array)
         active = next((d for d in reversed(span.diagrams) if t >= d.window[0]), None)
         if active:
@@ -502,9 +824,9 @@ class HybridProduction:
         dx = self._pan(span, local, w)
         dy = 0.
         if camera == 'follow':
-            # Track the active actor's rendered position, or the moving foreground group.
-            active = next((actor for actor, a, _ in span.actions if a.start <= local <= a.start + a.seconds), None)
-            targets = [active] if active else [a for a in span.actors if not a.startswith('crowd-hyena-')]
+            # Track the moving foreground group; a fixed group focus avoids a
+            # camera jump when a finite action ends.
+            targets = [a for a in span.actors if not a.startswith('crowd-hyena-')]
             if targets:
                 from .creatures.actions import action_pose
                 xs = []
@@ -519,6 +841,10 @@ class HybridProduction:
                 xs = [element_pose(span.motion, e, i, local)[0] for i, e in enumerate(span.motion.elements)]
                 dx = (sum(xs) / len(xs) / 1920 - .5) * w * .35
             zoom = 1.06
+            if span.source_character and not self.square and len(self._cast_groups(span)) == 1:
+                # A side panel's text is pinned; keep the focus from carrying its
+                # actor into that text area. Travel remains visible in the stage.
+                dx = max(0., dx) if spec['composition'] == 'left_third' else min(0., dx)
         if camera == 'shake':
             strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
             dx, dy = strength * math.sin(local * 39), strength * math.sin(local * 31)
@@ -527,6 +853,20 @@ class HybridProduction:
             image = image.transform((w, h), Image.AFFINE,
                 (inv, 0, w / 2 * (1 - inv) + dx, 0, inv, h / 2 * (1 - inv) + dy), Image.BICUBIC,
                 fillcolor=ImageColor.getrgb(self.style['palette']['background']))
+        if span.source_character:
+            # Source labels/atomic quotes keep their safe screen position while
+            # the scene camera follows the artwork. Captions are added later at
+            # their actual narration time by frame().
+            from .bold import render as renderer
+            key = (id(span.motion), w, h)
+            if key not in self._text_layers:
+                self._text_layers[key] = (_SquareLayers(span.motion, w, h) if self.square else
+                                          _SceneLayers(span.motion, w, h))
+            array = np.asarray(image, dtype=np.float32).copy()
+            for i, e in enumerate(span.motion.elements):
+                if e.kind == 'text':
+                    renderer._composite(array, self._text_layers[key], i, [local], 'text')
+            image = Image.fromarray(np.clip(array + .5, 0, 255).astype(np.uint8))
         return image.convert('RGB')
 
     def _square_frame(self, scene, t, w, h, background):
@@ -560,7 +900,22 @@ class HybridProduction:
         return np.clip(art + .5, 0, 255).astype(np.uint8)
 
     def frame(self, t):
-        if not self.spans or t < self.starts[0] or t >= self.tl['end_card']['start']:
+        if not self.spans or t < self.starts[0]:
+            return self.whiteboard.frame(t)
+        end_start = self.tl['end_card']['start']
+        if t >= end_start:
+            last = self.spans[-1]
+            if (last.spec['treatment'] != 'whiteboard' and not last.source_proof
+                    and t < end_start + last.join_length):
+                # Keep the existing endcard clock; ease out of a cinematic scene
+                # instead of making an extra unaligned hard cut at its boundary.
+                previous = self._frame(last, end_start - 1 / 30)
+                current = self.whiteboard.frame(t).convert('RGB')
+                array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
+                                          *self.size, kind='match', duration=last.join_length)
+                image = Image.fromarray(array).convert('RGBA')
+                self.whiteboard._caption(image, t)
+                return image.convert('RGB')
             return self.whiteboard.frame(t)
         i = bisect.bisect_right(self.starts, t) - 1
         span = self.spans[i]

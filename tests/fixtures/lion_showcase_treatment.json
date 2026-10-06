@@ -1,0 +1,18 @@
+{
+  "source": "lion_full.md",
+  "reason": "Edward's explicit visual treatment: Mara is a tigress while the recovered narration remains verbatim.",
+  "series_bible": {
+    "cast": [
+      {"id": "mara", "species": "tigress", "sex": "female", "marks": ["stripes", "mane_none"]}
+    ]
+  },
+  "scene_overrides": {
+    "b000": {"omit_pictures": true},
+    "b008": {
+      "actions": [
+        {"actor": "kojo", "verb": "swipe", "at_beat": "b008", "intensity": 3},
+        {"actor": "kojo", "verb": "roar", "at_beat": "b008", "intensity": 3}
+      ]
+    }
+  }
+}
