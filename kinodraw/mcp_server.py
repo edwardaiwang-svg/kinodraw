@@ -616,6 +616,7 @@ def _narrated_worker(service, args):
             if cancel_file.exists():
                 self._event.set()
             super().check()
+            store._check(store._state(), args.revision)
     token = Token()
     status = {'stage': 'prepare', 'frames': 0, 'total': 0, 'elapsed': 0, 'eta': None}
     lock = threading.RLock()

@@ -980,7 +980,8 @@ def state() -> dict:
             'product': PRODUCT['name'],
             'models': SUGGESTED,
             'formats': [{'value': '16:9', 'label': 'Landscape 16:9 (YouTube)'},
-                        {'value': '9:16', 'label': 'Vertical 9:16 (Shorts, TikTok, Reels)'}],
+                        {'value': '9:16', 'label': 'Vertical 9:16 (Shorts, TikTok, Reels)'},
+                        {'value': '1:1', 'label': 'Square 1:1'}],
             'styles': [{'value': f"{e['id']}/{e['stories'][0]}", 'label': e['name']['en']}   # the registry's looks
                        for e in styles.looks(ready=True)],                               # that render now
             'voices': {lang: [{'id': vid, 'name': name} for vid, name in choices]

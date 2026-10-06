@@ -665,6 +665,8 @@ class Composer:
                                        self.project_dir, style=self.style)
             shot.items += items
             shot.items.append(mark_item(marks.Mark('circle', rect, t0 + 1.2, seed=5)))
+            self.in_play = (beat['chapter'], Card('doodle', t0 + .3,
+                                                 {'doodle': self.hero, 'label': ''}, 'hero'))
         return shot
 
     def agenda_rows(self, n):

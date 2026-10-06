@@ -188,6 +188,7 @@ def test_saved_series_bible_art_override_after_validation_is_reused(tmp_path, mo
     next(c for c in fixed['cast'] if c['name'] == 'Tavi')['marks'].append('scar_nose')
     project = tmp_path / 'project'
     project.mkdir()
+    (project / 'storyboard.json').write_text(json.dumps(board))
     config = project / 'project.json'
     config.write_text(json.dumps({'plan_v3': fixed, 'plan_v3_report': {'fallback': False}}))
     before = config.read_bytes()

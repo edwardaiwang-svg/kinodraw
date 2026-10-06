@@ -97,11 +97,17 @@ def strings(value, lang, localized=False):
 def frame_slots(board, lang, interface=False):
     slots = list(strings(board.get('title', {}), lang)) + list(strings(board.get('footer', {}), lang))
     for chapter in board['chapters']:
-        for key in ('label', 'title', 'source', 'speaker'):
+        for key in ('label', 'title', 'source', 'speaker', 'hook'):
             slots.extend(strings(chapter.get(key, {}), lang))
     for beat in board['beats']:
         for key in ('visuals', 'take'):
             slots.extend(strings(beat.get(key, {}), lang, localized=True))
+        # Sparse source pages may write the last two directed source sentences
+        # (render.Production._visuals/_source_lines), at their saved word times.
+        # Admit those spans only, not the rest of the narration vocabulary.
+        spoken = beat.get('spoken', {}).get(lang, '')
+        slots.extend(spoken[a:b] for sentence in beat.get('direction', [])[-2:]
+                     for a, b in [sentence['span']])
     fixed = list(strings(script.TEXT[lang], lang)) + list(PRODUCT.values()) + [auto_scenes.CREDIT_LINE[lang]]
     if interface:
         for bank in INTERFACE_FRAME_WORDS:
@@ -353,3 +359,14 @@ def test_tokens_and_slots_keep_language_and_order():
     assert list(strings({'nested': [{'en': 'Honey', 'zh': '蜂蜜', 'es': 'Miel'}]}, 'es')) == ['Miel']
     with pytest.raises(AssertionError, match='unmatched'):
         check_drawn_words('press invented Gutenberg', [], 'Gutenberg invented press', 'en', 'probe')
+
+
+def test_frame_slots_keep_hooks_and_only_the_directed_source_spans():
+    board = {'chapters': [{'hook': {'en': 'Exact hook', 'zh': '别的语言'}}],
+             'beats': [{'spoken': {'en': 'Secret first. Frame second. Frame last.'},
+                        'direction': [{'span': [0, 13]}, {'span': [14, 27]}, {'span': [28, 39]}]}]}
+    slots = frame_slots(board, 'en')
+    assert slots[:3] == ['Exact hook', 'Frame second.', 'Frame last.']
+    for text in ('Secret first', '别的语言', 'Invented label'):
+        with pytest.raises(AssertionError, match='non-caption'):
+            check_drawn_words(text, slots, '', 'en', 'probe')

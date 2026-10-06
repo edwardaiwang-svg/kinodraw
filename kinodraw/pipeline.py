@@ -488,7 +488,7 @@ def _finish(project_dir):
     publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
             voice_source=voice_server.describe(cfg['voice_server'], lang)
             if cfg.get('voice_server') and not cfg.get('recording') else None,
-            size=(720, 1280) if aspect == '9:16' else (1280, 720))
+            size={'16:9': (1280, 720), '9:16': (720, 1280), '1:1': (720, 720)}[aspect])
     contact_sheet(tl, video, build / 'contact-sheet.jpg', size=size)
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
     _save(build / 'qa.json', qa)

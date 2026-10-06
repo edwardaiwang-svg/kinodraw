@@ -201,7 +201,7 @@ def test_website_privacy_names_the_cookieless_counter_and_server_logs():
     assert 'The app, the site and KinoDraw Cloud have no ads, no analytics' not in text
     assert not any('no analytics' in clause and re.search(r'\b(?:site|website)\b', clause)
                    for sentence in sentences for clause in sentence.split(';'))
-    assert 'Last updated October 4, 2026' in text
+    assert 'Last updated October 5, 2026' in text
     assert "GitHub's API for the latest release" in text
     assert 'cloudflareinsights' not in raw and 'google-site-verification' not in raw
 

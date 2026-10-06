@@ -134,10 +134,10 @@ def contact_sheet(tl: dict, video: Path, path: Path, every: float = 10.0, size=(
 
 
 def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path, size=(1280, 720)):
-    """1280x720: the title in big handwriting, section colours, and the video's own actor: the narrator giving a
+    """Landscape, portrait or square: the title in big handwriting, section colours, and the video's own actor: the narrator giving a
     thumbs-up in the video's skin, or in the collage look the paper puppet cheering on cream paper."""
-    if size == (720, 1280):
-        return _portrait_thumbnail(storyboard, lang, path, project_dir)
+    if size in ((720, 1280), (720, 720)):
+        return _portrait_thumbnail(storyboard, lang, path, project_dir, height=size[1])
     collage = storyboard.get('look') == 'collage'
     skin = skins.for_look(storyboard.get('look'))
     if collage:
@@ -182,18 +182,19 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path, size=(
     img.convert('RGB').save(path)
 
 
-def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path):
+def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path, height=1280):
     from .engine import motion
 
     collage = storyboard.get('look') == 'collage'
     skin = skins.for_look(storyboard.get('look'))
-    img = motion.paper_texture((720, 1280), 'cream').convert('RGBA') if collage else skin.background(720, 1280).copy()
+    img = motion.paper_texture((720, height), 'cream').convert('RGBA') if collage else skin.background(720, height).copy()
     d = ImageDraw.Draw(img)
     storyboard = normalize(storyboard)
     title = storyboard['title'][lang]
-    lines, size = ink.fit_text(title, lang, 620, 4, 112, min_size=32, fonts=skin.fonts)
-    while size > 1 and (len(lines) > 4 or max(ink.text_width(line, lang, size, skin.fonts) for line in lines) > 620):
-        size -= 2                              # long words and titles must also stay inside the phone's margins
+    lines, size = ink.fit_text(title, lang, 620, 4, 112 if height == 1280 else 72, min_size=32, fonts=skin.fonts)
+    while size > 1 and (len(lines) > 4 or max(ink.text_width(line, lang, size, skin.fonts) for line in lines) > 620
+                       or (height == 720 and len(lines) * int(size * 1.15) > 240)):
+        size -= 2                              # long words and titles must also stay inside the frame's margins
         lines, size = ink.fit_text(title, lang, 620, 4, size, min_size=size, fonts=skin.fonts)
     y = 60
     for line in lines:
@@ -206,12 +207,13 @@ def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Pa
               if c['kind'] == 'section' and c.get('color')]
     for i, col in enumerate(colors[:6]):
         d.rounded_rectangle((50 + i * 70, y + 30, 100 + i * 70, y + 58), 10, fill=col)
+    art_h = 600 if height == 1280 else min(300, height - y - 110)
     if collage:
         from .engine.collage import puppet
         look = storyboard.get('puppet') or {}
         cut = motion.die_cut(puppet.raster('cheer', 'happy', 0, look.get('preset', 'sunny'),
-                                         tuple(sorted((look.get('colors') or {}).items())), height=600), border=12)
-        x, y = (720 - cut.width) // 2, 1280 - cut.height - 40
+                                         tuple(sorted((look.get('colors') or {}).items())), height=art_h), border=12)
+        x, y = (720 - cut.width) // 2, height - cut.height - 40
         shadow = motion.shadow_only(cut, blur=10, opacity=.3)
         img.alpha_composite(shadow, (x + 8 - (shadow.width - cut.width) // 2, y + 10 - (shadow.height - cut.height) // 2))
         img.alpha_composite(cut, (x, y))
@@ -219,8 +221,8 @@ def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Pa
         pose = auto_scenes.narrator(storyboard, 'thumbs')
         art = resolve(pose, project_dir) if pose else None
         if art:
-            dr = skin.dress(ink.svg_drawing(art, (580, 600)))
-            img.alpha_composite(dr.color, ((720 - dr.color.width) // 2, 1280 - dr.color.height - 40))
+            dr = skin.dress(ink.svg_drawing(art, (580, art_h)))
+            img.alpha_composite(dr.color, ((720 - dr.color.width) // 2, height - dr.color.height - 40))
     img.convert('RGB').save(path)
 
 

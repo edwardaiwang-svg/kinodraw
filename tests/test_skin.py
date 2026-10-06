@@ -27,7 +27,8 @@ def test_every_look_is_described_once_with_what_the_app_needs():
         m = e['motion']
         assert {m['min'], m['max'], m['default']} <= set(MOTIONS)
         assert MOTIONS.index(m['min']) <= MOTIONS.index(m['default']) <= MOTIONS.index(m['max'])
-        assert e['aspect'] == (['16:9', '9:16'] if e['render_ready'] else ['16:9'])
+        assert e['aspect'] == (list(pipeline.ASPECTS) if e['renderer'] == 'whiteboard'
+                               else ['16:9', '9:16'] if e['render_ready'] else ['16:9'])
         low, high = e['length_s']
         assert 0 < low < high
         assert {'topic', 'audience', 'tone', 'structure'} <= set(e['fit'])
@@ -53,7 +54,7 @@ class _Probe(skins.Skin):
         return Image.new('RGBA', (width, height), (10, 120, 200, 255))
 
     def dress(self, drawing, x=0, y=0):
-        _Probe.seen.append(type(drawing).__name__)
+        _Probe.seen.append(drawing)
         return drawing
 
 
@@ -69,7 +70,13 @@ def test_a_skin_reaches_every_drawing_the_paper_the_fonts_the_hand_and_the_capti
     monkeypatch.setattr(skins, 'for_look', lambda look: probe)
     prod = renderer.make_production(board, tl, 'en', tmp_path / 'p')
     assert prod.skin is probe and hands == ['chalk']
-    assert len(_Probe.seen) == len(prod.ctx.elements) and {'TextDrawing', 'PathDrawing'} <= set(_Probe.seen)
+    # Agenda hooks are dressed before admission; rejected candidates never
+    # enter ctx.elements. Every retained drawing and candidate is dressed once.
+    drawings = {id(e.drawing) for e in prod.ctx.elements}
+    drawings.update(id(e.drawing) for card in prod.cards.values() for e in card.get('hooks', []))
+    assert len(_Probe.seen) == len(drawings)
+    assert {id(d) for d in _Probe.seen} == drawings
+    assert {'TextDrawing', 'PathDrawing'} <= {type(d).__name__ for d in _Probe.seen}
     t = tl['captions'][3]['start'] + .1
     frame = np.asarray(prod.frame(t).convert('RGB'))
     assert used == {arimo}                                                         # writing, measuring, chrome

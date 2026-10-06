@@ -77,7 +77,7 @@ def test_studio_creates_and_changes_format(tmp_path, monkeypatch):
     httpd, url = server.serve(0)
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        for aspect, status in [('16:9', 200), ('9:16', 200), ('4:3', 400)]:
+        for aspect, status in [('16:9', 200), ('9:16', 200), ('1:1', 200), ('4:3', 400)]:
             req = urllib.request.Request(url + 'api/projects/' + urllib.parse.quote(created['project']) + '/format',
                                          data=json.dumps({'aspect': aspect}).encode(),
                                          headers={'X-Studio-Token': server.Handler.token})
@@ -88,7 +88,7 @@ def test_studio_creates_and_changes_format(tmp_path, monkeypatch):
             with reply:
                 assert reply.code == status
                 result = json.loads(reply.read())
-            assert pipeline.settings(project)['aspect'] == (aspect if status == 200 else '9:16')
+            assert pipeline.settings(project)['aspect'] == (aspect if status == 200 else '1:1')
             if status == 400:
                 assert 'aspect must' in result['error']
     finally:
@@ -125,6 +125,11 @@ def test_thumbnail_sizes_and_landscape_bytes(tmp_path, look):
     with Image.open(default) as img:
         assert img.size == (1280, 720)
     assert default.read_bytes() == explicit.read_bytes()
+    if look != 'collage':
+        square = tmp_path / 'square.png'
+        package.thumbnail(board, 'en', square, tmp_path, size=(720, 720))
+        with Image.open(square) as img:
+            assert img.size == (720, 720)
 
 
 def test_encoded_qa_checks_requested_size(tmp_path, monkeypatch):
@@ -144,7 +149,10 @@ def test_encoded_qa_checks_requested_size(tmp_path, monkeypatch):
 @pytest.mark.parametrize('workers', [1, 2])
 @pytest.mark.parametrize('aspect', pipeline.ASPECTS)
 def test_render_passes_format_to_production_and_segments(tmp_path, monkeypatch, workers, aspect):
-    pipeline.new_project(TINY, tmp_path, aspect=aspect, direction={'look': 'collage'})
+    # Native square is a whiteboard target; collage retains its letterboxed
+    # landscape/portrait contract (pipeline.validate_size).
+    look = 'whiteboard' if aspect == '1:1' else 'collage'
+    pipeline.new_project(TINY, tmp_path, aspect=aspect, direction={'look': look})
     build = tmp_path / 'build'
     build.mkdir()
     pipeline._save(build / 'timeline.json', {'duration': 1})
@@ -152,15 +160,22 @@ def test_render_passes_format_to_production_and_segments(tmp_path, monkeypatch, 
     prod = SimpleNamespace(warnings=[], cues=lambda: ['cue'])
     monkeypatch.setattr(pipeline.renderer, 'make_production', lambda *a, **k: calls.append(('production', k)) or prod)
     monkeypatch.setattr(pipeline.renderer, 'render_segments', lambda *a, **k: calls.append(('segments', k)) or [])
-    monkeypatch.setattr(pipeline.renderer, 'encode', lambda *a: None)
+    encoded = []
+    monkeypatch.setattr(pipeline.renderer, 'encode', lambda *a, **k: encoded.append(k))
     pipeline.render(tmp_path, workers=workers)
-    assert calls == ([('segments', {'aspect': aspect})] if workers == 2 else []) + [('production', {'aspect': aspect})]
-    assert json.loads((build / 'cues.json').read_text(encoding='utf-8')) == {'cues': ['cue']}
+    assert calls == ([('segments', {'aspect': aspect, 'context': None})] if workers == 2 else []) + (
+        [('production', {'aspect': aspect})] if workers == 1 or look == 'collage' else [])
+    assert encoded == ([{'context': None}] if workers == 1 else [])
+    if look == 'collage':
+        assert json.loads((build / 'cues.json').read_text(encoding='utf-8')) == {'cues': ['cue']}
+    else:
+        assert not (build / 'cues.json').exists()
 
 
 @pytest.mark.parametrize('aspect', pipeline.ASPECTS)
 def test_finish_uses_format_sizes_and_unwrapped_collage(tmp_path, monkeypatch, aspect):
-    pipeline.new_project(TINY, tmp_path, aspect=aspect, direction={'look': 'collage'})
+    look = 'whiteboard' if aspect == '1:1' else 'collage'
+    pipeline.new_project(TINY, tmp_path, aspect=aspect, direction={'look': look})
     build = tmp_path / 'build'
     build.mkdir()
     pipeline._save(build / 'timeline.json', {'duration': 1})
@@ -175,17 +190,44 @@ def test_finish_uses_format_sizes_and_unwrapped_collage(tmp_path, monkeypatch, a
     monkeypatch.setattr(pipeline, 'contact_sheet', lambda *a, **k: calls.update(sheet=k))
     monkeypatch.setattr(pipeline.renderer, 'make_production', lambda *a, **k:
                         calls.update(production=k) or SimpleNamespace(crowded=lambda: [(0, 'a', 'b')]))
-    report = pipeline.finish(tmp_path)
-    size = (1080, 1920) if aspect == '9:16' else (1920, 1080)
+    size = {'16:9': (1920, 1080), '9:16': (1080, 1920), '1:1': (1080, 1080)}[aspect]
+    monkeypatch.setattr(pipeline, 'video_size', lambda video: size)
+    monkeypatch.setattr(pipeline.subprocess, 'run', lambda args, **k:
+                        calls.update(decode=args) or SimpleNamespace(returncode=0, stderr=b''))
+    # Stub the worker's implementation; real process/staging/full-decode
+    # acceptance lives in test_finish_worker and test_native_pipeline.
+    report = pipeline._finish(tmp_path)
     assert calls['qa']['size'] == calls['sheet']['size'] == size
-    assert calls['publish']['size'] == ((720, 1280) if aspect == '9:16' else (1280, 720))
-    assert calls['production'].get('aspect', '16:9') == '16:9'
+    assert calls['publish']['size'] == {'16:9': (1280, 720), '9:16': (720, 1280), '1:1': (720, 720)}[aspect]
+    assert '-xerror' in calls['decode'] and '0:v:0' in calls['decode'] and '0:a:0' in calls['decode']
+    if look == 'collage':
+        assert calls['production'].get('aspect', '16:9') == '16:9'
+    else:
+        assert 'production' not in calls
     title = pipeline.storyboard(tmp_path)['title']['en']
     stem = title + (' (vertical)' if aspect == '9:16' else '')
     assert calls['stem'] == stem
     assert calls['video'].name == f'{stem}.mp4'
     assert calls['title'] == title
-    assert not report['ok'] and 'written on top' in report['problems'][0]
+    if look == 'collage':
+        assert not report['ok'] and 'written on top' in report['problems'][0]
+    else:
+        assert report['ok'] and report['problems'] == []
+
+
+@pytest.mark.parametrize('entrypoint', ['render', 'finish'])
+def test_square_collage_is_rejected_before_outputs_are_touched(tmp_path, monkeypatch, entrypoint):
+    with pytest.raises(ValueError, match='collage does not support 1:1'):
+        pipeline.new_project(TINY, tmp_path / 'invalid', aspect='1:1', direction={'look': 'collage'})
+    assert not (tmp_path / 'invalid').exists()
+    pipeline.new_project(TINY, tmp_path, direction={'look': 'collage'})
+    cfg = pipeline.settings(tmp_path)
+    pipeline._save(tmp_path / 'project.json', {**cfg, 'aspect': '1:1'})
+    before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    monkeypatch.setattr(pipeline.subprocess, 'Popen', lambda *a, **k: pytest.fail('unsupported target reached worker'))
+    with pytest.raises(ValueError, match='collage does not support 1:1'):
+        getattr(pipeline, entrypoint)(tmp_path)
+    assert before == {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
 
 
 def test_portrait_contact_sheet_tiles(tmp_path, monkeypatch):

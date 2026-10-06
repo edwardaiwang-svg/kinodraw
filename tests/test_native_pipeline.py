@@ -121,6 +121,9 @@ def test_actual_full_square_pipeline_finish(tmp_path):
     assert before=={p.name:pipeline.sha(p) for p in (project/'build/narration.wav',project/'build/mix.wav')}
     assert (project/'Small story.srt').is_file()
     assert (project/'Small story-thumbnail.png').is_file()
+    from PIL import Image
+    with Image.open(project/'Small story-thumbnail.png') as thumbnail:
+        assert thumbnail.size == (720,720)
     evidence('full-square-finish',dict(qa=qa,media=media,cached_hashes=before,scope='Complete 21.833333-second saved fixture, local tone narration; not a long showcase.'))
 
 

@@ -185,7 +185,15 @@ def test_text_written_over_text_fails_the_finish(tmp_path, monkeypatch):
         monkeypatch.setattr(pipeline, name, lambda *a, **k: None)
     monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a, **k: {'ok': True, 'problems': []})
     monkeypatch.setattr(pipeline.renderer, 'make_production', lambda *a: prod)
-    qa = pipeline.finish(tmp_path / 'p')
+    from types import SimpleNamespace
+    decoded = []
+    monkeypatch.setattr(pipeline, 'video_size', lambda video: (1920, 1080))
+    monkeypatch.setattr(pipeline.subprocess, 'run', lambda args, **k:
+                        decoded.append(args) or SimpleNamespace(returncode=0, stderr=b''))
+    # The finish worker owns this QA; in-process drawing stubs belong at its
+    # implementation boundary, not at the parent subprocess launcher.
+    qa = pipeline._finish(tmp_path / 'p')
+    assert '-xerror' in decoded[0] and '0:v:0' in decoded[0] and '0:a:0' in decoded[0]
     t = prod.crowded()[0][0]
     assert not qa['ok'] and qa['problems'] == [f'At {pipeline.clock(t)} "All in one place." and "Any time you like." '
                                                'are written on top of each other.']
