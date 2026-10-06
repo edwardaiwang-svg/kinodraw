@@ -17,7 +17,7 @@ from kinodraw.director import style
 from kinodraw.director.llm import cloud, providers
 from kinodraw.director.v3.rules import from_rules
 from kinodraw.director.v3.schema import PLAN_SCHEMA
-from kinodraw.studio import server
+from kinodraw.studio import integration, server
 
 MATH = ('# Fractions made easy\n\nA fraction is part of a whole, and math teachers love fractions.\n\n'
         '## Adding fractions\n\nTo add fractions, find a common denominator. The formula is short.\n\n'
@@ -142,8 +142,11 @@ def test_a_pick_outside_the_offer_is_not_used(studio, fake_cloud, monkeypatch):
         assert board['look'] == 'chalkboard' and 'cannot use' in pick['note'] and 'KinoDraw Cloud AI' in pick['note']
     monkeypatch.delenv('KINODRAW_CLOUD_TOKEN')                  # signed out: the offline rules pick, and say why
     monkeypatch.setattr(cloud, '_token', lambda: None)
-    _, _, cfg, _ = studio(director='cloud', title='Signed out')
-    assert cfg['style_pick']['by'] == 'rules' and 'sign in' in cfg['style_pick']['note']
+    # Planning now builds its provider from the request before the stubbed planner runs, so a signed-out
+    # cloud job stops at the sign-in prompt, as the real planner always did. Check the pick where it is made.
+    pick = integration.choose_style(ingest.read(MATH, title='Signed out'), {'director': 'cloud', 'lang': 'en'},
+                                    'en', '16:9', None)
+    assert pick['by'] == 'rules' and 'sign in' in pick['note']
 
 
 

@@ -10,6 +10,7 @@ import pytest
 from scipy.signal import butter, resample_poly, sosfilt
 
 from kinodraw import cli, pipeline, script, voice
+from test_finish_worker import cached_project
 
 needs_models = pytest.mark.skipif(bool(voice.missing_files('en')),
                                   reason='Kokoro models not downloaded (kinodraw setup --lang en)')
@@ -348,27 +349,14 @@ def test_a_recording_problem_names_the_way_back_to_the_ai_voice(tmp_path, monkey
         pipeline.narrate(project)
 
 
-def test_a_video_in_your_own_voice_does_not_credit_the_ai_voice(tmp_path, monkeypatch):
+def test_a_video_in_your_own_voice_does_not_credit_the_ai_voice(tmp_path, cached_project):
     """The description of a video narrated with the creator's own recording said "Narration: Kokoro AI voice", and
     so did the Studio under the finished video."""
-    from kinodraw import package
     from kinodraw.studio import server
-    project = tmp_path / 'video'
-    board = pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
-    build = project / 'build'
-    build.mkdir()
-    for ext in ('srt', 'vtt'):
-        (build / f'captions.{ext}').write_text('', encoding='utf-8')
-    tl = {'chapters': [{'id': c['id'], 'start': 0, 'title': ''} for c in board['chapters']], 'duration': 1}
-    (build / 'timeline.json').write_text(json.dumps(tl), encoding='utf-8')
-    monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
-    for name in ('mux', 'contact_sheet'):
-        monkeypatch.setattr(pipeline, name, lambda *a, **k: None)
-    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a, **k: {'ok': True, 'problems': []})
-    monkeypatch.setattr(package, 'thumbnail', lambda *a, **k: None)
+    project = cached_project
 
     def description():
-        pipeline.finish(project)
+        assert pipeline.finish(project)['ok']
         return next(project.glob('*-description.txt')).read_text(encoding='utf-8')
     assert 'Narration: Kokoro AI voice.' in description()
     (tmp_path / 'take.wav').write_bytes(b'audio')
@@ -388,18 +376,44 @@ def test_your_own_voice_works_where_text_files_are_not_utf8_by_default(tmp_path)
     import shutil
     import subprocess
     import sys
-    env = {**os.environ, 'PYTHONUTF8': '0', 'PYTHONCOERCECLOCALE': '0', 'PYTHONIOENCODING': 'utf-8',
-           'LC_ALL': 'en_US.ISO8859-1', 'LANG': 'en_US.ISO8859-1'}
+    from kinodraw.director import match
+    env = {name: value for name, value in os.environ.items() if not name.startswith('TTS_')}
+    env.update(PYTHONUTF8='0', PYTHONCOERCECLOCALE='0', PYTHONIOENCODING='utf-8',
+               LC_ALL='en_US.ISO8859-1', LANG='en_US.ISO8859-1',
+               PYTHON_KEYRING_BACKEND='keyring.backends.null.Keyring')
     probe = subprocess.run([sys.executable, '-c', 'import locale, sys; print(locale.getpreferredencoding(False), '
                             'sys.getfilesystemencoding())'], env=env, capture_output=True, text=True, encoding='utf-8').stdout.split()
     if probe[0].lower().replace('-', '') == 'utf8' or probe[1].lower().replace('-', '') != 'utf8':
         pytest.skip(f'no non-UTF-8 text default with UTF-8 file names here: {probe}')
+    # Fresh CLI children do not inherit conftest's path/keychain patches. Give migration
+    # temporary app folders and copies of the cached models, with no inherited voice server.
+    models = tmp_path / 'models'
+    models.mkdir()
+    for name in (voice.LANGS['en']['model'], voice.LANGS['en']['voices']):
+        shutil.copyfile(voice.MODEL_DIR / name, models / name)
+    if match.CACHE.is_dir():
+        shutil.copytree(match.CACHE, models / 'embed')
+    env['KINODRAW_MODELS'] = str(models)
+    isolated_cli = '''import os, sys
+from pathlib import Path
+import platformdirs
+root = Path(sys.argv[1])
+platformdirs.user_data_dir = lambda app: str(root / 'data' / app)
+platformdirs.user_config_dir = lambda app: str(root / 'config' / app)
+platformdirs.user_cache_dir = lambda app: str(root / 'cache' / app)
+platformdirs.user_videos_dir = lambda: str(root / 'Videos')
+from kinodraw import cli, paths
+assert all(old.is_relative_to(root) and new.is_relative_to(root) for old, new in paths.legacy_moves())
+assert not any(name.startswith('TTS_') for name in os.environ)
+assert os.environ['PYTHON_KEYRING_BACKEND'] == 'keyring.backends.null.Keyring'
+cli.main(sys.argv[2:])
+'''
     project, script = tmp_path / 'Vidéo 我的', tmp_path / 'honey.md'
     script.write_text('# Honey\n\nHoney is one of the oldest foods people still eat.\n\nBees visit about two million '
                       'flowers to make one jar.\n', encoding='utf-8')
 
     def kinodraw(*args):
-        done = subprocess.run([sys.executable, '-m', 'kinodraw.cli', *map(str, args)], env=env, capture_output=True,
+        done = subprocess.run([sys.executable, '-c', isolated_cli, str(tmp_path / 'app'), *map(str, args)], env=env, capture_output=True,
                               text=True, encoding='utf-8')
         assert done.returncode == 0, done.stderr[-2000:]
         return done.stdout

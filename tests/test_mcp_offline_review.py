@@ -3,7 +3,7 @@ from argparse import Namespace
 
 import pytest
 
-from kinodraw import director, mcp_server, pipeline
+from kinodraw import director, mcp_server, pipeline, voice
 from kinodraw.project_store import ProjectStore
 from test_mcp_narrated import cache_tones, save_plan, source_bytes
 
@@ -62,8 +62,10 @@ def test_cached_worker_never_looks_up_saved_provider(tmp_path, monkeypatch, save
                      progress='demo/build/developer/check-progress.json',
                      cancel_file='demo/build/developer/check.cancel',
                      revision=ProjectStore(project).load()['revision'])
+    ensure_models = voice.ensure_models
     with pytest.raises(ValueError, match='captured cached renderer dispatch'):
         mcp_server._narrated_worker(service, args)
+    assert voice.ensure_models is ensure_models
     assert source_bytes(project) == before and not list(project.glob('*.mp4'))
 
 

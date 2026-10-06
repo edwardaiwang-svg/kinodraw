@@ -1,6 +1,7 @@
 """A saved format switch re-lays the drawings while reusing the real voice cache."""
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -35,14 +36,28 @@ def forbid_synthesis(monkeypatch):
     monkeypatch.setattr(voice, '_engine', uncached)
 
 
+@pytest.fixture
+def stubbed_finish(monkeypatch):
+    # These layout tests stub the media operations; keep them in the finish body now that
+    # public finish launches an isolated worker (tested with real media in test_finish_worker).
+    monkeypatch.setattr(pipeline, 'finish', lambda project, **kwargs: pipeline._finish(project))
+    run = subprocess.run
+    def decode_placeholder(command, *args, **kwargs):
+        if command[:6] == [pipeline.renderer.FFMPEG, '-v', 'error', '-xerror', '-err_detect', 'explode'] \
+                and command[-7:] == ['-map', '0:v:0', '-map', '0:a:0', '-f', 'null', '-']:
+            return subprocess.CompletedProcess(command, 0, b'', b'')
+        return run(command, *args, **kwargs)
+    monkeypatch.setattr(subprocess, 'run', decode_placeholder)
+
+
 @pytest.mark.parametrize('portrait', ['letterbox', 'native'])
-def test_cli_aspect_round_trip_reuses_voice_and_restores_landscape(tmp_path, monkeypatch, fake_voice, portrait):
+def test_cli_aspect_round_trip_reuses_voice_and_restores_landscape(tmp_path, monkeypatch, fake_voice, stubbed_finish, portrait):
     if portrait == 'native':
         monkeypatch.setattr(styles, 'portrait', lambda look: 'native')
     else:
         assert styles.portrait('whiteboard') == 'letterbox'
     encoded, published, muxed = [], [], []
-    def encode(prod, start, n, path, crf):
+    def encode(prod, start, n, path, crf, *, context=None):
         frames = [prod.frame(t).convert('RGB') for t in FRAME_TIMES]
         assert all(frame.size == prod.size for frame in frames)
         encoded.append({'size': prod.size,
@@ -137,12 +152,11 @@ def test_set_aspect_only_changes_format_and_rejects_invalid_values(tmp_path):
     assert not (tmp_path / 'build').exists()
 
 
-def test_finish_refuses_a_render_made_for_the_other_format(tmp_path, monkeypatch, fake_voice):
+def test_finish_refuses_a_render_made_for_the_other_format(tmp_path, monkeypatch, fake_voice, stubbed_finish):
     """`render --aspect 16:9 --stills` saves the format but leaves the vertical render in build/: finish must not
     write that vertical picture over the finished 16:9 video."""
-    import subprocess
     from kinodraw import package
-    def encode(prod, start, n, path, crf):            # a real one-second video of the production's size
+    def encode(prod, start, n, path, crf, *, context=None):    # a real one-second video of the production's size
         w, h = prod.size
         subprocess.run([package.FFMPEG, '-y', '-v', 'error', '-f', 'lavfi', '-i', f'color=c=white:s={w}x{h}:d=1',
                         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(path)], check=True)

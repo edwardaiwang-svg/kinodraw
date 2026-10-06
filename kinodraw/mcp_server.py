@@ -632,10 +632,11 @@ def _narrated_worker(service, args):
         emit(stage=name, stage_done=done, stage_total=total, job_elapsed=time.monotonic() - started)
     stage.check_cancelled = token.check
     context = RenderContext(token=token, callback=frames)
+    store = ProjectStore(path)
     previous = signal.signal(signal.SIGTERM, lambda *_: token._event.set())
     # The isolated worker never calls the download-capable ensure_models implementation.
+    ensure_models = voice.ensure_models
     voice.ensure_models = lambda lang, progress=None: _local_models(lang, checksum=False)
-    store = ProjectStore(path)
     try:
         with tempfile.TemporaryDirectory(prefix='mcp-make-') as folder:
             scratch = Path(folder) / 'project'
@@ -704,6 +705,7 @@ def _narrated_worker(service, args):
             service._save(receipt, result)
             emit(stage='succeeded', job_elapsed=time.monotonic() - started)
     finally:
+        voice.ensure_models = ensure_models
         signal.signal(signal.SIGTERM, previous)
 
 

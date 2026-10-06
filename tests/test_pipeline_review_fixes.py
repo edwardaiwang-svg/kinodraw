@@ -190,11 +190,14 @@ def test_provider_settings_switch_and_same_provider(kind, overrides):
     switched = director.provider_settings(previous, kind, **overrides)
     assert switched['voice'] == 'saved-voice'
     assert switched['director'] == kind
-    for key in ('model', 'base_url', 'command'):
-        expected = overrides.get(key) if kind != 'compat' else overrides.get(key, previous[key])
-        assert switched.get(key) == expected
+    # Saved endpoints and commands are never provider inputs (tests/test_project_provider_trust.py):
+    # only the current request's count, and a saved model stays only with the same provider.
+    for key in ('base_url', 'command'):
+        assert switched.get(key) == overrides.get(key)
+    assert switched.get('model') == overrides.get('model', previous['model'] if kind == 'compat' else None)
     assert previous['model'] == 'old-model'
-    assert director.provider_settings(previous, 'compat') == previous
+    assert director.provider_settings(previous, 'compat') == {key: value for key, value in previous.items()
+                                                             if key not in ('base_url', 'command')}
 
 
 @pytest.mark.parametrize('changed', ['storyboard', 'settings'])

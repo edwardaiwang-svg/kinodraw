@@ -20,6 +20,7 @@ import pytest
 from kinodraw import cli, package, paths, pipeline, voice, voice_server
 from kinodraw.director.llm import providers
 from kinodraw.studio import server as studio_server
+from test_aspect_switch import stubbed_finish
 
 TEXT = '# Small steps\n\nPlants need sunlight. Roots drink water. Leaves make food.'
 API_KEY = voice_server.api_key
@@ -301,8 +302,9 @@ def test_recording_uses_local_guides_even_with_server_config(tmp_path, monkeypat
     monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('local.wav'), 1, [0] * len(text)))
     expected = {'recorded': voice.Clip(Path('recording.wav'), 1, [0])}
     monkeypatch.setattr(voice, 'from_recording', lambda *a: expected)
-    assert pipeline.narrate(folder) is expected and seen == ['models']
-    assert pipeline.narrate(folder, server=voice_server.Server('http://127.0.0.1:1', 'test-model')) is expected
+    # narrate returns the clips paired with the project revision they were made from.
+    assert pipeline.narrate(folder) == expected and seen == ['models']
+    assert pipeline.narrate(folder, server=voice_server.Server('http://127.0.0.1:1', 'test-model')) == expected
 
 
 @pytest.fixture
@@ -469,7 +471,8 @@ def test_new_video_takes_a_server_voice_only_while_the_server_is_on(studio_http,
 
 @pytest.mark.parametrize('lang,own,kokoro', [('en', "creator's own", 'Kokoro'), ('zh', '作者本人', 'Kokoro'),
                                           ('es', 'creador', 'Kokoro')])
-def test_published_credits_describe_server_and_preserve_local_and_own_voice(tmp_path, monkeypatch, lang, own, kokoro):
+def test_published_credits_describe_server_and_preserve_local_and_own_voice(tmp_path, monkeypatch, stubbed_finish,
+                                                                           lang, own, kokoro):
     folder = tmp_path / 'Video'
     board = pipeline.new_project(TEXT, folder, lang=lang, voice_server={'model': 'test-model', 'voice': 'test-voice'})
     build = folder / 'build'
