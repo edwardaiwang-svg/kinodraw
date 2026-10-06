@@ -45,6 +45,10 @@ def chart_svg(element, t, color, foreground):
         else:
             points.append((x, y))
             art += f'<circle cx="{x}" cy="{y}" r="5" fill="{color}" opacity="{p}"/>'
+        if element.suffix:
+            # Literal endpoint labels remain readable while the bars enter.
+            labels += (f'<text x="{x}" y="{baseline - value / span * h - 16}" font-size="32" '
+                       f'text-anchor="middle" fill="{foreground}">{escape(str(value).removesuffix(".0") + element.suffix)}</text>')
         if i < len(element.labels):
             labels += (f'<text x="{x}" y="{h / 2 + 38}" font-size="22" text-anchor="middle" '
                        f'fill="{foreground}">{escape(element.labels[i])}</text>')

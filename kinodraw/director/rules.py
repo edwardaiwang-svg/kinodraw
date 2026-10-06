@@ -898,6 +898,32 @@ class RulesDirector:
 
     def _number(self, beat, text, norm, recent):
         """One salient number: 'X% of Y' becomes a 100-square grid, anything else a big stat."""
+        # An explicit change is one fact with two endpoints, not its first stat.
+        # Keep this narrow: nearby numbers alone do not establish a comparison.
+        if self.lang == 'en':
+            for sentence in script.sentences(text, self.lang):
+                change = re.search(r'\b(rose|increased|grew|climbed|fell|decreased|dropped|declined|changed|went|moved)'
+                    r'\s+from\s+(\d+(?:\.\d+)?)\s*(%|percent)\s+to\s+(\d+(?:\.\d+)?)\s*(%|percent)(?!\w)',
+                    sentence, re.I)
+                if not change or re.search(r"\b(?:not|never|no|didn['’]t|hasn['’]t)\b", sentence, re.I):
+                    continue
+                before, after = float(change[2]), float(change[4])
+                if not (0 <= before <= 100 and 0 <= after <= 100):
+                    continue
+                verb = change[1].lower()
+                if verb in ('rose', 'increased', 'grew', 'climbed') and after < before or \
+                        verb in ('fell', 'decreased', 'dropped', 'declined') and after > before:
+                    continue
+                unit = '%' if change[3] == '%' and change[5] == '%' else 'percent'
+                v = {'id': f"{beat['id']}n", 'type': 'bars', 'title': {self.lang: ''},
+                     'unit': {self.lang: unit}, 'rows': [
+                         {'label': {self.lang: 'Before'}, 'value': before},
+                         {'label': {self.lang: 'After'}, 'value': after}]}
+                pos = text.index(sentence) + change.start(2)
+                trig = self._spoken(norm, change[2] + ' ' + change[3], pos)
+                if trig:
+                    v['trigger'] = {self.lang: trig}
+                return v, pos
         pct = re.search(r'(\d+(?:\.\d+)?)\s?%\s+of\s+(?:the\s+)?([a-z][\w-]*(?: [a-z][\w-]*)?)' if self.lang == 'en'
                         else r'(\d+(?:\.\d+)?)\s?[%％]的([一-鿿]{2,6})', text)
         if self.lang == 'es':

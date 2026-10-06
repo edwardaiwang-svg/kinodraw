@@ -309,6 +309,8 @@ class HybridProduction:
                     self.warnings.append(f"hybrid: missing prop {e['ref']}; unavailable picture omitted")
         text_kind, ref = spec['text']['kind'], spec['text']['ref']
         source = self.by_id.get(ref)
+        numeric_chart = treatment == 'chart' and any(v.get('type') in ('bars', 'line', 'stat', 'grid100')
+            for bid in spec['beat_ids'] for v in self.by_id[bid]['visuals'])
         if text_kind == 'quote':
             quotes = [v for v in source['visuals'] if v.get('type') == 'quote'] if source else []
             value = quotes[0] if quotes else {}
@@ -323,12 +325,12 @@ class HybridProduction:
                 elements[-1].start = self._source_text_start(span, source, body)
                 elements[-1]._quote_source = (source, body)
         for e in spec['elements']:
-            if not span.diagram and e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
+            if not span.diagram and not numeric_chart and e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
                 elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
                 if span.source_character:
                     elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
-        if not span.diagram and text_kind not in ('none', 'caption_only', 'quote'):
+        if not span.diagram and not numeric_chart and text_kind not in ('none', 'caption_only', 'quote'):
             words = source['text'] if source else text
             elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
                 'type_on' if treatment == 'kinetic_type' else 'word_pop', width=1500, size=72,
@@ -358,9 +360,11 @@ class HybridProduction:
                 for visual in self.by_id[bid]['visuals']:
                     if visual.get('type') in ('bars', 'line'):
                         rows = visual['rows']
+                        unit = self._label(visual.get('unit'))
                         elements.append(MotionElement(kind='chart', chart='line' if visual['type'] == 'line' else 'bar', values=tuple(r['value'] for r in rows),
                             labels=tuple(r.get('label', {}).get(self.lang, '') if isinstance(r.get('label'), dict)
-                                         else r.get('label', '') for r in rows), width=1150, height=450))
+                                         else r.get('label', '') for r in rows),
+                            suffix=('' if unit == '%' else ' ') + unit if unit else '', width=1150, height=450))
                     elif visual.get('type') == 'stat':
                         value = self._label(visual['value'])
                         label = self._label(visual.get('label'))
@@ -371,7 +375,7 @@ class HybridProduction:
                         svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 440">{cells}</svg>'
                         elements.append(MotionElement(kind='picture', svg=svg, width=520, height=520))
                         elements.append(MotionElement(text=self._label(visual.get('title')), preset='corner_caption', y=.15, width=1400, size=60))
-                    else:
+                    elif visual.get('type') != 'cluster' or not numeric_chart:
                         span.source_chart = True
                         self.warnings.append(f"hybrid: chart visual {visual.get('type')} requires source whiteboard cutaway")
             if not elements:
@@ -390,6 +394,20 @@ class HybridProduction:
             self._layout_character(span)
             span.motion_art = copy.copy(span.motion)
             span.motion_art.elements = [e for e in elements if e.kind != 'text']
+        elif numeric_chart and spec['composition'] in ('grid', 'split') and len([
+                v for bid in spec['beat_ids'] for v in self.by_id[bid]['visuals']
+                if v.get('type') in ('bars', 'line', 'stat', 'grid100')]) == 1 and not any(
+                v.get('type') == 'grid100' for bid in spec['beat_ids'] for v in self.by_id[bid]['visuals']):
+            # Give measured facts the main panel; source pictures support them.
+            pictures = [e for e in elements if e.kind == 'picture']
+            for i, element in enumerate(pictures):
+                element.x, element.y = .16, .2 + (i + .5) * .45 / max(1, len(pictures))
+                element.width, element.height = min(element.width, 340), min(element.height, 260)
+            for element in elements:
+                if element not in pictures:
+                    element.x, element.y = .64, .42
+                    element.width = min(element.width, 1050)
+                    element.height = min(element.height, 430)
         elif spec['composition'] in ('grid', 'split'):
             cols = 2 if spec['composition'] == 'split' else math.ceil(math.sqrt(max(1, len(elements) + len(self._cast_groups(span)))))
             rows = math.ceil(max(1, len(elements) + len(self._cast_groups(span))) / cols)
