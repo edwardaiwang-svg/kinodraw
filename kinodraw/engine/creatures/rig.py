@@ -10,6 +10,10 @@ from .genes import Genome
 Point = tuple[float, float]
 
 
+def _lerp(a, b, amount):
+    return a + (b - a) * amount
+
+
 @dataclass(frozen=True)
 class Ellipse:
     x: float
@@ -79,6 +83,7 @@ def spring_chain(root: Point, lengths: tuple[float, ...], angle: float, t: float
 
 def build(genome: Genome, pose: Pose = Pose(), t: float = 0.) -> Rig:
     g = genome.repair()
+    rest = min(1., max(0., pose.sleep))
     if g.kind == 'humanoid':
         return _human(g, pose, t)
     if g.kind == 'blob':
@@ -100,11 +105,17 @@ def build(genome: Genome, pose: Pose = Pose(), t: float = 0.) -> Rig:
         head_r *= .91
         head_y += 4
         body_ry = 37. if young else 40.
-    body = Ellipse(-35. + pose.lean * .6, body_y + pose.crouch, body_rx, body_ry * (1 + pose.breath))
+    resting_y = -body_ry - 13
+    body = Ellipse(-35. + pose.lean * .6, _lerp(body_y + pose.crouch, resting_y, rest),
+                   body_rx, body_ry * (1 + pose.breath))
     chest = Ellipse(body.x + body.rx * .67 + pose.lean * .60,
                     body.y - (18 if hyena else 1) + pose.lean * .38,
                     35. if not baby else 29., (49. if hyena else body_ry) * (1 + pose.breath * 1.5))
-    head = Ellipse(head_x + pose.head_x, head_y + pose.head_y + pose.crouch * .65,
+    # A large mane rests above the ground rather than passing through it.
+    maned = g.species == 'lion' and g.sex == 'male' and g.age in ('adult', 'old') and 'mane_none' not in g.marks
+    rest_head_y = -head_r * (2.08 if 'mane_black' in g.marks else 1.85) - 9 if maned else -head_r - 20
+    head = Ellipse(_lerp(head_x + pose.head_x, head_x - 14, rest),
+                   _lerp(head_y + pose.head_y + pose.crouch * .65, rest_head_y, rest),
                    head_r * (1.06 if canine else 1.), head_r * (1. if baby or slender else 1.08))
     parts = _face_parts(head, pose, head.rx * (.27 if hyena else .43 if canine else 0.))
     parts['tail_root'] = body.x - body.rx * .94, body.y - 2
@@ -113,11 +124,14 @@ def build(genome: Genome, pose: Pose = Pose(), t: float = 0.) -> Rig:
         front, far = i >= 2, i % 2 == 0
         x = body.x + body.rx * (.70 if front else -.70) + (-13 if far else 4)
         rest_y = body_y + (-12 if front and hyena else 20 if hyena else 5 if front else 12)
-        root = x + pose.lean * .25, rest_y + pose.crouch + pose.lean * (.28 if front else -.12)
+        root = x + pose.lean * .25, _lerp(rest_y + pose.crouch + pose.lean * (.28 if front else -.12),
+                                        resting_y + (7 if front else 12), rest)
         length = -rest_y + 5
         stride = math.sin(math.radians(pose.legs[i])) * length * .55
         width = 23. if baby else 25. if front else 31.
         target = x + (-7 if front else -10) + stride, -1 - width * .40 - pose.dy - max(0., -pose.knees[i]) * .65
+        target = (_lerp(target[0], x + (17 if front else 28) + (8 if far else 0), rest),
+                  _lerp(target[1], -width * .4 - (7 if far else 0), rest))
         if name == 'front_near' and abs(pose.swipe) > .001:
             angle = math.radians(105 * pose.swipe)
             target = x + length * math.sin(angle), root[1] + length * math.cos(angle)
@@ -126,6 +140,14 @@ def build(genome: Genome, pose: Pose = Pose(), t: float = 0.) -> Rig:
         parts[name + '_paw'] = end
     tail_length = 13. if baby else 12. if hyena or canine else 16.5
     tail = spring_chain(parts['tail_root'], (tail_length,) * 5, -155 if baby else -150, t, 14 + pose.tail)
+    # Relax the tail into a shallow ground-level curve behind the tucked feet.
+    resting_tail = [parts['tail_root']]
+    for angle in (110, 85, 55, -5, -15):
+        x, y = resting_tail[-1]
+        theta = math.radians(angle)
+        resting_tail.append((x + tail_length * math.cos(theta), y + tail_length * math.sin(theta)))
+    tail = tuple(tuple(_lerp(a, b, rest) for a, b in zip(awake, asleep))
+                 for awake, asleep in zip(tail, resting_tail))
     mane_radius, mane = 0., ()
     if g.species == 'lion' and g.sex == 'male' and g.age in ('adult', 'old') and 'mane_none' not in g.marks:
         mane_radius = head_r * (2.08 if 'mane_black' in g.marks else 1.85)
@@ -156,25 +178,33 @@ def _face_parts(head, pose, snout=0.):
 
 def _human(g, p, t):
     baby = g.age == 'baby'
+    rest = min(1., max(0., p.sleep))
     leg_length = 47. if baby else 98.
     torso = 52. if baby else 81.
     hip_y = -leg_length + p.crouch
-    body = Ellipse(0., hip_y - torso / 2, 24. if baby else 31., torso / 2 * (1 + p.breath))
-    chest = Ellipse(0., hip_y - torso * .73, body.rx, torso * .28 * (1 + p.breath))
-    head = Ellipse(p.head_x, hip_y - torso - (29 if baby else 31) + p.head_y,
+    thickness = 24. if baby else 31.
+    body = Ellipse(0., _lerp(hip_y - torso / 2, -thickness - 10, rest),
+                   _lerp(thickness, torso / 2, rest), _lerp(torso / 2, thickness, rest) * (1 + p.breath))
+    chest = Ellipse(_lerp(0., torso * .23, rest), _lerp(hip_y - torso * .73, body.y, rest),
+                    _lerp(thickness, torso * .28, rest), _lerp(torso * .28, thickness, rest) * (1 + p.breath))
+    head = Ellipse(_lerp(p.head_x, torso / 2 + 22, rest),
+                   _lerp(hip_y - torso - (29 if baby else 31) + p.head_y, -45., rest),
                    32. if baby else 27., 33. if baby else 34.)
     parts, legs, arms = _face_parts(head, p), {}, {}
     for i, side in enumerate(('far', 'near')):
         x = -14. if i == 0 else 14.
-        root = (x, hip_y)
+        root = (_lerp(x, -torso / 2, rest), _lerp(hip_y, body.y + i * 8, rest))
         target = (x + math.sin(math.radians(p.legs[i])) * leg_length * .65,
                   -max(0., -p.knees[i]) * .6)
+        target = (_lerp(target[0], -torso / 2 - leg_length * .60, rest),
+                  _lerp(target[1], -13 - i * 7, rest))
         joint, end = two_bone(root, target, leg_length * .53, leg_length * .53)
         legs[side] = Limb(root, joint, end, 13.)
-        shoulder = (-body.rx if i == 0 else body.rx, chest.y - 8)
+        shoulder = (_lerp(-thickness if i == 0 else thickness, torso * .23, rest), chest.y - 8)
         arm_length = torso * .85
         angle = math.radians(p.arms[i] + (-10 if i == 0 else 10))
         hand = (shoulder[0] + arm_length * math.sin(angle), shoulder[1] + arm_length * math.cos(angle))
+        hand = (_lerp(hand[0], head.x - 12 - i * 9, rest), _lerp(hand[1], -12 - i * 6, rest))
         joint, end = two_bone(shoulder, hand, arm_length * .52, arm_length * .52, -1 if i else 1)
         arms[side] = Limb(shoulder, joint, end, 11.)
         parts['hand_' + side] = end

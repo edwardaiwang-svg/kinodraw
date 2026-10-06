@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields
 
 DURATIONS = {'roar': 2.4, 'whimper': 2.2, 'tremble': 2.2, 'nudge': 1.8, 'laugh': 2.4,
              'swipe': 1.4, 'walk': 3., 'run': 2.5, 'sit': 2.4, 'look': 2., 'pounce': 1.8,
-             'hide': 2.4, 'breathe_heavy': 3.5}
+             'hide': 2.4, 'breathe_heavy': 3.5, 'sleep': 2.8}
 ACTIONS = tuple(DURATIONS)
 TREMBLE_CYCLES = 16.
 # Whole-cue horizontal travel, in the rig's 600-unit drawing space before genome size; the pose cycle itself stays in
@@ -55,6 +55,7 @@ class Pose:
     mane_lag: float = 0.
     screen_shake: float = 0.
     sound_expand: float = 0.
+    sleep: float = 0.
 
 
 def blend(a: Pose, b: Pose, amount: float) -> Pose:
@@ -103,13 +104,22 @@ def shake(u, cycles=9.):
     return math.sin(2. * math.pi * cycles * u) * window(u)
 
 
-def action_pose(action: Action | str, t: float) -> Pose:
+def action_pose(action: Action | str, t: float, *, until: float | None = None) -> Pose:
     action = Action(action) if isinstance(action, str) else action
     if action.name in ('idle', 'rest'):
         return Pose()
     if action.name not in ACTIONS:
         raise ValueError(f'Unknown creature action: {action.name}')
     u = (t - action.start) / action.seconds
+    if action.name == 'sleep':
+        # Sleep is a held state, with a short, continuous wake when another cue
+        # starts. Its posture is categorical; intensity scales breathing only.
+        settled = smooth(u / .75)
+        if until is not None:
+            settled *= 1. - smooth((t - until) / .6)
+        breath = math.sin(math.tau * .20 * (t - action.start))
+        return Pose(sleep=settled, blink=settled, ears=18 * settled,
+                    head_pitch=12 * settled, breath=.045 * breath * settled * min(1., max(.5, action.intensity)))
     if not 0. < u < 1.:
         return Pose()
     w, hit = window(u), strike(u)
@@ -184,6 +194,12 @@ def action_pose(action: Action | str, t: float) -> Pose:
                  puffs=max(0., -breath) * w, ears=5 * w)
     strength = min(2., max(0., action.intensity))
     return add(blend(Pose(), p, min(1., strength)), blend(Pose(), p, max(0., strength - 1.)))
+
+
+def cue_pose(action: Action, cues: list[Action], t: float) -> Pose:
+    """Evaluate a cue against its actor's following cues, independent of frame order."""
+    following = [a.start for a in cues if a.start > action.start]
+    return action_pose(action, t, until=min(following) if following else None)
 
 
 def travel_x(action: Action | str, t: float) -> float:

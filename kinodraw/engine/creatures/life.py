@@ -1,7 +1,7 @@
 """Seeded life evaluated from shot time; no mutable simulation state or worker seams."""
 import math
 
-from .actions import Action, Pose, action_pose, add
+from .actions import Action, Pose, add, blend, cue_pose
 from .genes import Genome
 
 
@@ -37,10 +37,13 @@ def idle_pose(genome: Genome, t: float) -> Pose:
 
 
 def pose_at(genome: Genome, action: Action | str | Pose | list[Action], t: float) -> Pose:
-    p = idle_pose(genome, t)
     if isinstance(action, Pose):
-        return add(p, action)
-    # Overlapping cues add their continuous envelope channels, never swap geometry.
-    for cue in action if isinstance(action, (list, tuple)) else [action]:
-        p = add(p, action_pose(cue, t))
-    return p
+        p = action
+    else:
+        p = Pose()
+        cues = list(action) if isinstance(action, (list, tuple)) else [action]
+        cues = [Action(cue) if isinstance(cue, str) else cue for cue in cues]
+        # Overlapping finite cues add; a held sleep state wakes on the next cue.
+        for cue in cues:
+            p = add(p, cue_pose(cue, cues, t))
+    return add(blend(idle_pose(genome, t), Pose(), p.sleep), p)

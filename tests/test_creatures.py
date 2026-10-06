@@ -90,7 +90,7 @@ def test_heroes_have_pairwise_distinct_silhouettes_at_same_scale_and_baby_propor
     assert not cub.mane and not tiger.mane and lion.mane_radius > 2 * lion.head.rx
 
 
-@pytest.mark.parametrize('name', ACTIONS)
+@pytest.mark.parametrize('name', [name for name in ACTIONS if name != 'sleep'])
 def test_every_action_moves_then_returns_to_the_current_idle_pose(heroes, name):
     g = heroes[0] if name in ('whimper', 'walk', 'hide', 'tremble') else heroes[2]
     if name == 'laugh':

@@ -23,7 +23,7 @@ from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
 from .bold.render import _SceneLayers
 from .creatures import Genome, Action, raster
-from .creatures.actions import ACTIONS, add, target_response, travel_x
+from .creatures.actions import ACTIONS, add, cue_pose, target_response, travel_x
 from .creatures.draw import H as RIG_HEIGHT
 
 TRAVEL_MARGIN = .03  # share of the frame width a walking or running actor keeps clear of the right edge
@@ -195,6 +195,12 @@ class HybridProduction:
             timing = self.tl['beats'][a['at_beat']]
             char = self._source_action_char(beat, a['actor'], a['verb'])
             target = None
+            if a['verb'] == 'sleep':
+                contact = self._sleep_contact(beat, a['actor'])
+                if contact:
+                    char, target = contact
+                    if target not in actors:
+                        actors.append(target)
             if a['verb'] == 'nudge' and treatment in ('character', 'atmosphere'):
                 char = self._nudge_char(beat['spoken'], a['actor'], char)
                 target = self._nudge_target(beat, a['actor'], char) if char is not None else None
@@ -207,7 +213,7 @@ class HybridProduction:
             at = timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0)
             remaining = max(.1, min(timing['speech_end'], span.end) - at)
             action = Action(a['verb'], at - span.start, min(remaining, Action(a['verb']).seconds), a['intensity'] / 3)
-            if a['verb'] != 'nudge' or treatment not in ('character', 'atmosphere'):
+            if a['verb'] != 'sleep' and (a['verb'] != 'nudge' or treatment not in ('character', 'atmosphere')):
                 target = next((key for key in actors if key != a['actor'] and mentions(
                     self.cast[key].name, beat['spoken'][char:])), None)
             events.append((a['actor'], action, target))
@@ -502,6 +508,45 @@ class HybridProduction:
         ct = timing['char_times']
         return timing['start'] - span.start + (ct[min(char, len(ct) - 1)] if ct else 0)
 
+    def _sleep_contact(self, beat, actor):
+        """Only explicit curled-against wording supports a resting contact pair."""
+        name = re.escape(name_key(self.cast[actor].name))
+        hit = re.search(r'(?<!\w)' + name + r'(?!\w)\s+(?:was\s+)?(curled\s+up)\s+'
+                        r'(?:tightly\s+)?against\s+([^.!?;\n]+)', beat['spoken'], re.I)
+        if not hit:
+            return None
+        tail = hit[2]
+        # Curling alone is not sleep. Require the subject's explicit asleep
+        # modifier, rather than a negated state or the receiver's later verb.
+        asleep = re.search(r',\s*(?:fast\s+)?asleep\b', tail, re.I)
+        if not asleep:
+            return None
+        tail = tail[:asleep.start()]
+        if re.search(r"\b(?:not|never|cannot|while|whereas|when|but|was|is|fell|slept|sleep\w*)\b|\b\w+n['’]t\b", tail, re.I):
+            return None
+        named = [key for key, g in self.cast.items() if key != actor and g.age != 'baby' and mentions(g.name, tail)]
+        if len(named) == 1:
+            return hit.start(1), named[0]
+        if named:
+            return None
+        relation = re.match(r"(?:his|her|their)\s+(father|mother)['’]s\b", tail, re.I)
+        if not relation:
+            return None
+        parents = set()
+        for source in self.by_id.values():
+            if source['section'] == beat['section']:
+                for key, g in self.cast.items():
+                    if key == actor or g.age == 'baby':
+                        continue
+                    parent = re.escape(name_key(g.name))
+                    pattern = (r'(?<!\w)' + name + r'(?!\w)[^.!?;\n]{0,140}\b(?:his|her|their)\s+' +
+                               relation[1] + r'\s*,?\s*(?:the\s+)?(?:great\s+)?(?:king\s+)?' + parent + r'(?!\w)')
+                    if re.search(pattern, source['spoken'], re.I):
+                        parents.add(key)
+            if source['id'] == beat['id']:
+                break
+        return (hit.start(1), next(iter(parents))) if len(parents) == 1 else None
+
     def _layout_character(self, span):
         """Reserve a cast stage independently of the number/length of source labels."""
         from .bold.render import _text_metrics
@@ -578,7 +623,7 @@ class HybridProduction:
             left = (self.size[0] * stage_left + (i + .04) * cell_w if travelling else
                     self.size[0] * stage_left + (i + .5) * cell_w - group_width * scale / 2)
             for j, key in enumerate(group):
-                mirror = paired and j > 0
+                mirror = paired and j > 0 and any(a.name == 'nudge' and target == key for _, a, target in span.actions)
                 bbox = bounds[key]
                 edge = 600 - bbox[2] if mirror else bbox[0]
                 anchor = left + (300 - edge) * scale
@@ -589,7 +634,7 @@ class HybridProduction:
         # Interacting participants share a cell; unrelated actors retain independent slots.
         groups = [[a] for a in span.actors if not a.startswith('crowd-hyena-')]
         for actor, action, target in span.actions:
-            if not target or action.name != 'nudge':
+            if not target or action.name not in ('nudge', 'sleep'):
                 continue
             left = next(g for g in groups if actor in g)
             right = next(g for g in groups if target in g)
@@ -647,7 +692,7 @@ class HybridProduction:
             from .creatures.actions import action_pose, Pose
             pose = Pose()
             for a in actions:
-                pose = add(pose, action_pose(a, local))
+                pose = add(pose, cue_pose(a, actions, local))
             for actor, a, target in span.actions:
                 if target == key:
                     pose = add(pose, target_response(a, local))
@@ -700,8 +745,10 @@ class HybridProduction:
         floor = span.motion.motion_floor
         self._travelled = {}
         # Receivers sit in front of the nudging adult's mane/head, keeping both faces visible.
-        ordered = sorted(span.actors, key=lambda key: (span.actor_layout[key][4], span.actor_layout[key][3])
-                         if key in span.actor_layout else (-1, False))
+        sleepers = {actor for actor, a, target in span.actions if a.name == 'sleep' and target}
+        ordered = sorted(span.actors, key=lambda key: (key in sleepers,
+                         span.actor_layout[key][4], span.actor_layout[key][3])
+                         if key in span.actor_layout else (False, -1, False))
         for key in ordered:
             g = self.cast[key]
             if key not in span.actor_layout:
@@ -717,9 +764,10 @@ class HybridProduction:
             x, ground, height, mirror, group = slot
             mirror = mirror and any(a.name == 'nudge' and target == key for _, a, target in span.actions)
             pose = Pose()
+            cues = [a for actor, a, _ in span.actions if actor == key]
             for actor, action, target in span.actions:
                 if actor == key:
-                    acting = action_pose(action, local)
+                    acting = cue_pose(action, cues, local)
                     if action.name == 'nudge' and target:
                         acting = action_pose(Action('nudge', action.start, action.seconds, max(.85, action.intensity)), local)
                         u = (local - action.start) / action.seconds
@@ -730,6 +778,15 @@ class HybridProduction:
                         acting = add(acting, Pose(head_y=((target_head - own_head) / g.size - 68 * max(.85, action.intensity)) * lower,
                                                   dx=18 * window(u, .3, .65)))
                     pose = add(pose, acting)
+                    if action.name == 'sleep' and target in span.actor_layout:
+                        other = self.cast[target]
+                        target_x, _, target_height, _, _ = span.actor_layout[target]
+                        parent_body = build(other).body
+                        own_head = build(g).head
+                        scale = h * target_height / RIG_HEIGHT
+                        contact_x = target_x + (parent_body.x * other.size -
+                                               (own_head.x + own_head.rx * .35) * g.size) * scale / w
+                        x += (contact_x - x) * acting.sleep
                 elif target == key:
                     response = target_response(action, local)
                     pose = add(pose, response)
@@ -739,7 +796,11 @@ class HybridProduction:
                         pose = add(pose, Pose(dx=(-8 if mirror else 8) * recoil,
                                               lean=(-5 if mirror else 5) * recoil, head_pitch=-5 * recoil))
             phase = seed((span.spec['beat_ids'], group)) / 2**32 * math.tau
-            draw_time = local if floor or any(
+            awake = 1. - min(1., pose.sleep)
+            # An asleep child follows its contact partner's group translation;
+            # independent head, tail and awake fidget channels remain suppressed.
+            drift = 1. if key in sleepers else awake
+            draw_time = local if floor or pose.sleep or any(
                 (actor == key or target == key) and a.start < local < a.start + a.seconds
                 for actor, a, target in span.actions) else 0.
             if floor:
@@ -748,16 +809,16 @@ class HybridProduction:
                 journeys = [a.start + a.seconds for actor, a, _ in span.actions
                             if actor == key and a.name in ('walk', 'run')]
                 settled = smooth((local - max(journeys)) / .5) if journeys else 1.
-                x += settled * floor * 60 * math.sin(local * 1.13 + phase) / w
-                ground += floor * 31 * math.sin(local * 1.67 + phase * .8) / h
-                pose = add(pose, Pose(breath=.04 * floor * math.sin(local * 2.5 + phase),
-                                     head_pitch=10 * floor * math.sin(local * 1.5 + phase),
-                                     head_y=8 * floor * math.sin(local * 2.3 + phase),
-                                     tail=20 * floor * math.sin(local * 1.7 + phase)))
+                x += settled * floor * drift * 60 * math.sin(local * 1.13 + phase) / w
+                ground += floor * drift * 31 * math.sin(local * 1.67 + phase * .8) / h
+                pose = add(pose, Pose(breath=.04 * floor * awake * math.sin(local * 2.5 + phase),
+                                     head_pitch=10 * floor * awake * math.sin(local * 1.5 + phase),
+                                     head_y=8 * floor * awake * math.sin(local * 2.3 + phase),
+                                     tail=20 * floor * awake * math.sin(local * 1.7 + phase)))
             else:
                 idle = idle_pose(g, draw_time)
-                pose = add(pose, Pose(**{f.name: tuple(-v for v in getattr(idle, f.name))
-                                        if isinstance(getattr(idle, f.name), tuple) else -getattr(idle, f.name)
+                pose = add(pose, Pose(**{f.name: tuple(-v * awake for v in getattr(idle, f.name))
+                                        if isinstance(getattr(idle, f.name), tuple) else -getattr(idle, f.name) * awake
                                         for f in fields(Pose)}))
             sprite_height = max(60, round(h * height))
             sprite = raster(g, pose, draw_time, height=sprite_height)
