@@ -201,10 +201,13 @@ def _detect_cast(script_beats):
             location = re.search(r'\b(?:in|at|across|from|near|of)\s+(?:the\s+)?(?:[a-z]+\s+){0,2}$', before, re.I)
             subject = re.match(r"\s+(?:(?:was|is|did|would|had)\s+)?(?:" + '|'.join(ACTION_CUES.values()) +
                                r"|watch\w*|lived|loved|returned|guarded)\b", after, re.I)
+            # "Each point" is a determiner and noun, not a named actor pointing.
+            # Explicit introductions still admit a character actually named Each.
+            determiner_subject = name == 'Each' and re.match(r'\s+point\b', after, re.I)
             # Capitalization alone (places, headings, plural common nouns) is not a name cue.
             named |= bool(noun or (introduced and not location and SPECIES_RE.search(introduced.group())) or
                           any(w in TITLES for w in text[start:end].split()) or
-                          (subject and not name.endswith('s') and not SPECIES_RE.fullmatch(name)) or
+                          (subject and not determiner_subject and not name.endswith('s') and not SPECIES_RE.fullmatch(name)) or
                           re.search(r'\b(?:mother|father|sister|brother),\s*$', before, re.I) or
                           re.search(r'\b(?:hug\w*|met|saw|named|called)\s*$', before, re.I))
             # Only explicit noun phrases and subject-owned attributes supply traits. Mere

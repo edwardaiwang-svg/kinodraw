@@ -260,7 +260,7 @@ def test_studio_and_read_aloud(tmp_path, monkeypatch):
     from kinodraw.director.llm import providers
     monkeypatch.setattr(providers, 'saved', lambda: set())
     state = server.state()
-    assert [v['id'] for v in state['voices']['es']] == ['ef_dora', 'em_alex']
+    assert [v['id'] for v in state['voices']['es']] == ['ef_dora', 'em_alex', 'em_santa']
     assert 'es' in state['models_ready']
     info = server.narrator('Miel')
     assert info['lang'] == 'es' and info['voice'] == 'ef_dora'
