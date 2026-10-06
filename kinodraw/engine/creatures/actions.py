@@ -6,7 +6,7 @@ from dataclasses import dataclass, fields
 
 DURATIONS = {'roar': 2.4, 'whimper': 2.2, 'tremble': 2.2, 'nudge': 1.8, 'laugh': 2.4,
              'swipe': 1.4, 'walk': 3., 'run': 2.5, 'sit': 2.4, 'look': 2., 'pounce': 1.8,
-             'hide': 2.4, 'breathe_heavy': 3.5, 'sleep': 2.8, 'bare_teeth': 3.}
+             'hide': 2.4, 'breathe_heavy': 3.5, 'sleep': 2.8, 'bare_teeth': 3., 'teeth_chatter': 2.}
 ACTIONS = tuple(DURATIONS)
 TREMBLE_CYCLES = 16.
 # Whole-cue horizontal travel, in the rig's 600-unit drawing space before genome size; the pose cycle itself stays in
@@ -162,6 +162,12 @@ def action_pose(action: Action | str, t: float, *, until: float | None = None) -
     elif name == 'bare_teeth':
         p = Pose(jaw=.65 * w, fierce=w, head_pitch=-12 * w,
                  head_x=12 * w, ears=-12 * w, crouch=5 * w)
+    elif name == 'teeth_chatter':
+        # The jaw chatters at 5 Hz with exposed teeth throughout the active
+        # envelope; fear alone keeps its separate closed-mouth body shiver.
+        chatter = .5 + .5 * math.sin(math.tau * 5 * (t - action.start))
+        p = Pose(jaw=(.30 + .30 * chatter) * w, worry=w,
+                 head_y=2 * math.sin(math.tau * 5 * (t - action.start)) * w)
     elif name == 'swipe':
         p = Pose(legs=(0., 0., 0., -95 * hit), knees=(0., 0., 0., -25 * w),
                  head_x=5 * hit, squash=.04 * hit, swipe=hit, mane=4 * shake(u, 5))

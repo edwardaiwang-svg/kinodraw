@@ -259,6 +259,7 @@ class HybridProduction:
         span.actors = tuple(dict.fromkeys(actors))
         span.actions = tuple(events)
         self._group_actions(span, events)
+        self._source_reactions(span, events)
         span.actions = tuple(events)
         kind = spec['atmosphere']['kind']
         aliases = {'night_stars': ['night_sky', 'starfield'],
@@ -430,6 +431,49 @@ class HybridProduction:
     def _label(self, value):
         return str(value.get(self.lang, next(iter(value.values()), ''))) if isinstance(value, dict) else str(value or '')
 
+    @staticmethod
+    def _positive_clause(text, start, end):
+        """Polarity belongs to the owned clause, including inversion and suffixes."""
+        boundary = r'[,;.!?\n]|\b(?:but|while|whereas|when|because)\b'
+        before = list(re.finditer(boundary, text[:start], re.I))
+        after = re.search(boundary, text[end:], re.I)
+        clause = text[before[-1].end() if before else 0:end + after.start() if after else len(text)]
+        return not (NEGATED_ACTION.search(clause) or re.search(
+            r'\b(?:under|in)\s+no\s+circumstances\b|\bat\s+no\s+time\b|\bin\s+no\s+way\b', clause, re.I))
+
+    def _source_reactions(self, span, events):
+        """A positive owned roar can rattle the explicit recipient's mouth."""
+        for spec in span.spec['actions']:
+            actor, bid = spec['actor'], spec['at_beat']
+            if spec['verb'] != 'roar' or actor not in self.cast:
+                continue
+            beat, timing = self.by_id[bid], self.tl['beats'][bid]
+            char = self._source_action_char(beat, actor, 'roar')
+            if char is None:
+                continue
+            ct = timing['char_times']
+            at = timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0)
+            if not any(owner == actor and a.name == 'roar' and a.start == at - span.start
+                       for owner, a, _ in events):
+                continue
+            tail = re.split(r'[.!?;\n]', beat['spoken'][char:], maxsplit=1)[0]
+            for recipient, genome in self.cast.items():
+                name = re.escape(name_key(genome.name))
+                hit = re.match(r"roar\w*\s+(?:so\s+(?:\w+\s+){1,4}it\s+|(?:that|which)\s+)?"
+                               r"(?:did\s+)?(?:not\s+|never\s+)?(rattl\w*)\s+(?:King\s+|Queen\s+)?" +
+                               name + r"['’]s\s+teeth\b", tail, re.I)
+                if not hit or not self._positive_clause(beat['spoken'], char, char + hit.end()):
+                    continue
+                offset = char + hit.start(1)
+                reaction_at = timing['start'] + (ct[min(offset, len(ct) - 1)] if ct else 0)
+                remaining = min(timing['speech_end'], span.end) - reaction_at
+                if remaining <= 0 or any(owner == recipient and a.name == 'teeth_chatter' for owner, a, _ in events):
+                    continue
+                if recipient not in span.actors:
+                    span.actors += (recipient,)
+                events.append((recipient, Action('teeth_chatter', reaction_at - span.start,
+                                                 min(remaining, Action('teeth_chatter').seconds)), None))
+
     def _group_actions(self, span, events):
         """Give source-owned plural representatives the actions spoken about them."""
         hyenas = [key for key in span.actors if self.cast[key].species == 'hyena']
@@ -438,13 +482,14 @@ class HybridProduction:
         for bid in span.spec['beat_ids']:
             beat, timing = self.by_id[bid], self.tl['beats'][bid]
             for verb, pattern in (
-                ('laugh', r'\bhyenas?\s+(?:were\s+|began\s+|started\s+)?(laugh\w*|cackl\w*)\b|\b(Laughing)\.\s+A\s+cackle\s+of\s+(?:spotted\s+)?hyenas\b'),
-                ('bare_teeth', r'\bhyenas?\s+(?:drew\s+closer,\s*)?(baring|bared|bare)\s+(?:their\s+)?(?:sharp\s+)?teeth\b'),
-                ('walk', r'\bhyenas?\s+(drew\s+closer|approach\w*|emerged)\b'),
-                ('run', r'\bhyenas?\s+(scattered|fled)\b'),
+                ('laugh', r'\bhyenas?\s+(?:not\s+only\s+)?(?:were\s+|began\s+|started\s+)?(laugh\w*|cackl\w*)\b|\b(Laughing)\.\s+A\s+cackle\s+of\s+(?:spotted\s+)?hyenas\b'),
+                ('bare_teeth', r'\bhyenas?\s+(?:not\s+only\s+)?(?:drew\s+closer,\s*)?(baring|bared|bare)\s+(?:their\s+)?(?:sharp\s+)?teeth\b'),
+                ('walk', r'\bhyenas?\s+(?:not\s+only\s+)?(drew\s+closer|approach\w*|emerged)\b'),
+                ('run', r'\bhyenas?\s+(?:not\s+only\s+)?(scattered|fled)\b'),
             ):
-                hit = re.search(pattern, beat['spoken'], re.I)
-                if not hit or NEGATED_ACTION.search(hit.group()):
+                hit = next((h for h in re.finditer(pattern, beat['spoken'], re.I)
+                            if self._positive_clause(beat['spoken'], h.start(), h.end())), None)
+                if not hit:
                     continue
                 char = hit.start(1) if hit[1] is not None else hit.start(2)
                 ct = timing['char_times']
