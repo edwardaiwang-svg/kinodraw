@@ -1,0 +1,1370 @@
+{
+  "version": 1,
+  "lang": "en",
+  "title": {
+    "en": "What Is a Fraction?"
+  },
+  "narrator": "narrator",
+  "chapters": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": {
+        "en": "What Is a Fraction?"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "agenda",
+      "kind": "agenda",
+      "label": {
+        "en": "What we'll cover"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "s1",
+      "kind": "section",
+      "label": {
+        "en": "Part 1"
+      },
+      "title": {
+        "en": "Parts of a Whole"
+      },
+      "hook": {
+        "en": "Imagine you have a pizza, and…"
+      }
+    },
+    {
+      "id": "s2",
+      "kind": "section",
+      "label": {
+        "en": "Part 2"
+      },
+      "title": {
+        "en": "The Top and the Bottom"
+      },
+      "hook": {
+        "en": "Every fraction has two numbers…"
+      }
+    },
+    {
+      "id": "s3",
+      "kind": "section",
+      "label": {
+        "en": "Part 3"
+      },
+      "title": {
+        "en": "Comparing Fractions"
+      },
+      "hook": {
+        "en": "Which is bigger, one half or…"
+      }
+    },
+    {
+      "id": "s4",
+      "kind": "section",
+      "label": {
+        "en": "Part 4"
+      },
+      "title": {
+        "en": "Equal Fractions"
+      },
+      "hook": {
+        "en": "Two halves make a whole, and…"
+      }
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "label": {
+        "en": "Wrap-up"
+      },
+      "title": {
+        "en": ""
+      }
+    }
+  ],
+  "beats": [
+    {
+      "id": "b001",
+      "chapter": "intro",
+      "kind": "title",
+      "display": {
+        "en": "Today: What Is a Fraction?"
+      },
+      "spoken": {
+        "en": "Today: What Is a Fraction?"
+      },
+      "visuals": [],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            26
+          ],
+          "role": "hook",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "a Fraction",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "a Fraction"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b002",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Here's what we'll cover. First: Parts of a Whole."
+      },
+      "spoken": {
+        "en": "Here's what we'll cover. First: Parts of a Whole."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b003",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Second: The Top and the Bottom."
+      },
+      "spoken": {
+        "en": "Second: The Top and the Bottom."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b004",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Third: Comparing Fractions."
+      },
+      "spoken": {
+        "en": "Third: Comparing Fractions."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b005",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "And finally: Equal Fractions."
+      },
+      "spoken": {
+        "en": "And finally: Equal Fractions."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b006",
+      "chapter": "s1",
+      "kind": "opener",
+      "display": {
+        "en": "Part 1: Parts of a Whole."
+      },
+      "spoken": {
+        "en": "Part one: Parts of a Whole."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            25
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Whole",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Whole",
+              "a Whole",
+              "Parts"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b007",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "en": "Imagine you have a pizza, and you cut it into four equal slices. Each slice is one part of the whole pizza. We call that one fourth, and we write it as one over four."
+      },
+      "spoken": {
+        "en": "Imagine you have a pizza, and you cut it into four equal slices. Each slice is one part of the whole pizza. We call that one fourth, and we write it as one over four."
+      },
+      "visuals": [
+        {
+          "id": "b007v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_pizza",
+              "label": {
+                "en": "Pizza"
+              },
+              "trigger": {
+                "en": "pizza"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "pizza"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            64
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "equal slices",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "equal slices",
+              "a pizza",
+              "Imagine"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            65,
+            107
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the whole pizza",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the whole pizza",
+              "Each slice"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            108,
+            166
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "four",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "four",
+              "that one fourth",
+              "call"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b008",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "en": "A fraction is a way of showing a part of something that has been split into equal pieces."
+      },
+      "spoken": {
+        "en": "A fraction is a way of showing a part of something that has been split into equal pieces."
+      },
+      "visuals": [
+        {
+          "id": "b008v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_explain"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            89
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "equal pieces",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "equal pieces",
+              "A fraction"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b009",
+      "chapter": "s1",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: Each slice is one part of the whole pizza."
+      },
+      "spoken": {
+        "en": "Key takeaway: Each slice is one part of the whole pizza."
+      },
+      "visuals": [
+        {
+          "id": "b009v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_pizza"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "Each slice is one part of the whole pizza."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            56
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "the whole pizza",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the whole pizza",
+              "Each slice"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b010",
+      "chapter": "s2",
+      "kind": "opener",
+      "display": {
+        "en": "Part 2: The Top and the Bottom."
+      },
+      "spoken": {
+        "en": "Part two: The Top and the Bottom."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            31
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Top",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Top",
+              "Bottom",
+              "the Bottom",
+              "The Top"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b011",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "en": "Every fraction has two numbers. The bottom number is called the denominator. It tells you how many equal pieces the whole is cut into. The top number is called the numerator. It tells you how many of those pieces you are talking about. So three over four means three slices out of four."
+      },
+      "spoken": {
+        "en": "Every fraction has two numbers. The bottom number is called the denominator. It tells you how many equal pieces the whole is cut into. The top number is called the numerator. It tells you how many of those pieces you are talking about. So three over four means three slices out of four."
+      },
+      "visuals": [
+        {
+          "id": "b011g",
+          "type": "glossary",
+          "term": {
+            "en": "Denominator"
+          },
+          "text": {
+            "en": "It tells you how many equal pieces the whole is cut into."
+          },
+          "trigger": {
+            "en": "denominator"
+          }
+        },
+        {
+          "id": "b011g1",
+          "type": "glossary",
+          "term": {
+            "en": "Numerator"
+          },
+          "text": {
+            "en": "It tells you how many of those pieces you are talking about."
+          },
+          "trigger": {
+            "en": "numerator"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            31
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "two numbers",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "two numbers",
+              "Every fraction"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            32,
+            76
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the denominator",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the denominator",
+              "The bottom"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            77,
+            134
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "cut",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "cut",
+              "tells"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            135,
+            174
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the numerator",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the numerator",
+              "The top"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 4,
+          "span": [
+            175,
+            235
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "talking",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "talking",
+              "tells"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 5,
+          "span": [
+            236,
+            286
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "four",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "four",
+              "three"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b012",
+      "chapter": "s2",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: Every fraction has two numbers."
+      },
+      "spoken": {
+        "en": "Key takeaway: Every fraction has two numbers."
+      },
+      "visuals": [],
+      "take": {
+        "headline": {
+          "en": "Every fraction has two numbers."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            45
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "two numbers",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "two numbers",
+              "Every fraction"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b013",
+      "chapter": "s3",
+      "kind": "opener",
+      "display": {
+        "en": "Part 3: Comparing Fractions."
+      },
+      "spoken": {
+        "en": "Part three: Comparing Fractions."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            28
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Comparing Fractions",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Comparing Fractions",
+              "Fractions"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b014",
+      "chapter": "s3",
+      "kind": "narration",
+      "display": {
+        "en": "Which is bigger, one half or one fourth? Think about the pizza. If you cut it into two slices, each slice is big. If you cut it into four slices, each slice is smaller. So one half is bigger than one fourth. When the denominator gets bigger, each piece gets smaller."
+      },
+      "spoken": {
+        "en": "Which is bigger, one half or one fourth? Think about the pizza. If you cut it into two slices, each slice is big. If you cut it into four slices, each slice is smaller. So one half is bigger than one fourth. When the denominator gets bigger, each piece gets smaller."
+      },
+      "visuals": [
+        {
+          "id": "b014v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_pizza",
+              "label": {
+                "en": "Pizza"
+              },
+              "trigger": {
+                "en": "pizza"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "pizza"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            40
+          ],
+          "role": "question",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "one fourth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "one fourth",
+              "bigger"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            41,
+            63
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the pizza",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the pizza",
+              "Think"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            64,
+            113
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "big",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "big",
+              "two slices",
+              "cut"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            114,
+            168
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "smaller",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "smaller",
+              "four slices",
+              "cut"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 4,
+          "span": [
+            169,
+            207
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "one fourth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "one fourth"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 5,
+          "span": [
+            208,
+            266
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "gets smaller",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "gets smaller",
+              "gets bigger",
+              "the denominator"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b015",
+      "chapter": "s3",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: If you cut it into four slices, each slice is smaller."
+      },
+      "spoken": {
+        "en": "Key takeaway: If you cut it into four slices, each slice is smaller."
+      },
+      "visuals": [
+        {
+          "id": "b015v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_pizza"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "If you cut it into four slices, each slice is smaller."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            68
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "smaller",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "smaller",
+              "four slices",
+              "cut"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b016",
+      "chapter": "s4",
+      "kind": "opener",
+      "display": {
+        "en": "Part 4: Equal Fractions."
+      },
+      "spoken": {
+        "en": "Part four: Equal Fractions."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            24
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Equal Fractions",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Equal Fractions",
+              "Fractions"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b017",
+      "chapter": "s4",
+      "kind": "narration",
+      "display": {
+        "en": "Two halves make a whole, and so do four fourths. Also, one half is the same amount as two fourths. They look different, but they cover the same space. We call these equivalent fractions."
+      },
+      "spoken": {
+        "en": "Two halves make a whole, and so do four fourths. Also, one half is the same amount as two fourths. They look different, but they cover the same space. We call these equivalent fractions."
+      },
+      "visuals": [
+        {
+          "id": "b017v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_explain"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            48
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "four fourths",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "four fourths",
+              "a whole",
+              "Two"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            49,
+            98
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "two fourths",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "two fourths",
+              "one"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            99,
+            150
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the same space",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the same space",
+              "look different"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            151,
+            186
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "these equivalent fractions",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "these equivalent fractions",
+              "call"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b018",
+      "chapter": "s4",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: Also, one half is the same amount as two fourths."
+      },
+      "spoken": {
+        "en": "Key takeaway: Also, one half is the same amount as two fourths."
+      },
+      "visuals": [],
+      "take": {
+        "headline": {
+          "en": "Also, one half is the same amount as two fourths."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            63
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "two fourths",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "two fourths",
+              "one"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b019",
+      "chapter": "outro",
+      "kind": "narration",
+      "display": {
+        "en": "A fraction tells us how many equal parts we have out of the whole. The bottom number counts the pieces in the whole, and the top number counts the pieces we have. Now you can share a pizza fairly with your friends."
+      },
+      "spoken": {
+        "en": "A fraction tells us how many equal parts we have out of the whole. The bottom number counts the pieces in the whole, and the top number counts the pieces we have. Now you can share a pizza fairly with your friends."
+      },
+      "visuals": [
+        {
+          "id": "b019v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_pizza",
+              "label": {
+                "en": "Pizza"
+              },
+              "trigger": {
+                "en": "pizza"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "pizza"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            66
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the whole",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the whole",
+              "A fraction"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            67,
+            162
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "the pieces",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "the pieces",
+              "the whole",
+              "The bottom"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            163,
+            214
+          ],
+          "role": "end_line",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "your friends",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "your friends",
+              "share"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b020",
+      "chapter": "outro",
+      "kind": "closing",
+      "display": {
+        "en": "Thanks for watching!"
+      },
+      "spoken": {
+        "en": "Thanks for watching!"
+      },
+      "visuals": [
+        {
+          "id": "b020v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_wave"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            20
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Thanks for watching",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Thanks for watching",
+              "watching"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    }
+  ]
+}

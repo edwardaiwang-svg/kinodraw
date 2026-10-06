@@ -92,3 +92,35 @@ mix to −14 LUFS with a −1 dBTP limiter. The whiteboard mix is unchanged.
 
 On-screen words come only from the script, the `brand` fields, or fixed interface labels ("I'm in!", "Continue").
 Decorative chat messages come from a fixed bilingual bank, never from a model.
+
+### Source diagrams (v3)
+
+An element `{kind: "diagram", ref: beat_id}` requests a procedural product diagram.
+The ref must belong to its scene. The resolver reads spoken source and preceding
+beats in the same section; providers cannot supply geometry, code, labels or numbers.
+Offline rules select this route for English `Place/Draw/Build/Arrange N rows of M dots`,
+matching `N times M equals total`, `Rotate the same dots to make M rows of N`,
+and counting cues. Dimensions are 1–10, total at most 64. Inconsistent equations,
+rotations, negation and unsupported grammar are rejected. English single number words
+through twenty, tens through sixty, hyphenated compounds through sixty-nine,
+and base-ten integer digits are accepted within those caps. Whole values with
+hundred/thousand suffixes, decimals, fractions or other unsupported continuations fail closed. Chinese
+is currently unsupported and rejected, including by validation; no translation is inferred.
+
+Motion panels/cards glide/slide while organizing/arranging 2–4 distinct source
+labels from notes, tasks, drawings, files, sketches, ideas and calendars. Labels
+retain source spelling. Hand construction, equation writing, rotation and count
+highlighting use source character times. Dot identities survive a rigid quarter
+turn; cards translate into safe readable slots. Native targets regenerate diagrams
+at their actual dimensions. Accepted dot references retain their source whiteboard
+proof even when a provider selects a hybrid or motion scene. The source glide cue
+owns panel visibility; a delayed musical join cannot hide their labels. Two to four
+cards share the available landscape width, while square cards stack above captions.
+Pure whiteboard and native routes also render these cards. Multiple panel refs follow
+their absolute source cues in order. After gliding, cards move within safe slots
+during continuous narration under breathing/drifting/lively; still and authored holds suppress motion.
+Dot proofs use larger readable marks and a bounded idle focus sweep scaled to the
+saved breathing/drifting/lively floor. The drawing hand and declared reading holds
+stay anchored; explicit still disables this ambient camera motion. Saved plans without a diagram element keep the old
+schema shape and rendering. These procedural diagrams are not original LLM art
+and do not satisfy the held Luna-SVG transport requirement (A6).

@@ -39,7 +39,14 @@ an unrelated icon: roar opens a jaw, whimper/tremble moves the cub, nudge/swipe 
 breathe_heavy animates the being. Do not turn "armor" as a metaphor into a helmet unless the text calls for it.
 
 Elements are {kind, ref}: picture uses an id offered for one of the scene's beats; cast uses a cast id;
-atmosphere uses the scene's atmosphere kind; text uses a supplied beat_id. text.ref also uses a beat_id
+atmosphere uses the scene's atmosphere kind; text uses a supplied beat_id.
+Diagram uses a scene beat_id, never SVG/code/numbers/labels supplied by you. Its closed source-grounded
+vocabulary is English equal-group dot arrays (explicit rows of dots, up to 10 per dimension and 64 dots),
+matching multiplication equations, rotating the same dots to swapped rows/columns, and counting them;
+or panels/cards that glide/slide while organizing source-named notes, tasks, drawings, files, sketches,
+ideas or calendars (2-4 labels). Use diagram instead of symbolic pictures for these literal instructions.
+Include a diagram ref for every construction/equation/rotation/counting beat. Earlier same-section source
+provides the original array. Unsupported languages/claims are rejected; do not invent diagram content. text.ref also uses a beat_id
 ("" when kind is none), showing that beat's supplied display text verbatim. Use caption_only for ordinary
 narration, kinetic for emphasis, quote for a quotation, title for an opening and counter for spoken data.
 No fabricated text or early quote cards. Allow at least displayed character count / 27 seconds of hold;

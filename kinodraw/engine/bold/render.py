@@ -14,6 +14,7 @@ import numpy as np
 import resvg_py
 from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageColor, ImageFont
+from scipy import fft
 from scipy.signal import fftconvolve
 
 from ... import library
@@ -370,13 +371,34 @@ def _raster(doc, w, h, text=False):
     if text and any(ord(ch) > 127 for ch in doc):
         fonts.append(str(ink.ASSETS / 'fonts' / 'NotoSansSC-Bold.otf'))
     png = resvg_py.svg_to_bytes(svg_string=doc, width=w, height=h, skip_system_fonts=True, font_files=fonts)
-    return np.asarray(Image.open(io.BytesIO(png)).convert('RGBA'), np.float32)
+    image = Image.open(io.BytesIO(png))
+    if image.mode != 'RGBA':
+        image = image.convert('RGBA')
+    # Keep transparent margins in byte form; sprites expand only their crop.
+    return np.asarray(image)
 
 
 def glow_layer(emissive, half_distance):
     """Gaussian with zero padding: an isolated source's halo halves at ``half_distance`` pixels."""
     sigma = max(.01, half_distance / math.sqrt(2 * math.log(2)))
-    return fftconvolve(emissive, _glow_kernel(sigma), mode='same', axes=(0, 1))
+    kernel = _glow_kernel(sigma)
+    if min(emissive.shape[:2]) == 1 or kernel.shape[0] == 1:
+        return fftconvolve(emissive, kernel, mode='same', axes=(0, 1))
+    shape, spectrum = _glow_spectrum(sigma, emissive.shape[:2])
+    transformed = fft.rfftn(emissive, shape, axes=(0, 1))
+    light = fft.irfftn(transformed * spectrum, shape, axes=(0, 1))
+    # Use fftconvolve's exact padding, transform dtype and centred crop.
+    radius = (kernel.shape[0] - 1) // 2
+    h, w = emissive.shape[:2]
+    return light[radius:radius + h, radius:radius + w].copy()
+
+
+@lru_cache(maxsize=8)
+def _glow_spectrum(sigma, size):
+    kernel = _glow_kernel(sigma)
+    shape = tuple(fft.next_fast_len(n + k - 1, real=True)
+                  for n, k in zip(size, kernel.shape[:2]))
+    return shape, fft.rfftn(kernel, shape, axes=(0, 1))
 
 
 @lru_cache(maxsize=8)
@@ -484,14 +506,181 @@ def _bounds(scene, e, t, geometry):
     return -x, -y, x, y
 
 
+@lru_cache(maxsize=8)
+def _particle_atlas(sx, sy):
+    """Circle coverage at 1/32-pixel phases; one SVG raster for all placements.
+
+    Only subpixel antialiasing is quantized (at most 1/64 pixel per axis).
+    Position, assembly, opacity, blur and camera time remain continuous.
+    """
+    phases = 32
+    mx, my = math.ceil(2.5 * sx) + 1, math.ceil(2.5 * sy) + 1
+    tw, th = 2 * mx + 2, 2 * my + 2
+    body = ''.join(
+        f'<ellipse cx="{x * tw + mx + x / phases:.9f}" '
+        f'cy="{y * th + my + y / phases:.9f}" rx="{2.5 * sx:.9f}" '
+        f'ry="{2.5 * sy:.9f}" fill="white"/>'
+        for y in range(phases) for x in range(phases))
+    doc = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{tw * phases}" '
+           f'height="{th * phases}">{body}</svg>')
+    pixels = _raster(doc, tw * phases, th * phases)[..., 3].astype(np.float32) / 255
+    return tuple(tuple(pixels[y * th:(y + 1) * th, x * tw:(x + 1) * tw].copy()
+                       for x in range(phases)) for y in range(phases))
+
+
+def _particle_sprite(scene, e, i, t, size):
+    if not e.count:
+        return None
+    left, top, right, bottom = _bounds(scene, e, t, None)
+    sw = max(1, math.ceil((right - left) * size[0] / W))
+    sh = max(1, math.ceil((bottom - top) * size[1] / H))
+    sx, sy = sw / (right - left), sh / (bottom - top)
+    atlas = _particle_atlas(sx, sy)
+    src, dst = _particles(scene.seed + i, e.count, e.width, e.height)
+    pts = m.assemble(src, dst, t - e.start, dur=PANEL_ENTER,
+                     stagger=PARTICLE_STAGGER, seed_key=scene.seed + i)
+    placements = []
+    for j, (x, y) in enumerate(pts):
+        x += 5 * scene.motion_floor * math.sin(t * 1.2 + j)
+        y += 5 * scene.motion_floor * math.cos(t * 1.7 + j)
+        opacity = .9 + .25 * scene.motion_floor * (math.sin(t * 2 + j) - 1)
+        px, py = round((round(x, 6) - left) * sx * 32), round((round(y, 6) - top) * sy * 32)
+        ix, fx = divmod(px, 32)
+        iy, fy = divmod(py, 32)
+        tile = atlas[fy][fx]
+        x0, y0 = ix - math.ceil(2.5 * sx) - 1, iy - math.ceil(2.5 * sy) - 1
+        x1, y1 = min(sw, x0 + tile.shape[1]), min(sh, y0 + tile.shape[0])
+        bx, by = max(0, x0), max(0, y0)
+        if x1 <= bx or y1 <= by:
+            continue
+        alpha = np.rint(tile[by - y0:y1 - y0, bx - x0:x1 - x0] * opacity * 255) / 255
+        placements.append((bx, by, x1, y1, alpha))
+    if not placements:
+        return None
+    # Keep the same pixel grid and one-pixel crop padding, allocating only the
+    # occupied tile bounds rather than the entire assembly/entrance envelope.
+    ox = max(0, min(p[0] for p in placements) - 1)
+    oy = max(0, min(p[1] for p in placements) - 1)
+    right = min(sw, max(p[2] for p in placements) + 1)
+    bottom = min(sh, max(p[3] for p in placements) + 1)
+    coverage = np.zeros((bottom - oy, right - ox), np.float32)
+    for bx, by, x1, y1, alpha in placements:
+        region = coverage[by - oy:y1 - oy, bx - ox:x1 - ox]
+        region += (1 - region) * alpha
+    xs, ys = np.flatnonzero(coverage.max(axis=0)), np.flatnonzero(coverage.max(axis=1))
+    if not len(xs) or not len(ys):
+        return None
+    x0, y0 = max(0, xs[0] - 1), max(0, ys[0] - 1)
+    coverage = coverage[y0:ys[-1] + 2, x0:xs[-1] + 2].copy()
+    color = ImageColor.getrgb(scene.palette.accent)
+    return (Image.fromarray(coverage), color), left + (ox + x0) / sx, top + (oy + y0) / sy, sx, sy
+
+
+def _sprite_pixels(pixels, left, top, sx, sy):
+    xs = np.flatnonzero(pixels[..., 3].max(axis=0))
+    ys = np.flatnonzero(pixels[..., 3].max(axis=1))
+    if not len(xs) or not len(ys):
+        return None
+    h, w = pixels.shape[:2]
+    x0, y0 = max(0, xs[0] - 1), max(0, ys[0] - 1)
+    pixels = pixels[y0:min(h, ys[-1] + 2), x0:min(w, xs[-1] + 2)].astype(np.float32)
+    pixels[..., 3] /= 255
+    pixels[..., :3] *= pixels[..., 3:]
+    channels = tuple(Image.fromarray(pixels[..., c]) for c in range(4))
+    return channels, left + x0 / sx, top + y0 / sy, sx, sy
+
+
+@lru_cache(maxsize=256)
+def _counter_extent(value, size):
+    # Measure the bundled Arimo numeric glyphs at its 2048-unit em size.
+    # Their ink is inside their advances and their only numeric kerning pair
+    # (11) shortens the run, so summed advances conservatively enclose it.
+    font = ink.font('en_caption', 2048)
+    width = sum(font.getlength(ch) for ch in value)
+    _, top, _, bottom = font.getbbox(value, anchor='ls')
+    ascent, descent = font.getmetrics()
+    baseline = (ascent - descent) / 2
+    padding = 2 + size / 1024  # raster edge padding and two font units
+    return (width * size / 4096 + padding,
+            max(abs(top + baseline), abs(bottom + baseline)) * size / 2048 + padding)
+
+
+
 class _SceneLayers:
     def __init__(self, scene, w, h):
         self.scene, self.size = scene, (w, h)
         self.content = {}
         self.sprites = {}
+        self.tokens = OrderedDict()
+        self.particles = {}
+
+    def counter_sprite(self, e, i, t):
+        # Batch exact complete tokens, retaining resvg shaping, kerning and fit.
+        # Prefetch is a cache policy only: arbitrary times still raster exactly.
+        color = self.scene.palette.accent if e.accent or e.kind == 'chart' else self.scene.palette.foreground
+        fragment = _text(e, self.scene, t, color)
+        key = (self.size, fragment)
+        if key not in self.tokens:
+            rows, body, height, width = [], [], 0, 0
+            seen = set()
+            for time in (t + j / FPS for j in range(8)):
+                token = _text(e, self.scene, time, color)
+                if token in seen or (self.size, token) in self.tokens:
+                    continue
+                seen.add(token)
+                left, top, right, bottom = _bounds(self.scene, e, time, None)
+                value = counter_text(e, time)
+                plain = (e.preset in {'counter', 'type_on'}
+                         and re.fullmatch(r'[-0-9,.%]+', value))
+                # Integer sampling scales keep cropped sprite origins exactly
+                # representable. Fractional scales retain the original bounds.
+                if plain and self.size[0] % (W // 2) == 0 and self.size[1] % (H // 2) == 0:
+                    _, _, size, _ = _text_metrics(value, e.size, e.width, False)
+                    x, y = _counter_extent(value, size)
+                    right, bottom = min(right, x), min(bottom, y)
+                # Keep one sampling grid for every token, independent of its
+                # neighbours and vertical position in a prefetched sheet.
+                sx, sy = self.size[0] / W * 2, self.size[1] / H * 2
+                sw = max(2, 2 * math.ceil(right * sx))
+                sh = max(2, 2 * math.ceil(bottom * sy))
+                left, top = -sw / (2 * sx), -sh / (2 * sy)
+                right, bottom = -left, -top
+                # Plain Arimo digits/punctuation fit inside these padded bounds.
+                # Avoid a sheet-sized viewport mask for each such token; retain
+                # clipping for arbitrary suffixes and animated text transforms.
+                overflow = 'visible' if plain else 'hidden'
+                body.append(f'<svg x="0" y="{height}" width="{sw}" height="{sh}" '
+                            f'viewBox="{left} {top} {right - left} {bottom - top}" '
+                            f'preserveAspectRatio="none" overflow="{overflow}">{token}</svg>')
+                rows.append((token, height, sw, sh, left, top, sx, sy))
+                height += sh
+                width = max(width, sw)
+            doc = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+                   f'font-family="Arimo, Noto Sans SC" font-weight="700">{"".join(body)}</svg>')
+            pixels = _raster(doc, width, height, text=True)
+            for token, y, sw, sh, left, top, sx, sy in rows:
+                self.tokens[self.size, token] = _sprite_pixels(pixels[y:y + sh, :sw], left, top, sx, sy)
+            while len(self.tokens) > 128:
+                self.tokens.popitem(last=False)
+        self.tokens.move_to_end(key)
+        return self.tokens[key]
 
     def sprite(self, i, t, layer, geometry=None):
         e = self.scene.elements[i]
+        if layer == 'text' and e.font == 'rounded' and (e.kind == 'text' and e.preset == 'counter' or e.kind == 'chart' and e.chart == 'number'):
+            return self.counter_sprite(e, i, t)
+        if e.kind == 'particle_field' and geometry is None:
+            if layer == 'text':
+                return None
+            state = _appearance(self.scene, e, t, None)
+            cache = self.particles.setdefault(i, OrderedDict())
+            if state not in cache:
+                cache[state] = _particle_sprite(self.scene, e, i, t, self.size)
+                # Retain a frame's blur samples and its exact-time glow sample.
+                while len(cache) > self.scene.blur_samples + 1:
+                    cache.popitem(last=False)
+            cache.move_to_end(state)
+            return cache[state]
         state = _appearance(self.scene, e, t, geometry)
         if i not in self.content or self.content[i][0] != state:
             self.content[i] = state, _element_content(self.scene, e, i, t, geometry)
@@ -508,17 +697,8 @@ class _SceneLayers:
                    f'viewBox="{left} {top} {right - left} {bottom - top}" preserveAspectRatio="none" '
                    f'font-family="Arimo, Noto Sans SC" font-weight="700">{fragment}</svg>')
             pixels = _raster(doc, sw, sh, text=layer == 'text')
-            xs = np.flatnonzero(pixels[..., 3].max(axis=0))
-            ys = np.flatnonzero(pixels[..., 3].max(axis=1))
-            sprite = None
-            if len(xs) and len(ys):
-                sx, sy = sw / (right - left), sh / (bottom - top)
-                x0, y0 = max(0, xs[0] - 1), max(0, ys[0] - 1)
-                pixels = pixels[y0:min(sh, ys[-1] + 2), x0:min(sw, xs[-1] + 2)].copy()
-                pixels[..., 3] /= 255
-                pixels[..., :3] *= pixels[..., 3:]
-                channels = tuple(Image.fromarray(pixels[..., c]) for c in range(4))
-                sprite = channels, left + x0 / sx, top + y0 / sy, sx, sy
+            sx, sy = sw / (right - left), sh / (bottom - top)
+            sprite = _sprite_pixels(pixels, left, top, sx, sy)
             self.sprites[key] = fragment, sprite
         return self.sprites[key][1]
 
@@ -540,7 +720,10 @@ def _warp(sprite, pose, w, h):
     if sprite is None or pose[3] <= 0:
         return None
     channels, left, top, sx, sy = sprite
-    x, y, scale, alpha = (round(v, 6) for v in pose)
+    solid = len(channels) == 2
+    image = channels[0]
+    # NumPy time scalars must not promote float32 compositing to float64.
+    x, y, scale, alpha = (round(float(v), 6) for v in pose)
     dx, dy = scale * w / W / sx, scale * h / H / sy
     if dx <= 0 or dy <= 0:
         return None
@@ -550,9 +733,20 @@ def _warp(sprite, pose, w, h):
     if x1 <= x0 or y1 <= y0:
         return None
     matrix = (1 / dx, 0, (x0 - x) / dx, 0, 1 / dy, (y0 - y) / dy)
-    moved = np.stack([np.asarray(channel.transform((x1 - x0, y1 - y0), Image.AFFINE, matrix, Image.BILINEAR))
-                      for channel in channels], axis=2)
-    moved *= alpha
+    if solid:
+        coverage = np.asarray(image.transform((x1 - x0, y1 - y0), Image.AFFINE, matrix, Image.BILINEAR)) * alpha
+        moved = np.empty((*coverage.shape, 4), np.float32)
+        moved[..., 3] = coverage
+        # The integer colour tuple promotes the original RGB product to
+        # float64. Keep that rounding, writing directly into the float32
+        # destination instead of allocating a full float64 RGB temporary.
+        for c, color in enumerate(channels[1]):
+            np.multiply(coverage, color, out=moved[..., c], dtype=np.float64)
+        return x0, y0, moved
+    moved = np.empty((y1 - y0, x1 - x0, 4), np.float32)
+    for c, channel in enumerate(channels):
+        np.multiply(np.asarray(channel.transform((x1 - x0, y1 - y0), Image.AFFINE, matrix, Image.BILINEAR)),
+                    alpha, out=moved[..., c])
     return x0, y0, moved
 
 
@@ -560,8 +754,11 @@ def _over(target, moved):
     if moved is not None:
         x, y, pixels = moved
         region = target[y:y + pixels.shape[0], x:x + pixels.shape[1]]
-        region *= 1 - pixels[..., 3:]
-        region += pixels[..., :region.shape[2]]
+        inverse = 1 - pixels[..., 3]
+        # Avoid the short RGB broadcast loop; retain float32 multiply/add order.
+        for c in range(region.shape[2]):
+            region[..., c] *= inverse
+            region[..., c] += pixels[..., c]
 
 
 def _composite(target, layers, i, times, layer, overrides=None):
@@ -585,8 +782,47 @@ def _composite(target, layers, i, times, layer, overrides=None):
     y1 = max(y + p.shape[0] for x, y, p in samples)
     mixed = np.zeros((y1 - y0, x1 - x0, 4), np.float32)
     for x, y, pixels in samples:
-        mixed[y - y0:y - y0 + pixels.shape[0], x - x0:x - x0 + pixels.shape[1]] += pixels / len(times)
+        # Warped samples are private arrays; retain division before addition
+        # without allocating another RGBA sample for the quotient.
+        pixels /= len(times)
+        mixed[y - y0:y - y0 + pixels.shape[0], x - x0:x - x0 + pixels.shape[1]] += pixels
     _over(target, (x0, y0, mixed))
+
+
+def _resize_rgb(pixels, w, h):
+    if (w, h) != (pixels.shape[1] * 4, pixels.shape[0] * 4):
+        return np.asarray(Image.fromarray(pixels).resize((w, h), Image.BILINEAR))
+    # Pillow's 4x bilinear weights are exact eighths. Round each byte pass
+    # separately, horizontal first, including the replicated edge pixels.
+    for axis in (1, 0):
+        source = pixels.astype(np.uint16)
+        base = (source << 3) + 4
+        delta, scratch = np.empty_like(source), np.empty_like(source)
+        shape = list(source.shape)
+        shape[axis] *= 4
+        pixels = np.empty(shape, np.uint8)
+        before, after = [slice(None)] * 3, [slice(None)] * 3
+        before[axis], after[axis] = slice(None, -1), slice(1, None)
+        before, after = tuple(before), tuple(after)
+        for direction, phases in ((-1, (1, 0)), (1, (2, 3))):
+            edge = [slice(None)] * 3
+            edge[axis] = 0 if direction < 0 else -1
+            if direction < 0:
+                np.subtract(source[before], source[after], out=delta[after])
+            else:
+                np.subtract(source[after], source[before], out=delta[before])
+            delta[tuple(edge)] = 0
+            for phase in phases:
+                # Unsigned differences wrap, but the completed positive
+                # weighted sum is <= 2044 and is exact modulo 65536.
+                np.add(base, delta, out=scratch)
+                np.right_shift(scratch, 3, out=scratch)
+                destination = [slice(None)] * 3
+                destination[axis] = slice(phase, None, 4)
+                pixels[tuple(destination)] = scratch
+                if phase == phases[0]:
+                    delta *= 3
+    return pixels
 
 
 def _background(scene, t, w, h):
@@ -598,7 +834,7 @@ def _background(scene, t, w, h):
         distance = np.sqrt(((xx + .5) * W / gw - cx) ** 2 / 850 ** 2 + ((yy + .5) * H / gh - cy) ** 2 / 650 ** 2)
         alpha = np.maximum(0, 1 - distance)[..., None] * .05 * scene.motion_floor
         ambient = background + (np.array(ImageColor.getrgb(scene.palette.accent)) - background) * alpha
-        return np.asarray(Image.fromarray(np.clip(ambient + .5, 0, 255).astype(np.uint8)).resize((w, h), Image.BILINEAR), np.float32)
+        return np.asarray(_resize_rgb(np.clip(ambient + .5, 0, 255).astype(np.uint8), w, h), np.float32)
     return np.broadcast_to(background, (h, w, 3)).copy()
 
 
@@ -620,12 +856,19 @@ def render_frame(scene, t, w=W, h=H, *, _overrides=None, background=None):
             if e.emissive:
                 _composite(light, layers, i, [t], 'art', _overrides)
         light = glow_layer(light[..., :3], GLOW_HALF * gh / H)
-        halo = Image.fromarray(np.clip(light * 4 * scene.glow, 0, 255).astype(np.uint8))
-        art += np.asarray(halo.resize((w, h), Image.BILINEAR), np.float32)
-    art *= _vignette(w, h)
+        halo = np.clip(light * 4 * scene.glow, 0, 255).astype(np.uint8)
+        art += _resize_rgb(halo, w, h)
+    vignette = _vignette(w, h)[..., 0]
+    # As in _over, avoid NumPy's short-channel broadcast inner loop.
+    for c in range(3):
+        art[..., c] *= vignette
     if scene.grain:
         rng = m.seeded(scene.seed, 'bold grain', math.floor(t * FPS + 1e-6), w, h)
-        art += rng.normal(0, scene.grain, (h, w, 1)).astype(np.float32)
+        grain = rng.normal(0, scene.grain, (h, w, 1)).astype(np.float32)[..., 0]
+        for c in range(3):
+            art[..., c] += grain
     for i in range(len(scene.elements)):
         _composite(art, layers, i, [t], 'text', _overrides)
-    return np.clip(art + .5, 0, 255).astype(np.uint8)
+    art += .5
+    np.clip(art, 0, 255, out=art)
+    return art.astype(np.uint8)

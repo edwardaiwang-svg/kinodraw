@@ -44,7 +44,7 @@ SCENE = _obj(
     beat_ids=_arr(S),
     treatment=_enum('whiteboard', 'motion', 'kinetic_type', 'atmosphere', 'chart', 'character'),
     composition=_enum('center', 'left_third', 'right_third', 'split', 'grid', 'full_bleed', 'stage'),
-    elements=_arr(_obj(kind=_enum('picture', 'cast', 'atmosphere', 'text'), ref=S)),
+    elements=_arr(_obj(kind=_enum('picture', 'cast', 'atmosphere', 'text', 'diagram'), ref=S)),
     actions=_arr(_obj(actor=S, verb=_enum(*VERBS), at_beat=S, intensity=I)),
     atmosphere=_obj(kind=_enum(*ATMOSPHERES), density=N),
     camera=_enum('static', 'slow_push', 'pull_back', 'pan_left', 'pan_right', 'shake', 'follow'),

@@ -25,6 +25,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import PRODUCT, VERSION, director, paths, pipeline, styles, voice, voice_server
 from ..project_store import ProjectStore, RevisionConflict, atomic_save_json
+from ..progress import CancellationToken, Cancelled, RenderContext, wait_process
+from . import integration
 from ..director import style
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
@@ -66,8 +68,19 @@ class JobContext:
     def __init__(self, job):
         self.job = job
         self.cancelled = threading.Event()
+        self.token = CancellationToken()
+        self.render_context = RenderContext(self.token, self._render_progress)
+
+    def _render_progress(self, update):
+        self.job.update(done=update.frames, total=update.total, frames=update.frames, frames_total=update.total,
+                        elapsed=update.elapsed, eta=update.eta)
+
+    def cancel(self):
+        self.cancelled.set()
+        self.token.cancel()
 
     def check_cancelled(self):
+        self.token.check()
         if self.cancelled.is_set():
             raise JobCancelled('Cancelled. You can retry.')
 
@@ -81,27 +94,25 @@ class JobContext:
         # The caller owns output files and engine logic. Avoid pipe deadlocks here.
         if kwargs.get('stdout') == subprocess.PIPE or kwargs.get('stderr') == subprocess.PIPE:
             raise ValueError('Use output files rather than PIPE with job subprocesses')
-        process = subprocess.Popen(args, **kwargs)
+        kwargs['start_new_session'] = True
+        process = self.token.register(subprocess.Popen(args, **kwargs), group=True)
         try:
-            while process.poll() is None:
-                if self.cancelled.wait(.05):
-                    process.terminate()
-                    try:
-                        process.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        process.kill(); process.wait()
-                    self.check_cancelled()
-            self.check_cancelled()
-            if process.returncode:
-                raise subprocess.CalledProcessError(process.returncode, args)
+            try:
+                wait_process(process, self.render_context)
+            except RuntimeError:
+                self.token.check()
+                if process.returncode:
+                    raise subprocess.CalledProcessError(process.returncode, args) from None
+                raise
             return process.returncode
         finally:
-            if process.poll() is None:
-                process.kill(); process.wait()
+            self.token.stop(process)
+            self.token.unregister(process)
+
 
 
 # Main integration registers only exported, implemented seams. Nothing fakes success.
-STUDIO_HOOKS = {}  # provider(body), writer(body), starters(), export(path, body, context), projectzip(path, body, context)
+STUDIO_HOOKS = integration.hooks()  # provider(body), writer(body), starters(), export(path, body, context), projectzip(path, body, context)
 
 
 class Jobs:
@@ -129,9 +140,12 @@ class Jobs:
                     progress.check_cancelled()
                     job['state'] = 'running'
                     job['result'] = fn(progress)
-                    progress.check_cancelled()
+                    if not getattr(progress.render_context, 'published', False):
+                        progress.check_cancelled()
+                    if 'frames' in job:
+                        job.update(done=job['frames'], total=job['frames_total'])
                     job['state'] = 'done'
-                except JobCancelled as error:
+                except (JobCancelled, Cancelled) as error:
                     job.update(state='cancelled', error=str(error))
                 except Exception as error:  # noqa: BLE001 - shown to the user
                     job.update(state='failed', error=_plain(error))
@@ -146,7 +160,7 @@ class Jobs:
                 raise FileNotFoundError(jid)
             if job['state'] not in ('done', 'failed', 'cancelled'):
                 job['state'] = 'cancelling'
-                self.contexts[jid].cancelled.set()
+                self.contexts[jid].cancel()
             return dict(job)
 
     def get(self, jid: str) -> dict | None:
@@ -333,7 +347,7 @@ def create_project(body: dict, provider=None) -> dict:
     lang = body.get('lang') or doc.lang
     if mode == 'cloud' and lang not in ('en', 'zh'):
         mode = 'rules'
-    settings = {k: body[k] for k in ('workers',) if body.get(k)}
+    settings = {k: body[k] for k in ('workers', 'model', 'base_url', 'command') if body.get(k)}
     settings.update(_voice_settings(lang, body.get('voice') or voice.LANGS[lang]['voice'], body.get('speed', 1.0)))
     auto = body.get('look') == style.AUTO                                    # "Choose for me": the director picks
     settings['aspect'] = pipeline.validate_aspect(body.get('aspect', '16:9'), None if auto else body.get('look'))
@@ -352,8 +366,8 @@ def create_project(body: dict, provider=None) -> dict:
             direction.update(look='whiteboard', story='story', motion=None)
         if auto and not settings['director_v3']:       # once, before the storyboard; saved, so a re-plan never re-picks
             progress('style', 0, 1)
-            pick = style.choose(doc, mode, lang, settings['aspect'], direction['brand'], body.get('model') or None,
-                                body.get('base_url') or None)
+            pick = integration.choose_style(doc, {**body, 'director': mode, 'lang': lang}, lang,
+                                            settings['aspect'], direction['brand'], provider)
             look, story = pick['style'].split('/')
             direction.update(look=look, story=story, motion=None,
                              brand=direction['brand'] if story == 'promo' else None)
@@ -366,15 +380,20 @@ def create_project(body: dict, provider=None) -> dict:
             pipeline.new_project(text, scratch, title=title, lang=body.get('lang') or None, direction=direction,
                                  director=mode, **settings)
             if settings['director_v3']:
-                chosen = provider if provider is not None else STUDIO_HOOKS.get('provider', lambda b: mode)(body)
+                chosen = provider if provider is not None else STUDIO_HOOKS.get('provider', lambda b: mode)({**body, 'director': mode, 'lang': lang})
                 report = pipeline.direct_v3(scratch, provider=chosen)
             else:
-                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress)
+                chosen = provider if provider is not None else STUDIO_HOOKS.get('provider', lambda b: None)({**body, 'director': mode, 'lang': lang})
+                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress, provider=chosen)
             progress.check_cancelled()
-            import shutil
-            for source in scratch.glob('script.*'):
-                shutil.copy2(source, path / source.name)
-            store.initialize(pipeline.storyboard(scratch), pipeline.settings(scratch))
+            planned = ProjectStore(scratch).load()
+            integration.validate_references(planned['storyboard'], planned['settings'], scratch)
+            integration.transfer_assets(scratch, path)
+            integration.validate_references(planned['storyboard'], planned['settings'], path)
+            with progress.token._lock:
+                progress.check_cancelled()
+                store.initialize(planned['storyboard'], planned['settings'])
+                progress.render_context.published = True
         usage = report.get('usage')
         return {'project': name, 'notes': report.get('notes', [])[:20], 'style': pick,
                 'cost': None if not usage else (usage.get('cost_usd', 0) if isinstance(usage, dict) else usage.cost_usd), 'calls': 0 if not usage else (usage.get('calls', 0) if isinstance(usage, dict) else usage.calls)}
@@ -429,12 +448,12 @@ def docx_script(name: str, data: bytes) -> str:
     return '\n\n'.join(parts)
 
 
-def make_video(name: str) -> dict:
+def make_video(name: str, body=None) -> dict:
     path = _project(name)
 
     def job(progress):
         if 'make' in STUDIO_HOOKS:
-            return STUDIO_HOOKS['make'](path, {}, progress)
+            return STUDIO_HOOKS['make'](path, body or {}, progress)
         server = apply_video_settings(path)
         if server:
             server.key = voice_server.api_key(server.url, env_without_base=False)
@@ -669,22 +688,34 @@ def redirect(name: str, body: dict) -> dict:
         store = _store(path)
         state = store.load()
         store.snapshot('Before replan', expected)
-        cfg = state['settings']
-        cfg['director'] = mode
+        cfg = director.provider_settings(state['settings'], mode,
+            **{k: body[k] for k in ('model', 'base_url', 'command') if k in body})
         # Plan in an owned scratch folder; only a complete validated result is committed.
         with tempfile.TemporaryDirectory(prefix='replan-', dir=store.meta) as folder:
             scratch = Path(folder)
+            integration.transfer_assets(path, scratch)
             atomic_save_json(scratch / 'storyboard.json', state['storyboard'])
             if cfg.get('director_v3'):
                 for key in ('plan_v3', 'plan_v3_report', 'scene_treatments'):
                     cfg.pop(key, None)
                 atomic_save_json(scratch / 'project.json', cfg)
-                report = pipeline.direct_v3(scratch, provider=STUDIO_HOOKS.get('provider', lambda b: mode)(body))
+                report = pipeline.direct_v3(scratch, provider=STUDIO_HOOKS.get('provider', lambda b: mode)({**cfg, **body, 'director': mode, 'lang': cfg['lang']}))
             else:
                 atomic_save_json(scratch / 'project.json', cfg)
-                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress)
+                report = director.direct(scratch, mode, body.get('model') or None, body.get('base_url') or None, progress, provider=STUDIO_HOOKS.get('provider', lambda b: None)({**cfg, **body, 'director': mode, 'lang': cfg['lang']}))
             progress.check_cancelled()
-            store.save(pipeline.storyboard(scratch), pipeline.settings(scratch), state['revision'], 'Before replan commit')
+            planned = ProjectStore(scratch).load()
+            integration.validate_references(planned['storyboard'], planned['settings'], scratch)
+            with store.locked():
+                store._check(store._state(), state['revision'])
+                integration.transfer_assets(scratch, path)
+                integration.validate_references(planned['storyboard'], planned['settings'], path)
+            # save takes its own OS lock; never nest ProjectStore locks. A source
+            # edit between transfer and save is still rejected by the revision.
+            with progress.token._lock:
+                progress.check_cancelled()
+                store.save(planned['storyboard'], planned['settings'], state['revision'], 'Before replan commit')
+                progress.render_context.published = True
         return {'notes': report.get('notes', [])[:20], 'report': report}
     # Reject stale callers synchronously (409), also check again when queued work begins.
     state = _store(path).load()
@@ -774,8 +805,12 @@ def save_storyboard(name: str, board: dict, revision=None, plan=None) -> dict:
                     raise ValueError('Invalid plan: ' + '; '.join(repairs[:10]))
             # Re-adapt only changed plans; ordinary board edits must retain manual visuals.
             if checked != cfg.get('plan_v3'):
+                original_visuals = {b['id']: deepcopy(b.get('visuals', [])) for b in board['beats']}
                 board, treatments = adapt(checked, board)
-                cfg.update(plan_v3=checked, scene_treatments=treatments, director_v3=True)
+                for beat in board['beats']:
+                    if original_visuals.get(beat['id']):
+                        beat['visuals'] = original_visuals[beat['id']]
+                cfg.update(plan_v3=checked, scene_treatments=treatments, director_v3=True, series_bible={'cast': deepcopy(checked['cast'])})
             # save outside this lock, with the same revision check protecting the gap.
     saved = store.save(board, cfg, revision)
     return {'ok': True, 'warnings': report['warnings'], 'revision': saved['revision'],
@@ -1055,6 +1090,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(path, 'image/svg+xml') if path else self._json({'error': 'no doodle'}, 404)
             if parts[0] == 'files' and method == 'GET' and len(parts) >= 3:
                 root = _project(parts[1])
+                download = integration.DOWNLOADS.get((parts[1], '/'.join(parts[2:])))
+                if download is not None:
+                    return self._file(download)
                 target = (root / '/'.join(parts[2:])).resolve()
                 return self._file(target) if root in target.parents else self._json({'error': 'no'}, 404)
             if parts[0] != 'api':
@@ -1078,7 +1116,12 @@ class Handler(BaseHTTPRequestHandler):
         if p == ['starters'] and method == 'GET':
             if 'starters' not in STUDIO_HOOKS:
                 return self._json({'error': 'Starter projects are not integrated.'}, 503)
-            return self._json(STUDIO_HOOKS['starters']())
+            try:
+                return self._json(STUDIO_HOOKS['starters']())
+            except ModuleNotFoundError as error:
+                if error.name != 'kinodraw.starters':
+                    raise
+                return self._json({'error': 'Starter projects await the sibling starters module.'}, 503)
         if p == ['state'] and method == 'GET':
             return self._json(state())
         if p == ['voice-server'] and method == 'POST':
@@ -1097,6 +1140,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(sorted([x for x in items if bool(x.get('trashed')) == (q.get('trash') == '1')], key=lambda x: -x['modified']))
         if p == ['projects'] and method == 'POST':
             return self._json(create_project(self._body()))
+        if p == ['projects', 'import'] and method == 'POST':
+            return self._json(integration.importzip(self.rfile, self.headers.get('Content-Length')))
         if len(p) >= 2 and p[0] == 'projects':
             name = p[1]
             if len(p) == 2 and method == 'GET':
@@ -1181,7 +1226,7 @@ class Handler(BaseHTTPRequestHandler):
             if p[2:] == ['credit'] and method == 'POST':
                 return self._json(set_credit(name, self._body()))
             if p[2:] == ['make'] and method == 'POST':
-                return self._json(make_video(name))
+                return self._json(make_video(name, self._body()))
             if p[2:] == ['narrator']:
                 return self._json(set_narrator(name, self._body()) if method == 'POST' else narrator(name))
             if p[2:] == ['recording'] and method == 'POST':      # the file itself is the body (it can be large)

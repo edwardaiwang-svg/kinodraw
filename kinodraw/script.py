@@ -169,7 +169,7 @@ def headline(beat_texts: list[str], fallback: str, lang: str, claim: bool = Fals
     for cap, room in ((14, None), (18, 90)) if lang in ('en', 'es') else ((28, None),):
         fits = [s for s in source if s != last and eligible(s, cap, room)]
         # A final factual sentence beats a connector or question title when no earlier point fits.
-        if not fits and not need and last and eligible(last, cap, room) and (
+        if not fits and not need and len(source) > 1 and last and eligible(last, cap, room) and (
                 lang == 'zh' or re.search(r'\b(?:was|were|had|felt|stopped|took|gave)\b', last)):
             fits = [last]
         if fits:
@@ -281,8 +281,9 @@ def build(doc: Document, story: str = 'explain') -> dict:
             # a one-sentence closing paragraph that sums the section up is its takeaway, said once (as the note
             # is written), not read out and then repeated straight after as "Key takeaway: ..."
             head, texts = closing, beats_of(s.paragraphs[:-1], lang)
-        if multi and texts and sentences(texts[-1], lang)[-1] == head:
-            # Move a final summary to the note rather than saying it twice in succession.
+        if multi and texts and sentences(texts[-1], lang)[-1] == head \
+                and (len(texts) > 1 or len(sentences(texts[-1], lang)) > 1):
+            # Move a final summary to the note only when the chapter still has source narration.
             texts[-1] = texts[-1][:-len(head)].rstrip()
             texts = [text for text in texts if text]
         if multi:                                   # said while the section's title card is written

@@ -1,0 +1,1317 @@
+{
+  "version": 1,
+  "lang": "zh",
+  "title": {
+    "zh": "为什么天空是蓝色的"
+  },
+  "narrator": "narrator",
+  "chapters": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": {
+        "zh": "为什么天空是蓝色的"
+      },
+      "title": {
+        "zh": ""
+      }
+    },
+    {
+      "id": "agenda",
+      "kind": "agenda",
+      "label": {
+        "zh": "本期内容"
+      },
+      "title": {
+        "zh": ""
+      }
+    },
+    {
+      "id": "s1",
+      "kind": "section",
+      "label": {
+        "zh": "第1部分"
+      },
+      "title": {
+        "zh": "太阳光是什么颜色"
+      },
+      "hook": {
+        "zh": "可是你知道吗？"
+      }
+    },
+    {
+      "id": "s2",
+      "kind": "section",
+      "label": {
+        "zh": "第2部分"
+      },
+      "title": {
+        "zh": "光遇到空气"
+      },
+      "hook": {
+        "zh": "地球外面包着一层厚厚的空气。"
+      }
+    },
+    {
+      "id": "s3",
+      "kind": "section",
+      "label": {
+        "zh": "第3部分"
+      },
+      "title": {
+        "zh": "蓝光最爱跑"
+      },
+      "hook": {
+        "zh": "不同颜色的光，散开的本领不一样…"
+      }
+    },
+    {
+      "id": "s4",
+      "kind": "section",
+      "label": {
+        "zh": "第4部分"
+      },
+      "title": {
+        "zh": "为什么傍晚是红色的"
+      },
+      "hook": {
+        "zh": "到了傍晚，太阳在地平线附近，阳…"
+      }
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "label": {
+        "zh": "总结"
+      },
+      "title": {
+        "zh": ""
+      }
+    }
+  ],
+  "beats": [
+    {
+      "id": "b001",
+      "chapter": "intro",
+      "kind": "title",
+      "display": {
+        "zh": "今天的主题：为什么天空是蓝色的。"
+      },
+      "spoken": {
+        "zh": "今天的主题：为什么天空是蓝色的。"
+      },
+      "visuals": [],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            16
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "天空是蓝色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "天空是蓝色"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b002",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "本期我们聊四件事。第一，太阳光是什么颜色。"
+      },
+      "spoken": {
+        "zh": "本期我们聊四件事。第一，太阳光是什么颜色。"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b003",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "第二，光遇到空气。"
+      },
+      "spoken": {
+        "zh": "第二，光遇到空气。"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b004",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "第三，蓝光最爱跑。"
+      },
+      "spoken": {
+        "zh": "第三，蓝光最爱跑。"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b005",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "zh": "最后，为什么傍晚是红色的。"
+      },
+      "spoken": {
+        "zh": "最后，为什么傍晚是红色的。"
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b006",
+      "chapter": "s1",
+      "kind": "opener",
+      "display": {
+        "zh": "第1部分：太阳光是什么颜色。"
+      },
+      "spoken": {
+        "zh": "第一部分：太阳光是什么颜色。"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            14
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "什么颜色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "什么颜色"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b007",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "zh": "白天我们抬头看天，天空是蓝色的。可是你知道吗？太阳光看起来是白色的，其实里面藏着红、橙、黄、绿、蓝、靛、紫七种颜色。下雨以后出现的彩虹，就是这些颜色被分开了。"
+      },
+      "spoken": {
+        "zh": "白天我们抬头看天，天空是蓝色的。可是你知道吗？太阳光看起来是白色的，其实里面藏着红、橙、黄、绿、蓝、靛、紫七种颜色。下雨以后出现的彩虹，就是这些颜色被分开了。"
+      },
+      "visuals": [
+        {
+          "id": "b007v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_think",
+              "label": {
+                "zh": "可是你知道吗？"
+              },
+              "trigger": {
+                "zh": "可是你知道吗？"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "可是你知道吗？"
+          }
+        },
+        {
+          "id": "b007v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "zh": "阳光"
+              },
+              "trigger": {
+                "zh": "阳光"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "阳光"
+          }
+        },
+        {
+          "id": "b007v2",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "rain_cloud",
+              "label": {
+                "zh": "下雨"
+              },
+              "trigger": {
+                "zh": "下雨"
+              }
+            },
+            {
+              "doodle": "fl_rainbow",
+              "label": {
+                "zh": "彩虹"
+              },
+              "trigger": {
+                "zh": "彩虹"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "下雨"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            16
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "天空是蓝色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "天空是蓝色",
+              "抬头看天"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            16,
+            23
+          ],
+          "role": "hook",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "可是你知道",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "可是你知道"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            23,
+            58
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "七种颜色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "七种颜色",
+              "靛",
+              "蓝",
+              "绿"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            58,
+            79
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "颜色被分开",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "颜色被分开",
+              "出现的彩虹"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b008",
+      "chapter": "s1",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：太阳光看起来是白色的，其实里面藏着红、橙、黄、绿、蓝、靛、紫七种颜色。"
+      },
+      "spoken": {
+        "zh": "本节要点：太阳光看起来是白色的，其实里面藏着红、橙、黄、绿、蓝、靛、紫七种颜色。"
+      },
+      "visuals": [
+        {
+          "id": "b008v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_rainbow"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b008v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "zh": "太阳光看起来是白色的，其实里面藏着红、橙、黄、绿、蓝、靛、紫七种颜色。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            40
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "七种颜色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "七种颜色",
+              "靛",
+              "蓝",
+              "绿"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b009",
+      "chapter": "s2",
+      "kind": "opener",
+      "display": {
+        "zh": "第2部分：光遇到空气。"
+      },
+      "spoken": {
+        "zh": "第二部分：光遇到空气。"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            11
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "遇到空气",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "遇到空气"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b010",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "zh": "地球外面包着一层厚厚的空气。太阳光穿过空气的时候，会撞到许许多多非常小的气体分子。光被撞到以后，会向四面八方散开，这就叫做散射。"
+      },
+      "spoken": {
+        "zh": "地球外面包着一层厚厚的空气。太阳光穿过空气的时候，会撞到许许多多非常小的气体分子。光被撞到以后，会向四面八方散开，这就叫做散射。"
+      },
+      "visuals": [
+        {
+          "id": "b010v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe",
+              "label": {
+                "zh": "地球"
+              },
+              "trigger": {
+                "zh": "地球"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "地球"
+          }
+        },
+        {
+          "id": "b010v2",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "zh": "阳光"
+              },
+              "trigger": {
+                "zh": "阳光"
+              }
+            },
+            {
+              "doodle": "molecule",
+              "label": {
+                "zh": "分子"
+              },
+              "trigger": {
+                "zh": "分子"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "阳光"
+          }
+        },
+        {
+          "id": "b010g",
+          "type": "glossary",
+          "term": {
+            "zh": "散射"
+          },
+          "text": {
+            "zh": "光被撞到以后，会向四面八方散开"
+          },
+          "trigger": {
+            "zh": "散射"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            14
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "厚厚的空气",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "厚厚的空气"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            14,
+            41
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "气体分子",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "气体分子",
+              "空气的时候"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            41,
+            64
+          ],
+          "role": "list",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "光被撞到以后",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "光被撞到以后",
+              "这就叫做散射",
+              "叫做散射",
+              "四面八方散开"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b011",
+      "chapter": "s2",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：太阳光穿过空气的时候，会撞到许许多多非常小的气体分子。"
+      },
+      "spoken": {
+        "zh": "本节要点：太阳光穿过空气的时候，会撞到许许多多非常小的气体分子。"
+      },
+      "visuals": [
+        {
+          "id": "b011v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b011v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "molecule"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "zh": "太阳光穿过空气的时候，会撞到许许多多非常小的气体分子。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            32
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "气体分子",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "气体分子",
+              "空气的时候"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b012",
+      "chapter": "s3",
+      "kind": "opener",
+      "display": {
+        "zh": "第3部分：蓝光最爱跑。"
+      },
+      "spoken": {
+        "zh": "第三部分：蓝光最爱跑。"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            11
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "最爱跑",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "最爱跑"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b013",
+      "chapter": "s3",
+      "kind": "narration",
+      "display": {
+        "zh": "不同颜色的光，散开的本领不一样。蓝光的波长比较短，最容易被空气散开。红光的波长比较长，几乎可以直接走过去。所以满天都是被散开的蓝光，我们不管看向哪里，都能看到蓝色。"
+      },
+      "spoken": {
+        "zh": "不同颜色的光，散开的本领不一样。蓝光的波长比较短，最容易被空气散开。红光的波长比较长，几乎可以直接走过去。所以满天都是被散开的蓝光，我们不管看向哪里，都能看到蓝色。"
+      },
+      "visuals": [
+        {
+          "id": "b013v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_explain"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            16
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "不一样",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "不一样",
+              "颜色的光"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            16,
+            34
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "空气散开",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "空气散开",
+              "比较短"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            34,
+            53
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "走过去",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "走过去",
+              "比较长"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            53,
+            82
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "看到蓝色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "看到蓝色",
+              "向哪里",
+              "散开的蓝光"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b014",
+      "chapter": "s3",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：蓝光的波长比较短，最容易被空气散开。"
+      },
+      "spoken": {
+        "zh": "本节要点：蓝光的波长比较短，最容易被空气散开。"
+      },
+      "visuals": [],
+      "take": {
+        "headline": {
+          "zh": "蓝光的波长比较短，最容易被空气散开。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            23
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "空气散开",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "空气散开",
+              "比较短"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b015",
+      "chapter": "s4",
+      "kind": "opener",
+      "display": {
+        "zh": "第4部分：为什么傍晚是红色的。"
+      },
+      "spoken": {
+        "zh": "第四部分：为什么傍晚是红色的。"
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            15
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "傍晚是红色",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "傍晚是红色"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b016",
+      "chapter": "s4",
+      "kind": "narration",
+      "display": {
+        "zh": "到了傍晚，太阳在地平线附近，阳光要穿过更长的一段空气才能到达我们的眼睛。蓝光在路上差不多都被散走了，剩下来的红光和橙光，就把天边染成了红彤彤的晚霞。"
+      },
+      "spoken": {
+        "zh": "到了傍晚，太阳在地平线附近，阳光要穿过更长的一段空气才能到达我们的眼睛。蓝光在路上差不多都被散走了，剩下来的红光和橙光，就把天边染成了红彤彤的晚霞。"
+      },
+      "visuals": [
+        {
+          "id": "b016v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_sun",
+              "label": {
+                "zh": "太阳"
+              },
+              "trigger": {
+                "zh": "太阳"
+              }
+            },
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "zh": "阳光"
+              },
+              "trigger": {
+                "zh": "阳光"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "太阳"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            36
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "眼睛",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "眼睛",
+              "地平线附近",
+              "傍晚"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            36,
+            74
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "红彤彤的晚霞",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "红彤彤的晚霞",
+              "红光和橙光",
+              "散走"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b017",
+      "chapter": "s4",
+      "kind": "take",
+      "display": {
+        "zh": "本节要点：到了傍晚，太阳在地平线附近，阳光要穿过更长的一段空气才能到达我们的眼睛。"
+      },
+      "spoken": {
+        "zh": "本节要点：到了傍晚，太阳在地平线附近，阳光要穿过更长的一段空气才能到达我们的眼睛。"
+      },
+      "visuals": [
+        {
+          "id": "b017v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b017v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_sun"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "zh": "到了傍晚，太阳在地平线附近，阳光要穿过更长的一段空气才能到达我们的眼睛。"
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            41
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "眼睛",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "眼睛",
+              "地平线附近",
+              "傍晚"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b018",
+      "chapter": "outro",
+      "kind": "narration",
+      "display": {
+        "zh": "天空是蓝色的，是因为空气把太阳光里的蓝光散开了。傍晚的天空是红色的，是因为蓝光已经走远了。下次抬头看天的时候，别忘了想一想这个有趣的小秘密。"
+      },
+      "spoken": {
+        "zh": "天空是蓝色的，是因为空气把太阳光里的蓝光散开了。傍晚的天空是红色的，是因为蓝光已经走远了。下次抬头看天的时候，别忘了想一想这个有趣的小秘密。"
+      },
+      "visuals": [
+        {
+          "id": "b018v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "zh": "阳光"
+              },
+              "trigger": {
+                "zh": "阳光"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "阳光"
+          }
+        },
+        {
+          "id": "b018v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_thinking_face",
+              "label": {
+                "zh": "想一想"
+              },
+              "trigger": {
+                "zh": "想一想"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "zh": "想一想"
+          }
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            24
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "蓝光散开",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "蓝光散开",
+              "天空是蓝色"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            24,
+            45
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "已经走远",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "已经走远",
+              "天空是红色"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            45,
+            70
+          ],
+          "role": "end_line",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "小秘密",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "小秘密",
+              "看天的时候"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b019",
+      "chapter": "outro",
+      "kind": "closing",
+      "display": {
+        "zh": "感谢收看！"
+      },
+      "spoken": {
+        "zh": "感谢收看！"
+      },
+      "visuals": [
+        {
+          "id": "b019v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_wave"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            5
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "感谢收看",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "感谢收看"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    }
+  ]
+}

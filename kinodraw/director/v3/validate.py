@@ -6,6 +6,7 @@ import math
 import re
 
 from .schema import PLAN_SCHEMA, SCENE
+from ...engine.source_diagrams import resolve as resolve_diagram
 from .semantics import beats, candidate_ids, cast_evidence, detect_cast, mentions, name_key
 
 
@@ -236,6 +237,8 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
         for e in scene['elements']:
             allowed = (offered if e['kind'] == 'picture' else set(cast_by_id) if e['kind'] == 'cast' else
                        {scene['atmosphere']['kind']} - {'none'} if e['kind'] == 'atmosphere' else set(bids))
+            if e['kind'] == 'diagram':
+                allowed = {bid for bid in bids if resolve_diagram(script_beats, bid) is not None}
             if e['ref'] in allowed:
                 elements.append(e)
             else:

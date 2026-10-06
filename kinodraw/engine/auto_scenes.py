@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+from copy import copy
 from pathlib import Path
 
 from . import ink
@@ -118,6 +119,7 @@ def build_agenda(ctx, chapters, beats, x0):
         ctx.add(ctx.strokes((cw, chh), [rect], color=col, width=8, fills=[(rect[:-1], mix(col, .9))], max_dur=.6),
                 cx, cy, t)
         first = len(ctx.elements)                   # everything written inside the card (for later marks)
+        hooks = []                                # candidates; admitted after primary hand scheduling
         sp = ch.get('speaker') or {}
         if chh >= 600:
             ctx.add(ctx.text(str(ch['number']), 150, color=col), cx + 34, cy + 10, t)
@@ -135,12 +137,15 @@ def build_agenda(ctx, chapters, beats, x0):
                 hook_y = 200 + head.size[1] + 24
             if ch.get('hook'):
                 hook = ctx.text(ctx.T(ch['hook']), 56, color=ink.INK, max_w=cw - 60, max_lines=2, min_size=40, pace=1.4)
-                ctx.add(hook, cx + 34, cy + hook_y, t)
+                hook_ctx = copy(ctx)
+                hook_ctx.elements = hooks
+                hook_ctx.add(hook, cx + 34, cy + hook_y, t, after=ctx.elements[-1],
+                             optional=True, group='agenda')
         else:                                   # compact card (5–8 sections): number, label, title
             ctx.add(ctx.text(str(ch['number']), 100, color=col), cx + 24, cy + 6, t)
             ctx.add(ctx.text(ctx.T(ch['label']), 40, color=col, max_w=cw - 130, max_lines=1), cx + 110, cy + 36, t)
             ctx.add(ctx.text(ctx.T(ch['title']), 40, max_w=cw - 48, max_lines=2, min_size=28, pace=1.6), cx + 24, cy + 124, t)
-        cards[ch['id']] = {'box': (cx, cy, cw, chh), 'color': col, 'els': ctx.elements[first:]}
+        cards[ch['id']] = {'box': (cx, cy, cw, chh), 'color': col, 'els': ctx.elements[first:], 'hooks': hooks}
     return cards
 
 
@@ -505,8 +510,14 @@ def build_end_card_portrait(ctx, x0, t):
     host, y = _portrait_host(ctx, ep.get('host') or {}, x0, y, t)
     els += host
     pose = narrator(ep, 'thumbs')
-    if pose and y + 390 <= bottom:
-        els.append(ctx.add(ctx.doodle(pose, (260, 390), max_dur=1.3), x0 + left + (width - 260) / 2, y, t))
+    box = (260, 390)
+    if g.size[0] == g.size[1] and 0 < bottom - y < box[1]:
+        # Square uses this stacked layout with a shorter content band. Keep
+        # the saved narrator, uniformly fitting its source box below the host.
+        height = int(bottom - y)
+        box = (max(1, round(box[0] * height / box[1])), height)
+    if pose and y + box[1] <= bottom:
+        els.append(ctx.add(ctx.doodle(pose, box, max_dur=1.3), x0 + left + (width - box[0]) / 2, y, t))
     return els
 
 

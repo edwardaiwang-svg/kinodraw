@@ -5,18 +5,67 @@ Modes: rules (offline, free) · cloud (KinoDraw Cloud plans) · openai · anthro
 """
 from __future__ import annotations
 
-import json
+from copy import deepcopy
+from ..project_store import ProjectStore
 from pathlib import Path
 
 from .validate import validate
 
 
+def provider_settings(settings, kind, **overrides):
+    """Keep saved options only while using the same provider."""
+    cfg = deepcopy(settings)
+    if kind != (cfg.get('director') or cfg.get('provider') or 'rules'):
+        for key in ('model', 'base_url', 'command'):
+            cfg.pop(key, None)
+    cfg['director'] = kind
+    cfg.update({key: value for key, value in overrides.items() if value is not None})
+    return cfg
+
+
+def provider_for(settings):
+    """Canonical saved/env auth, with optional transient request overrides."""
+    from .llm.providers import AnthropicProvider, CommandProvider, OpenAIProvider, make_provider
+    kind = settings.get('director') or settings.get('provider') or 'rules'
+    if kind == 'rules':
+        return 'rules'
+    model, base = settings.get('model') or None, settings.get('base_url') or None
+    key = settings.get('key') or None
+    if kind == 'anthropic':
+        model = model or 'claude-opus-5-5'
+        if base:
+            raise ValueError('Anthropic base_url is not supported by the existing provider')
+        if key:
+            return AnthropicProvider(model, key=key)
+    if kind == 'cloud' and settings.get('token'):
+        from .llm.cloud import CloudProvider
+        return CloudProvider(settings.get('lang'), token=settings['token'])
+    if kind == 'command' and settings.get('command'):
+        return CommandProvider(model=model, command=settings['command'])
+    if kind == 'compat' and not (model and base):
+        raise ValueError('an OpenAI-compatible provider needs --base-url and --model')
+    if kind in ('openai', 'compat') and (key or base):
+        return OpenAIProvider(model or 'gpt-6-luna', key=key, base_url=base,
+                              name=kind, strict_schema=kind == 'openai')
+    return make_provider(kind, model=model, base_url=base, lang=settings.get('lang'))
+
+
 def direct(project_dir: Path, mode: str = 'rules', model: str | None = None, base_url: str | None = None,
-           progress=None) -> dict:
+           progress=None, *, provider=None) -> dict:
     """Fill every beat's visuals, validate, and save storyboard.json. Returns a report."""
     project_dir = Path(project_dir)
-    path = project_dir / 'storyboard.json'
-    board = json.loads(path.read_text(encoding='utf-8'))
+    store = ProjectStore(project_dir)
+    saved = store.load()
+    board = saved['storyboard']
+    cfg = provider_settings(saved['settings'], mode, model=model, base_url=base_url)
+    generated = cfg.get('generated_visuals', {})
+    from .validate import _doodles
+    # A saved generated snapshot distinguishes untouched direction from edits.
+    # With no ownership record, existing art is conservatively user-owned.
+    originals = {b['id']: deepcopy(b.get('visuals', [])) for b in board['beats']
+                 if (b['id'] in generated and b.get('visuals', []) != generated[b['id']])
+                 or (b.get('visuals') and b['id'] not in generated)
+                 or any(ref.startswith('own:') for ref in _doodles(b.get('visuals', [])))}
     from .match import ensure_model                  # every director searches the doodles; first run downloads it
     ensure_model(board['lang'], progress and (lambda done, total: progress('download-search', done, total)))
     if mode == 'rules':
@@ -28,10 +77,17 @@ def direct(project_dir: Path, mode: str = 'rules', model: str | None = None, bas
         report = {'warnings': report['warnings'], 'notes': [], 'usage': None}
     else:
         from .llm.director import LLMDirector
-        from .llm.providers import make_provider
-        report = LLMDirector(make_provider(mode, model, base_url, board['lang']), board['lang']).direct(board, progress)
+        if provider is None:
+            provider = provider_for({**cfg, 'lang': board['lang']})
+        report = LLMDirector(provider, board['lang']).direct(board, progress)
     if board.get('look', 'whiteboard') != 'whiteboard':  # animated looks: a role, scene, emphasis and energy per sentence
         from .annotate import annotate
         report['direction'] = annotate(board)
-    path.write_text(json.dumps(board, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
+    for beat in board['beats']:
+        if beat['id'] in originals:
+            beat['visuals'] = originals[beat['id']]
+        else:
+            generated[beat['id']] = deepcopy(beat.get('visuals', []))
+    cfg['generated_visuals'] = {b['id']: generated[b['id']] for b in board['beats'] if b['id'] in generated}
+    store.save(board, cfg, saved['revision'], 'Before direction')
     return report

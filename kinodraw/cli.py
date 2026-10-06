@@ -123,13 +123,13 @@ def cmd_voice(args):
 def cmd_render(args):
     from . import pipeline
     project = Path(args.project)
-    if getattr(args, 'director_v3', False) or pipeline.settings(project).get('director_v3'):
-        pipeline.direct_v3(project)
-    if getattr(args, 'aspect', None) is not None:
+    if getattr(args, 'aspect', None) is not None or getattr(args, 'size', None) is not None:
         try:
-            pipeline.set_aspect(project, args.aspect)
+            pipeline.set_format(project, aspect=getattr(args, 'aspect', None), size=getattr(args, 'size', None))
         except ValueError as error:
             sys.exit(f'\n{error}')
+    if getattr(args, 'director_v3', False) or pipeline.settings(project).get('director_v3'):
+        pipeline.direct_v3(project)
     from .library import missing_pictures
     messages = missing_pictures(pipeline.storyboard(project), project)
     if messages:
@@ -139,9 +139,11 @@ def cmd_render(args):
         tl = json.loads((project / 'build' / 'timeline.json').read_text(encoding='utf-8'))
         cfg, board = pipeline.settings(project), pipeline.storyboard(project)
         aspect = pipeline.validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
-        if tl.get('layout', 'landscape') != renderer.pace_layout(board, aspect):
+        target = pipeline.validate_size(cfg.get('size'), aspect, board.get('look'))
+        if tl.get('layout', 'landscape') != renderer.pace_layout(board, pipeline._pace_aspect(aspect)):
             tl = pipeline.build_audio(project, pipeline.narrate(project))
-        prod = renderer.make_production(board, tl, cfg['lang'], project, aspect=aspect)
+        prod = renderer.make_production(board, tl, cfg['lang'], project, aspect=aspect,
+                                        **({'size': target} if cfg.get('size') is not None else {}))
         out = project / 'build' / 'stills'
         out.mkdir(parents=True, exist_ok=True)
         for s in args.stills.split(','):
@@ -274,7 +276,7 @@ def _settings(args):
     out = {}
     if getattr(args, 'director_v3', False):
         out.update(director_v3=True, director=args.director)
-    for key in ('voice', 'speed', 'workers', 'aspect'):
+    for key in ('voice', 'speed', 'workers', 'aspect', 'size', 'director', 'model', 'base_url'):
         if getattr(args, key, None) is not None:
             out[key] = getattr(args, key)
     # A new project starts with the end card on, as in the Studio; --no-credit leaves it off. The Studio box shows it.
@@ -437,7 +439,8 @@ def main(argv=None):
                        'line (captions keep your spelling); kept as the project\'s pronounce.txt')
         p.add_argument('--workers', type=int, help='parallel render processes (default 2)')
         p.add_argument('--aspect', choices=ASPECTS, default='16:9',
-                       help='16:9 for YouTube (default) or 9:16 for Shorts, TikTok and Reels')
+                       help='16:9 (default), 9:16 portrait or 1:1 square')
+        p.add_argument('--size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'), help='native pixel dimensions')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
         p.add_argument('--director', default='rules', choices=MODES)
         p.add_argument('--director-v3', action='store_true', help='save and reuse a whole-video v3 director plan')
@@ -485,7 +488,8 @@ def main(argv=None):
     p.add_argument('--duration', type=float)
     p.add_argument('--workers', type=int)
     p.add_argument('--aspect', choices=ASPECTS, default=None,
-                   help='switch the project to 16:9 or 9:16 first (saved to project.json; the narration is reused)')
+                   help='save 16:9, 9:16 or 1:1; reuse the cached narration')
+    p.add_argument('--size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'), help='save native pixel dimensions')
     p.add_argument('--stills')
     p.set_defaults(func=cmd_render)
     p = sub.add_parser('finish')

@@ -21,6 +21,7 @@ from .. import library
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
 from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
+from .bold.render import _SceneLayers
 from .creatures import Genome, Action, raster
 from .creatures.actions import ACTIONS, add, target_response
 
@@ -98,6 +99,9 @@ class Span:
     join: float = 0.
     join_length: float = 0.
     source_chart: bool = False
+    diagram: object | None = None
+    diagrams: tuple = ()
+    source_proof: bool = False
 
 
 class HybridProduction:
@@ -106,9 +110,13 @@ class HybridProduction:
     def __init__(self, episode, tline, lang, project_dir, plan, whiteboard):
         self.ep, self.tl, self.lang = episode, tline, lang
         self.plan, self.whiteboard = plan, whiteboard
+        self.whiteboard.motion_floor = plan['style']['motion_floor']
         self.cutaway = copy.copy(whiteboard)
         self.cutaway.cap_starts = []  # joins carry one sharp caption at actual narration time
         self.size, self.duration = whiteboard.size, tline['duration']
+        self.native = getattr(whiteboard, 'native', False)
+        self.square = self.native and self.size[0] == self.size[1]
+        self._square_layers = {}
         self.ctx, self.els = whiteboard.ctx, whiteboard.els
         self.warnings = list(whiteboard.warnings)
         self.by_id = {b['id']: b for b in beats(episode, lang)}
@@ -145,6 +153,10 @@ class HybridProduction:
             if i and len(self.score_beats) and not len(available):
                 self.warnings.append(f'hybrid: source span {spec["beat_ids"]} too short for a score-aligned join')
             self._prepare(span, project_dir)
+            if self.native and span.atmos:
+                span.atmos.internal_size = self.size
+            if self.square and span.motion:
+                self._reflow_square(span)
             self.spans.append(span)
         self.starts = [s.start for s in self.spans]
         self.cuts = [s.join for s in self.spans[1:] if s.spec['transition_in'] == 'cut']
@@ -208,9 +220,24 @@ class HybridProduction:
             span.atmos = Atmosphere(layers, {'background': self.style['palette']['background'],
                 'foreground': self.style['palette']['ink'], 'accent': self.style['palette']['accent']},
                 spec['atmosphere']['density'], seed(spec['beat_ids']))
-        if treatment == 'whiteboard':
+        from .source_diagrams import resolve as resolve_diagram, PanelMotion
+        for element in spec['elements']:
+            if element['kind'] == 'diagram':
+                diagram = resolve_diagram(self.ep, element['ref'])
+                if diagram and diagram.kind == 'panels':
+                    span.diagrams += (PanelMotion(diagram, self.tl, self.size, self.whiteboard.skin,
+                                                  self.style['palette'], self.style['motion_floor'],
+                                                  speech_end=min(span.end, max(self.tl['beats'][bid]['speech_end']
+                                                                              for bid in spec['beat_ids']))),)
+                elif diagram and diagram.kind == 'dots':
+                    span.source_proof = True
+        span.diagrams = tuple(sorted(span.diagrams, key=lambda d: d.window[0]))
+        for previous, following in zip(span.diagrams, span.diagrams[1:]):
+            previous.speech_end = min(previous.speech_end, following.window[0])
+        span.diagram = span.diagrams[0] if span.diagrams else None
+        if treatment == 'whiteboard' or span.source_proof:
             return
-        if span.atmos is None and self.style['motion_floor'] != 'still':
+        if span.atmos is None and not span.diagram and self.style['motion_floor'] != 'still':
             span.atmos = Atmosphere('dust', {'background': self.style['palette']['background'],
                 'accent': self.style['palette']['accent2']}, .8, seed(spec['beat_ids']))
         if treatment == 'character' and not span.actors:
@@ -218,7 +245,7 @@ class HybridProduction:
         p = self.style['palette']
         elements = []
         for e in spec['elements']:
-            if e['kind'] == 'picture':
+            if e['kind'] == 'picture' and not span.diagram:
                 try:
                     path = library.resolve(e['ref'], Path(project_dir))
                     elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450))
@@ -234,10 +261,10 @@ class HybridProduction:
             atomic = '\n'.join(textwrap.wrap('“' + body + '”', 48)) + ('\n— ' + who if who else '')
             elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
         for e in spec['elements']:
-            if e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
+            if not span.diagram and e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
                 elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
-        if text_kind not in ('none', 'caption_only', 'quote'):
+        if not span.diagram and text_kind not in ('none', 'caption_only', 'quote'):
             words = source['text'] if source else text
             elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
                 'type_on' if treatment == 'kinetic_type' else 'word_pop', width=1500, size=72,
@@ -293,6 +320,34 @@ class HybridProduction:
                 element.width = min(element.width, 1920 / cols * .8)
                 element.height = min(element.height, 1080 / rows * .65)
 
+    def _reflow_square(self, span):
+        """Reflow logical element boxes before their SVGs are rasterized.
+
+        The renderer positions centers as stage fractions, but native square
+        sprites keep uniform pixel scale (letters and circles never stretch).
+        """
+        elements = span.motion.elements
+        groups = self._cast_groups(span)
+        if span.spec['composition'] in ('grid', 'split'):
+            total = max(1, len(elements) + len(groups))
+            cols = 1 if span.spec['composition'] == 'split' else math.ceil(math.sqrt(total))
+            rows = math.ceil(total / cols)
+            for i, e in enumerate(elements):
+                e.x, e.y = (i % cols + .5) / cols, .08 + (i // cols + .5) * .68 / rows
+                e.width = min(e.width, 1080 / cols * .78)
+                e.height = min(e.height, 1080 * .58 / rows)
+        else:
+            for e in elements:
+                e.width = min(e.width, 840)
+                e.height = min(e.height, 570)
+                # Reserve the lower band for narration captions.
+                if e.y is None:
+                    e.y = .37 if span.actors else .43
+        for e in elements:
+            if e.kind == 'text':
+                # Existing text presets and font choice remain source controlled.
+                e.size = min(e.size, 64)
+
     def _label(self, value):
         return str(value.get(self.lang, next(iter(value.values()), ''))) if isinstance(value, dict) else str(value or '')
 
@@ -317,13 +372,17 @@ class HybridProduction:
             group = next(g for g in groups if key in g)
             offset = len(span.motion.elements)
             total = offset + len(groups)
-            cols = 2 if span.spec['composition'] == 'split' else math.ceil(math.sqrt(total))
+            cols = (1 if self.square else 2) if span.spec['composition'] == 'split' else math.ceil(math.sqrt(total))
             rows = math.ceil(total / cols)
             slot = offset + groups.index(group)
             within = .5 + (group.index(key) - (len(group) - 1) / 2) * .6 / max(1, len(group))
-            return (slot % cols + within) / cols, (slot // cols + .85) / rows, min(.65 / rows, 1.2 / (cols * len(group)))
+            ground = (slot // cols + .85) / rows
+            height = min(.65 / rows, 1.2 / (cols * len(group)))
+            if self.square:
+                ground, height = .08 + ground * .68, height * .68
+            return (slot % cols + within) / cols, ground, height
         x = {'left_third': 1/3, 'right_third': 2/3}.get(span.spec['composition'], .5) if n == 1 else .2 + .6 * i / max(1, n - 1)
-        return x, .8, min(.78, 1.5 / max(1, n))
+        return x, .8, min(.78, (0.78 if self.square else 1.5) / max(1, n))
 
     def _actors(self, span, local, image):
         main = [key for key in span.actors if not key.startswith('crowd-hyena-')]
@@ -344,6 +403,15 @@ class HybridProduction:
                     pose = add(pose, target_response(a, local))
             x, ground, relative_height = ((i + .5) / len(crowd), .42, .24) if is_crowd else self._actor_slot(span, key)
             height = round(h * relative_height)
+            if self.square:
+                # Rigs have different silhouettes; measure their SVG viewBox,
+                # then rasterize once at the size fitting the actor's safe slot.
+                from .creatures.draw import svg
+                import xml.etree.ElementTree as ET
+                view = ET.fromstring(svg(g, pose, local)).attrib['viewBox'].split()
+                ratio = float(view[2]) / float(view[3])
+                slot_width = w * (.8 / max(1, n) if not is_crowd else .8 / len(crowd))
+                height = min(height, round(slot_width / ratio))
             sprite = raster(g, pose, local, height=max(60, height))
             bbox = sprite.getchannel('A').getbbox()
             if bbox:
@@ -368,7 +436,7 @@ class HybridProduction:
 
     def _frame(self, span, t):
         spec, local = span.spec, max(0, t - span.start)
-        if spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
+        if span.source_proof or spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
             return self.cutaway.frame(t).convert('RGB')
         w, h = self.size
         background = None
@@ -376,8 +444,14 @@ class HybridProduction:
             from .bold.render import _background
             base = np.clip(_background(span.motion, local, w, h), 0, 255).astype(np.uint8)
             background = np.clip(compose(base, span.atmos, local) * 255 + .5, 0, 255).astype(np.uint8)
-        array = render_frame(span.motion, local, w, h, background=background)
+        if self.square:
+            array = self._square_frame(span.motion, local, w, h, background)
+        else:
+            array = render_frame(span.motion, local, w, h, background=background)
         image = Image.fromarray(array)
+        active = next((d for d in reversed(span.diagrams) if t >= d.window[0]), None)
+        if active:
+            active.paint(image, t)
         if spec['treatment'] == 'chart' and (span.source_chart or not span.motion.elements):
             # Use actual numeric data, never fabricate chart values.
             board = self.cutaway.frame(t).convert('RGB')
@@ -407,7 +481,7 @@ class HybridProduction:
                 dx = (sum(xs) / len(xs) / 1920 - .5) * w * .35
             zoom = 1.06
         if camera == 'shake':
-            strength = 2 * self.style['energy'] * math.exp(-local * 4)
+            strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
             dx, dy = strength * math.sin(local * 39), strength * math.sin(local * 31)
         inv = 1 / zoom
         if zoom != 1 or dx or dy:
@@ -416,17 +490,51 @@ class HybridProduction:
                 fillcolor=ImageColor.getrgb(self.style['palette']['background']))
         return image.convert('RGB')
 
+    def _square_frame(self, scene, t, w, h, background):
+        """Use the motion engine's native sprites/effects with uniform square geometry."""
+        from .bold import render as renderer
+        key = id(scene), w, h
+        if key not in self._square_layers:
+            self._square_layers[key] = _SquareLayers(scene, w, h)
+        layers = self._square_layers[key]
+        art = renderer._background(scene, t, w, h) if background is None else np.asarray(background, np.float32).copy()
+        for i, e in enumerate(scene.elements):
+            times = [t]
+            if scene.blur_samples > 1 and renderer._element_blurs(scene, e, i, t):
+                times = t + np.linspace(-.5, .5, scene.blur_samples) / renderer.FPS
+            renderer._composite(art, layers, i, times, 'art')
+        if scene.glow and any(e.emissive for e in scene.elements):
+            gw, gh = max(1, w // 4), max(1, h // 4)
+            light = np.zeros((gh, gw, 4), np.float32)
+            for i, e in enumerate(scene.elements):
+                if e.emissive:
+                    renderer._composite(light, layers, i, [t], 'art')
+            light = renderer.glow_layer(light[..., :3], renderer.GLOW_HALF * gh / renderer.H)
+            halo = Image.fromarray(np.clip(light * 4 * scene.glow, 0, 255).astype(np.uint8))
+            art += np.asarray(halo.resize((w, h), Image.Resampling.BILINEAR), np.float32)
+        art *= renderer._vignette(w, h)
+        if scene.grain:
+            rng = renderer.m.seeded(scene.seed, 'bold grain', math.floor(t * renderer.FPS + 1e-6), w, h)
+            art += rng.normal(0, scene.grain, (h, w, 1)).astype(np.float32)
+        for i in range(len(scene.elements)):
+            renderer._composite(art, layers, i, [t], 'text')
+        return np.clip(art + .5, 0, 255).astype(np.uint8)
+
     def frame(self, t):
         if not self.spans or t < self.starts[0] or t >= self.tl['end_card']['start']:
             return self.whiteboard.frame(t)
         i = bisect.bisect_right(self.starts, t) - 1
         span = self.spans[i]
         # Selected whiteboard scenes retain their exact legacy bytes, including transitions.
-        if span.spec['treatment'] == 'whiteboard':
+        if span.spec['treatment'] == 'whiteboard' or span.source_proof:
             return self.whiteboard.frame(t)
         local = t - span.join
         kind = span.spec['transition_in']
-        if i and local < 0:
+        if span.diagram and t >= span.diagram.window[0]:
+            # The spoken glide cue owns these panels. A score-delayed join must
+            # not hide their labels or substitute the previous scene.
+            image = self._frame(span, t)
+        elif i and local < 0:
             image = self._frame(self.spans[i - 1], min(t, span.start - 1 / 30))
         else:
             image = self._frame(span, t)
@@ -458,6 +566,21 @@ class HybridProduction:
         return cues
 
 
+class _SquareLayers(_SceneLayers):
+    def __init__(self, scene, w, h):
+        # Rasterize fragments at the final isotropic scale; convert only the
+        # logical x coordinates expected by the existing motion compositor.
+        super().__init__(scene, round(h * 1920 / 1080), h)
+        self.x_ratio = (h * 1920 / 1080) / w
+
+    def sprite(self, i, t, layer, geometry=None):
+        sprite = super().sprite(i, t, layer, geometry)
+        if sprite is None:
+            return None
+        channels, left, top, sx, sy = sprite
+        return channels, left * self.x_ratio, top, sx / self.x_ratio, sy
+
+
 def prepare_props(plan, board, project, llm, candidates=None):
     """Small callable-only A6 seam; saved generated refs are consumed offline by workers.
 
@@ -472,7 +595,7 @@ def prepare_props(plan, board, project, llm, candidates=None):
     for scene in plan['scenes']:
         if scene['treatment'] not in ('motion', 'atmosphere', 'whiteboard'):
             continue
-        if any(e['kind'] == 'cast' for e in scene['elements']):
+        if any(e['kind'] in ('cast', 'diagram') for e in scene['elements']):
             continue
         description = ' '.join(by_id[b]['text'] for b in scene['beat_ids'])
         offered = [hit for b in scene['beat_ids'] for hit in (candidates or {}).get(b, [])]

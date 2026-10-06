@@ -223,6 +223,15 @@ class PathDrawing:
         self._cache_e = elapsed
         return self._cache_mask, pen, down
 
+    def _native_mask(self, elapsed):
+        """Fresh-path rasterization for native recipes, independent of frame history.
+
+        Fractional brush endpoints from earlier calls must not remain in a
+        segment's mask. The default incremental mask keeps its exact behavior.
+        """
+        self._cache_mask = None
+        return PathDrawing._mask(self, elapsed)
+
     def state(self, elapsed):
         if elapsed >= self.duration:
             return self.color, None, False
@@ -299,6 +308,8 @@ def svg_drawing(svg_path, box, speed=700., min_dur=.8, max_dur=2.0) -> PathDrawi
     color, line, polylines, brush = _svg_layers(str(svg_path), int(box[0]), int(box[1]))
     drawing = PathDrawing(color, line, [np.asarray(p, np.float32) for p in polylines], brush,
                           speed=speed, min_dur=min_dur, max_dur=max_dur)
+    drawing.native_recipe = ('svg', (str(svg_path), tuple(box)),
+                             dict(speed=speed, min_dur=min_dur, max_dur=max_dur))
     drawing.doodle = True                    # a picture with its own colours (a skin restyles its fills)
     return drawing
 
@@ -359,7 +370,10 @@ def picture_drawing(path, box, speed=375., min_dur=.8, max_dur=2.2):
         else:
             stat = path.stat()
             image = _picture_image(str(path), stat.st_mtime_ns, stat.st_size, int(box[0]), int(box[1]))
-        return RevealDrawing(image, speed=speed, min_dur=min_dur, max_dur=max_dur)
+        drawing = RevealDrawing(image, speed=speed, min_dur=min_dur, max_dur=max_dur)
+        drawing.native_recipe = ('picture', (str(path), tuple(box)),
+                                 dict(speed=speed, min_dur=min_dur, max_dur=max_dur))
+        return drawing
     except Exception:
         raise ValueError(f'KinoDraw couldn’t open the picture “{path.name}”. Save it again as a PNG or JPG '
                          'and upload it again.') from None
@@ -403,8 +417,11 @@ def stroke_drawing(size, polylines, color=INK, width=6, fill=None, closed_fill=N
                     fine.append(a + (b - a) * s / k)
             pts = np.asarray(fine, np.float32)
         dens.append(pts)
-    return PathDrawing(col, line if closed_fill else col, dens, brush=width * .9 + 1.5,
-                       speed=speed, min_dur=min_dur, max_dur=max_dur, pop=pop if closed_fill else .01)
+    drawing = PathDrawing(col, line if closed_fill else col, dens, brush=width * .9 + 1.5,
+                          speed=speed, min_dur=min_dur, max_dur=max_dur, pop=pop if closed_fill else .01)
+    drawing.native_recipe = ('strokes', (tuple(size), polylines), dict(color=color, width=width,
+        fill=fill, closed_fill=closed_fill, speed=speed, min_dur=min_dur, max_dur=max_dur, pop=pop, ss=ss))
+    return drawing
 
 
 # ---------------------------------------------------------------- text drawings
@@ -476,6 +493,8 @@ class TextDrawing:
 
     def __init__(self, lines, lang, size, color=INK, align='left', line_gap=1.18, pace=1.0,
                  min_dur=.6, max_dur=6.0, pad=6, fonts: Fonts = FONTS):
+        self.native_recipe = ('text', (list(lines), lang, size), dict(color=color, align=align,
+            line_gap=line_gap, pace=pace, min_dur=min_dur, max_dur=max_dur, pad=pad, fonts=fonts))
         f = hand_font(lang, size, fonts)
         self.lines, self.lang = lines, lang
         widths = [text_width(line, lang, size, fonts) for line in lines]
@@ -627,6 +646,7 @@ class StaticDrawing:
 
     def __init__(self, image, pop=.35):
         self.image, self.size, self.duration = image, image.size, pop
+        self.native_photo = image.info.get('native_photo')
 
     def state(self, elapsed):
         if elapsed < 0:
@@ -648,6 +668,7 @@ def circle_photo(path, diameter, ring=8, color=INK):
     mask = mask.resize((diameter, diameter), Image.LANCZOS)
     out = Image.new('RGBA', (diameter, diameter), (0, 0, 0, 0))
     out.paste(img, (0, 0), mask)
+    out.info['native_photo'] = (str(path), diameter, ring, color)
     return out
 
 

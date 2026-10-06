@@ -59,7 +59,7 @@ async function api(path, opts = {}) {
   const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
   const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, ...type, ...(opts.headers || {}) } });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code, status: r.status });
+  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code, status: r.status, usage: data.usage });
   return data;
 }
 const doodleSrc = (id) => `/doodle/${encodeURIComponent(id)}.svg?token=${T}${current ? `&project=${encodeURIComponent(current)}` : ''}`;
@@ -146,12 +146,16 @@ const voiceMeta = (id, server) => (STATE.voice_server?.on      // with Settings 
 
 const MAKE = ['storyboard', 'director', 'voice', 'timeline', 'render', 'finish'];
 async function watch(job, title, order = MAKE, own = false) {     // own: narrated from the user's recording
+  let cancelling = false;
   $('#prog-cancel').disabled = false;
   $('#prog-cancel').onclick = async () => {
-    try { await api(`/api/jobs/${job}/cancel`, { method: 'POST' }); $('#prog-cancel').disabled = true; $('#prog-stage').textContent = 'Cancellation requested; waiting for the current step to stop…'; }
-    catch (e) { toast(e.message); }
+    cancelling = true; $('#prog-cancel').disabled = true;
+    $('#prog-stage').textContent = 'Cancellation requested; waiting for the current step to stop…';
+    try { await api(`/api/jobs/${job}/cancel`, { method: 'POST' }); }
+    catch (e) { cancelling = false; $('#prog-cancel').disabled = false; toast(e.message); }
   };
   $('#prog-title').textContent = title; $('#prog-fill').style.width = '2%'; $('#progress').classList.remove('hidden');
+  $('#prog-stage').textContent = 'Starting';
   const STAGES = { storyboard: 'Reading the script', style: 'Choosing a style', director: 'Planning the visuals', voice: 'Recording the narration',
     timeline: 'Timing captions and music', render: 'Drawing the video (the longest step)', finish: 'Adding music, captions and chapters',
     'download-search': 'Downloading the doodle search (first video only)', 'download-voice': 'Downloading the voice (first video only)',
@@ -167,7 +171,13 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
     $('#prog-fill').style.width = `${Math.min(99, ((k + frac) / order.length) * 100)}%`;
     const count = j.stage.startsWith('download') ? ` · ${MB(j.done)} of ${MB(j.total)} MB (${Math.floor(frac * 100)}%)`
       : j.total > 1 ? ` · ${j.done}/${j.total}` : '';
-    $('#prog-stage').textContent = j.state === 'cancelling' ? 'Cancellation requested; waiting for the current step to stop…' : `${STAGES[j.stage] || 'Starting'}${count}`;
+    const seconds = Math.ceil(j.eta);
+    const eta = !cancelling && j.state === 'running' && j.stage === 'render'
+      && Number.isFinite(j.eta) && j.eta >= 0 && Number.isFinite(j.frames) && j.frames >= 0
+      && Number.isFinite(j.frames_total)
+      && j.frames === j.done && j.frames_total === j.total && j.frames < j.frames_total
+      ? ` · Encoding: ~${seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`} remaining` : '';
+    $('#prog-stage').textContent = cancelling || j.state === 'cancelling' ? 'Cancellation requested; waiting for the current step to stop…' : `${STAGES[j.stage] || 'Starting'}${count}${eta}`;
     if (['done', 'failed', 'cancelled'].includes(j.state)) {
       $('#progress').classList.add('hidden');
       if (j.state !== 'done') throw new Error(j.error);
@@ -235,7 +245,9 @@ function showNew() {
       if (cloudOption.disabled && dirSel.value === 'cloud') { dirSel.value = 'rules'; dirSel.onchange?.(); }
     }
   };
-  langSel.onchange = fillVoices; $('#script').oninput = () => { if (!langSel.value) fillVoices(); };
+  const scriptInput = $('#script');
+  let scriptEdits = 0;
+  langSel.onchange = fillVoices; scriptInput.oninput = () => { scriptEdits++; if (!langSel.value) fillVoices(); };
   fillVoices();
   $('#speed-wrap').innerHTML = speedRow('speed');
   bindSpeed('speed');
@@ -262,6 +274,7 @@ function showNew() {
     }[d];
     if (d !== 'rules') $('#director-note').textContent += ' Planning uploads your full story and prompt to the selected provider. Choose Offline for local planning.';
     else $('#director-note').textContent += ' Initial asset downloads may use the network; a configured voice server receives narration text.';
+    writerNote();
   };
   dirSel.onchange = async () => {
     note(); syncStyle();
@@ -271,6 +284,49 @@ function showNew() {
       catch (e) { STATE.cloud = null; if (e.code === 'sign_in') cloudAsks = e.message; }   // the note and Settings say it asks
       note();
     }
+  };
+  const draftButton = $('#writer-draft'), draftStatus = $('#writer-status');
+  let drafting = false;
+  const writerAvailable = () => STATE.hooks?.writer && ['openai', 'anthropic', 'compat', 'command'].includes(dirSel.value);
+  function writerNote() {
+    const available = writerAvailable();
+    $('#writer-note').textContent = available
+      ? 'Only Draft from notes sends your topic, source notes and local voice/style guidance to the selected provider or command, using the model and base URL below. Provider billing may apply. Review the draft and check its facts before creating a storyboard.'
+      : 'Drafting is unavailable with this director. Choose a supporting provider under Settings → Advanced directors (OpenAI, Anthropic, OpenAI-compatible, or your command). Offline and KinoDraw Cloud do not support drafting.';
+    draftButton.disabled = drafting || !available;
+  }
+  const usageText = usage => usage ? ` · Usage: ${JSON.stringify(usage)}` : '';
+  $('#writer-use').onclick = () => {
+    if (!scriptInput.isConnected) return;
+    scriptInput.value = $('#writer-text').value; scriptInput.oninput(); fillVoices();
+    $('#writer-review').classList.add('hidden');
+    draftStatus.textContent = 'Draft inserted. Edit and check it before creating a storyboard.' + draftStatus.usage;
+  };
+  $('#writer-dismiss').onclick = () => $('#writer-review').classList.add('hidden');
+  draftButton.onclick = async () => {
+    if (drafting || !writerAvailable()) return;
+    const topic = $('#writer-topic').value.trim(), notes = $('#writer-notes').value.trim();
+    if (!topic || !notes) { draftStatus.textContent = 'Add a topic and source notes. A topic alone is not evidence.'; return; }
+    const before = scriptInput.value, edits = scriptEdits;
+    drafting = true; writerNote(); draftStatus.textContent = 'Drafting from your source notes…';
+    $('#writer-review').classList.add('hidden');
+    try {
+      const result = await api('/api/writer', { method: 'POST', body: JSON.stringify({ director: dirSel.value,
+        model: $('#model').value, base_url: dirSel.value === 'compat' ? $('#base-url').value : '', topic, notes, voice: $('#writer-voice').value }) });
+      if (!scriptInput.isConnected) return;
+      if (!result.ok) throw Object.assign(new Error(result.error || 'The provider could not draft from these notes.'), { usage: result.usage });
+      if (typeof result.text !== 'string' || !result.text.trim()) throw new Error('The writer returned an empty draft.');
+      draftStatus.usage = usageText(result.usage);
+      if (before.trim() || scriptEdits !== edits || scriptInput.value !== before) {
+        $('#writer-text').value = result.text; $('#writer-review').classList.remove('hidden');
+        draftStatus.textContent = 'Your script is kept. Review the returned draft below, then choose Replace script with this draft.' + draftStatus.usage;
+      } else {
+        scriptInput.value = result.text; scriptInput.oninput(); fillVoices();
+        draftStatus.textContent = 'Draft inserted. Edit and check it before creating a storyboard.' + draftStatus.usage;
+      }
+    } catch (error) {
+      if (scriptInput.isConnected) draftStatus.textContent = error.message + usageText(error.usage);
+    } finally { drafting = false; if (scriptInput.isConnected) writerNote(); }
   };
   note();
   $('#file').onchange = async (e) => {
@@ -285,6 +341,7 @@ function showNew() {
         ? 'Pages files can’t be read. In Pages, choose File → Export To → Word…, then choose the .docx.'
         : 'Choose a .md, .txt or .docx file.');
       $('#file-name').textContent = f.name; fillVoices();
+      scriptEdits++;
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
   $('#style').innerHTML = `<option id="style-auto" value="auto">${esc(autoLabel(dirSel.value))}</option>`
@@ -324,7 +381,16 @@ function showNew() {
 
 // ---------------------------------------------------------------- project
 function formatOptions(selected) {
-  return STATE.formats.map((f) => `<option value="${esc(f.value)}"${f.value === selected ? ' selected' : ''}>${esc(f.label)}</option>`).join('');
+  const formats = [...STATE.formats];
+  if (!formats.some((f) => f.value === '1:1')) formats.push({ value: '1:1', label: 'Square 1:1' });
+  return formats.map((f) => `<option value="${esc(f.value)}"${f.value === selected ? ' selected' : ''}>${esc(f.label)}</option>`).join('');
+}
+
+function nativeTarget() {
+  const value = $('#p-native-target').value;
+  if (!value) return {};
+  const [aspect, width, height] = value.split(',');
+  return { aspect, size: [Number(width), Number(height)] };
 }
 
 async function openProject(name, tab = null) {
@@ -412,10 +478,11 @@ async function openProject(name, tab = null) {
     button.onclick = async () => {
       if (dirty && !(await saveBoard())) return;
       try {
-        const response = await api(`/api/projects/${encodeURIComponent(name)}/${kind}`, { method: 'POST', body: JSON.stringify({ revision }) });
+        const body = kind === 'export' ? { revision, format: $('#p-export-format').value, ...nativeTarget() } : { revision };
+        const response = await api(`/api/projects/${encodeURIComponent(name)}/${kind}`, { method: 'POST', body: JSON.stringify(body) });
         const result = await watch(response.job, kind === 'export' ? 'Exporting' : 'Packing the project');
         if (!result?.file) throw new Error('The export hook returned no downloadable file.');
-        modal(`<h2>Export ready</h2><a href="${fileSrc(result.file)}" target="_blank">Download ${esc(result.file)}</a>`);
+        modal(`<h2>Export ready</h2><a href="${fileSrc(result.file)}" target="_blank">Download ${esc(result.format || 'ZIP')}</a>${result.audio_file ? `<p>${esc(result.audio_note)}</p><a href="${fileSrc(result.audio_file)}" target="_blank">Download audio companion</a>` : ''}`);
       } catch (e) { $('#progress').classList.add('hidden'); toast(e.message, 7000); }
     };
   }
@@ -714,7 +781,7 @@ async function makeVideo(name, anyway = false) {   // anyway: the user saw which
       stop(`${sentences(unseen)} didn’t match your recording. Record it again, or press Make the video anyway.`);
       return;
     }
-    const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/make`, { method: 'POST' })).job, 'Making your video', MAKE, own);
+    const res = await watch((await api(`/api/projects/${encodeURIComponent(name)}/make`, { method: 'POST', body: JSON.stringify({ revision, ...nativeTarget() }) })).job, 'Making your video', MAKE, own);
     toast(res.ok ? `Video ready (${res.length})` : `Video made, with warnings: ${res.problems[0]}`, 6000);
     await openProject(name);
     document.querySelector('.tabs button[data-tab="video"]').click();
@@ -1101,6 +1168,17 @@ function refreshDirectorMenus() {          // after Settings changes, without cl
 
 document.addEventListener('DOMContentLoaded', async () => {
   $('#btn-new').onclick = showNew;
+  $('#project-import').onchange = async (event) => {
+    const input = event.target, file = input.files[0]; if (!file) return;
+    input.disabled = true;
+    try {
+      if (dirty && current && !(await saveBoard())) return;
+      const result = await api('/api/projects/import', { method: 'POST', body: file });
+      await openProject(result.project);
+      toast('Imported saved project.');
+    } catch (error) { toast(error.message, 8000); }
+    finally { input.disabled = false; input.value = ''; }
+  };
   $('#btn-sample').onclick = showSample;
   $('#btn-settings').onclick = showSettings;
   $('#feedback').onclick = showFeedback;

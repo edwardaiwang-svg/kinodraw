@@ -65,6 +65,27 @@ class Production:
         if geometry.name == 'portrait':
             self.vertical = True
         self.project_dir = Path(project_dir)
+        config_path = self.project_dir / 'project.json'
+        config = json.loads(config_path.read_text(encoding='utf-8')) if config_path.is_file() else {}
+        plan = config.get('plan_v3') if config.get('director_v3') and not relaxed else None
+        if plan:
+            self.motion_floor = plan['style']['motion_floor']
+        self._source_beats = {bid for scene in plan['scenes'] if scene['treatment'] == 'whiteboard'
+                              and (geometry.size[0] == geometry.size[1]
+                                   or scene['text']['kind'] not in ('none', 'caption_only')
+                                   or any(e['kind'] == 'text' for e in scene['elements']))
+                              for bid in scene['beat_ids']} if plan else set()
+        from .source_diagrams import resolve as resolve_diagram
+        requested = {e['ref'] for scene in plan['scenes'] for e in scene['elements']
+                     if e['kind'] == 'diagram'} if plan else set()
+        self._diagrams = {bid: spec for bid in requested
+                          if (spec := resolve_diagram(self.ep, bid)) is not None}
+        self._diagram_palette = plan['style']['palette'] if plan else None
+        self._diagram_drawn = {}
+        self._diagram_ends = {e['ref']: max(tline['beats'][bid]['speech_end'] for bid in scene['beat_ids'])
+                              for scene in plan['scenes'] for e in scene['elements']
+                              if e['kind'] == 'diagram'} if plan else {}
+        self._source_beats -= set(self._diagrams)
         self.skin = skins.for_look(self.ep.get('look'))       # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
         self.layout = Layout(self.g)
@@ -81,6 +102,9 @@ class Production:
         if self.skin.emphasis == 'highlighter':              # each sentence's key phrase, where it is written
             skins.highlight_phrases(self.ep, self.tl, self.ctx.elements)
         self._schedule()
+        for element in self.ctx.elements:
+            if hasattr(element.drawing, 'bind') and element.start is not None:
+                element.drawing.bind(element.start, element.rate)
         self._pin_notes()
         self._index()
 
@@ -107,6 +131,9 @@ class Production:
     def _visuals(self, beat, not_before=0.0):
         ctx = self.ctx
         ctx.beat = beat
+        if beat['id'] in self._diagrams:
+            self._proof(beat)
+            return
         deferred = []
         first_new = len(ctx.elements)
         for k, v in enumerate(beat.get('visuals', [])):
@@ -164,12 +191,110 @@ class Production:
             except Exception as error:  # noqa: BLE001
                 self.warnings.append(f"{beat['id']}/{v.get('id')}: emphasis {error}")
             self._tag(n0, v.get('id') or f"{beat['id']}#emphasis", beat=beat['id'])
+        # A sparse directed paragraph can leave its second row unused while
+        # several concluding sentences are spoken. Write those source sentences
+        # there at their saved narration times, using the same single hand.
+        spans = beat.get('direction', [])[-2:]
+        visuals = beat.get('visuals', [])
+        drawn = ctx.elements[first_new:]
+        busy = max((e.trigger for e in drawn), default=math.inf) + sum(e.drawing.duration for e in drawn)
+        col = self.layout.cursor
+        if (ctx.chapter and ctx.chapter['kind'] == 'section' and visuals
+                and all(v.get('type') == 'cluster' for v in visuals)
+                and self.layout.used.get(col) == {0}):
+            spans = [s for s in spans if self._source_time(beat, s) >= busy + .3]
+            if spans:
+                box, _ = self.layout.slot()
+                self._source_lines(beat, spans, box)
+        if (beat['id'] in self._source_beats and not visuals
+                and not ctx.elements[first_new:] and ctx.chapter
+                and ctx.chapter['kind'] not in ('intro', 'outro')):
+            spoken = beat['spoken'][self.lang]
+            box, _ = self.layout.slot()
+            self._source_lines(beat, [{'span': [0, len(spoken)]}], box)
         for el in ctx.elements[first_new:]:          # e.g. wait for a section opener to be drawn
             if not el.atomic:
+                opening = 0.
+                if ctx.chapter and ctx.chapter['kind'] == 'section':
+                    opening = next(c['start'] for c in self.tl['chapters']
+                                   if c['id'] == ctx.chapter['id']) + tl.ZOOM_IN + .15
+                self._visual_triggers[id(el)] = (el, max(el.trigger, opening))
                 el.trigger = max(el.trigger, not_before)
+
+    def _proof(self, beat):
+        from .source_diagrams import ProofDrawing, window
+        spec = self._diagrams[beat['id']]
+        for previous in self.ctx.elements:
+            if (previous.group.startswith('diagram:') and hasattr(previous.drawing, 'motion')
+                    and previous.hidden_after is None):
+                previous.hidden_after = self._bt(beat)['start']
+        if spec.base in self._diagram_drawn:
+            col, x, y, w, h, drawing = self._diagram_drawn[spec.base]
+            self.cut(self._bt(beat)['start'], col * self.g.col, 'cut')
+        else:
+            specs = [self._diagrams[b['id']] for b in self.ep['beats']
+                     if b['id'] in self._diagrams and self._diagrams[b['id']].base == spec.base]
+            if spec.kind == 'dots' and not any(s.build for s in specs):
+                from .source_diagrams import resolve
+                specs.insert(0, resolve(self.ep, spec.base))
+            # Reserve a full safe board; later refs reuse this exact proof page.
+            box, (col, _) = self.layout.page()
+            x, y, w, h = box
+            self.cut(self._bt(beat)['start'], col * self.g.col, 'cut')
+            panel = spec.kind == 'panels'
+            timing = dict(self.tl, _diagram_palette=self._diagram_palette,
+                          _diagram_floor=self.motion_floor,
+                          _diagram_speech_end=self._diagram_ends[spec.ref]) if panel else self.tl
+            drawing = ProofDrawing(specs, timing, self.size if panel else (w, h), self.lang, self.skin)
+            if panel:
+                x, y = col * self.g.col, 0.
+            element = self.ctx.add(drawing, x, y, drawing.origin, essential=True,
+                                   group=f'diagram:{spec.base}', beat=beat['id'],
+                                   deadline=drawing.origin + drawing.duration + .1, hand=not panel, fixed=panel)
+            self._visual_triggers[id(element)] = (element, drawing.origin)
+            self._diagram_drawn[spec.base] = (col, x, y, w, h, drawing)
+        if spec.kind == 'dots' and spec.write:
+            a, b = window(self._bt(beat), spec.write)
+            group = f'diagram-equation:{spec.base}'
+            for previous in self.ctx.elements:
+                if previous.group == group and previous.hidden_after is None:
+                    previous.hidden_after = a
+            text = ink.TextDrawing([spec.equation], self.lang,
+                                   drawing.text.native_recipe[1][2], color=self.skin.ink,
+                                   fonts=self.skin.fonts, min_dur=b-a, max_dur=b-a)
+            written = self.ctx.add(text, x + (w-text.size[0])/2, y+h*.79, a,
+                                   essential=True, group=group,
+                                   beat=spec.ref, deadline=b+.1)
+            self._visual_triggers[id(written)] = (written, a)
+
+    def _source_time(self, beat, sentence):
+        times = self._bt(beat).get('char_times', [])
+        a, _ = sentence['span']
+        return self._bt(beat)['start'] + (times[a] if a < len(times) else 0.)
+
+    def _source_lines(self, beat, sentences, box):
+        """Allocate complete source sentences, without changing narration or its timing."""
+        ctx = self.ctx
+        x, y, w, h = box
+        row_h = h / len(sentences)
+        spoken = beat['spoken'][self.lang]
+        old_h = ctx.text_h
+        ctx.text_h = row_h - 12
+        try:
+            for k, sentence in enumerate(sentences):
+                a, b = sentence['span']
+                text = spoken[a:b]
+                drawing = ctx.text(text, 40, max_w=w - 24, max_lines=8)
+                ctx.add(drawing, x + 12, y + k * row_h + 6,
+                            self._source_time(beat, sentence), essential=True,
+                            group=f"source:{beat['id']}:{a}", beat=beat['id'],
+                            deadline=self._bt(beat)['speech_end'] - PACE_MARGIN)
+        finally:
+            ctx.text_h = old_h
 
     def _build(self):
         ctx, lay = self.ctx, self.layout
+        self._visual_triggers = {}
         chapters = self.ep['chapters']
         for ch in chapters:
             cid, kind = ch['id'], ch['kind']
@@ -187,6 +312,9 @@ class Production:
                 for b in beats:
                     stock = next((v for v in b.get('visuals', []) if v.get('type') == 'stock'), None)
                     bt = self._bt(b)
+                    if b['id'] in self._diagrams:
+                        self._visuals(b)
+                        continue
                     if stock:
                         self.stock.append((bt['start'], bt['end'], stock.get('clip', kind)))
                     elif kind == 'intro':
@@ -202,6 +330,11 @@ class Production:
                     else:
                         # outro beat without stock: keep the last board; nothing new.
                         pass
+                continue
+            if kind == 'agenda' and any(b['id'] in self._diagrams for b in beats):
+                for b in beats:
+                    self._visuals(b)
+                self.agenda_x = self.cuts[-1][1]
                 continue
             if kind == 'agenda':
                 col = lay.new_page()
@@ -221,8 +354,10 @@ class Production:
             col = lay.new_page()
             x0 = col * self.g.col
             self.pages[cid] = x0
+            first_page_element = len(ctx.elements)
+            page_cut = len(self.cuts)
             opener_done = 0.0
-            if kind == 'section':
+            if kind == 'section' and beats[0]['id'] not in self._diagrams:
                 self.scene_marks.append((x0, 'opener'))
                 lay.reserve(col, col + self.g.opener_cols - 1)
                 self.cut(cstart, x0, 'cut')
@@ -236,12 +371,37 @@ class Production:
                 self.cut(cstart, x0, 'cut' if prev_tr else 'pan')
                 if prev_tr:
                     self.modes.append((cstart, cstart + .5, 'fade_in', {}))
+            source_outro = (kind == 'outro' and self.g.cols_on_screen >= 3
+                            and beats and beats[0].get('direction') and beats[0].get('visuals')
+                            and all(v.get('type') == 'cluster' for v in beats[0]['visuals']))
+            if source_outro:
+                lay.reserve(col, col + 1)
             for b in beats:
                 bt = self._bt(b)
-                if b.get('kind') == 'take' and kind == 'section':
+                if b.get('kind') == 'take' and kind == 'section' and b['id'] not in self._diagrams:
                     self._take_page(b, bt, ch)
                     continue
+                if source_outro and b is beats[0]:
+                    self._source_lines(b, b['direction'],
+                                       (x0 + self.g.cell_x0, self.g.page_box[1],
+                                        self.g.col * 2 - self.g.cell_x0 * 2, self.g.page_box[3]))
                 self._visuals(b, opener_done)              # nothing before the section's title card
+            if kind == 'outro':
+                # Closing narration often names its first picture much later.
+                # Keep the completed source board until that picture is due,
+                # then arrive before the hand starts its existing strokes.
+                drawings = [e for e in ctx.elements[first_page_element:]
+                            if e.hand and not e.fixed]
+                if drawings:
+                    ready = min(e.trigger for e in drawings)
+                    at, left, mode = self.cuts[page_cut]
+                    prep = self.g.pan_seconds if mode == 'pan' else 0.
+                    change = max(at, ready - prep)
+                    self.cuts[page_cut] = (change, left, mode)
+                    if mode == 'cut' and change > at:
+                        self.modes = [(change, change + b - a, kind, params)
+                                      if a == at and kind == 'fade_in' else (a, b, kind, params)
+                                      for a, b, kind, params in self.modes]
         # Closing page, written by the hand like everything else.
         end = self.tl['end_card']
         col = lay.new_page()
@@ -257,6 +417,40 @@ class Production:
             auto.SCENES[self.g.name]['credit'](ctx, col * self.g.col, self.tl['credit']['start'] - .8)
             self._tag(n0, 'credit', essential=True, deadline=self.tl['credit']['end'] - .3)
         self._transitions()
+        # Supplementary sentences must release the hand before the existing
+        # camera departure, including its settle, so the next page keeps its art.
+        from .board import SETTLE
+        marks = self.cut_marks + [len(ctx.elements)]
+        rejected = set()
+        for k in range(len(self.cuts) - 1):
+            for element in ctx.elements[marks[k]:marks[k + 1]]:
+                if element.group.startswith('source:'):
+                    deadline = min(element.deadline, self.cuts[k + 1][0] - SETTLE)
+                    if element.trigger + element.drawing.duration / 2 + .1 > deadline:
+                        rejected.add(id(element))
+                    else:
+                        element.deadline = deadline
+        if rejected:
+            self.cut_marks = [sum(id(e) not in rejected for e in ctx.elements[:mark])
+                              for mark in self.cut_marks]
+            ctx.elements[:] = [e for e in ctx.elements if id(e) not in rejected]
+        # Retain the established opener timing unless its estimated finish
+        # actually drops narrated artwork. Replay copies, leaving the real hand
+        # and camera untouched; only deficient beats recover their word times.
+        from copy import copy
+        copies = {id(e): copy(e) for e in ctx.elements}
+        marks = self.cut_marks + [len(ctx.elements)]
+        for k in range(len(self.cuts)):
+            for element in ctx.elements[marks[k]:marks[k + 1]]:
+                clone = copies[id(element)]
+                clone.stretch = k
+                clone.after = copies.get(id(element.after)) if element.after is not None else None
+        Scheduler(Camera(self.g, locked=self.camera.locked), self.g).run(list(copies.values()), self.cuts)
+        deficient = {e.beat for key, e in copies.items()
+                     if e.skipped and key in self._visual_triggers}
+        for element, trigger in self._visual_triggers.values():
+            if element.beat in deficient and not element.group.startswith('source:'):
+                element.trigger = trigger
 
     def _take_page(self, beat, bt, ch):
         """A fresh page for the section's takeaway: during the pre-roll the camera pans over and the note
@@ -295,7 +489,29 @@ class Production:
             for el in ctx.elements[n0:]:
                 el.trigger = max(el.trigger, t_note + .02)
                 el.after = el.after or written
-        if deadline is not None and not self.relaxed:
+        deficient_portrait = self.g.name == 'portrait' and not self.relaxed and deadline is not None and (
+            sum(el.drawing.duration / 2 + .15 for el in els) > deadline - t_note)
+        if deadline is not None and ('takeaway_delay' in bt or deficient_portrait):
+            # The section's pictures have already been narrated. On a deficient
+            # take, draw these before its words, then write the label/headline at
+            # their original speech triggers. This uses the preceding narration,
+            # not a silent reading hold. Reserve the actual two-times hand budget.
+            extras = [el for el in ctx.elements if el.beat == beat['id'] and not el.essential]
+            pos = (els[0].x + els[0].w, els[0].y + els[0].h / 2)
+            natural = 0.
+            for el in extras:
+                natural += min(.3, .08 + math.dist(pos, (el.x, el.y)) / 5000) + el.drawing.duration
+                pos = (el.x + el.w, el.y + el.h / 2)
+            ready = t_label - bt.get('takeaway_delay', 0.) - .15
+            first = ready - .15 - natural / 2 - .1 - els[0].drawing.duration / 2 - .1
+            els[0].trigger = first
+            for el in extras:
+                el.trigger, el.after = first + .01, els[0]
+            for el in ctx.elements:
+                if el.beat == beat['id']:
+                    el.catch_up = True
+            self.cuts[-1] = (first - self.g.pan_seconds, xt, 'pan')
+        elif deadline is not None and not self.relaxed:
             extras = [el for el in ctx.elements if el.beat == beat['id'] and not el.essential]
             reserve = sum(el.drawing.duration / 4 + .2 for el in extras)
             for el in els:
@@ -362,6 +578,19 @@ class Production:
                                                keep_optional=True)
         else:
             Scheduler(self.camera, self.g).run(els, self.cuts, max_rate=2.0)
+        hooks = [e for card in self.cards.values() for e in card.get('hooks', [])]
+        for e in hooks:
+            e.stretch, e.deadline = e.after.stretch, e.after.deadline
+        rejected = []
+        admitted = Scheduler(self.camera, self.g).supplementary(hooks, els, self.cuts,
+                                                               max_rate=1.0 if self.relaxed else 2.0,
+                                                               rejected=rejected)
+        els.extend(admitted)
+        for card in self.cards.values():
+            card['els'].extend(e for e in card.get('hooks', []) if e in admitted)
+        for e, reason in rejected:
+            section = next(cid for cid, card in self.cards.items() if e in card.get('hooks', []))
+            self.warnings.append(f'agenda:{section}: source hook not admitted; {reason}')
         for e in els:
             if not e.atomic:
                 continue
@@ -529,23 +758,55 @@ class Production:
         return self.view(t, self.camera.at(t) + self._drift(t))
 
     def _drift(self, t):
-        if self.camera.locked:
+        diagrams = getattr(self, '_diagrams', {})
+        if any(s.kind == 'panels' and self.tl['beats'][s.ref]['start'] <= t <= self.tl['beats'][s.ref]['end']
+               for s in diagrams.values()):
             return 0.
-        # Only idle holds need ambient motion. Fade to zero at both boundaries
+        proof_floor = getattr(self, 'motion_floor', None) if any(s.kind == 'dots' for s in diagrams.values()) else None
+        if (self.camera.locked and not proof_floor) or getattr(self, 'motion_floor', None) == 'still':
+            return 0.
+        # Only idle gaps need ambient motion. Fade to zero at both boundaries
         # so the ordinary drawing coordinates and paper are recovered exactly.
         L = self.camera.at(t)
-        intervals = [(e.start, e.end) for e in self.els
-                     if e.x + e.w >= L and e.x <= L + self.size[0]]
+        visible = [e for e in self.els
+                   if e.x + e.w >= L and e.x <= L + self.size[0]
+                   and e.y < self.size[1] and e.y + getattr(e, 'h', 1) > 0
+                   and (not isinstance(e.drawing, ink.TextDrawing) or self.text_visible(e, t, L))]
+        intervals = []
+        for e in visible:
+            hidden = getattr(e, 'hidden_after', None)
+            end = min(e.end, hidden) if hidden is not None else e.end
+            if end > e.start:
+                intervals.append((e.start, end))
         intervals += [(a, a + self.g.pan_seconds) for a, _, kind in self.camera.keys
                       if kind != 'cut']
         # Suppress ambient motion for a visible hand trip, including its settle.
         # Whole intervals keep the envelope continuous when motion changes owner.
-        visible = {id(e) for e in self.els if e.x + e.w >= L and e.x <= L + self.size[0]}
+        # Travelling hands are not culled by text_visible(), unlike lettering.
+        visible = {id(e) for e in self.els
+                   if e.x + e.w >= L and e.x <= L + self.size[0]
+                   and e.y < self.size[1] and e.y + getattr(e, 'h', 1) > 0}
         for prev, nxt in zip(self.hand_els, self.hand_els[1:]):
             if id(prev) in visible and id(nxt) in visible and prev.stretch == nxt.stretch and prev.end < nxt.start:
                 if (L <= prev.x and prev.x + prev.w <= L + self.size[0]
-                        and L <= nxt.x and nxt.x + nxt.w <= L + self.size[0]):
+                        and L <= nxt.x and nxt.x + nxt.w <= L + self.size[0]
+                        and self._last_pen(prev) is not None and self._first_pen(nxt) is not None):
                     intervals.append((prev.end, nxt.start))
+        phase_start = max((b for _, b in intervals if b <= t), default=0.) + .3
+        # These are authored reading stops, not missing animation. Include their
+        # future boundaries too, so the camera eases back before a hold begins.
+        timeline = getattr(self, 'tl', {})
+        holds = list(timeline.get('holds', []))
+        # A saved cinematic plan supplies the ambient policy for its generated
+        # closing board too. Explicit timeline holds still override that policy;
+        # an ordinary whiteboard end card keeps its default reading stop.
+        if timeline.get('end_card') and getattr(self, 'motion_floor', 'still') == 'still':
+            holds.append(timeline['end_card'])
+        intervals += [(h['start'], h['end']) for h in holds]
+        intervals += [(tr['speech_end'], tr['hold_end']) for tr in timeline.get('transitions', [])]
+        intervals += [(timeline['beats'][key]['speech_end'], timeline['beats'][key]['speech_end'] + seconds)
+                      for key, seconds in timeline.get('pauses', {}).items()
+                      if seconds > 0 and key in timeline.get('beats', {})]
         before, after = 0., math.inf
         for a, b in intervals:
             if a <= t < b:
@@ -559,7 +820,15 @@ class Production:
             return 0.
         age = t - (before + .3)
         envelope = ease(min(1., age / .3)) * ease(min(1., remaining / .3))
-        return 12 * math.sin(age * .8) * envelope
+        # A reading stop gates the envelope without restarting the existing
+        # idle arc on the other side of it.
+        if proof_floor:
+            # A sparse equal-group proof needs a visible, bounded focus sweep,
+            # rather than the legacy few-pixel idle arc. Keep the hand and all
+            # declared reading holds anchored; scale with the native canvas.
+            amplitude = self.size[0] * {'breathing': .04, 'drifting': .055, 'lively': .065}[proof_floor]
+            return amplitude * math.sin((t - phase_start) * .55) * envelope
+        return 12 * math.sin((t - phase_start) * .8) * envelope
 
     def stock_frame(self, t, a, clip):
         path = self.project_dir / 'stock/MANIFEST.json'
@@ -712,10 +981,23 @@ class Production:
         ink.paste(frame, img, (self.size[0] - img.width) / 2, bottom - img.height)
 
 
-def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None):
+def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None, *, size=None):
     """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
     A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does. ``portrait`` can
     override the look's 9:16 layout for comparisons; the registry decides by default."""
+    if size is not None:
+        from .geometry import geometry_for_size, PORTRAIT
+        size = geometry_for_size(size, aspect).size
+        if any(v % 2 for v in size):
+            raise ValueError('size requires even pixel dimensions')
+        if aspect == '9:16' and size != PORTRAIT.size:
+            raise ValueError('portrait export supports 1080x1920 only')
+    if size is not None and aspect != '9:16' and (size != SIZE or aspect != '16:9'):
+        from ..export import native_production
+        return native_production(episode, tline, lang, project_dir, size, aspect=aspect, relaxed=relaxed)
+    if aspect == '1:1':
+        from ..export import native_production
+        return native_production(episode, tline, lang, project_dir, (1080, 1080), aspect=aspect, relaxed=relaxed)
     config_path = Path(project_dir) / 'project.json'
     config = json.loads(config_path.read_text(encoding='utf-8')) if config_path.is_file() else {}
     plan = config.get('plan_v3') if config.get('director_v3') else None
@@ -766,7 +1048,7 @@ def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, roun
     Every round lays out the timeline with the pauses so far, schedules the drawings at natural speed
     with nothing skipped, and adds the overrun of each beat's drawings past the next beat's start."""
     layout = pace_layout(episode, aspect, portrait)
-    pauses: dict = {}
+    pauses = tl.Pacing()
     for _ in range(rounds):
         timing = tl.layout(episode, lang, clips, pauses)
         if layout == 'portrait':
@@ -789,6 +1071,42 @@ def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, roun
             room = PAUSE_MAX - pauses.get(bid, 0.)
             if need > .05 and room > .05:
                 pauses[bid] = round(pauses.get(bid, 0.) + min(need, room), 2)
+                changed = True
+        if not changed:
+            break
+    timing = tl.layout(episode, lang, clips, pauses)
+    prod = make_production(episode, timing, lang, project_dir, aspect=aspect, portrait=portrait)
+    for tr in timing['transitions']:
+        elements = [e for e in prod.ctx.elements if e.beat == tr['take_beat'] and not e.fixed]
+        if any(e.skipped or e.rate > 2. + 1e-6 for e in elements):
+            pauses[tr['take_beat']] = PAUSE_MAX
+            pauses.takeaways[tr['take_beat']] = 0.
+    # Replay the same one-hand scheduler with its real speed ceiling and without
+    # dropping unfinished work. Include the preceding page, camera and pen travel;
+    # an isolated note budget cannot see a late arrival from that page.
+    from copy import copy
+    for _ in range(rounds):
+        timing = tl.layout(episode, lang, clips, pauses)
+        prod = make_production(episode, timing, lang, project_dir, aspect=aspect, portrait=portrait)
+        originals = [e for e in prod.ctx.elements if not (e.fixed and not e.hand)]
+        copies = {id(e): copy(e) for e in originals}
+        for e in originals:
+            c = copies[id(e)]
+            c.after = copies.get(id(e.after)) if e.after is not None else None
+            c.start, c.rate, c.skipped = None, 1., False
+        Scheduler(Camera(prod.g, locked=prod.camera.locked), prod.g).run(
+            list(copies.values()), prod.cuts, measure=True)
+        changed = False
+        for tr in timing['transitions']:
+            bid = tr['take_beat']
+            if bid not in pauses.takeaways:
+                continue
+            end = max(e.end for e in copies.values() if e.beat == bid and not e.fixed)
+            head = copies[id(prod.notes[tr['section']]['els'][2])]
+            from .board import STALE
+            deficit = max(end - (tr['hold_end'] - NOTE_READ), head.start - head.trigger - STALE)
+            if deficit > .001:
+                pauses.takeaways[bid] = round(pauses.takeaways[bid] + deficit + .01, 4)
                 changed = True
         if not changed:
             break
@@ -929,7 +1247,7 @@ def load(args):
 def build(episode, tline, args):
     t0 = time.time()
     prod = make_production(episode, tline, args.lang, args.project, aspect=args.aspect,
-                           portrait=getattr(args, 'portrait', None))
+                           portrait=getattr(args, 'portrait', None), size=getattr(args, 'size', None))
     print(json.dumps({'elements': len(prod.els), 'warnings': prod.warnings[:40], 'n_warnings': len(prod.warnings),
                       'build_s': round(time.time() - t0, 1), 'duration': tline['duration']}, ensure_ascii=False), flush=True)
     return prod
@@ -1011,7 +1329,7 @@ def encode(prod, start, n, output, crf, context=None):
 
 
 def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20,
-                    aspect='16:9', portrait=None, context=None):
+                    aspect='16:9', portrait=None, context=None, *, size=None):
     """One/two owned process groups, private segments, atomic lossless join."""
     import os
     import tempfile
@@ -1030,6 +1348,12 @@ def render_segments(project, episode, lang, timeline, start, n, output, workers,
                      '--aspect', aspect] + (['--timeline', str(timeline)] if timeline else ['--synthetic'])
     if portrait is not None:
         base += ['--portrait', portrait]
+    if size is not None:
+        from .geometry import geometry_for_size
+        size = geometry_for_size(size, aspect).size
+        if any(v % 2 for v in size):
+            raise ValueError('size requires even pixel dimensions')
+        base += ['--size', str(size[0]), str(size[1])]
     procs = []
     with tempfile.TemporaryDirectory(prefix='.segments-', dir=output.parent) as work:
         seg_dir = Path(work)
@@ -1086,7 +1410,8 @@ def main(argv=None):
     ap.add_argument('--stills')
     ap.add_argument('--preview-dir')
     ap.add_argument('--crf', type=int, default=20)
-    ap.add_argument('--aspect', default='16:9', choices=['16:9', '9:16'], help='9:16: vertical, for Shorts')
+    ap.add_argument('--aspect', default='16:9', choices=['16:9', '9:16', '1:1'], help='output aspect ratio')
+    ap.add_argument('--size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'), help='native output pixel dimensions')
     ap.add_argument('--portrait', default=None, choices=['letterbox', 'native'], help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     if not (args.stills or args.output):
@@ -1108,7 +1433,7 @@ def main(argv=None):
     t1 = time.time()
     if args.workers > 1:
         warnings = render_segments(args.project, args.episode, args.lang, args.timeline, args.start, n, output,
-                                   args.workers, args.crf, args.aspect, args.portrait)
+                                   args.workers, args.crf, args.aspect, args.portrait, size=args.size)
     else:
         prod = build(episode, tline, args)
         encode(prod, args.start, n, output, args.crf)
@@ -1125,6 +1450,8 @@ def main(argv=None):
                 'render_seconds': round(time.time() - t1, 1)}
     if args.portrait is not None:
         manifest['portrait'] = args.portrait
+    if args.size is not None:
+        manifest['size'] = args.size
     Path(str(output) + '.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'wrote {output} ({n} frames) in {time.time() - t1:.0f}s')
 

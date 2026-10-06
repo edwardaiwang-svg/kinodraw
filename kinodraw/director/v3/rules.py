@@ -9,6 +9,7 @@ from ..validate import _doodles
 from .schema import SCENE, SKINS
 from .semantics import actions, atmosphere, beats, candidate_ids, detect_cast, mentions
 from .validate import _default, validate
+from ...engine.source_diagrams import resolve as resolve_diagram
 
 
 def detect_genre(text: str) -> str:
@@ -108,7 +109,13 @@ def from_rules(board: dict, candidates=None) -> dict:
                      hold_s=max(1.5, len(b['text']) / 27),
                      text={'kind': 'kinetic' if treatment == 'kinetic_type' else 'counter' if treatment == 'chart' else
                            'title' if b['kind'] in ('title', 'opener') else 'caption_only', 'ref': b['id']})
-        if treatment == 'character':
+        diagram = resolve_diagram(board, b['id'])
+        if diagram:
+            scene['elements'] = [{'kind': 'diagram', 'ref': b['id']}]
+            scene['treatment'] = 'whiteboard' if diagram.kind == 'dots' else 'motion'
+            scene['text'] = {'kind': 'caption_only', 'ref': b['id']}
+            scene['camera'] = 'static'
+        if treatment == 'character' and not diagram:
             scene['elements'] = [{'kind': 'cast', 'ref': cid} for cid in named]
         if atmo != 'none':
             scene['elements'].append({'kind': 'atmosphere', 'ref': atmo})

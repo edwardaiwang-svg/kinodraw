@@ -57,6 +57,7 @@ class Element:
     deadline: float | None = None   # must be finished by then (a transition follows)
     skipped: bool = False           # not drawn at all (too late to be useful)
     beat: str = ''                  # the beat whose visual this is (pacing), '' for automatic scenes
+    catch_up: bool = False         # a measured deficient takeaway uses the normal 2x limit
     atomic: bool = False            # quote card: one camera stop and a shared drawing budget
 
     @property
@@ -237,7 +238,7 @@ class Scheduler:
         self.camera = camera
         self.g = geometry
 
-    def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE, keep_optional=False):
+    def run(self, elements, cuts, max_rate=2.0, stale=STALE, cut_grace=CUT_GRACE, keep_optional=False, measure=False):
         """Place every element in time and move the camera.
 
         ``cuts[k] = (t, L, 'cut' | 'pan')`` brings the camera to stretch k (a page, or a run of
@@ -269,6 +270,28 @@ class Scheduler:
             else:
                 units.append((key, [e]))
         planned = [t for t, _, _ in cuts]
+        # A face/margin unit follows its headline, but consumes the same one-hand
+        # budget before the page disappears. Reserve that work at the actual
+        # rate limit, including travel and the scheduler's start/finish margins.
+        # Work backwards so sibling and chained dependents are counted once.
+        reserved = [math.inf] * len(units)
+        if not keep_optional and (g.name != 'portrait' or measure or any(e.catch_up for e in elements)):
+            for k in range(len(units) - 1, 0, -1):
+                (s, _, _), followers = units[k]
+                if (units[k - 1][0][0] != s or any(e.atomic for e in followers)
+                        or not all(e.after is not None for e in followers)):
+                    continue
+                deadline = min([reserved[k]] + [e.deadline for e in followers if e.deadline is not None])
+                if s + 1 < len(cuts) and cuts[s + 1][2] == 'cut':
+                    deadline = min(deadline, planned[s + 1] - SETTLE)
+                pos = (units[k - 1][1][-1].x + units[k - 1][1][-1].w,
+                       units[k - 1][1][-1].y + units[k - 1][1][-1].h / 2)
+                natural = 0.
+                for e in followers:
+                    if e.hand:
+                        natural += min(.3, .08 + math.dist(pos, (e.x, e.y)) / 5000) + e.drawing.duration
+                        pos = (e.x + e.w, e.y + e.h / 2)
+                reserved[k - 1] = min(reserved[k - 1], deadline - .15 - natural / max_rate - .1)
         # The next trigger that is a real moment in the narration: units that only follow another
         # drawing (``after``: a note's face, its margin doodles) do not hurry the unit before them.
         next_trig, upcoming = [0.] * len(units), math.inf
@@ -305,7 +328,7 @@ class Scheduler:
                 for e in els:
                     e.deadline = min(page_change - SETTLE, e.deadline if e.deadline is not None else math.inf)
             nxt = max(trig, min(next_trig[k], trig + 60))
-            deadline = min([e.deadline for e in els if e.deadline is not None] or [math.inf])
+            deadline = min([reserved[k]] + [e.deadline for e in els if e.deadline is not None])
             quote_ready = None
             if k + 1 < len(units) and units[k + 1][0][0] == s and all(e.atomic for e in units[k + 1][1]):
                 upcoming = units[k + 1][1]
@@ -348,6 +371,8 @@ class Scheduler:
                     pos = (e.x + e.w, e.y + e.h / 2)
             window = max(.1, min(nxt, page_change, deadline) - start - .1)
             rate = 1.0 if natural <= window else min(max_rate, natural / window)
+            if any(e.catch_up for e in els):
+                rate = max_rate
             if quote_ready is not None and any(e.essential for e in els):
                 rate = max(rate, natural / window)
             # Keep up with the words: when the hand would reach a drawing more than KEEP_UP after it is said
@@ -362,7 +387,7 @@ class Scheduler:
                         rate = min(max_rate, max(rate, off / max(.05, due + KEEP_UP - start)))
                     off += e.drawing.duration
                     pos = (e.x + e.w, e.y + e.h / 2)
-            if all(e.optional for e in els) and start + natural / rate > deadline and not keep_optional:
+            if all(e.optional for e in els) and start + natural / rate > deadline and not keep_optional and not measure:
                 for e in els:                               # decoration that cannot all fit: none of it
                     dropped.add(e.group or id(e))
                     e.skipped = True
@@ -412,11 +437,11 @@ class Scheduler:
                 fresh = key not in started                  # a visual is judged when it would start
                 if keep_optional and e.optional:
                     misses = False
-                if not e.essential and ((fresh and (late or holds_page or misses)) or (e.optional and misses)):
+                if not measure and not e.essential and ((fresh and (late or holds_page or misses)) or (e.optional and misses)):
                     dropped.add(key)                        # too late to help: skip it, never pop it in
                     e.skipped = True
                     continue
-                if misses:                                  # essential (or already half drawn): hurry
+                if misses and not measure and not e.catch_up:  # essential (or already half drawn): hurry
                     e_rate = max(e_rate, e.drawing.duration / max(.01, e.deadline - earliest))
                 if pan_at is not None:
                     cam.pan(pan_at, new_col * g.col)
@@ -431,6 +456,67 @@ class Scheduler:
                     cursor = max(cursor, earliest)
         enter(len(cuts) - 1)
         return elements
+
+    def supplementary(self, supplements, primary, cuts, max_rate=2.0, rejected=None):
+        """Fit unspoken excerpts into the finished one-hand/camera schedule.
+
+        Primary triggers, rates and camera keys are immutable in this pass, even
+        during relaxed pacing measurement: optional prose cannot add speech time.
+        Reserve travel on both sides. Return admitted drawings; candidates that
+        do not fit remain available to the caller for reporting, not primary work.
+        ``rejected`` collects (candidate, measured reason) pairs. A candidate has
+        no production start until admitted; rejection is not a skipped drawing.
+        """
+        hands = sorted((e for e in primary if e.hand and e.start is not None and not e.skipped),
+                       key=lambda e: e.start)
+        segments = self.camera._segments()
+
+        def travel(a, b):
+            if a is None or b is None:
+                return .12
+            return min(.3, .08 + math.dist((a.x + a.w, a.y + a.h / 2), (b.x, b.y)) / 5000)
+
+        for e in supplements:
+            e.start, e.rate, e.skipped = None, 1., False
+            if e.after is not None and (e.after.start is None or e.after.skipped):
+                if rejected is not None:
+                    rejected.append((e, 'primary predecessor was not drawn'))
+                continue
+            ready = max(e.trigger, e.after.end if e.after is not None else 0.)
+            deadline = e.deadline if e.deadline is not None else math.inf
+            if e.stretch + 1 < len(cuts):
+                deadline = min(deadline, cuts[e.stretch + 1][0] - SETTLE)
+            available, on_screen = 0., False
+            for i, (at, _, L, kind) in enumerate(segments):
+                if not (L <= e.x and e.x + e.w <= L + self.g.size[0]):
+                    continue
+                on_screen = True
+                arrival = at + (self.g.pan_seconds if kind != 'cut' else 0.)
+                departure = segments[i + 1][0] - SETTLE if i + 1 < len(segments) else math.inf
+                for prev, nxt in zip([None] + hands, hands + [None]):
+                    for rate in (1., max_rate):
+                        start = max(ready, arrival,
+                                    prev.end + max(.15, travel(prev, e) / rate) if prev else 0.)
+                        end = min(deadline, departure,
+                                  nxt.start - max(.15, travel(e, nxt) / rate) if nxt else math.inf)
+                        available = max(available, end - start)
+                        if start + e.drawing.duration / rate <= end:
+                            e.start, e.rate = start, rate
+                            break
+                    if e.start is not None:
+                        break
+                if e.start is not None:
+                    hands.append(e)
+                    hands.sort(key=lambda el: el.start)
+                    break
+            if e.start is None and rejected is not None:
+                reason = (f'available={available:.6f}s, required={e.drawing.duration / max_rate:.6f}s '
+                          f'at {max_rate:g}x; ready={ready:.6f}s, deadline={deadline:.6f}s; '
+                          'travel and camera settle reserved')
+                if not on_screen:
+                    reason += '; no camera stop contains the candidate'
+                rejected.append((e, reason))
+        return [e for e in supplements if e.start is not None]
 
     @staticmethod
     def _gone(e, dropped):

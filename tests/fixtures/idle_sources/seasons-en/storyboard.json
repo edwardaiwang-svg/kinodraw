@@ -1,0 +1,1612 @@
+{
+  "version": 1,
+  "lang": "en",
+  "title": {
+    "en": "Why Do We Have Seasons?"
+  },
+  "narrator": "narrator",
+  "chapters": [
+    {
+      "id": "intro",
+      "kind": "intro",
+      "label": {
+        "en": "Why Do We Have Seasons?"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "agenda",
+      "kind": "agenda",
+      "label": {
+        "en": "What we'll cover"
+      },
+      "title": {
+        "en": ""
+      }
+    },
+    {
+      "id": "s1",
+      "kind": "section",
+      "label": {
+        "en": "Part 1"
+      },
+      "title": {
+        "en": "The Tilted Earth"
+      },
+      "hook": {
+        "en": "Have you ever wondered why it…"
+      }
+    },
+    {
+      "id": "s2",
+      "kind": "section",
+      "label": {
+        "en": "Part 2"
+      },
+      "title": {
+        "en": "Going Around the Sun"
+      },
+      "hook": {
+        "en": "The Earth also travels around…"
+      }
+    },
+    {
+      "id": "s3",
+      "kind": "section",
+      "label": {
+        "en": "Part 3"
+      },
+      "title": {
+        "en": "Summer and Winter"
+      },
+      "hook": {
+        "en": "When your half of the Earth…"
+      }
+    },
+    {
+      "id": "s4",
+      "kind": "section",
+      "label": {
+        "en": "Part 4"
+      },
+      "title": {
+        "en": "Spring and Autumn"
+      },
+      "hook": {
+        "en": "In between, the Earth is not…"
+      }
+    },
+    {
+      "id": "outro",
+      "kind": "outro",
+      "label": {
+        "en": "Wrap-up"
+      },
+      "title": {
+        "en": ""
+      }
+    }
+  ],
+  "beats": [
+    {
+      "id": "b001",
+      "chapter": "intro",
+      "kind": "title",
+      "display": {
+        "en": "Today: Why Do We Have Seasons?"
+      },
+      "spoken": {
+        "en": "Today: Why Do We Have Seasons?"
+      },
+      "visuals": [],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            30
+          ],
+          "role": "hook",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "Seasons",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Seasons"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b002",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Here's what we'll cover. First: The Tilted Earth."
+      },
+      "spoken": {
+        "en": "Here's what we'll cover. First: The Tilted Earth."
+      },
+      "visuals": [],
+      "music": true,
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        }
+      ]
+    },
+    {
+      "id": "b003",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Second: Going Around the Sun."
+      },
+      "spoken": {
+        "en": "Second: Going Around the Sun."
+      },
+      "visuals": [],
+      "music": true,
+      "character": [
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ]
+    },
+    {
+      "id": "b004",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "Third: Summer and Winter."
+      },
+      "spoken": {
+        "en": "Third: Summer and Winter."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b005",
+      "chapter": "agenda",
+      "kind": "agenda",
+      "display": {
+        "en": "And finally: Spring and Autumn."
+      },
+      "spoken": {
+        "en": "And finally: Spring and Autumn."
+      },
+      "visuals": [],
+      "music": true
+    },
+    {
+      "id": "b006",
+      "chapter": "s1",
+      "kind": "opener",
+      "display": {
+        "en": "Part 1: The Tilted Earth."
+      },
+      "spoken": {
+        "en": "Part one: The Tilted Earth."
+      },
+      "visuals": [],
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            25
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "The Tilted Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "The Tilted Earth",
+              "Tilted Earth"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b007",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "en": "Have you ever wondered why it is hot in summer and cold in winter? Many people think the Earth gets closer to the Sun in summer. That is not true. The real reason is that the Earth is tilted."
+      },
+      "spoken": {
+        "en": "Have you ever wondered why it is hot in summer and cold in winter? Many people think the Earth gets closer to the Sun in summer. That is not true. The real reason is that the Earth is tilted."
+      },
+      "visuals": [
+        {
+          "id": "b007v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "thermometer_hot",
+              "label": {
+                "en": "Hot"
+              },
+              "trigger": {
+                "en": "hot"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "hot"
+          }
+        },
+        {
+          "id": "b007v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe",
+              "label": {
+                "en": "Earth"
+              },
+              "trigger": {
+                "en": "Earth"
+              }
+            },
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Summer"
+              },
+              "trigger": {
+                "en": "summer"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "Earth"
+          }
+        }
+      ],
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            66
+          ],
+          "role": "question",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "winter",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "winter",
+              "wondered"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            67,
+            128
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "summer",
+              "people"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            129,
+            146
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "true",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "true"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            147,
+            191
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "tilted",
+              "The real"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b008",
+      "chapter": "s1",
+      "kind": "narration",
+      "display": {
+        "en": "Our planet spins on an axis that leans about twenty-three degrees, like a spinning top that is slightly crooked."
+      },
+      "spoken": {
+        "en": "Our planet spins on an axis that leans about twenty-three degrees, like a spinning top that is slightly crooked."
+      },
+      "visuals": [
+        {
+          "id": "b008v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_explain"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            112
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "slightly crooked",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "slightly crooked",
+              "twenty-three degrees",
+              "Our planet"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b009",
+      "chapter": "s1",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: The real reason is that the Earth is tilted."
+      },
+      "spoken": {
+        "en": "Key takeaway: The real reason is that the Earth is tilted."
+      },
+      "visuals": [
+        {
+          "id": "b009v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b009v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "The real reason is that the Earth is tilted."
+        }
+      },
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            58
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "tilted",
+              "The real"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b010",
+      "chapter": "s2",
+      "kind": "opener",
+      "display": {
+        "en": "Part 2: Going Around the Sun."
+      },
+      "spoken": {
+        "en": "Part two: Going Around the Sun."
+      },
+      "visuals": [],
+      "character": [
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            29
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Sun",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Sun",
+              "the Sun",
+              "Going"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b011",
+      "chapter": "s2",
+      "kind": "narration",
+      "display": {
+        "en": "The Earth also travels around the Sun. One trip takes one year, or about three hundred and sixty-five days. Because of the tilt, the same part of the Earth leans toward the Sun for part of the trip and leans away for another part."
+      },
+      "spoken": {
+        "en": "The Earth also travels around the Sun. One trip takes one year, or about three hundred and sixty-five days. Because of the tilt, the same part of the Earth leans toward the Sun for part of the trip and leans away for another part."
+      },
+      "visuals": [
+        {
+          "id": "b011v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe",
+              "label": {
+                "en": "Earth"
+              },
+              "trigger": {
+                "en": "Earth"
+              }
+            },
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sun"
+              },
+              "trigger": {
+                "en": "Sun"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "Earth"
+          }
+        }
+      ],
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            38
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "the Sun",
+              "The Earth"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            39,
+            107
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "sixty-five days",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "sixty-five days",
+              "one year"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            108,
+            230
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "another part",
+              "the tilt"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b012",
+      "chapter": "s2",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: The Earth also travels around the Sun."
+      },
+      "spoken": {
+        "en": "Key takeaway: The Earth also travels around the Sun."
+      },
+      "visuals": [
+        {
+          "id": "b012v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b012v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "The Earth also travels around the Sun."
+        }
+      },
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            52
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "the Sun",
+              "The Earth"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b013",
+      "chapter": "s3",
+      "kind": "opener",
+      "display": {
+        "en": "Part 3: Summer and Winter."
+      },
+      "spoken": {
+        "en": "Part three: Summer and Winter."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            26
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Summer and Winter",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Summer and Winter",
+              "Winter"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b014",
+      "chapter": "s3",
+      "kind": "narration",
+      "display": {
+        "en": "When your half of the Earth leans toward the Sun, sunlight hits the ground more directly. The days are longer, and the land warms up. That is summer. When your half leans away, the sunlight comes in at a low angle and spreads out. The days are shorter, and it gets cold. That is winter."
+      },
+      "spoken": {
+        "en": "When your half of the Earth leans toward the Sun, sunlight hits the ground more directly. The days are longer, and the land warms up. That is summer. When your half leans away, the sunlight comes in at a low angle and spreads out. The days are shorter, and it gets cold. That is winter."
+      },
+      "visuals": [
+        {
+          "id": "b014v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe",
+              "label": {
+                "en": "Earth"
+              },
+              "trigger": {
+                "en": "Earth"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "Earth"
+          }
+        },
+        {
+          "id": "b014v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sun"
+              },
+              "trigger": {
+                "en": "Sun"
+              }
+            },
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sunlight"
+              },
+              "trigger": {
+                "en": "sunlight"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "Sun"
+          }
+        }
+      ],
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            89
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "directly",
+              "the Sun"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            90,
+            133
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "warms up",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "warms up",
+              "longer",
+              "The days"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            134,
+            149
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "That is summer",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "That is summer",
+              "summer"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            150,
+            230
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "spreads out",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "spreads out",
+              "leans away",
+              "your half"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 4,
+          "span": [
+            231,
+            270
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "gets cold",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "gets cold",
+              "shorter",
+              "The days"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 5,
+          "span": [
+            271,
+            286
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "That is winter",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "That is winter",
+              "winter"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b015",
+      "chapter": "s3",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: The days are longer, and the land warms up."
+      },
+      "spoken": {
+        "en": "Key takeaway: The days are longer, and the land warms up."
+      },
+      "visuals": [
+        {
+          "id": "b015v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "sun_bright"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b015v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "The days are longer, and the land warms up."
+        }
+      },
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            57
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "warms up",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "warms up",
+              "longer",
+              "The days"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b016",
+      "chapter": "s4",
+      "kind": "opener",
+      "display": {
+        "en": "Part 4: Spring and Autumn."
+      },
+      "spoken": {
+        "en": "Part four: Spring and Autumn."
+      },
+      "visuals": [],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            26
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Spring and Autumn",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Spring and Autumn",
+              "Autumn"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b017",
+      "chapter": "s4",
+      "kind": "narration",
+      "display": {
+        "en": "In between, the Earth is not leaning much toward or away from the Sun. Days and nights are about equal, and the weather is mild. These are spring and autumn. When it is summer in California, it is winter in Australia, because the two places lean in opposite directions."
+      },
+      "spoken": {
+        "en": "In between, the Earth is not leaning much toward or away from the Sun. Days and nights are about equal, and the weather is mild. These are spring and autumn. When it is summer in California, it is winter in Australia, because the two places lean in opposite directions."
+      },
+      "visuals": [
+        {
+          "id": "b017v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe",
+              "label": {
+                "en": "Earth"
+              },
+              "trigger": {
+                "en": "Earth"
+              }
+            },
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sun"
+              },
+              "trigger": {
+                "en": "Sun"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "Earth"
+          }
+        },
+        {
+          "id": "b017v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "moon_stars",
+              "label": {
+                "en": "Nights"
+              },
+              "trigger": {
+                "en": "nights"
+              }
+            },
+            {
+              "doodle": "rain_cloud",
+              "label": {
+                "en": "Weather"
+              },
+              "trigger": {
+                "en": "weather"
+              }
+            }
+          ],
+          "relation": "plus",
+          "trigger": {
+            "en": "nights"
+          }
+        }
+      ],
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            70
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "the Sun",
+              "the Earth"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            71,
+            128
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "mild",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "mild",
+              "equal",
+              "Days"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 2,
+          "span": [
+            129,
+            157
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "spring and autumn",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "spring and autumn"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 3,
+          "span": [
+            158,
+            269
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "California",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "California",
+              "Australia",
+              "opposite directions",
+              "summer"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b018",
+      "chapter": "s4",
+      "kind": "take",
+      "display": {
+        "en": "Key takeaway: In between, the Earth is not leaning much toward or away from the Sun."
+      },
+      "spoken": {
+        "en": "Key takeaway: In between, the Earth is not leaning much toward or away from the Sun."
+      },
+      "visuals": [
+        {
+          "id": "b018v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "moon_stars"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        },
+        {
+          "id": "b018v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "rain_cloud"
+            }
+          ],
+          "relation": "none",
+          "size": "margin"
+        }
+      ],
+      "take": {
+        "headline": {
+          "en": "In between, the Earth is not leaning much toward or away from the Sun."
+        }
+      },
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            84
+          ],
+          "role": "tagline",
+          "energy": 1,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "the Sun",
+              "the Earth"
+            ],
+            "energy": [
+              0,
+              1
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b019",
+      "chapter": "outro",
+      "kind": "narration",
+      "display": {
+        "en": "So seasons come from the tilt of the Earth, not from how far away the Sun is. The next time you put on a warm coat, remember that you are leaning away from the Sun, and that the Earth is on its long trip around it."
+      },
+      "spoken": {
+        "en": "So seasons come from the tilt of the Earth, not from how far away the Sun is. The next time you put on a warm coat, remember that you are leaning away from the Sun, and that the Earth is on its long trip around it."
+      },
+      "visuals": [
+        {
+          "id": "b019v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "earth_globe",
+              "label": {
+                "en": "Earth"
+              },
+              "trigger": {
+                "en": "Earth"
+              }
+            },
+            {
+              "doodle": "sun_bright",
+              "label": {
+                "en": "Sun"
+              },
+              "trigger": {
+                "en": "Sun"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "Earth"
+          }
+        },
+        {
+          "id": "b019v1",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "fl_coat",
+              "label": {
+                "en": "Coat"
+              },
+              "trigger": {
+                "en": "coat"
+              }
+            }
+          ],
+          "relation": "none",
+          "trigger": {
+            "en": "coat"
+          }
+        }
+      ],
+      "character": [
+        {
+          "name": "Earth",
+          "traits": []
+        },
+        {
+          "name": "Sun",
+          "traits": []
+        }
+      ],
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            77
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Earth",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Earth",
+              "Sun",
+              "the Sun",
+              "the Earth"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        },
+        {
+          "i": 1,
+          "span": [
+            78,
+            214
+          ],
+          "role": "end_line",
+          "energy": 2,
+          "scene": "board",
+          "emphasis": "Sun",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Sun",
+              "Earth",
+              "its long trip",
+              "the Sun"
+            ],
+            "energy": [
+              1,
+              2
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    },
+    {
+      "id": "b020",
+      "chapter": "outro",
+      "kind": "closing",
+      "display": {
+        "en": "Thanks for watching!"
+      },
+      "spoken": {
+        "en": "Thanks for watching!"
+      },
+      "visuals": [
+        {
+          "id": "b020v0",
+          "type": "cluster",
+          "items": [
+            {
+              "doodle": "narrator_wave"
+            }
+          ],
+          "relation": "none"
+        }
+      ],
+      "music": true,
+      "direction": [
+        {
+          "i": 0,
+          "span": [
+            0,
+            20
+          ],
+          "role": "none",
+          "energy": 0,
+          "scene": "board",
+          "emphasis": "Thanks for watching",
+          "options": {
+            "scene": [
+              "board"
+            ],
+            "emphasis": [
+              "Thanks for watching",
+              "watching"
+            ],
+            "energy": [
+              0,
+              0
+            ]
+          },
+          "source": "rules"
+        }
+      ]
+    }
+  ]
+}

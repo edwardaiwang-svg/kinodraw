@@ -1,7 +1,8 @@
 """Small offline MCP server: one UTF-8 JSON-RPC message per stdio line.
 
 The rendering, storyboard building and validation stay in the existing pipeline.
-No director providers, narration, downloads, app migration, or credentials are used.
+Explicit make/cached modes finish narrated movies through the shared pipeline.
+No live providers, downloads, app migration, or credentials are used.
 """
 from __future__ import annotations
 
@@ -13,9 +14,13 @@ import json
 import math
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
+import threading
+import time
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -109,6 +114,36 @@ def _number(value, name, minimum=0, maximum=None):
     if not finite or value < minimum or (maximum is not None and value > maximum):
         raise ValueError(f'{name} must be finite and between {minimum} and {maximum}')
     return value
+
+
+def _worker_command(root, arguments):
+    worker = [sys.executable, '--mcp-worker'] if getattr(sys, 'frozen', False) else \
+        [sys.executable, '-m', 'kinodraw.mcp_server']
+    return worker + ['--root', str(root), *arguments]
+
+
+def _local_models(lang, *, checksum=True):
+    """An offline gate, also used instead of ensure_models in our isolated worker."""
+    from . import voice
+    spec = voice.LANGS[lang]
+    for name in (spec['model'], spec['voices'], spec['config']):
+        if not name:
+            continue
+        path = voice.MODEL_DIR / name
+        expected_hash, expected_size = voice.FILES[name][1:]
+        if path.is_symlink() or not path.is_file() or path.stat().st_size != expected_size:
+            raise ValueError(f'cached local Kokoro model required: {name}; no downloads on MCP')
+        if checksum:
+            from .package import sha
+            if sha(path) != expected_hash:
+                raise ValueError(f'cached local Kokoro model checksum differs: {name}')
+
+
+def _sources(path, cfg):
+    from .package import sha
+    names = {'project.json', 'storyboard.json', 'pronounce.txt'}
+    names.update(cfg[key] for key in ('script', 'recording') if cfg.get(key))
+    return {name: sha(path / name) if (path / name).is_file() else None for name in names}
 
 
 class Developer:
@@ -221,7 +256,11 @@ class Developer:
 
     def chart_add(self, project, beat, source):
         from .director.validate import validate
+        from .project_store import ProjectStore
         path, cfg, board = self.project(project)
+        store = ProjectStore(path)
+        saved = store.load()
+        cfg, board = saved['settings'], saved['storyboard']
         source_path = self.path(source)
         if source_path.suffix.lower() != '.json':
             raise ValueError('chart source must be a local .json file')
@@ -258,8 +297,9 @@ class Developer:
         report = validate(board, path)
         if not report['ok']:
             raise ValueError('invalid storyboard: ' + '; '.join(report['errors']))
-        self._save(path / 'storyboard.json', board)
-        return {'visual': visual['id'], 'source_sha256': digest, 'rows': len(mapped)}
+        updated = store.save(board, cfg, expected_revision=saved['revision'], label='Before MCP chart')
+        return {'visual': visual['id'], 'source_sha256': digest, 'rows': len(mapped),
+                'revision': updated['revision']}
 
     @staticmethod
     def _save(path, data):
@@ -291,14 +331,101 @@ class Developer:
         folder = path / 'build' / 'developer'
         folder.mkdir(parents=True, exist_ok=True)
         output = folder / ('preview-' + uuid.uuid4().hex + '.png')
-        size = (540, 960) if aspect == '9:16' else (960, 540)
+        size = {'9:16': (540, 960), '1:1': (540, 540)}.get(aspect, (960, 540))
         prod.frame(time).convert('RGB').resize(size).save(output, 'PNG')
         return {'path': str(output), 'mimeType': 'image/png', 'synthetic_timing': True,
                 'width': size[0], 'height': size[1], 'warnings': prod.warnings}
 
-    def render(self, project, start=0, duration=1):
+    def _narrated_project(self, project, mode):
+        from . import voice
+        path, cfg, board = self.project(project)
+        report = self.validate_project(project)
+        if not report['ok']:
+            raise ValueError('invalid storyboard: ' + '; '.join(report['errors']))
+        # These values can be consumed indirectly by narration/finish/render.
+        # A saved provider name/plan is data; commands, URLs and secrets are not accepted.
+        def config_refs(value):
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in {'key', 'api_key', 'token', 'command', 'base_url', 'url', 'endpoint', 'voice_server'}:
+                        raise ValueError(f'{key} is unavailable on offline MCP')
+                    if key in {'script', 'recording', 'voice_file', 'config', 'config_file'} and item:
+                        _text(item, key)
+                        if len(item) > 1024 or ':' in item or Path(item).is_absolute():
+                            raise ValueError(f'{key} must be a local path inside its project')
+                        target = self.path(str(path.relative_to(self.root) / item))
+                        if not target.resolve().is_relative_to(path):
+                            raise ValueError(f'{key} escapes its project')
+                    if key == 'kind' and item == 'picture':
+                        self._references({'doodle': value.get('ref')}, path)
+                    config_refs(item)
+            elif isinstance(value, list):
+                for item in value:
+                    config_refs(item)
+        config_refs(cfg)
+        self._references(cfg, path)
+        music = board.get('music')
+        if isinstance(music, dict):
+            from .audio.mix import MUSIC
+            for key in ('primary', 'secondary'):
+                if key not in music:
+                    continue
+                slug = _text(music[key], 'music track')
+                if not re.fullmatch(r'[A-Za-z0-9_-]+', slug):
+                    raise ValueError('music must name a bundled track, not a path')
+                track = MUSIC / f'{slug}.mp3'
+                if track.is_symlink() or not track.is_file() or not track.resolve().is_relative_to(MUSIC.resolve()):
+                    raise ValueError('music must name an existing bundled track')
+        if cfg.get('recording'):
+            for metadata in (path / 'voice/recording').glob('*.json'):
+                info = loads(metadata.read_text(encoding='utf-8'))
+                for clip in info.get('clips', []):
+                    name = _text(clip.get('wav'), 'recording clip')
+                    if Path(name).name != name or name.startswith('.') or ':' in name or '\\' in name:
+                        raise ValueError('recording clip must be a filename inside its cache')
+                    target = self.path(str(path.relative_to(self.root) / 'voice/recording' / name))
+                    if not target.is_file():
+                        raise ValueError('recording clip must exist inside its cache')
+        lang = cfg.get('lang')
+        if lang not in voice.LANGS or cfg.get('voice') not in dict(voice.VOICES[lang]):
+            raise ValueError('choose an existing local Kokoro voice for the project language')
+        _number(cfg.get('speed', 1), 'speed', minimum=voice.SPEEDS[0], maximum=voice.SPEEDS[1])
+        workers = cfg.get('workers', 1)
+        if isinstance(workers, bool) or not isinstance(workers, int) or not 1 <= workers <= 16:
+            raise ValueError('workers must be an integer between 1 and 16')
+        if mode == 'make':
+            _local_models(lang)
+        else:
+            from .audio.mix import read_wav, SR
+            from .engine import render
+            from .package import sha
+            from .pipeline import _pace_aspect
+            tl = loads((path / 'build/timeline.json').read_text(encoding='utf-8'))
+            duration = _number(tl.get('duration'), 'cached duration', minimum=1 / 30)
+            if tl.get('storyboard_sha256') != sha(path / 'storyboard.json'):
+                raise ValueError('cached timeline does not match the saved storyboard')
+            if tl.get('layout', 'landscape') != render.pace_layout(board, _pace_aspect(cfg.get('aspect', '16:9'))):
+                raise ValueError('cached timeline layout differs; use make explicitly')
+            audio = _text(tl.get('audio'), 'cached narration')
+            if Path(audio).name != audio or ':' in audio or '\\' in audio:
+                raise ValueError('cached narration must be a filename inside build')
+            wav = self.path(str(path.relative_to(self.root) / 'build' / audio))
+            pcm, rate = read_wav(wav)
+            if rate != SR or abs(len(pcm) / rate - duration) > 1 / rate or not (abs(pcm) > .001).any():
+                raise ValueError('cached narration must contain measured, nonzero full-duration PCM')
+            if set(tl.get('beats', {})) != {b['id'] for b in board['beats']}:
+                raise ValueError('cached timeline beat IDs differ')
+        return path, cfg, board
+
+    def render(self, project, start=0, duration=1, mode='synthetic'):
+        if mode not in ('synthetic', 'make', 'cached'):
+            raise ValueError('mode must be synthetic, make or cached')
         start = _number(start, 'start')
         duration = _number(duration, 'duration', minimum=1 / 30, maximum=30)
+        if mode != 'synthetic':
+            if start != 0 or duration != 1:
+                raise ValueError('make/cached produce the full movie; omit start and duration')
+            return self._start_narrated(project, mode)
         path, cfg, board = self.project(project)
         report = self.validate_project(project)
         if not report['ok']:
@@ -307,9 +434,8 @@ class Developer:
         folder = path / 'build' / 'developer'
         folder.mkdir(parents=True, exist_ok=True)
         output, log = folder / f'{job}.mp4', folder / f'{job}.log'
-        command = [sys.executable, '-m', 'kinodraw.mcp_server', '--root', str(self.root),
-                   '--render-child', project, '--output', str(output.relative_to(self.root)),
-                   '--start', str(start), '--duration', str(duration)]
+        command = _worker_command(self.root, ['--render-child', project,
+                   '--output', str(output.relative_to(self.root)), '--start', str(start), '--duration', str(duration)])
         with log.open('wb') as diagnostics:
             child = subprocess.Popen(command, cwd=Path(__file__).resolve().parents[1],
                                      stdin=subprocess.DEVNULL, stdout=diagnostics, stderr=diagnostics,
@@ -318,12 +444,58 @@ class Developer:
         return {'job': job, 'pid': child.pid, 'state': 'running', 'synthetic_timing': True,
                 'path': str(output), 'diagnostics': str(log)}
 
+    def _start_narrated(self, project, mode):
+        from . import pipeline
+        from .project_store import ProjectStore
+        path, cfg, board = self._narrated_project(project, mode)
+        saved = ProjectStore(path).load()
+        if any(e['process'].poll() is None and e.get('project') == path for e in self.jobs.values()):
+            raise ValueError('a narrated job already owns this project')
+        job = uuid.uuid4().hex
+        folder = path / 'build/developer'
+        folder.mkdir(parents=True, exist_ok=True)
+        output = path / (pipeline._output_stem(board, cfg) + '.mp4')
+        log, receipt, progress, cancel = [folder / f'{job}.{suffix}' for suffix in ('log', 'json', 'progress.json', 'cancel')]
+        command = _worker_command(self.root, ['--narrated-child', project, '--mode', mode,
+            '--receipt', str(receipt.relative_to(self.root)), '--progress', str(progress.relative_to(self.root)),
+            '--cancel-file', str(cancel.relative_to(self.root)), '--revision', saved['revision']])
+        with log.open('wb') as diagnostics:
+            child = subprocess.Popen(command, cwd=Path(__file__).resolve().parents[1], stdin=subprocess.DEVNULL,
+                                     stdout=diagnostics, stderr=diagnostics, start_new_session=True)
+        self.jobs[job] = {'process': child, 'output': output, 'log': log, 'cancelled': False,
+                          'mode': mode, 'project': path, 'receipt': receipt, 'progress': progress, 'cancel': cancel}
+        return {'job': job, 'pid': child.pid, 'state': 'running', 'mode': mode,
+                'synthetic_timing': False if mode == 'cached' else None,
+                'timing': 'measured cached narration' if mode == 'cached' else 'pending measured narration',
+                'path': str(output), 'diagnostics': str(log),
+                'direction': 'saved plan' if cfg.get('plan_v3') else 'rules fallback from saved storyboard; no picture search',
+                'cost': 'local CPU/time; no provider or API charges'}
+
     def status(self, job):
         entry = self.jobs.get(job)
         if entry is None:
             raise ValueError('unknown job; only jobs owned by this server can be inspected or cancelled')
         code = entry['process'].poll()
         output = entry['output']
+        if 'mode' in entry:
+            result = {'job': job, 'pid': entry['process'].pid, 'exit_code': code,
+                      'path': str(output), 'diagnostics': str(entry['log']), 'mode': entry['mode'],
+                      'synthetic_timing': False if entry['mode'] == 'cached' else None,
+                      'timing': 'measured cached narration' if entry['mode'] == 'cached' else 'pending measured narration'}
+            progress = entry['progress']
+            if progress.is_file() and not progress.is_symlink():
+                result['progress'] = loads(progress.read_text(encoding='utf-8'))
+            state = 'running' if code is None else 'cancelled' if entry['cancelled'] else 'failed'
+            receipt = entry['receipt']
+            if code == 0 and receipt.is_file() and not receipt.is_symlink():
+                measured = loads(receipt.read_text(encoding='utf-8'))
+                from .package import sha
+                if (measured.get('validated') and output.is_file() and not output.is_symlink()
+                        and sha(output) == measured.get('video_sha256')):
+                    state = 'succeeded'
+                    result.update(measured)
+            result['state'] = state
+            return result
         if code is None:
             state = 'running'
         elif entry['cancelled']:
@@ -342,6 +514,18 @@ class Developer:
         if status['state'] == 'running':
             # This process group was created by our Popen; never search command text or accept a PID.
             entry['cancelled'] = True
+            if 'mode' in entry:
+                entry['cancel'].write_text('cancel\n', encoding='utf-8')
+                try:
+                    child.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    child.terminate()
+                    try:
+                        child.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
+                        child.wait(timeout=2)
+                return self.status(job)
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(child.pid, signal.SIGTERM)
             try:
@@ -372,13 +556,155 @@ TOOLS = [
      'inputSchema': _schema({**PROJECT, 'beat': TEXT, 'source': TEXT}, ['project', 'beat', 'source'])},
     {'name': 'preview_png', 'description': 'Render an actual PNG with the existing renderer and estimated timing, without voice or network.',
      'inputSchema': _schema({**PROJECT, 'time': {'type': 'number', 'minimum': 0}}, ['project'])},
-    {'name': 'render', 'description': 'Start one owned subprocess for a silent MP4 using estimated timing; duration 1/30 to 30 seconds. Poll status for actual completion.',
-     'inputSchema': _schema({**PROJECT, 'start': {'type': 'number', 'minimum': 0}, 'duration': {'type': 'number', 'minimum': 1 / 30, 'maximum': 30}}, ['project'])},
+    {'name': 'render', 'description': (
+        'Explicit action: default synthetic renders a silent estimated-timing preview (1/30 to 30 seconds). '
+        'Opt in with mode=make for a full narrated, validated MP4 and sidecars using locally cached, '
+        'checksum-verified Kokoro ONNX models and measured speech timing; mode=cached reuses a matching '
+        'saved timeline/narration without TTS/models/provider calls. Omit start/duration for full movies. '
+        'Saved v3 plans are reused; otherwise rules scenes use the saved storyboard without picture search. '
+        'No downloads, secret lookup or live providers. Local cost: CPU/time, no API charges. '
+        'Poll status for actual encoded frames, ETA, stage, validation and owned exit code.'),
+     'inputSchema': _schema({**PROJECT, 'start': {'type': 'number', 'minimum': 0}, 'duration': {'type': 'number', 'minimum': 1 / 30, 'maximum': 30},
+                             'mode': {'type': 'string', 'enum': ['synthetic', 'make', 'cached'], 'default': 'synthetic'}}, ['project'])},
     {'name': 'status', 'description': 'Inspect an opaque job ID owned by this server; return its actual process exit code.',
      'inputSchema': _schema({'job': TEXT}, ['job'])},
     {'name': 'cancel', 'description': 'Cancel an owned render process group and reap its child; no arbitrary PIDs.',
      'inputSchema': _schema({'job': TEXT}, ['job'])},
 ]
+
+
+def _validate_movie(video, timeline, context, work):
+    """Fully count/decode video and audio, retaining the owned encoder's exit."""
+    import numpy as np
+    from .engine.render import FFMPEG, FPS
+    from .progress import RenderContext, encoded_frames, validate_frames, wait_process
+    check = RenderContext(token=context.token)
+    expected = round(timeline['duration'] * FPS)
+    validate_frames(FFMPEG, video, expected, check, group=False)
+    pcm = Path(work) / 'validated-audio.pcm'
+    with pcm.open('wb') as output, (Path(work) / 'audio-errors.txt').open('w+b') as errors:
+        child = context.token.register(subprocess.Popen([
+            FFMPEG, '-v', 'error', '-xerror', '-err_detect', 'explode', '-i', str(video),
+            '-map', '0:a:0', '-ar', '48000', '-ac', '1', '-f', 's16le', '-'],
+            stdout=output, stderr=errors), group=False)
+        try:
+            wait_process(child, check)
+            errors.seek(0)
+            if errors.read().strip():
+                raise RuntimeError('finished audio decode reported errors')
+            code = child.returncode
+        finally:
+            context.token.stop(child)
+    samples = np.fromfile(pcm, dtype='<i2')
+    peak = float(np.max(np.abs(samples.astype(np.float32))) / 32768) if samples.size else 0
+    if peak <= .001 or abs(samples.size / 48000 - timeline['duration']) > .08:
+        raise RuntimeError('finished audio is silent or differs from the full measured duration')
+    return {'frames': encoded_frames(Path(str(video) + '.decode-progress')),
+            'decode_exit': 0, 'audio_decode_exit': code,
+            'audio_samples': int(samples.size), 'audio_peak': peak, 'duration': timeline['duration']}
+
+
+def _narrated_worker(service, args):
+    from . import pipeline, voice
+    from .package import sha
+    from .progress import CancellationToken, RenderContext
+    from .project_store import ProjectStore
+    path, cfg, _ = service._narrated_project(args.narrated_child, args.mode)
+    receipt, progress_file, cancel_file = map(service.path, (args.receipt, args.progress, args.cancel_file))
+    class Token(CancellationToken):
+        def check(self):
+            if cancel_file.exists():
+                self._event.set()
+            super().check()
+    token = Token()
+    status = {'stage': 'prepare', 'frames': 0, 'total': 0, 'elapsed': 0, 'eta': None}
+    lock = threading.RLock()
+    started = time.monotonic()
+    def emit(**values):
+        with lock:
+            status.update(values)
+            service._save(progress_file, status)
+    def frames(value):
+        emit(frames=value.frames, total=value.total, elapsed=value.elapsed, eta=value.eta)
+    def stage(name, done=0, total=1):
+        token.check()
+        emit(stage=name, stage_done=done, stage_total=total, job_elapsed=time.monotonic() - started)
+    stage.check_cancelled = token.check
+    context = RenderContext(token=token, callback=frames)
+    previous = signal.signal(signal.SIGTERM, lambda *_: token._event.set())
+    # The isolated worker never calls the download-capable ensure_models implementation.
+    voice.ensure_models = lambda lang, progress=None: _local_models(lang, checksum=False)
+    store = ProjectStore(path)
+    try:
+        with tempfile.TemporaryDirectory(prefix='mcp-make-') as folder:
+            scratch = Path(folder) / 'project'
+            with store.locked():
+                store._check(store._state(), args.revision)
+                sources = _sources(path, cfg)
+                pipeline._copy_project(path, scratch)
+            # Job diagnostics belong to the server, never to pipeline publication.
+            shutil.rmtree(scratch / 'build/developer', ignore_errors=True)
+            token.check()
+            if args.mode == 'make':
+                scratch_store = ProjectStore(scratch)
+                original = scratch_store.load()
+                settings = original['settings']
+                if not cfg.get('plan_v3'):
+                    from .director.v3.rules import from_rules
+                    plan = from_rules(original['storyboard'])
+                    settings.update(director='rules', director_v3=True, plan_v3=plan,
+                                    scene_treatments=plan['scenes'])
+                else:
+                    settings['director_v3'] = True
+                scratch_store.save(original['storyboard'], settings, original['revision'])
+                qa = pipeline.produce(scratch, progress=stage, context=context)
+            else:
+                scratch_store = ProjectStore(scratch)
+                original = scratch_store.load()
+                settings = original['settings']
+                settings['director'] = 'rules'
+                settings['director_v3'] = bool(settings.get('plan_v3'))
+                scratch_store.save(original['storyboard'], settings, original['revision'])
+                stage('render')
+                pipeline.render(scratch, context=context)
+                stage('finish')
+                qa = pipeline.finish(scratch, context=context)
+            if not qa.get('ok'):
+                raise RuntimeError('pipeline finish failed validation: ' + dumps(qa.get('problems')))
+            stage('validate')
+            tl = loads((scratch / 'build/timeline.json').read_text(encoding='utf-8'))
+            from .audio.mix import read_wav
+            narration, _ = read_wav(scratch / 'build' / tl['audio'])
+            if not (abs(narration) > .001).any():
+                raise RuntimeError('narration is silent')
+            video = Path(qa['video'])
+            validation = _validate_movie(video, tl, context, folder)
+            suffixes = ('.srt', '.vtt', '-chapters.txt', '-transcript.md', '-description.txt', '-thumbnail.png')
+            sidecars = [video.with_name(video.stem + suffix) for suffix in suffixes]
+            if any(not p.is_file() or p.stat().st_size == 0 for p in sidecars):
+                raise RuntimeError('pipeline did not produce every finished sidecar')
+            qa['video'] = str(path / video.name)
+            service._save(scratch / 'build/qa.json', qa)
+            stage('publish')
+            with store.locked():
+                store._check(store._state(), args.revision)
+                if _sources(path, cfg) != sources:
+                    raise ValueError('project source changed while rendering')
+                # Recheck indirect paths and links before touching the destination.
+                service._narrated_project(args.narrated_child, args.mode)
+                with token._lock:
+                    token.check()
+                    pipeline._commit_outputs(scratch, path, context)
+                    context.published = True
+            result = {'validated': True, 'synthetic_timing': False, 'timing': 'measured narration',
+                      'path': str(path / video.name), 'video_sha256': sha(video), 'validation': validation,
+                      'sidecars': [str(path / p.name) for p in sidecars], 'pipeline_qa': qa,
+                      'direction': 'saved plan' if cfg.get('plan_v3') else 'rules fallback from saved storyboard; no picture search'}
+            service._save(receipt, result)
+            emit(stage='succeeded', job_elapsed=time.monotonic() - started)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
 
 
 class RPCError(Exception):
@@ -427,7 +753,7 @@ class Server:
         spec = next((tool for tool in TOOLS if tool['name'] == name), None)
         try:
             if spec is None:
-                raise ValueError(f'tool unavailable: {name}; writer/export/ZIP/progress are not implemented here')
+                raise ValueError(f'tool unavailable: {name}; use one of the seven advertised tools')
             if not isinstance(arguments, dict):
                 raise ValueError('arguments must be an object')
             schema = spec['inputSchema']
@@ -480,12 +806,20 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', required=True)
     parser.add_argument('--render-child', help=argparse.SUPPRESS)
+    parser.add_argument('--narrated-child', help=argparse.SUPPRESS)
+    parser.add_argument('--mode', choices=('make', 'cached'), help=argparse.SUPPRESS)
+    parser.add_argument('--receipt', help=argparse.SUPPRESS)
+    parser.add_argument('--progress', help=argparse.SUPPRESS)
+    parser.add_argument('--cancel-file', help=argparse.SUPPRESS)
+    parser.add_argument('--revision', help=argparse.SUPPRESS)
     parser.add_argument('--output', help=argparse.SUPPRESS)
     parser.add_argument('--start', type=float, default=0, help=argparse.SUPPRESS)
     parser.add_argument('--duration', type=float, default=1, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
-        if args.render_child:
+        if args.narrated_child:
+            _narrated_worker(Developer(args.root), args)
+        elif args.render_child:
             from .engine import render
             service = Developer(args.root)
             start = _number(args.start, 'start')
@@ -499,7 +833,7 @@ def main(argv=None):
                           'frames': max(1, round(duration * render.FPS)), 'warnings': prod.warnings})
         else:
             Server(args.root).serve()
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, RuntimeError) as error:
         print(error, file=sys.stderr)
         return 1
     return 0

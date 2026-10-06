@@ -12,6 +12,7 @@
 <aside id="side">
   <div class="brand">Kino<span>Draw</span></div>
   <button id="btn-new" class="primary wide">+ New video</button>
+  <label class="file">Import project ZIP… <input id="project-import" type="file" accept=".zip,application/zip"></label>
   <button id="btn-trash">Trash</button><button id="btn-sample" class="ghost wide">Watch an example</button>
   <div class="side-label">Your videos</div>
   <nav id="projects"></nav>
@@ -43,6 +44,20 @@
       <label class="file">Choose file… <input id="file" type="file" accept=".md,.txt,.docx"></label>
       <span id="file-name" class="muted"></span>
     </div>
+    <details>
+      <summary>Draft a script from source notes (optional)</summary>
+      <label>Topic <input id="writer-topic" maxlength="1000" placeholder="What the script is about"></label>
+      <label>Source notes (required to draft; one note per line)<textarea id="writer-notes" maxlength="30000" placeholder="Paste the facts the draft may use"></textarea></label>
+      <label>Local voice/style guidance (optional)<textarea id="writer-voice" maxlength="5000" placeholder="For example: short sentences, plain language"></textarea></label>
+      <p id="writer-note" class="note"></p>
+      <button id="writer-draft" type="button">Draft from notes</button>
+      <p id="writer-status" class="muted" role="status" aria-live="polite"></p>
+      <div id="writer-review" class="hidden">
+        <label>Returned draft — review before replacing your script<textarea id="writer-text"></textarea></label>
+        <button id="writer-use" type="button">Replace script with this draft</button>
+        <button id="writer-dismiss" type="button" class="ghost">Keep my script</button>
+      </div>
+    </details>
     <div class="narrator-pick">
       <span class="pick-label">Narrator</span>
       <label class="seg"><input type="radio" name="narrator" value="builtin" checked><b id="nv-ai-title">Built-in voice</b>
@@ -90,6 +105,14 @@
       <div class="actions">
         <select id="p-director"></select>
         <select id="p-format" aria-label="Format"></select>
+        <select id="p-native-target" aria-label="Make and export resolution">
+          <option value="">Saved resolution</option>
+          <option value="16:9,1920,1080">Landscape 1080p</option>
+          <option value="16:9,3840,2160">Landscape 4K</option>
+          <option value="1:1,1080,1080">Square 1080</option>
+          <option value="9:16,1080,1920">Portrait 1080</option>
+        </select>
+        <select id="p-export-format" aria-label="Export file format"><option value="webm">WebM with audio</option><option value="gif">GIF + audio companion</option></select>
         <button id="p-redirect" class="ghost">Re-plan visuals</button>
         <button id="p-reveal" class="ghost">Open folder</button>
         <label class="check"><input id="p-credit" type="checkbox" checked><span></span></label>

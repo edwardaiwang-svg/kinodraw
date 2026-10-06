@@ -6,7 +6,7 @@ is needed for these commands. The existing `new`, `voice`, `render`, and `finish
 commands retain their flags and behavior.
 
 ```sh
-P=/Users/edwardai/test/doodle-studio/.venv/bin/python
+P=python
 ROOT=/absolute/path/to/an/existing/workspace
 "$P" -m kinodraw.cli starter --list
 "$P" -m kinodraw.cli starter explainer-en --root "$ROOT" -o demo

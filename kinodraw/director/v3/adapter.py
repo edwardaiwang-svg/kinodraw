@@ -26,6 +26,10 @@ def adapt(plan: dict, board: dict) -> tuple[dict, list[dict]]:
         refs = list(dict.fromkeys(e['ref'] for e in scene['elements'] if e['kind'] == 'picture'))
         for bid in scene['beat_ids']:
             beat = by_id[bid]
+            if any(e['kind'] == 'diagram' and e['ref'] == bid for e in scene['elements']):
+                # Geometry stays source-bound in the renderer; no expanded provider payload.
+                beat['visuals'] = []
+                continue
             draft = beat.get('visuals', [])
             chosen = []
             for visual in draft:

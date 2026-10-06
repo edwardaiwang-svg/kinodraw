@@ -64,6 +64,10 @@ AI answers are always checked by code before use:
 
 Any beat that fails keeps the offline plan. Keys are stored in your system keychain.
 
+In Studio → New video, **Draft a script from source notes** optionally uses a supporting Advanced director (OpenAI, Anthropic, OpenAI-compatible, or your command). Add a topic and source notes; optional voice/style guidance is local text you supply. Only pressing **Draft from notes** sends these fields to the selected provider or command, using the selected model/base URL; provider charges may apply. Offline and KinoDraw Cloud drafting are unavailable. The returned script stays editable, and replacing an existing or newly edited script requires an explicit review choice. Check its facts before creating a storyboard; drafting does not create or make a video.
+
+**Import project ZIP…** in the Studio sidebar opens a saved KinoDraw project ZIP (up to 256 MiB) as a new project, retaining its saved plan, cast, assets, provenance, recording and settings. Import verifies the archive and compatibility before publishing; archives with pending Studio transactions must be opened and saved in the original project and exported again. Existing projects are preserved. During drawing, **Encoding: ~… remaining** estimates only the remaining encoded frames for the current render step, not the time to a finished video.
+
 ## Your own voice server (optional)
 
 The built-in voice is the default. To use an OpenAI-compatible voice server you already run, open Studio → Settings → Voice server, enter its address and model, optionally its voice and API key, and press **Test**. Turn on **Read scripts with my own OpenAI-compatible voice server** and press **Save**. When it is on, New video and each project's Narrator tab name the server voice, you can choose a server voice per video, and **Hear it** plays a sample from your server. The voice fields offer the voices your server lists (or, for OpenAI's own API, its documented voices), and you can still type any name. Your own recordings stay local and take priority over the server.

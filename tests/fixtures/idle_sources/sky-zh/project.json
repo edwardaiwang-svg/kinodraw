@@ -1,0 +1,10 @@
+{
+ "script": "script.md",
+ "lang": "zh",
+ "voice": "zf_001",
+ "speed": 1.0,
+ "director": "rules",
+ "director_v3": false,
+ "workers": 2,
+ "aspect": "16:9"
+}

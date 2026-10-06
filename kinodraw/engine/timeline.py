@@ -27,6 +27,18 @@ ZOOM_IN = .35             # first part of each section: zoom into its agenda car
 TAKE_PREROLL = .15        # start the note's camera move just before its words
 
 
+class Pacing(dict):
+    """Ordinary capped breaths plus measured preparation for deficient takeaways.
+
+    Takeaway preparation is separate from post-speech pauses: its artwork starts
+    during the preceding narration, and only the measured shortfall delays speech.
+    ``layout`` serializes that plan into each affected beat for the renderer.
+    """
+    def __init__(self):
+        super().__init__()
+        self.takeaways = {}
+
+
 def take_hold(beat, lang):
     return .05            # the note is read during its narration, then pinned immediately
 
@@ -34,7 +46,8 @@ def take_hold(beat, lang):
 def layout(episode, lang, clips, pauses=None, credit=True):
     """clips[beat_id] = {'speech': seconds of speech incl. trailing clip gap, 'char_times': [...]};
     pauses[beat_id] = seconds of silence after that beat (pacing)."""
-    pauses = pauses or {}
+    pauses = {} if pauses is None else pauses
+    takeaways = getattr(pauses, "takeaways", {})
     episode = normalize(episode)
     cue_options = {}
     look_skin = skin.for_look(episode.get('look'))
@@ -55,9 +68,10 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         clip = clips[beat['id']]
         take = beat.get('kind') == 'take' and chapters[beat['chapter']]['kind'] == 'section'
         prep = cursor
-        start = cursor + (TAKE_PREROLL if take else 0.)
+        delay = max(0., float(takeaways.get(beat['id'], 0.))) if take else 0.
+        start = cursor + (TAKE_PREROLL + delay if take else 0.)
         speech_end = start + clip['speech']
-        pause = 0. if take else min(.1, max(0., float(pauses.get(beat['id'], 0.))))
+        pause = min(.1, max(0., float(pauses.get(beat['id'], 0.))))
         if pause:
             used_pauses[beat['id']] = round(pause, 3)
         end = speech_end + (ZH_DWELL if lang == 'zh' else 0.) + pause
@@ -66,6 +80,8 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         info = {'start': round(start, 4), 'speech_end': round(speech_end, 4), 'char_times': clip['char_times']}
         if take:
             info['prep'] = round(prep, 4)
+            if beat['id'] in takeaways:
+                info['takeaway_delay'] = delay
             hold = take_hold(beat, lang)
             hold_end = end + hold
             t_end = hold_end + TRANSITION

@@ -1,0 +1,10 @@
+{
+ "script": "script.md",
+ "lang": "en",
+ "voice": "af_heart",
+ "speed": 1.0,
+ "director": "rules",
+ "director_v3": false,
+ "workers": 2,
+ "aspect": "16:9"
+}
