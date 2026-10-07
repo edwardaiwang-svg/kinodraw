@@ -243,3 +243,22 @@ def test_the_studio_takes_your_music_paper_and_hand(tmp_path, monkeypatch):
     page = (server.STATIC / 'index.html').read_text(encoding='utf-8')
     assert all(f'id="{i}"' in page for i in ('p-music', 'p-music-file', 'p-paper', 'p-paper-color', 'p-hand'))
     assert '/static/options.js' in page and 'projectOptions(name, p);' in (server.STATIC / 'app.js').read_text()
+
+
+def test_music_is_read_only_as_a_local_audio_file(tmp_path, monkeypatch):
+    """A playlist or concat list posing as music can't make FFmpeg fetch a URL or read another file: every decode
+    allows only local files and real audio containers, and such a file is refused as music."""
+    seen = []
+    real = mix._run
+    monkeypatch.setattr(mix, '_run', lambda cmd: seen.append(cmd) or real(cmd))
+    mix.decode(two_tones(tmp_path / 'riff.wav'), 2)
+    cmd = seen[-1]
+    assert cmd[cmd.index('-protocol_whitelist') + 1] == 'file'
+    assert set(cmd[cmd.index('-format_whitelist') + 1].split(',')) <= {'mp3', 'wav', 'mov', 'ogg', 'flac', 'aac',
+                                                                         'aiff', 'matroska'}
+    folder = project(tmp_path)
+    for name, text in {'list.ffconcat': f"ffconcat version 1.0\nfile '{tmp_path / 'riff.wav'}'\n",
+                       'live.m3u8': '#EXTM3U\n#EXTINF:1,\nhttp://127.0.0.1:9/a.ts\n#EXT-X-ENDLIST\n'}.items():
+        (tmp_path / name).write_text(text)
+        with pytest.raises(ValueError, match='isn’t music KinoDraw can play'):
+            pipeline.set_music(folder, tmp_path / name)

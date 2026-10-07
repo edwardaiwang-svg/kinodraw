@@ -33,6 +33,7 @@ MASTER_LUFS, CEILING_DBTP = -14.0, -1.0
 MUSIC = Path(__file__).resolve().parents[1] / 'assets' / 'music'
 DEFAULT_TRACKS = {'primary': 'fresh_focus', 'secondary': 'natural_vibes'}
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+LOCAL_AUDIO = ['-protocol_whitelist', 'file', '-format_whitelist', 'mp3,wav,mov,ogg,flac,aac,aiff,matroska']
 
 
 def _run(cmd):
@@ -61,10 +62,11 @@ def loudness(path) -> dict:
 
 
 def decode(path, channels, seconds=None) -> np.ndarray:
-    """The file's audio at SR (its first ``seconds`` only, when given)."""
+    """The file's audio at SR (its first ``seconds`` only, when given). Read only as a local audio file: a playlist or
+    concat list posing as music can't make FFmpeg fetch a URL or open another file."""
     limit = ['-t', str(seconds)] if seconds is not None else []
-    raw = _run([FFMPEG, '-v', 'error', *limit, '-i', str(path), '-f', 'f32le', '-ac', str(channels), '-ar', str(SR),
-                '-']).stdout
+    raw = _run([FFMPEG, '-v', 'error', *LOCAL_AUDIO, *limit, '-i', str(path), '-f', 'f32le', '-ac', str(channels),
+                '-ar', str(SR), '-']).stdout
     return np.frombuffer(raw, np.float32).reshape(-1, channels).copy()
 
 
