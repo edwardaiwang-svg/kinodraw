@@ -12,6 +12,7 @@ from .faces import Face
 from . import bird as _bird
 from . import fish as _fish
 from . import frog as _frog
+from . import human as _human
 from . import reptile as _reptile
 from . import insect as _insect
 from .primate import Ape
@@ -90,6 +91,7 @@ def _lions():
     out += _quads()
     out += _birds()
     out += _reptiles_and_fish()
+    out += _people()
     return out
 
 
@@ -539,4 +541,75 @@ def _reptiles_and_fish():
                  body_ry=.2)
     add(R('shark', shark, ('shark', 'great white shark'), ('鲨鱼',), 'shark',
           Face('fish', shark.coat, shark.belly, horns='shark'), family='fish', plan='fish', poses=_fish.POSES))
+    return out
+
+
+Person = _human.Person
+SKIN = (('light', '#F6D5BE'), ('tan', '#D9A07A'), ('brown', '#8D5A3B'))
+ROLE_ZH = {'king': '国王', 'queen': '王后', 'villager': '村民', 'teacher': '老师', 'explorer': '探险家',
+           'casual': '孩子', 'princess': '公主'}
+
+
+def _people():
+    """Role x age x sex looks, each in three skin tones; category "characters" (not stick-figure "people")."""
+    looks = [
+        # role, sex, age, noun, names, zh, genes
+        ('king', 'male', 'adult', 'king with a crown and red cape', ('king', 'ruler', 'monarch'), ('国王',),
+         Person('adult', 'male', hair='#3B2B24', hair_style='short', outfit='king', top='#7B3FA0', bottom='#4A2E6A',
+                accent='#C62828', beard=True)),
+        ('queen', 'female', 'adult', 'queen with a crown and gown', ('queen', 'ruler'), ('王后', '女王'),
+         Person('adult', 'female', hair='#5A3A26', hair_style='long', outfit='queen', top='#8E44AD', bottom='#8E44AD',
+                dress=True)),
+        ('king', 'male', 'elder', 'old king with a white beard', ('old king', 'king'), ('老国王', '国王'),
+         Person('elder', 'male', hair='#E6E2DA', hair_style='bald', outfit='king', top='#1F5FA8', bottom='#173F70',
+                accent='#C62828', beard=True)),
+        ('villager', 'male', 'adult', 'villager man in a tunic', ('villager', 'farmer', 'man'), ('村民', '农夫'),
+         Person('adult', 'male', hair='#3B2B24', hair_style='short', outfit='villager', top='#6E9E4A',
+                bottom='#6B5440', accent='#7A5230')),
+        ('villager', 'female', 'adult', 'villager woman in a dress', ('villager', 'farmer', 'woman'), ('村妇', '村民'),
+         Person('adult', 'female', hair='#2E2420', hair_style='bun', outfit='villager', top='#D9822B', bottom='#B5562E',
+                dress=True)),
+        ('teacher', 'male', 'adult', 'teacher in a shirt and tie', ('teacher', 'man', 'professor'), ('老师', '男老师'),
+         Person('adult', 'male', hair='#2E2420', hair_style='short', outfit='teacher', top='#F1EEE6',
+                bottom='#3D4A5C', accent='#C62828', glasses=True)),
+        ('teacher', 'female', 'adult', 'teacher with glasses', ('teacher', 'woman'), ('老师', '女老师'),
+         Person('adult', 'female', hair='#5A3A26', hair_style='ponytail', outfit='teacher', top='#3F7FD0',
+                bottom='#2E3B55', accent='#F2C230', glasses=True, dress=True)),
+        ('explorer', 'male', 'adult', 'explorer in a safari hat', ('explorer', 'adventurer', 'ranger'),
+         ('探险家',), Person('adult', 'male', hair='#7A4A26', hair_style='short', outfit='explorer', top='#C2A36B',
+                             bottom='#8E7A52', accent='#D8BE8A', shoes='#5A3A26')),
+        ('explorer', 'female', 'adult', 'explorer woman in a safari hat', ('explorer', 'adventurer', 'ranger'),
+         ('女探险家', '探险家'), Person('adult', 'female', hair='#2E2420', hair_style='ponytail', outfit='explorer',
+                                     top='#C2A36B', bottom='#8E7A52', accent='#D8BE8A', shoes='#5A3A26')),
+        ('casual', 'male', 'child', 'boy in a t-shirt and shorts', ('boy', 'child', 'kid'), ('男孩', '孩子'),
+         Person('child', 'male', hair='#3B2B24', hair_style='short', outfit='casual', top='#E53935', bottom='#2F5FA8',
+                shoes='#3A3536')),
+        ('casual', 'female', 'child', 'girl in a dress', ('girl', 'child', 'kid'), ('女孩', '孩子'),
+         Person('child', 'female', hair='#5A3A26', hair_style='ponytail', outfit='casual', top='#F48FB1',
+                bottom='#F48FB1', shoes='#C2185B', dress=True)),
+        ('princess', 'female', 'child', 'little princess with a tiara', ('princess', 'girl'), ('公主', '小公主'),
+         Person('child', 'female', hair='#C98A3A', hair_style='long', outfit='princess', top='#F48FB1',
+                bottom='#F48FB1', shoes='#C2185B', dress=True)),
+        ('explorer', 'male', 'child', 'young explorer boy', ('boy explorer', 'boy', 'kid'), ('小探险家', '男孩'),
+         Person('child', 'male', hair='#2E2420', hair_style='curly', outfit='explorer', top='#C2A36B',
+                bottom='#8E7A52', accent='#D8BE8A', shoes='#5A3A26')),
+        ('villager', 'male', 'elder', 'grandfather with a cane', ('grandfather', 'old man', 'grandpa'),
+         ('爷爷', '老人'), Person('elder', 'male', hair='#D9D6D0', hair_style='bald', outfit='villager', top='#8A6A4A',
+                                 bottom='#4A4A55', accent='#5A3A26', glasses=True, cane=True)),
+        ('villager', 'female', 'elder', 'grandmother with a bun and shawl', ('grandmother', 'old woman', 'grandma'),
+         ('奶奶', '老人'), Person('elder', 'female', hair='#E6E2DA', hair_style='bun', outfit='villager', top='#7B5EA7',
+                                 bottom='#6A5090', accent='#C9B6E4', glasses=True, dress=True)),
+    ]
+    out = []
+    for role, sex, age, noun, names, zh, g in looks:
+        for tone, skin in SKIN:
+            variant = f'{role}_{tone}'
+            gg = replace(g, skin=skin)
+            hat = 'crown' if role in ('king', 'queen') else 'tiara' if role == 'princess' else \
+                'helmet' if role == 'explorer' else ''
+            face = Face('human', skin, '', mane_c=g.hair, hair_style=g.hair_style, hat=hat, glasses=g.glasses,
+                        beard=g.beard, mark_c=g.accent or '#C9A66B')
+            out.append(Variant('human', sex, age, variant, genes=gg, face=face, family='human',
+                               names=names, zh=zh, noun=f'{noun} ({tone} skin)', marks=(role,), plan='human',
+                               poses=_human.POSES, category='characters', jitter=0))
     return out

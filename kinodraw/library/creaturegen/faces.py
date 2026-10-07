@@ -45,6 +45,10 @@ class Face:
     comb: str = ''              # chicken comb + wattle colour
     crest: str = ''             # head crest colour
     disc: str = ''              # owl face disc colour
+    hair_style: str = ''        # people: short long bun bald curly ponytail
+    hat: str = ''               # people: crown tiara helmet
+    glasses: bool = False
+    beard: bool = False
 
 
 def _ears(fc: Face):
@@ -490,5 +494,56 @@ def _fish(fc: Face, expr: str) -> Figure:
     return f
 
 
-SPECIAL = {'frog': _frog, 'ant': _bug, 'bee': _bug, 'beetle': _bug, 'bird': _bird, 'turtle': _reptile,
+def _human(fc: Face, expr: str) -> Figure:
+    """Person front face: skin-coloured head, hair by style, crown or explorer hat, glasses, beard."""
+    f = Figure()
+    hair = fc.mane_c
+    hs = fc.hair_style
+    if hs == 'long':
+        f.fill(Union([Ellipse(V(0, -.15), 1.15, 1.25), Ellipse(V(0, -.95), 1.05, .55)], k=.1), hair, SW, 'hair_back')
+    elif hs == 'ponytail':
+        f.fill(Tube([V(-.7, .5), V(-1.25, -.1), V(-1.15, -.75)], [.3, .26, .14]), hair, SW, 'ponytail')
+    elif hs == 'bun':
+        f.fill(Circle(V(0, 1.1), .38), hair, SW_DETAIL, 'bun')
+    for s in (-1, 1):
+        f.fill(Circle(V(s * .98, -.05), .2), fc.coat, SW_DETAIL, 'ear')
+    head = Circle(V(0, 0), 1.0)
+    f.fill(head, fc.coat, SW, 'head')
+    if hs in ('short', 'long', 'ponytail', 'bun', 'curly'):
+        cap = Union([Ellipse(V(0, .72), 1.05, .5), Ellipse(V(-.62, .55), .45, .42, deg(-20)),
+                     Ellipse(V(.55, .6), .5, .35, deg(15))], k=.06)
+        f.patch(cap, hair, head, 'hair')
+        if hs == 'curly':
+            f.fill(Union([Circle(rot(V(0, .98), deg(a)), .3) for a in (-70, -35, 0, 35, 70)], k=.03), hair, SW_DETAIL,
+                   'curls')
+    elif hs == 'bald':
+        f.patch(Union([Ellipse(V(s * .95, .05), .25, .4) for s in (-1, 1)]), hair, head, 'hair_sides')
+    if fc.beard:
+        f.fill(Union([Ellipse(V(0, -.82), .66, .36), Circle(V(0, -1.08), .26)], k=.06), hair, SW_DETAIL, 'beard')
+    eyes(f, expr, (.36, -.04), .72)
+    f.line([V(-.02, -.1), V(.06, -.2), V(-.02, -.26)], SW_FINE, name='nose')
+    for s in (-1, 1):
+        f.spot(V(s * .58, -.28), .13, C.mix(fc.coat, '#F08080', .45), 'cheek')
+    if fc.glasses:
+        for s in (-1, 1):
+            f.line([V(s * .36, .02) + rot(V(.25, 0), deg(a)) for a in range(0, 361, 30)], SW_FINE, name='glasses',
+                   closed=True)
+        f.line([V(-.11, .02), V(.11, .02)], SW_FINE, name='glasses_bridge')
+    mouth(f, expr, (0, -.4), .2, 'human')
+    if fc.hat in ('crown', 'tiara'):
+        w = .85 if fc.hat == 'crown' else .55
+        b = .72
+        pts = [V(-w, b), V(-w, b + .32), V(-w * .6, b + .62), V(-w * .3, b + .3), V(0, b + .7), V(w * .3, b + .3),
+               V(w * .6, b + .62), V(w, b + .32), V(w, b)]
+        f.fill(Poly(pts, r=.02), '#F2C230', SW_DETAIL, 'crown')
+        f.dot(V(0, b + .18), .1, '#E53935', 'jewel', SW_FINE)
+    elif fc.hat == 'helmet':
+        f.fill(Ellipse(V(0, .5), 1.35, .16), C.shade(fc.mark_c, .12), SW_DETAIL, 'hat_brim')
+        dome = Ellipse(V(0, .72), .95, .52)
+        f.fill(dome, fc.mark_c, SW_DETAIL, 'hat')
+        f.patch(Ellipse(V(0, .58), 1.0, .08), C.shade(fc.mark_c, .35), dome, 'hat_band')
+    return f
+
+
+SPECIAL = {'frog': _frog, 'human': _human, 'ant': _bug, 'bee': _bug, 'beetle': _bug, 'bird': _bird, 'turtle': _reptile,
            'snake': _reptile, 'crocodile': _reptile, 'fish': _fish}

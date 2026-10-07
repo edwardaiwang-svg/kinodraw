@@ -101,3 +101,27 @@ def test_carry_presets_record_an_anchor_inside_the_picture():
         assert point is not None, pid
         w, h = m['size']
         assert 0 <= point[0] <= w and 0 <= point[1] <= h, (pid, point)
+
+
+def test_people_resolve_by_role_age_and_skin_tone():
+    best, meta = creatures.best_preset, creatures.presets()
+    king = best('king', pose='wave')
+    assert meta[king]['family'] == 'human' and 'king' in meta[king]['marks'] and king.endswith('_wave_r')
+    assert 'queen' in meta[best('queen')]['marks']
+    assert meta[best('princess')]['age'] == 'child' and 'princess' in meta[best('princess')]['marks']
+    boy = best('boy', pose='run', facing='left')
+    assert meta[boy]['age'] == 'child' and meta[boy]['sex'] == 'male' and 'casual' in meta[boy]['marks']
+    assert boy.endswith('_run_l')
+    assert best('grandma', pose='walk').startswith('cr_human_female_elder_')
+    assert best('teacher', pose='shout', marks=('dark',)) .endswith('_brown_shout_r')
+    assert best('king', marks=('light',)).startswith('cr_human_male_adult_king_light_')
+    assert best('person', pose='roar').endswith('_shout_r')            # a person "roars" by shouting
+
+
+def test_a_person_never_resolves_to_an_animal():
+    meta = creatures.presets()
+    for word in ('man', 'woman', 'boy', 'girl', 'child', 'king', 'queen', 'teacher', 'explorer', 'grandpa'):
+        for pose in ('stand', 'walk', 'run', 'fly', 'swim', 'roar', 'sleep', 'carry', 'face_sad'):
+            got = creatures.best_preset(word, pose=pose)
+            assert got is not None and meta[got]['family'] == 'human', (word, pose, got)
+    assert creatures.anchor(creatures.best_preset('explorer', pose='carry')) is not None
