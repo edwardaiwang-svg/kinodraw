@@ -31,24 +31,11 @@ NEGATED_ACTION = re.compile(r"\b(?:never|cannot|no\s+longer)\b|\bnot\b(?!\s+only
 
 
 def camera_move(image, zoom, dx, dy, fill):
-    """Zoom about the centre and pan by (dx, dy), uncovered edges in `fill`.
-
-    A bicubic box resize: the same mapping as an affine transform at about a fifth of the cost."""
+    """Zoom about the centre and pan by (dx, dy), uncovered edges in `fill`."""
     w, h = image.size
     inv = 1 / zoom
-    x0, y0 = w / 2 * (1 - inv) + dx, h / 2 * (1 - inv) + dy
-    # Output pixels whose source lies inside the image; the rest stay `fill`.
-    u0, v0 = max(0, math.ceil(-x0 / inv)), max(0, math.ceil(-y0 / inv))
-    u1, v1 = min(w, math.floor((w - x0) / inv)), min(h, math.floor((h - y0) / inv))
-    if u1 <= u0 or v1 <= v0:
-        return Image.new(image.mode, (w, h), fill)
-    box = (max(0., x0 + u0 * inv), max(0., y0 + v0 * inv), min(float(w), x0 + u1 * inv), min(float(h), y0 + v1 * inv))
-    moved = image.resize((u1 - u0, v1 - v0), Image.BICUBIC, box=box)
-    if (u0, v0, u1, v1) == (0, 0, w, h):
-        return moved
-    out = Image.new(image.mode, (w, h), fill)
-    out.paste(moved, (u0, v0))
-    return out
+    return image.transform((w, h), Image.AFFINE, (inv, 0, w / 2 * (1 - inv) + dx, 0, inv, h / 2 * (1 - inv) + dy),
+                           Image.BICUBIC, fillcolor=fill)
 
 
 def seed(value):
