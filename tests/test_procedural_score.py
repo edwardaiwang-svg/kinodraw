@@ -70,6 +70,17 @@ def test_every_mood_is_mastered_with_the_music_under_the_narration(mood):
     assert _db(voice[speech]) - _db(result.music[speech]) > 12
 
 
+def test_empty_and_short_procedural_scores():
+    empty = score.render(0, 'warm', 96, track='procedural')
+    assert empty.music.shape == empty.audio.shape == (0, 2) and len(empty.beats) == 0
+    for seconds in (.1, .3):
+        short = score.render(seconds, 'bright', 120, track='procedural', narration=np.ones(round(seconds * SR)) * .1)
+        assert np.abs(short.music).max() < .15                    # leveled like a longer score, then faded
+        assert master.true_peak(short.audio, SR) <= mix.CEILING_DBTP + .05
+    with pytest.raises(ValueError):
+        score.render(1, track='missing')
+
+
 def test_marks_swell_into_climaxes_and_hush_tender_lines():
     plain = procedural.compose(40, 'dramatic', 96, seed=5)
     marked = procedural.compose(40, 'dramatic', 96, seed=5, marks=[(20., 1.), (30., -1., 5.)])

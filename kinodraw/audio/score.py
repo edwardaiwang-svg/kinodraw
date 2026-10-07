@@ -226,11 +226,10 @@ def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambie
     bpm = tempo_bpm if use_pad or slug == PROCEDURAL else tags()[slug]['bpm']
     if use_pad:
         music = ambient_pad(duration, mood, seed=seed)
-    elif slug == PROCEDURAL:
+    elif slug == PROCEDURAL and n:
         music = procedural.compose(duration, mood, tempo_bpm, seed, sections, marks)
-        level = master.loudness(music, SR)
-        if np.isfinite(level):
-            music *= np.float32(10 ** ((mix.OPEN_LUFS - level) / 20))
+        level = master.loudness(music, SR)                   # under 0.4 s: compose's usual -16 LUFS
+        music *= np.float32(10 ** ((mix.OPEN_LUFS - (level if np.isfinite(level) else -16.)) / 20))
         music *= _fades(n, SR)[:, None]
     elif n:
         music = loop(_track(slug), duration, bpm, tags()[slug]['downbeat'])
