@@ -4,9 +4,15 @@
 so clause k of the display text is timed by clause k of the spoken text. Cues
 group whole clauses and by default fit in <= 2 balanced lines at 70 px (never shrunk).
 A look may supply its own two-line fit check.
+
+Word highlight: every cue also carries the time each of its words is said (the spoken characters' measured times,
+mapped proportionally within the clause), and the caption on screen colours the word being said in the look's
+accent; the layout, outline and the other words are unchanged.
 """
 from __future__ import annotations
 
+import bisect
+import colorsys
 import re
 from functools import lru_cache
 
@@ -14,6 +20,7 @@ from PIL import Image, ImageDraw
 
 from ..ingest import CLOSERS, _outside_quotes, _sentence_spacing
 from . import ink
+from .skin import contrast
 
 SIZE = 70
 MAX_W = 1760
@@ -24,6 +31,7 @@ EN_WEAK = {'a', 'an', 'the', 'of', 'to', 'and', 'or', 'in', 'on', 'at', 'for', '
            'that', 'is', 'was', 'his', 'her', 'its', 'their', 'my', 'our', 'your', 'but', 'if', 'than'}
 
 ES_WEAK = set('el la los las de del a al y o en por para con desde como que es era su sus mi nuestro tu pero si'.split())
+OPENERS = '“‘「『«(（[《【¿¡'
 
 
 def cap_font(lang, fonts=ink.FONTS):
@@ -105,8 +113,9 @@ def split_long(text, lang, fits=fits):
     return pieces
 
 
-def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits):
-    """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)]."""
+def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False):
+    """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)], with
+    ``words`` [(start, end, text, [the time each of word_spans(text) is said])]."""
     display = _sentence_spacing(display, lang)
     sd, ss = clause_spans(display, lang), clause_spans(spoken, lang)
     # Captions include closing marks; spoken spans still index the original character times.
@@ -134,47 +143,135 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits):
         off = 0
         for p in pieces:
             frac = off / max(1, len(dtext))
-            atoms.append((p, sa + frac * (sb - sa)))
+            spots = [sa + (off + k) / max(1, len(dtext)) * (sb - sa) for k in range(len(p))]
+            atoms.append((p, sa + frac * (sb - sa), spots))
             off += len(p)
     target = 80 if lang in ('en', 'es') else 28
     minimum = 26 if lang in ('en', 'es') else 8
-    cues, cur, cur_pos = [], '', None
-    for text, pos in atoms:
+    cues, cur, cur_pos, cur_spots = [], '', None, []
+    for text, pos, spots in atoms:
         trial = cur + text
         if cur and (not fits(trial, lang) or (len(cur.strip()) >= minimum and len(trial.strip()) > target)):
-            cues.append((cur_pos, cur))
-            cur, cur_pos = text, pos
+            cues.append((cur_pos, cur, cur_spots))
+            cur, cur_pos, cur_spots = text, pos, spots
         else:
             if not cur:
                 cur_pos = pos
-            cur = trial
+            cur, cur_spots = trial, cur_spots + spots
     if cur.strip():
-        cues.append((cur_pos, cur))
+        cues.append((cur_pos, cur, cur_spots))
     # Merge a tiny trailing cue into the previous one when it still fits.
     if len(cues) >= 2 and len(cues[-1][1].strip()) < minimum and fits(cues[-2][1] + cues[-1][1], lang):
-        p, t = cues[-2]
-        cues[-2:] = [(p, t + cues[-1][1])]
+        p, t, spots = cues[-2]
+        cues[-2:] = [(p, t + cues[-1][1], spots + cues[-1][2])]
     out = []
-    for i, (pos, text) in enumerate(cues):
+    for i, (pos, text, spots) in enumerate(cues):
         start = 0. if i == 0 else max(0., char_time(int(pos)) - .05)
-        out.append([start, None, text.strip()])
+        lead, said = len(text) - len(text.lstrip()), [start]
+        for a, _ in word_spans(text.strip(), lang):
+            said.append(max(said[-1], char_time(int(spots[lead + a]))))
+        out.append([start, None, text.strip(), said[1:]])
     for i in range(len(out)):
         out[i][1] = out[i + 1][0] if i + 1 < len(out) else speech_end
         if out[i][1] <= out[i][0]:
             out[i][1] = out[i][0] + .4
-    return [tuple(c) for c in out]
+    return [tuple(c) if words else tuple(c[:3]) for c in out]
+
+
+def word_spans(text, lang):
+    """The words a caption highlights in turn, as (start, end) in ``text``: the runs between spaces, or in Chinese
+    each character with a Latin or number run as one word. Punctuation rides with a word: opening marks with the
+    next one, every other mark with the one before."""
+    spans, opened = [], None
+    for m in re.finditer(r'\S+' if lang in ('en', 'es') else r"[A-Za-z0-9$.,%×\-–/+'’&]+|\S", text):
+        a, b = m.span()
+        if any(ch.isalnum() for ch in m.group()):
+            spans.append((a if opened is None else opened, b))
+            opened = None
+        elif spans and opened is None and m.group()[0] not in OPENERS:
+            spans[-1] = (spans[-1][0], b)
+        elif opened is None:
+            opened = a
+    if opened is not None:
+        spans[-1:] = [(spans[-1][0] if spans else opened, len(text.rstrip()))]
+    return spans
+
+
+def word_at(said, t):
+    """Which of a cue's words, said at the times ``said``, is being said at ``t`` (the first until it starts, the
+    last after it); None without word times."""
+    return max(0, bisect.bisect_right(said, t) - 1) if said else None
+
+
+@lru_cache(maxsize=64)
+def highlight_color(accent, color, edge):
+    """The look's accent for the word being said: as it is when it reads on the caption's outline (4.5:1) and
+    stands apart from the other letters, else the same hue made only as much lighter or darker as that needs."""
+    def ok(c):
+        return contrast(c, edge) >= 4.5 and sum((x - y) ** 2 for x, y in zip(c, color)) >= 100 ** 2
+    accent = tuple(accent[:3])
+    if ok(accent):
+        return accent
+    h, l, s = colorsys.rgb_to_hls(*(v / 255 for v in accent))
+    shades = [tuple(round(v * 255) for v in colorsys.hls_to_rgb(h, k / 100, s)) for k in range(101)]
+    usable = [c for c in shades if ok(c)]
+    if not usable:
+        return tuple(color)
+    return min(usable, key=lambda c: abs(colorsys.rgb_to_hls(*(v / 255 for v in c))[1] - l))
+
+
+def word_boxes(text, lang, lines, lefts, rows, offset, size):
+    """Where each word of ``text`` is on its caption image: a list of boxes per word. Line i is drawn from x =
+    lefts[i] with its letters between rows[i] = (top, bottom); offset(line, j) is the advance before character j.
+    Neighbouring words and lines are split halfway between their letters. None if the lines are not the text."""
+    owner = []
+    for k, (a, b) in enumerate(word_spans(text, lang)):
+        owner += [(ch, k) for ch in text[a:b] if not ch.isspace()]
+    boxes, n = [[] for _ in word_spans(text, lang)], 0
+    for i, line in enumerate(lines):
+        runs = []                                   # [word, first, end] character runs of one word on this line
+        for j, ch in enumerate(line):
+            if ch.isspace():
+                continue
+            if n >= len(owner) or owner[n][0] != ch:
+                return None
+            k = owner[n][1]
+            n += 1
+            if runs and runs[-1][0] == k and runs[-1][2] == j:
+                runs[-1][2] = j + 1
+            else:
+                runs.append([k, j, j + 1])
+        xs = [(lefts[i] + offset(line, a), lefts[i] + offset(line, b)) for _, a, b in runs]
+        top = (rows[i - 1][1] + rows[i][0]) / 2 if i else 0
+        bottom = (rows[i][1] + rows[i + 1][0]) / 2 if i + 1 < len(lines) else size[1]
+        for r, (k, _, _) in enumerate(runs):
+            left = (xs[r - 1][1] + xs[r][0]) / 2 if r else 0
+            right = (xs[r][1] + xs[r + 1][0]) / 2 if r + 1 < len(runs) else size[0]
+            boxes[k].append((round(left), round(top), round(right), round(bottom)))
+    return boxes if n == len(owner) else None
+
+
+def paint_word(base, lit, boxes):
+    """``base`` with the pixels of ``boxes`` taken from ``lit``, the same caption lettered in the accent."""
+    out = base.copy()
+    for box in boxes:
+        out.paste(lit.crop(box), box[:2])
+    return out
 
 
 @lru_cache(maxsize=2048)
-def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255)):
-    """The caption as an image: ``color`` letters inside an ``edge`` outline (a skin sets all three)."""
+def _layout(text, lang, fonts, stroke):
     lines = balanced_lines(text, lang, fonts) or split_long(text, lang)[:2]
     f = cap_font(lang, fonts)
-    stroke = 7
     lh = int(SIZE * 1.16)
     widths = [f.getlength(l) for l in lines]
-    w = int(max(widths)) + 2 * stroke + 8
-    h = lh * len(lines) + 2 * stroke + 10
+    return lines, f, lh, widths, int(max(widths)) + 2 * stroke + 8, lh * len(lines) + 2 * stroke + 10
+
+
+@lru_cache(maxsize=2048)
+def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 255, 255), stroke=7):
+    """The caption as an image: ``color`` letters inside an ``edge`` outline (a skin sets all three)."""
+    lines, f, lh, widths, w, h = _layout(text, lang, fonts, stroke)
     img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
@@ -182,3 +279,25 @@ def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 25
         d.text((x, stroke + i * lh), line, font=f, fill=tuple(color) + (255,), stroke_width=stroke,
                stroke_fill=tuple(edge) + (255,))
     return img
+
+
+def caption_word_image(text, lang, fonts, color, edge, stroke=7, word=None, accent=None):
+    """caption_image with the word being said (index into word_spans) in the look's ``accent``."""
+    base = caption_image(text, lang, fonts, color, edge, stroke)
+    if word is None or accent is None:
+        return base
+    return _outline_word(text, lang, fonts, tuple(color), tuple(edge), stroke, word, tuple(accent))
+
+
+@lru_cache(maxsize=8)
+def _outline_word(text, lang, fonts, color, edge, stroke, word, accent):
+    lines, f, lh, widths, w, h = _layout(text, lang, fonts, stroke)
+    tops = [stroke + i * lh for i in range(len(lines))]
+    rows = [(y + f.getbbox(line)[1], y + f.getbbox(line)[3]) for y, line in zip(tops, lines)]
+    boxes = word_boxes(text, lang, lines, [(w - x) / 2 for x in widths], rows,
+                       lambda line, j: f.getlength(line[:j]), (w, h))
+    base = caption_image(text, lang, fonts, color, edge, stroke)
+    if not boxes or word >= len(boxes):
+        return base
+    lit = caption_image(text, lang, fonts, highlight_color(accent, color, edge), edge, stroke)
+    return paint_word(base, lit, boxes[word])

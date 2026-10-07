@@ -48,6 +48,7 @@ class Skin:
     faint: tuple = (110, 118, 126)      # chrome: the footer
     caption: tuple = (18, 18, 18)       # captions: letters
     caption_edge: tuple = (255, 255, 255)   # captions: the outline that keeps them readable on any picture
+    caption_accent: tuple = ink.SECTION_COLORS['blue']   # captions: the word being said
     ink: tuple = ink.INK[:3]            # what ink.INK becomes (titles, labels, outlines); last: the name
                                         # hides the ink module in the rest of this class body
 
@@ -81,11 +82,16 @@ class Skin:
             return _world(self, width, height).crop((left, 0, left + width, height))
         return ink.paper(width, height) if self.paper == 'whiteboard' else _paper(self.paper, self.base, width, height)
 
-    def caption_image(self, text, lang):
+    def caption_image(self, text, lang, word=None, accent=None, look=None):
+        """The caption, with its ``word`` being said (captions.word_spans) in ``accent`` (the skin's by default).
+        ``look`` = (letters, outline, stroke) letters it in an outline of other colours (a hybrid's palette)."""
         from . import captions
-        if self.caption_style == 'outline':
-            return captions.caption_image(text, lang, self.fonts, self.caption, self.caption_edge)
-        return _caption_panel(text, lang, self)
+        accent = self.caption_accent if accent is None else accent
+        if look is not None or self.caption_style == 'outline':
+            color, edge, stroke = look or (self.caption, self.caption_edge, 7)
+            return captions.caption_word_image(text, lang, self.fonts, color, edge, stroke, word, accent)
+        base = _caption_panel(text, lang, self)
+        return base if word is None else _panel_word(text, lang, self, word, tuple(accent))
 
     def cursor_image(self):
         return cursor_image()
@@ -222,7 +228,7 @@ def _skin(look: str) -> Skin:
     from .. import styles
     entry = styles.get(look)
     params = dict(entry['skin'])
-    for key in ('ink', 'base', 'soft', 'faint', 'caption', 'caption_edge'):
+    for key in ('ink', 'base', 'soft', 'faint', 'caption', 'caption_edge', 'caption_accent'):
         if key in params:
             params[key] = ink.rgba(params[key])[:3]
     if 'material_args' in params:
@@ -800,7 +806,7 @@ def _stepped(draw, box, fill, step=8):
 
 
 @lru_cache(maxsize=2048)
-def _caption_panel(text, lang, skin):
+def _caption_panel(text, lang, skin, color=None):
     lines, size = caption_layout(text, lang, skin)
     kind = 'en_caption' if lang != 'zh' else 'zh_caption'
     widths = [_run_width(l, kind, size, skin.fonts) for l in lines]
@@ -821,8 +827,27 @@ def _caption_panel(text, lang, skin):
         d.rectangle((0, 0, w - 1, panel_h - 1), fill='#3B2418')
         d.rectangle((8, 8, w - 9, panel_h - 9), outline='#D9A441', width=3)
     for i, line in enumerate(lines):
-        _draw_runs(d, line, ((w - widths[i]) / 2, 20 + size + i * lh), kind, size, skin.fonts, ink.rgba(skin.caption))
+        _draw_runs(d, line, ((w - widths[i]) / 2, 20 + size + i * lh), kind, size, skin.fonts,
+                   ink.rgba(color or skin.caption))
     return img
+
+
+@lru_cache(maxsize=8)
+def _panel_word(text, lang, skin, word, accent):
+    """The panel caption with one word lettered in the accent (the panel is the letters' background)."""
+    from . import captions
+    lines, size = caption_layout(text, lang, skin)
+    kind = 'en_caption' if lang != 'zh' else 'zh_caption'
+    widths, lh = [_run_width(l, kind, size, skin.fonts) for l in lines], round(size * 1.25)
+    base, f = _caption_panel(text, lang, skin), ink.font(kind, size, skin.fonts)
+    baselines = [20 + size + i * lh for i in range(len(lines))]
+    rows = [(y + f.getbbox(line, anchor='ls')[1], y + f.getbbox(line, anchor='ls')[3]) for y, line in zip(baselines, lines)]
+    boxes = captions.word_boxes(text, lang, lines, [(base.width - x) / 2 for x in widths], rows,
+                                lambda line, j: _run_width(line[:j], kind, size, skin.fonts), base.size)
+    if not boxes or word >= len(boxes):
+        return base
+    lit = _caption_panel(text, lang, skin, captions.highlight_color(accent, skin.caption, skin.caption_edge))
+    return captions.paint_word(base, lit, boxes[word])
 
 
 def tag_image(ch, lang, skin):

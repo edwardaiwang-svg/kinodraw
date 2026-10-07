@@ -156,8 +156,8 @@ def test_nonmaterial_and_spanish_timelines_keep_the_default_cues(look, lang, mon
     actual = timeline.layout(ep, lang, clips)
     original_cues = captions.cues_for_beat
 
-    def default_cues(spoken, display, language, char_time, speech_end, **kwargs):
-        return original_cues(spoken, display, language, char_time, speech_end)
+    def default_cues(spoken, display, language, char_time, speech_end, fits=None, **kwargs):
+        return original_cues(spoken, display, language, char_time, speech_end, **kwargs)
 
     monkeypatch.setattr(captions, 'cues_for_beat', default_cues)
     expected = timeline.layout(ep, lang, clips)

@@ -117,7 +117,7 @@ def test_scientific_join_keeps_actual_pixels_and_source_clock(tmp_path, outgoing
         for dt in (0., .1, .31, .5):
             at = following.start + dt
             expected = prod._frame(following, at).convert('RGBA')
-            prod.whiteboard._caption(expected, at)
+            prod.whiteboard._caption(expected, at, prod.caption_look, prod.caption_accent)
             assert prod.frame(at).tobytes() == expected.convert('RGB').tobytes()
         # Scientific content must also clear immediately at the real end-card clock.
         prod.spans = prod.spans[:index + 1]
@@ -132,7 +132,7 @@ def test_scientific_join_keeps_actual_pixels_and_source_clock(tmp_path, outgoing
         for dt in (0., .1, .31, .5):
             at = span.start + dt
             expected = prod._frame(span, at).convert('RGBA')
-            prod.whiteboard._caption(expected, at)
+            prod.whiteboard._caption(expected, at, prod.caption_look, prod.caption_accent)
             assert prod.frame(at).tobytes() == expected.convert('RGB').tobytes()
 
 

@@ -146,7 +146,7 @@ class HybridProduction:
         self._square_layers = {}
         self._text_layers = {}
         self._travelled = {}
-        self.ctx, self.els = whiteboard.ctx, whiteboard.els
+        self.ctx, self.els, self.cap_words = whiteboard.ctx, whiteboard.els, whiteboard.cap_words
         self.warnings = list(whiteboard.warnings)
         self.by_id = {b['id']: b for b in beats(episode, lang)}
         self.cast = {c['id']: cast_genome(c) for c in plan['cast']}
@@ -157,6 +157,11 @@ class HybridProduction:
             if dropped:
                 self.warnings.append(f"hybrid: cast {c['id']} unsupported marks {sorted(dropped)}")
         self.style = plan['style']
+        # Captions over motion scenes take the palette (its ink in a thin outline of its background, the word being
+        # said in its accent) instead of the whiteboard's dark letters in a thick white outline, which smear on a
+        # dark palette. Whiteboard scenes keep the whiteboard's own captions.
+        palette = {k: ImageColor.getrgb(v)[:3] for k, v in self.style['palette'].items()}
+        self.caption_look, self.caption_accent = (palette['ink'], palette['background'], 4), palette['accent']
         # Same score selection as finish; the decoded recording starts on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
@@ -1288,7 +1293,7 @@ class HybridProduction:
                                           *self.size, kind='match', duration=last.join_length)
                 image = Image.fromarray(array).convert('RGBA')
                 if not self.vertical:
-                    self.whiteboard._caption(image, t)
+                    self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
                 return image.convert('RGB')
             return self.whiteboard.frame(t)
         i = bisect.bisect_right(self.starts, t) - 1
@@ -1317,7 +1322,7 @@ class HybridProduction:
                 image = Image.fromarray(array)
         image = image.convert('RGBA')
         if not self.vertical:
-            self.whiteboard._caption(image, t)
+            self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')
 
     def cues(self):

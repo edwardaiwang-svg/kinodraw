@@ -30,6 +30,7 @@ from . import ink
 from . import scenes
 from . import skin as skins
 from . import timeline as tl
+from .captions import word_at
 from .storyboard import drawable, normalize
 from .board import Camera, Layout, Scheduler
 from .geometry import LANDSCAPE
@@ -55,6 +56,7 @@ def ease(u):
 class Production:
     vertical = False               # set by vertical.Vertical: the frame is the board alone, laid out in 9:16 there
     size = SIZE
+    cap_words = ()                 # when each caption's words are said (timeline.word_times); else the cues' own
 
     def __init__(self, episode, tline, lang, project_dir, relaxed=False, geometry=LANDSCAPE):
         """``relaxed``: schedule every drawing at natural speed and skip nothing (pacing measures with it)."""
@@ -647,6 +649,7 @@ class Production:
         self.hand_els = [e for e in self.els if e.hand]
         self.hand_starts = [e.start for e in self.hand_els]
         self.cap_starts = [c['start'] for c in self.tl['captions']]
+        self.cap_words = tl.word_times(self.ep, self.tl, self.lang)
         self.mode_starts = [m[0] for m in self.modes]
         self._stock_reader = None
 
@@ -976,14 +979,17 @@ class Production:
                 return next(x for x in self.ep['chapters'] if x['id'] == c['id']), c['start'], c['end']
         return None
 
-    def _caption(self, frame, t):
+    def _caption(self, frame, t, look=None, accent=None):
+        """The caption being said, its word being said in the skin's accent. A hybrid's motion scenes pass their
+        palette's: ``look`` = (letters, outline, stroke) and ``accent``."""
         i = bisect.bisect_right(self.cap_starts, t) - 1
         if i < 0:
             return
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
             return
-        raw = self.skin.caption_image(c['text'], self.lang)
+        said = self.cap_words[i] if self.cap_words else c.get('words')
+        raw = self.skin.caption_image(c['text'], self.lang, word_at(said, t), accent, look)
         img = self._fit_ui(raw)
         bottom = 1036 if raw.width > int(self.size[0] * .92) else 1046
         ink.paste(frame, img, (self.size[0] - img.width) / 2, bottom - img.height)
