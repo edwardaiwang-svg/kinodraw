@@ -69,8 +69,47 @@ function toast(msg, ms = 3500) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
   clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.add('hidden'), ms);
 }
-function modal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.remove('hidden'); return $('#modal-body'); }
-function closeModal() { $('#modal').classList.add('hidden'); }
+// The one dialog: named by its first heading, focus moves in and Tab stays inside; Escape or × closes it and focus
+// goes back to whatever opened it.
+let opener = null;
+const reachable = (box) => [...box.querySelectorAll('button, [href], input, select, textarea, [tabindex]')]
+  .filter((e) => !e.disabled && e.tabIndex >= 0 && e.getClientRects().length);
+function modal(html) {
+  const box = $('#modal'), body = $('#modal-body');
+  if (box.classList.contains('hidden')) opener = document.activeElement;
+  body.innerHTML = html;
+  const heading = body.querySelector('h1, h2, h3, h4');
+  if (heading && !heading.id) heading.id = 'modal-title';
+  $('#modal .modal-box').setAttribute('aria-labelledby', heading?.id || '');
+  box.classList.remove('hidden');
+  (reachable(body)[0] || $('#modal .close')).focus();
+  return body;
+}
+function closeModal() {
+  $('#modal').classList.add('hidden');
+  if (opener?.isConnected) opener.focus();
+  opener = null;
+}
+function showShortcuts() {           // only the keys this page really handles (the keydown listeners below)
+  const keys = [['Ctrl/⌘+S', 'Save the storyboard now (in an open video; it also saves by itself)'],
+    ['Ctrl/⌘+Z', 'Undo a storyboard change (outside text boxes)'], ['Ctrl/⌘+Shift+Z', 'Redo'],
+    ['Esc', 'Close this window or any other'], ['Tab, Shift+Tab', 'Move between controls (they stay inside an open window)'],
+    ['?', 'Show these shortcuts (outside text boxes)']];
+  modal(`<h2>Keyboard shortcuts</h2><dl class="keys">${keys.map(([k, what]) => `<dt><kbd>${esc(k)}</kbd></dt><dd>${esc(what)}</dd>`).join('')}</dl>`);
+}
+document.addEventListener('keydown', (event) => {
+  const box = $('#modal .modal-box'), open = !$('#modal').classList.contains('hidden');
+  if (open && event.key === 'Escape') { event.preventDefault(); closeModal(); return; }
+  if (open && event.key === 'Tab') {
+    const items = reachable(box), first = items[0], last = items[items.length - 1];
+    if (first && (!box.contains(document.activeElement) || document.activeElement === (event.shiftKey ? first : last))) {
+      event.preventDefault(); (event.shiftKey ? last : first).focus();
+    }
+    return;
+  }
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable;
+  if (event.key === '?' && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); showShortcuts(); }
+});
 
 function voiceName(id) {
   return Object.values(STATE.voices).flat().find((v) => v.id === id)?.name || id;
