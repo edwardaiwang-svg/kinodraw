@@ -369,7 +369,7 @@ def compose(duration, mood='warm', bpm=96., seed=0, sections=(), marks=()) -> np
     bar = 16 * step
     bars = int(np.ceil(duration / bar))
     starts = sorted({b for b in (round(s / bar) for s in sections if np.isfinite(s)) if 0 < b < bars})
-    end_bar = max(1, int((duration - 1.5) // bar))     # the closing bars play the home chord
+    end_bar = max(1, int((duration - 1.5) // bar) - 1)  # the home chord rings a full bar before the fade-out
     ct, ce = energy_curve(duration, style['energy'], bar, marks)
     energy = lambda t: float(np.interp(t, ct, ce))  # noqa: E731
     variation = rng.integers(3, size=bars + 1)
