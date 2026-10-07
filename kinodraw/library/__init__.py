@@ -1,7 +1,8 @@
 """Doodle library: resolve a doodle id to its SVG file, and the tagged catalog.
 
 Search order: the project's own ``doodles/`` folder (user or private presets),
-then the bundled bespoke set, then the converted Fluent Emoji set.
+then the bundled bespoke set, then the converted Fluent Emoji set, then the generated creature presets
+(animals and people in poses; ``creatures.py`` picks one by species, pose and facing).
 """
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets' / 'doodles'
-SETS = ('bespoke', 'fluent')
+SETS = ('bespoke', 'fluent', 'creatures')
 MISSING = ASSETS / 'missing.svg'
 OWN = 'own:'
 PICTURE_TYPES = ('.png', '.jpg', '.jpeg', '.svg')
@@ -90,7 +91,7 @@ def catalog() -> dict:
     """id -> {desc, category, en: [...], zh: [...], set} for every shipped doodle that has an SVG and is not banned."""
     out, skip = {}, banned()['doodles']
     for path in sorted((ASSETS / 'tags').glob('*.json')):
-        doodle_set = 'fluent' if path.stem == 'fluent' else 'bespoke'
+        doodle_set = path.stem if path.stem in ('fluent', 'creatures') else 'bespoke'
         for did, entry in json.loads(path.read_text(encoding='utf-8')).items():
             if did not in skip and (ASSETS / doodle_set / f'{did}.svg').exists():
                 out[did] = {**entry, 'set': doodle_set}
