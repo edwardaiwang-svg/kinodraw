@@ -26,7 +26,10 @@ Meaning rules (a word is drawn only in the sense the script uses it):
 - a picture found by meaning alone must be a curated drawing on the subject, and may not
   take words that name something else;
 - banned pictures (religious imagery, scientist figures; assets/doodles/banned.json) are never
-  drawn, and neither are banned words (church, Germany, scientists, astronomers).
+  drawn, and neither are banned words (church, Germany, scientists, astronomers);
+- an ink line icon (library.PACKS) is drawn only in an English beat that no doodle can show, and only
+  for a thing the beat names as a noun that is the icon's own name: never for a word used as a verb
+  ("the leaves began to fall"), never an interface symbol (help, dots), never a person, animal or face.
 Timeline labels say who or what the dated clause is about: a named person or group first,
 else the clause's subject ("By 1500, printing presses were running" -> "Printing presses").
 """
@@ -39,7 +42,7 @@ import numpy as np
 
 from .. import numbers, script
 from ..engine.storyboard import normalize
-from ..library import banned
+from ..library import banned, imported
 from .match import EN_STOP, ES_STOP, Hit, Matcher, _model, _normalize, catalog_vectors, es_gloss, singular
 
 # A literal keyword hit counts in proportion to how well the doodle agrees with its sentence (ramp lo..hi).
@@ -163,6 +166,21 @@ FIGURE_WORDS = {'armor': {'armor', 'helmet', 'helm', 'shield'}, 'armour': {'armo
 SUBJECT_VERBS = AUX | PAST | set('breathes laughs roars hunts swipes rattles visits studies treats examines '
                                'smiles wears feels stands stays trembles shrinks watches'.split())
 GROUP_SPLIT = re.compile(r'\b(?:while|whereas|but|instead|apart|separately)\b', re.I)
+# Icon categories that draw a thing (the others are interface symbols, faces, people or animals: no stand-in
+# for what a script names, and a story's characters are never drawn as icons).
+ICON_THINGS = {'Devices', 'Map', 'E-commerce', 'Buildings', 'Sport', 'Vehicles', 'Food', 'Health', 'Weather',
+               'Nature', 'Games', 'Document', 'Electrical',                           # Tabler Icons
+               'devices', 'body', 'objects', 'places', 'vehicles', 'nutrition', 'ppe'}   # Health Icons
+ICON_KINDS = ('building', 'device')            # Tabler names a bridge 'building bridge', a laptop 'device laptop'
+# A word is drawn as a thing only right after one of these ("the fall", "two million flowers", "a red lamp"); after
+# anything else it may be an action ("began to fall", "a friend walks", "can help") or not a thing at all ("led
+# the cubs home"). Words that can stand alone come before actions too ("leaves that fall", "it all runs", "help her
+# fall"), so only the plain determiners count.
+NOUN_BEFORE = set('a an the his its their our your my every'.split()) | (PREPS - {'to'}) | EMOJI_ADJ | set(
+    'one two three four five six seven eight nine ten twelve twenty hundred thousand million billion dozen'.split())
+ABSTRACT = set('world life way space time place'.split())   # icon names a script mostly means abstractly ("in the world")
+PERSON_TAGS = set('person people man woman men women user users human boy girl child children kid kids runner '
+                  'pedestrian athlete player swimmer walker'.split())   # pictograms of people (no stand-ins for a cast)
 
 
 def singular_words(phrase: str, lang: str = 'en') -> set:
@@ -174,9 +192,10 @@ def singular_words(phrase: str, lang: str = 'en') -> set:
 class RulesDirector:
     def __init__(self, lang: str):
         self.lang = lang
-        # The imported ink line icons are for search and hand-picking, not for automatic picks: their one-word
-        # names (fall, help, dots) read as verbs as often as nouns, and they sit beside the coloured doodles.
+        # The imported ink line icons are not matched with the doodles: their one-word names (fall, help, dots)
+        # read as verbs as often as nouns. They are a fallback for beats no doodle can show (_icons).
         self.matcher = Matcher(lang, include_packs=False)
+        self.icons = Matcher(lang) if lang == 'en' else None
         self.ids, self.vecs = self.matcher._catalog_vectors()
         self.pos = {i: k for k, i in enumerate(self.ids)}
         pic_ids, pic_vecs = catalog_vectors(lang, 'picture')   # what each drawing shows, keywords left out
@@ -269,10 +288,14 @@ class RulesDirector:
             hits = self._concepts(text, recent, beat['chapter'])
             terms = [self._key(v['term'][lang]) for _, v in planned if v['type'] == 'glossary']
             hits = [h for h in hits if not (h.phrase and any(self._inside(self._key(h.phrase), t) for t in terms))]
+            no_doodle = not self.cleared              # (before the listing pass below runs _concepts again)
             used_words: set = set()                   # (a defined term is shown by its note, not by its words)
             drawn: set = set()                        # pictures already in this beat: each is drawn once
             listed = [h for h in self._concepts(text, [], beat['chapter'], listing=True)
                       if not any(self._inside(self._key(h.phrase), t) for t in terms)]
+            if no_doodle and not self._lists(text, listed):   # no doodle can show this beat: an icon it names
+                hits = [h for h in self._icons(text, recent)
+                        if not any(self._inside(self._key(h.phrase), t) for t in terms)]
             for group in self._lists(text, listed):   # every listed thing, side by side (even if drawn before)
                 if budget <= 0:
                     break
@@ -311,7 +334,7 @@ class RulesDirector:
                     recent.extend(h.id for h in group)
                     budget -= 1
                     for h in group:
-                        if h.phrase:
+                        if h.phrase and h.id in self.matcher.entries:     # (an icon is a stand-in, not the word's picture)
                             self.pictures.setdefault(self._key(h.phrase), h.id)
                             section = heroes.setdefault(beat['chapter'], {})
                             section[h.id] = max(section.get(h.id, 0), h.score)
@@ -383,6 +406,7 @@ class RulesDirector:
         sentences = script.sentences(text, self.lang) or [text]
         vecs = self._sentence_vectors(sentences)
         found: dict[str, Hit] = {}
+        self.cleared = False                          # did any doodle match well enough (even if not drawn now)?
         offset = 0
         for sentence, vec in zip(sentences, vecs):
             base = text.find(sentence, offset)
@@ -419,6 +443,7 @@ class RulesDirector:
                     score *= .75                  # rank is context, not proof against a literal object
                 if score > (0. if listing else .15):
                     senses.setdefault(key, []).append((hit, score))
+                    self.cleared = True
             blocked = []                              # spans whose picture was used moments ago
             for key, cands in sorted(senses.items(), key=lambda kv: -max(s for _, s in kv[1])):
                 if listing:
@@ -447,12 +472,14 @@ class RulesDirector:
             sims = self.vecs @ vec
             for i in np.argsort(-sims)[:3]:
                 did = self.ids[i]
-                if (sims[i] >= MEANING_ONLY[self.lang] and did not in recent and did not in found
+                if (sims[i] >= MEANING_ONLY[self.lang] and did not in found
                         and self._meaning_allows(did, None, sentence)
                         and self.matcher.entries[did]['set'] == 'bespoke' and self.topic[chapter][i] <= MEANING_TOPIC_RANK
                         and not any(s < lead for s in named)
                         and (sims[i] >= MEANING_STRONG[self.lang] or self._shares(did, words))):
-                    found[did] = Hit(did, float(sims[i]) - MEANING_ONLY[self.lang] + .1, None, base)
+                    self.cleared = True
+                    if did not in recent:
+                        found[did] = Hit(did, float(sims[i]) - MEANING_ONLY[self.lang] + .1, None, base)
         ranked = sorted(found.values(), key=lambda h: -h.score)
         seen_phrases, out = set(), []
         for h in ranked:                              # one doodle per phrase
@@ -461,6 +488,54 @@ class RulesDirector:
                 seen_phrases.add(key)
                 out.append(h)
         return out
+
+    def _icons(self, text, recent) -> list[Hit]:
+        """Ink line icons for a beat that no doodle can show (call after _concepts found none), best first, one
+        per phrase: an icon whose own name is a thing the beat names, said as a noun (module docstring)."""
+        if self.icons is None or self._characters_in(text):
+            return []
+        found: dict = {}
+        offset = 0
+        for sentence in script.sentences(text, self.lang) or [text]:
+            base = text.find(sentence, offset)
+            offset = max(offset, base)
+            plain = IDIOMS[self.lang].sub(lambda m: ' ' * len(m.group(0)), sentence)
+            figures = {m.start(1) for m in FIGURATIVE.finditer(plain) if m.group(1)}   # "like a bridge"
+            for hit in self.icons.lexical(plain, every_phrase=True):
+                key = self._key(hit.phrase)
+                if hit.id not in recent and self._icon_fits(self.icons.entries[hit.id], key, plain, hit.start,
+                                                            hit.start + len(hit.phrase), figures) \
+                        and (key not in found or found[key].score < hit.score):
+                    found[key] = Hit(hit.id, hit.score, hit.phrase, base + hit.start)
+        return sorted(found.values(), key=lambda h: -h.score)
+
+    def _icon_fits(self, entry, key, sentence, a, b, figures):
+        """May this icon stand for sentence[a:b] (whose words are ``key``)?"""
+        desc = entry.get('desc', '')
+        if not imported(entry) or entry.get('category') not in ICON_THINGS or PEOPLE_DESC.search(desc) \
+                or {singular(w) for w in re.findall(r'[a-z]+', desc.lower())} & ANIMALS \
+                or set(entry.get('en', [])) & PERSON_TAGS:
+            return False                              # it draws a thing, not a symbol, a person or an animal
+        if not self._icon_named(entry, key) or key in GENERIC[self.lang] | PHENOMENA[self.lang] | ABSTRACT \
+                or NUMERAL.fullmatch(key) or self._banned(key):
+            return False                              # the words are its own name, and name a thing
+        return (self._said_as_noun(sentence, a, b) and a not in figures      # said as a thing, not a figure
+                and not re.match(r'\s+between\b', sentence[b:])                # ("a bridge between cultures"),
+                and not NEGATION[self.lang].search(sentence[max(0, a - 24):a])  # not negated,
+                and sentence[b:b + 1] != '-'                                    # not a describing word,
+                and not PEOPLE_OF[self.lang].search(sentence[max(0, a - 32):a]))  # not people
+
+    def _icon_named(self, entry, key):
+        """Is the icon's own name (Tabler: 'building bridge' is a bridge) exactly the thing the words say?"""
+        name = self._key(entry.get('desc', ''))
+        return key == name or any(name == f'{kind} {key}' for kind in ICON_KINDS)
+
+    def _said_as_noun(self, sentence, a, b):
+        """Are the words at sentence[a:b] said as a thing? "the fall of Rome" yes; "began to fall", "a friend walks",
+        "can help" no. Rules, not a tagger: a word they cannot place is not drawn."""
+        before = re.findall(r"[a-z']+", sentence[:a].lower())
+        prev = before[-1] if before else ''
+        return prev in NOUN_BEFORE or bool(re.search(r'\d[\d,.]*\s*$', sentence[:a]))
 
     def _lists(self, text, hits) -> list[list[Hit]]:
         """Runs of listed things ("a book, a newspaper or a website"): 2-3 named pictures in a row with
