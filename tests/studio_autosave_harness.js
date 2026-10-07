@@ -56,7 +56,7 @@ const run = code => vm.runInContext(code, context);
 run(fs.readFileSync('kinodraw/studio/static/app.js', 'utf8'));
 // Only auxiliary project/sidebar/media UI is stubbed; editing, rendering and navigation are real.
 run(`STATE = { projects_root: 'synthetic-home', voices: { en: [] }, formats: [], hooks: {}, product: 'KinoDraw' };
-  loadProjects = () => {}; loadNarrator = () => {}; renderVideo = () => {};`);
+  loadProjects = () => {}; loadNarrator = () => {}; renderVideo = () => {}; projectOptions = () => {};`);
 const titleInput = () => element('#board').children[0].inputs[0];
 const type = (input, value) => { input.value = value; input.oninput({ target: input }); };
 const draft = () => JSON.parse(storage.get('kinodraw-draft:synthetic-home:synthetic') || 'null');
