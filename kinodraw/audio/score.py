@@ -3,10 +3,11 @@
 render() returns the quiet, ducked music stem, the mastered narration/music mix and its beat grid. With
 track='procedural' the score is synthesized (audio/procedural.py) at the requested tempo, changing at section
 starts and swelling or hushing at intensity marks. Otherwise a recording plays: the named one, or the one the
-mood and requested tempo select; bpm and beats then describe its measured tempo, without repitching it.
-Measurements in assets/music/score_tags.json are made once with scripts/measure_bpm.py, including its analysis
-delay. Every source starts at its first downbeat, so the output's beat and bar grids start at zero.
-source() is the projects' choice: a saved storyboard music track, else the procedural score.
+mood and requested tempo select, or your own (an Own track); bpm and beats then describe its measured tempo,
+without repitching it. Measurements in assets/music/score_tags.json are made once with scripts/measure_bpm.py,
+including its analysis delay; an own track is measured the same way (audio/tempo.py) when it is added
+(pipeline.set_music). Every source starts at its first downbeat, so the output's beat and bar grids start at zero.
+source() is the projects' choice: their own music file, a saved storyboard music track, else the procedural score.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ import json
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path, PurePosixPath
 
 import numpy as np
 from scipy.signal import butter, sosfilt
@@ -32,6 +34,15 @@ SWELLS = {'roar': 1., 'impact': .8, 'pounce': .8, 'swipe': .6, 'shooting_star': 
 HUSHES = {'whimper': .8, 'nudge': .5}
 TENDER = re.compile(r'\b(?:gentl[ey]|softly|quietly|whisper\w*|nuzzl\w*|hug(?:s|ged|ging)?|cuddl\w*|tears?|'
                     r'lullab\w*|tender\w*)\b', re.I)
+
+
+@dataclass(frozen=True)
+class Own:
+    """Your own music file, copied into the project as music/<name> (pipeline.set_music), at its measured tempo."""
+    file: str            # music/<name>, as the storyboard names it
+    bpm: float
+    downbeat: float      # seconds into the file
+    path: Path           # the file itself
 
 
 @dataclass
@@ -57,11 +68,31 @@ def choose(music_mood, tempo_bpm) -> str:
     return min(matches or tags(), key=lambda slug: (abs(np.log2(tags()[slug]['bpm'] / tempo_bpm)), slug))
 
 
-def source(setting, music_mood, tempo_bpm) -> tuple[str, float]:
-    """(track, bpm) for a project: the recording a storyboard's music setting names ({"primary": slug}, which
-    projects saved before the procedural score keep), at its measured tempo; otherwise the procedural score at the
-    requested tempo. The renderer snaps joins to this grid and finish plays this track, so both use it."""
+def own(setting, project) -> Own | None:
+    """The music file a storyboard's music setting names ({"file": "music/<name>", "bpm", "downbeat"}), in the
+    project folder; None for any other setting. Only a file directly in the project's music folder is played."""
+    if not isinstance(setting, dict) or 'file' not in setting:
+        return None
+    name = setting['file']
+    parts = PurePosixPath(name).parts if isinstance(name, str) and '\\' not in name else ()
+    if len(parts) != 2 or parts[0] != 'music' or parts[1] in ('.', '..') or parts[1].startswith('.'):
+        raise ValueError('music file must be music/<name> in the project folder')
+    bpm, downbeat = (float(setting.get(key, np.nan)) for key in ('bpm', 'downbeat'))
+    _tempo(bpm)
+    if not np.isfinite(downbeat) or downbeat < 0:
+        raise ValueError('music downbeat must be a time in the file')
+    return Own(name, bpm, downbeat, Path(project) / name)
+
+
+def source(setting, music_mood, tempo_bpm, project='.') -> tuple[str | Own, float]:
+    """(track, bpm) for a project: its own music file (an Own track in ``project``), or the recording a storyboard's
+    music setting names ({"primary": slug}, which projects saved before the procedural score keep), at its measured
+    tempo; otherwise the procedural score at the requested tempo. The renderer snaps joins to this grid and finish
+    plays this track, so both use it."""
     _tempo(tempo_bpm)
+    mine = own(setting, project)
+    if mine:
+        return mine, mine.bpm
     slug = setting.get('primary') if isinstance(setting, dict) else None
     if slug and slug != PROCEDURAL:
         if slug not in tags():
@@ -199,14 +230,23 @@ def _track(slug):
     return mix.decode(mix.MUSIC / f'{slug}.mp3', 2)
 
 
+def recording(audio, duration, bpm, downbeat) -> np.ndarray:
+    """A recording looped on its bars (or cut) to the duration, at the music's open level, faded in and out."""
+    music = loop(audio, duration, bpm, downbeat)
+    level = master.loudness(music, SR)
+    if np.isfinite(level):
+        music *= np.float32(10 ** ((mix.OPEN_LUFS - level) / 20))
+    return music * _fades(len(music), SR)[:, None]
+
+
 def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambient=False,
            seed=20260927, track=None, sections=(), marks=()) -> Score:
     """Stereo 48 kHz music and final -14 LUFS / -1 dBTP mix. Narration must already be at 48 kHz.
 
     track: 'procedural' synthesizes the score (sections and marks shape it, seed varies it); a recording's slug
-    plays that recording; None selects a recording by mood and tempo, or with ambient=True a pad when the mood has
-    no tagged recording. Short narration is zero-padded; longer narration is cropped. The beat grid is available
-    to a caller snapping transitions to beats/bars.
+    plays that recording and an Own track your own file; None selects a recording by mood and tempo, or with
+    ambient=True a pad when the mood has no tagged recording. Short narration is zero-padded; longer narration is
+    cropped. The beat grid is available to a caller snapping transitions to beats/bars.
     """
     beat_grid(duration, tempo_bpm)
     n = round(duration * SR)
@@ -219,11 +259,12 @@ def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambie
             voice = voice[:, None]
         speech[:min(n, len(voice))] = voice[:n]
     mood = music_mood.strip().lower()
-    if track not in (None, PROCEDURAL) and track not in tags():
+    mine = isinstance(track, Own)
+    if not mine and track not in (None, PROCEDURAL) and track not in tags():
         raise ValueError(f'unknown music track {track!r}')
     use_pad = track is None and ambient and not any(mood in t['moods'] for t in tags().values())
     slug = None if use_pad else track or choose(mood, tempo_bpm)
-    bpm = tempo_bpm if use_pad or slug == PROCEDURAL else tags()[slug]['bpm']
+    bpm = tempo_bpm if use_pad or slug == PROCEDURAL else track.bpm if mine else tags()[slug]['bpm']
     if use_pad:
         music = ambient_pad(duration, mood, seed=seed)
     elif slug == PROCEDURAL and n:
@@ -231,12 +272,10 @@ def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambie
         level = master.loudness(music, SR)                   # under 0.4 s: compose's usual -16 LUFS
         music *= np.float32(10 ** ((mix.OPEN_LUFS - (level if np.isfinite(level) else -16.)) / 20))
         music *= _fades(n, SR)[:, None]
+    elif n and mine:
+        music = recording(mix.decode(track.path, 2), duration, bpm, track.downbeat)
     elif n:
-        music = loop(_track(slug), duration, bpm, tags()[slug]['downbeat'])
-        level = master.loudness(music, SR)
-        if np.isfinite(level):
-            music *= np.float32(10 ** ((mix.OPEN_LUFS - level) / 20))
-        music *= _fades(n, SR)[:, None]
+        music = recording(_track(slug), duration, bpm, tags()[slug]['downbeat'])
     else:
         music = np.zeros((0, 2), np.float32)
     gain = ducking(speech)
@@ -244,4 +283,4 @@ def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambie
     audio = master.master(music + speech, SR) if n else music.copy()
     if 0 < n < round(.4 * SR):
         audio = master.limit(audio, SR, mix.CEILING_DBTP)
-    return Score(music, audio, beat_grid(duration, bpm), gain, bpm, slug)
+    return Score(music, audio, beat_grid(duration, bpm), gain, bpm, track.file if mine else slug)

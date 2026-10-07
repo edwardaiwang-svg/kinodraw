@@ -275,6 +275,73 @@ def set_recording(project_dir: Path, source) -> dict:
     return cfg
 
 
+MUSIC_DIR = 'music'
+MUSIC_MAX_BYTES = 150 * 1024 ** 2
+MUSIC_SECONDS = (10, 600)
+
+
+def set_music(project_dir: Path, source, name: str | None = None):
+    """Your own music under the video: copy the file into the project as music/<name> (``name``: the file name to
+    use, the source's by default) and name it, with its measured tempo (audio/tempo.py), in the storyboard's music
+    setting. Refused unless it plays, is 10 s to 10 minutes long and at most 150 MB. ``'none'`` plays no music and
+    ``None`` the automatic music again (the file stays in music/). Returns the setting."""
+    import numpy as np
+    from .audio import score, tempo
+    project_dir = Path(project_dir)
+    store = ProjectStore(project_dir)
+    saved = store.load()
+    if source is None or source == 'none':
+        setting = source is None
+    else:
+        source = Path(source)
+        name = name or source.name
+        size = source.stat().st_size
+        if not size:
+            raise ValueError(f'“{name}” is empty. Choose your music again.')
+        if size > MUSIC_MAX_BYTES:
+            raise ValueError(f'“{name}” is too big (over 150 MB). Save it as .mp3 or .m4a and try again.')
+        low, high = MUSIC_SECONDS
+        try:
+            samples = audio.decode(source, 1, seconds=high + 1)[:, 0]
+        except subprocess.CalledProcessError:
+            raise ValueError(f'“{name}” isn’t music KinoDraw can play. .mp3, .m4a, .wav, .ogg and .flac files all '
+                             'work: save or export it as one of those and try again.') from None
+        if len(samples) < low * audio.SR:
+            raise ValueError(f'“{name}” is {len(samples) / audio.SR:.0f} seconds long. Choose music at least '
+                             f'{low} seconds long: it repeats under a longer video.')
+        if len(samples) > high * audio.SR:
+            raise ValueError(f'“{name}” is over {high // 60} minutes long. Choose a shorter piece: it repeats under '
+                             'a longer video.')
+        measured = tempo.estimate(samples)
+        heard = np.flatnonzero(np.abs(samples) > 1e-3)
+        if not len(heard) or (heard[-1] + 1) / audio.SR - measured['downbeat'] < 480 / measured['bpm']:
+            raise ValueError(f'“{name}” has too little music to repeat (two bars at least). Choose a longer piece.')
+        suffix = Path(name).suffix.lower()
+        suffix = suffix if re.fullmatch(r'\.[a-z0-9]{1,5}', suffix) else '.audio'
+        stem = re.sub(r'[^\w\-]', '', Path(name).stem.replace(' ', '-'))[:60] or 'music'
+        folder = project_dir / MUSIC_DIR
+        folder.mkdir(exist_ok=True)
+        target = folder / f'{stem}{suffix}'
+        if source.resolve() != target.resolve():
+            part = folder / f'.copy{suffix}'
+            try:
+                shutil.copyfile(source, part)
+                part.replace(target)
+            finally:
+                part.unlink(missing_ok=True)
+        try:
+            previous = score.own(saved['storyboard'].get('music'), project_dir)
+        except ValueError:                                           # a hand-edited setting: nothing to replace
+            previous = None
+        if previous and previous.path.name != target.name:          # the track this one replaces
+            previous.path.unlink(missing_ok=True)
+        setting = {'file': f'{MUSIC_DIR}/{target.name}', 'bpm': round(measured['bpm'], 4),
+                   'downbeat': round(measured['downbeat'], 4)}
+    saved['storyboard']['music'] = setting
+    store.save(saved['storyboard'], saved['settings'], saved['revision'])
+    return setting
+
+
 class _Narration(dict):
     """Beat clips with the paired source revision used to synthesize them."""
     def __init__(self, clips, revision, source_hash):
@@ -558,8 +625,8 @@ def _hybrid_audio(board, tl, build, cfg):
     style = cfg['plan_v3']['style']
     cues_path = build / 'cues.json'
     cues = _load(cues_path)['cues'] if cues_path.is_file() else []
-    if style['music_mood'] != 'none' and board.get('music', True):
-        track, _ = score.source(board.get('music'), style['music_mood'], style['tempo_bpm'])
+    if (style['music_mood'] != 'none' or score.own(board.get('music'), build.parent)) and board.get('music', True):
+        track, _ = score.source(board.get('music'), style['music_mood'], style['tempo_bpm'], build.parent)
         sections, marks = score.story_marks(board, tl, cues)
         result = score.render(tl['duration'], style['music_mood'], style['tempo_bpm'], narration=speech,
                               ambient=True, seed=zlib.crc32(board['title'][cfg['lang']].encode('utf-8')),

@@ -5,6 +5,7 @@ mix(): lay the bundled CC0 music under the timeline's music windows (title, agen
 section transitions, outro and end card), ducked under speech, fading at every edge.
 The animated looks (any look the whiteboard renderer does not draw) get a bed under the whole video instead,
 the sound effects the renderer cued (build/cues.json), and a mastered mix (-14 LUFS, -1 dBTP).
+Your own music file (pipeline.set_music) plays under the whole video in every look, and the mix is mastered.
 """
 from __future__ import annotations
 
@@ -59,8 +60,11 @@ def loudness(path) -> dict:
     return json.JSONDecoder().raw_decode(out[out.rfind('{'):])[0]
 
 
-def decode(path, channels) -> np.ndarray:
-    raw = _run([FFMPEG, '-v', 'error', '-i', str(path), '-f', 'f32le', '-ac', str(channels), '-ar', str(SR), '-']).stdout
+def decode(path, channels, seconds=None) -> np.ndarray:
+    """The file's audio at SR (its first ``seconds`` only, when given)."""
+    limit = ['-t', str(seconds)] if seconds is not None else []
+    raw = _run([FFMPEG, '-v', 'error', *limit, '-i', str(path), '-f', 'f32le', '-ac', str(channels), '-ar', str(SR),
+                '-']).stdout
     return np.frombuffer(raw, np.float32).reshape(-1, channels).copy()
 
 
@@ -222,7 +226,10 @@ def bed(env: np.ndarray, cues: list, slug: str) -> np.ndarray:
 def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
     """Write mix.wav (48 kHz stereo): the narration plus the music bed (or narration only when music is off).
     Any look but the whiteboard also gets its sound effects and a bed under the whole video, and is mastered;
-    storyboard keys 'sfx' and 'master' (true or false) override either."""
+    storyboard keys 'sfx' and 'master' (true or false) override either. Your own music file (score.own, in the
+    project folder above out_dir) plays under the whole video instead, looped on its bars or cut to the video's
+    length, at the bundled recordings' level and ducking (score.recording, score.ducking), and is mastered."""
+    from . import score
     out_dir = Path(out_dir)
     speech = read_wav(narration(tl, out_dir))[0][:, 0]
     total = len(speech)
@@ -231,14 +238,19 @@ def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
     cues = json.loads(cued.read_text(encoding='utf-8'))['cues'] if cued.is_file() else []
     music = np.zeros((total, 2), np.float32)
     setting = storyboard.get('music', True)
+    own = score.own(setting, out_dir.parent)
     env = envelope(speech) if setting or cues else None
-    if setting:
+    if own:
+        music = score.recording(decode(own.path, 2), total / SR, own.bpm, own.downbeat) * score.ducking(speech)[:, None]
+        if animated:
+            music *= swell(cues, total)[:, None]
+    elif setting:
         tracks = {**DEFAULT_TRACKS, **(setting if isinstance(setting, dict) else {})}
         music = bed(env, cues, tracks['primary']) if animated else windows(storyboard, tl, env, tracks)
     out = speech[:, None].repeat(2, axis=1) + music
     if cues and storyboard.get('sfx', animated):
         out += sfx.render(cues, total / SR) * (1 + (10 ** (SFX_DUCK_DB / 20) - 1) * env)[:, None]
-    if storyboard.get('master', animated):
+    if storyboard.get('master', animated or own is not None):
         out = master.master(out, SR, MASTER_LUFS, CEILING_DBTP)
     path = out_dir / 'mix.wav'
     write_wav(path, out)

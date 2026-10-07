@@ -22,6 +22,21 @@ def test_narrated_music_rejects_nonbundled_paths_before_job(tmp_path, slug):
     assert not service.jobs and source_bytes(project) == before
 
 
+@pytest.mark.parametrize('name', ['../outside.wav', 'music/../../outside.wav', '/tmp/outside.wav', 'music/missing.wav'])
+def test_narrated_own_music_must_be_a_file_in_the_music_folder(tmp_path, name):
+    service = mcp_server.Developer(tmp_path)
+    service.create_project('demo', script='# Example\n\nA fictional idea moves.', lang='en')
+    project = tmp_path / 'demo'
+    (project / 'music').mkdir()
+    (tmp_path / 'outside.wav').write_bytes(b'RIFF')
+    saved = ProjectStore(project).load()
+    saved['storyboard']['music'] = {'file': name, 'bpm': 120, 'downbeat': 0}
+    ProjectStore(project).save(saved['storyboard'], saved['settings'], saved['revision'])
+    with pytest.raises(ValueError, match='music'):
+        service.render('demo', mode='cached')
+    assert not service.jobs
+
+
 def test_square_cached_project_keeps_landscape_measured_narration(tmp_path):
     service = mcp_server.Developer(tmp_path)
     service.create_project('demo', script='# Example\n\nA fictional idea moves.', lang='en')

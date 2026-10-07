@@ -12,6 +12,7 @@
   kinodraw voice MyVideo --recording me.m4a     ... narrated by your own reading of MyVideo/read-aloud.txt (none: Kokoro again)
   kinodraw render MyVideo [--aspect 9:16] [--stills 5,30]  silent video (or preview stills)
   kinodraw finish MyVideo                       music, mux, captions, chapters, QA
+  kinodraw finish MyVideo --music song.mp3      ... with your own music under the video (none: no music; auto)
   kinodraw setup [--lang en zh]                 download the voice models once
   kinodraw doodles "rocket launch" [--lang en]  search the doodle library
   kinodraw login you@example.com                sign in to KinoDraw Cloud (optional: --director cloud is free with no account)
@@ -62,6 +63,9 @@ def cmd_new(args):
             voice.read_lexicon(Path(pronounce))
         except (OSError, ValueError) as error:
             sys.exit(f'--pronounce {pronounce}: {error}')
+    music = getattr(args, 'music', None)
+    if music and music.lower() not in ('none', 'auto') and not Path(music).is_file():
+        sys.exit(f'--music {music}: no such file')
     t = _stage('storyboard')
     board = pipeline.new_project(_file(args.script) or args.script, Path(args.out),
                                  title=args.title, lang=args.lang, direction=_direction(args), **_settings(args))
@@ -77,6 +81,19 @@ def cmd_new(args):
     sections = sum(c['kind'] == 'section' for c in board['chapters'])
     print(f"  {len(board['beats'])} beats, {sections} sections ({time.time() - t:.0f}s)")
     _report(report)
+    if music:
+        _music(Path(args.out), music)
+
+
+def _music(project, music):
+    """--music FILE | none | auto: your own music under the video, no music, or the automatic music."""
+    from . import pipeline
+    try:
+        setting = pipeline.set_music(project, {'none': 'none', 'auto': None}.get(music.lower(), music))
+    except ValueError as error:
+        sys.exit(f'\n--music {music}: {error}')
+    if isinstance(setting, dict):
+        print(f"  your music: {setting['file']} at {setting['bpm']:.1f} BPM (it repeats or is cut to the video)")
 
 
 def cmd_voice(args):
@@ -165,6 +182,8 @@ def cmd_render(args):
 
 def cmd_finish(args):
     from . import pipeline
+    if getattr(args, 'command', None) == 'finish' and getattr(args, 'music', None):     # make set it in new
+        _music(Path(args.project), args.music)
     t = _stage('finish')
     try:
         qa = pipeline.finish(Path(args.project))
@@ -322,6 +341,12 @@ def _server_flags(parser):
     parser.add_argument('--server-voice', metavar='NAME', help='optional voice on your server (TTS_VOICE)')
 
 
+def _music_flag(parser):
+    parser.add_argument('--music', metavar='FILE', help='your own music under the whole video (mp3, m4a, wav, ogg, '
+                        'flac; 10 s to 10 min), kept in the project\'s music folder; "none" for no music, "auto" for '
+                        'the automatic music')
+
+
 def _direction(args):
     brand = {key: getattr(args, arg, None)
              for key, arg in (('name', 'brand'), ('url', 'brand_url'), ('cta', 'brand_cta'))}
@@ -444,6 +469,7 @@ def main(argv=None):
                        help='16:9 (default), 9:16 portrait or 1:1 square')
         p.add_argument('--size', type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'), help='native pixel dimensions')
         p.add_argument('--no-credit', action='store_true', help='end without the 2-second "Made with ..." credit')
+        _music_flag(p)
         p.add_argument('--director', default='rules', choices=MODES)
         p.add_argument('--director-v3', action='store_true', help='save and reuse a whole-video v3 director plan')
         p.add_argument('--look', choices=LOOKS, help='visual style (default whiteboard)')
@@ -496,6 +522,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_render)
     p = sub.add_parser('finish')
     p.add_argument('project')
+    _music_flag(p)
     p.set_defaults(func=cmd_finish)
     p = sub.add_parser('setup')
     p.add_argument('--lang', nargs='+', default=['en', 'zh'], choices=['en', 'zh', 'es'])
