@@ -59,6 +59,10 @@ BUBBLE_WORDS = 12
 BUBBLE_POP, BUBBLE_OUT = .25, .15
 TYPE_CPS = 30
 BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
+# Idle life (J's jungle, 2026-10-07): a resting figure shifts its weight by leaning from its planted feet (a shear,
+# never a tilt that lifts the front or back paws) and blinks for BLINK seconds (3 frames) every 2.4-3.9 s.
+SWAY = .03
+BLINK = .1
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -162,10 +166,41 @@ def _svg(doodle_id):
     return raw, w, h
 
 
+@lru_cache(maxsize=256)
+def _shut(doodle_id):
+    """The doodle's SVG with its eyes shut, or None when it has no pupil (a dark circle) level with its eye anchor
+    (a face preset: on its eye line). Each pupil, with the iris, white and highlight drawn around it, becomes a closed
+    lid's curve."""
+    raw, _, _ = _svg(doodle_id)
+    anchors = meta(doodle_id).get('anchors') or {}
+    circles = [(m, float(m['cx']), float(m['cy']), float(m['r'])) for m in re.finditer(
+        r'<circle cx="(?P<cx>[-\d.]+)" cy="(?P<cy>[-\d.]+)" r="(?P<r>[-\d.]+)"[^>]*/>', raw)]
+    eye, line = anchors.get('eye'), (anchors.get('eyes') or [None, None])[1]
+    pupils = [(cx, cy, r) for m, cx, cy, r in circles if 'fill="#1B1B1B"' in m[0] and (
+        eye and r <= 14 and abs(cy - eye[1]) < 6 and abs(cx - eye[0]) < 60 or line is not None and abs(cy - line) < 6)]
+    if not pupils:
+        return None
+    cut, lids = set(), {}
+    for cx, cy, r in pupils:
+        reach = max(c[3] for c in circles if math.dist((c[1], c[2]), (cx, cy)) < 2.5)
+        drawn = [c for c in circles if math.dist((c[1], c[2]), (cx, cy)) + c[3] <= reach + 2.5]
+        cut |= {c[0].span() for c in drawn}
+        lids[min(c[0].start() for c in drawn)] = (
+            f'<path d="M{cx - reach:.1f} {cy:.1f}Q{cx:.1f} {cy + .55 * reach:.1f} {cx + reach:.1f} {cy:.1f}" '
+            f'fill="none" stroke-width="{max(3., .3 * reach):.1f}"/>')
+    out, at = [], 0
+    for a, b in sorted(cut):
+        out += [raw[at:a], lids.get(a, '')]
+        at = b
+    return ''.join(out) + raw[at:]
+
+
 @lru_cache(maxsize=160)
-def sprite(doodle_id, height, mirror=False):
-    """RGBA doodle at an exact pixel height, in its own colours (never recoloured), and its scale."""
+def sprite(doodle_id, height, mirror=False, shut=False):
+    """RGBA doodle at an exact pixel height, in its own colours (never recoloured), and its scale; ``shut`` draws it
+    with its eyes closed when it can."""
     raw, w, h = _svg(doodle_id)
+    raw = (_shut(doodle_id) if shut else None) or raw
     height = max(8, int(height))
     width = max(8, round(w * height / h))
     png = resvg_py.svg_to_bytes(svg_string=raw, width=width, height=height)
@@ -176,11 +211,11 @@ def sprite(doodle_id, height, mirror=False):
 
 
 @lru_cache(maxsize=160)
-def crowned(doodle_id, px, mirror, crown_px):
+def crowned(doodle_id, px, mirror, crown_px, shut=False):
     """The doodle at ``px`` with the crown on its head: centred over the head anchor (a face close-up's eyes), seated
     a little into the top of the head or mane above it, the canvas grown upward when the crown rises above the
     doodle's box. Returns (image, rows added on top)."""
-    image = sprite(doodle_id, px, mirror)
+    image = sprite(doodle_id, px, mirror, shut)
     c_left, c_top, c_right, c_bottom = _bbox(CROWN)
     crown = sprite(CROWN, round(crown_px / max(.1, c_bottom - c_top)))       # crown_px is the drawn crown's height
     anchors = meta(doodle_id).get('anchors') or {}
@@ -766,12 +801,14 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1., pin=None, reference=None, crown=0.):
+               anchor_y=1., pin=None, reference=None, crown=0., shear=0., shut=False):
         """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
 
         ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
         character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground);
-        ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every sway and lean."""
+        ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every sway and lean;
+        ``shear`` leans the doodle from its feet (the share of its height its top moves sideways); ``shut`` closes
+        its eyes."""
         w, h = self.size
         sx, sy, zoom = self._to_screen(x, ground, cam, parallax)
         left, top, right, bottom = _bbox(doodle, mirror)
@@ -780,18 +817,24 @@ class Storybook:
             return None
         step = max(2, int(px * .015))
         px = round(px / step) * step        # a bounded set of cached sizes during camera pushes
-        image = sprite(doodle, px, mirror)
+        image = sprite(doodle, px, mirror, shut)
         foot_x, foot_y = (left + right) / 2 * image.width, (top + (bottom - top) * anchor_y) * image.height
         if pin is not None:
             foot_x, foot_y = pin[0] * image.width, pin[1] * image.height
         if crown:
-            image, pad = crowned(doodle, px, mirror, max(8, round(crown * h * zoom / step) * step))
+            image, pad = crowned(doodle, px, mirror, max(8, round(crown * h * zoom / step) * step), shut)
             foot_y += pad
         if squash:
             before = image.size
             image = image.resize((max(1, round(image.width / (1 - squash))), max(1, round(image.height * (1 - squash)))),
                                  Image.Resampling.BICUBIC)
             foot_x, foot_y = foot_x * image.width / before[0], foot_y * image.height / before[1]
+        if shear:
+            k = shear * image.height / max(1., foot_y)          # per row, so the top moves shear of the height
+            pad = math.ceil(abs(k) * foot_y) + 2
+            image = image.transform((image.width + 2 * pad, image.height), Image.Transform.AFFINE,
+                                    (1, k, -pad - k * foot_y, 0, 1, 0), resample=Image.Resampling.BICUBIC)
+            foot_x += pad
         iw, ih = image.size
         if rotate:
             pad = round(max(iw, ih) * .25)
@@ -810,11 +853,11 @@ class Storybook:
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
         x, ground = f.x, f.ground
         direction = 1 if f.facing == 'r' else -1
-        rotate, squash, dy = 0., 0., 0.
+        rotate, squash, dy, shear = 0., 0., 0., 0.
         breath = math.sin(local * 2.6 + f.phase)
         squash = .012 * breath
         if pose in ('stand', 'look', 'sit', 'lie', 'sleep', 'look_up'):   # a resting figure shifts its weight
-            rotate = direction * (.8 if pose == 'sleep' else 2.2) * math.sin(local * 1.4 + f.phase)
+            shear = direction * SWAY * (.4 if pose == 'sleep' else 1.) * math.sin(local * 1.4 + f.phase)
         if pose in ('walk', 'run', 'carry') or (f.travel and pose != 'stand'):
             rate = 2.2 if pose == 'run' else 1.4
             step = abs(math.sin(math.pi * rate * (local + f.phase)))
@@ -839,7 +882,8 @@ class Storybook:
             x += direction * roar.dx * .0006
         reference = self._reference(f)
         self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash,
-                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0.)
+                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0., shear=shear,
+                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local))
         effects = []
         if f.carried is not None:
             c = f.carried
@@ -858,6 +902,13 @@ class Storybook:
                 o, 'fl_zzz', fig.facing == 'l', x0 + (.06 if fig.facing == 'r' else -.06) * fig.height / ADULT_HEIGHT,
                 fig.ground - fig.height * .75 + .01 * math.sin(local * 2), fig.height * .3, cam))
         return effects
+
+    @staticmethod
+    def _blinking(f, local):
+        """A character's idle blink: BLINK long, at an irregular moment of every 3 s (2.4 or 3.9 s apart)."""
+        t = local + 3 * f.phase / math.tau
+        k = math.floor(t / 3)
+        return 0 <= t - 3 * k - 1.5 * ((k * .618034 + f.phase) % 1) < BLINK
 
     def _reference(self, f):
         """The character's standing preset: the scale every one of its poses is drawn at."""
@@ -959,7 +1010,7 @@ class Storybook:
         page = self.paper(w, h).copy().convert('RGBA')
         push = 1 + .05 * min(1., (local - start) / 3)
         self._paste(page, doodle, False, .5, .5 + .36 * push, .72 * push, [.5, .5, 1.], anchor_y=1.,
-                    crown=.2 * push if 'crown' in f.marks else 0.)
+                    crown=.2 * push if 'crown' in f.marks else 0., shut=self._blinking(f, local))
         return page.convert('RGB'), alpha
 
     def _bubble_plan(self, shot, bubble):

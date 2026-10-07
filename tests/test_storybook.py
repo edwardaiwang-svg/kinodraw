@@ -1,9 +1,12 @@
 """Offline story videos are picture books: preset doodles on the whiteboard paper (J, 2026-10-07)."""
+import itertools
 import json
+import math
 import re
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from kinodraw import ingest, pipeline, script
 from kinodraw.director.rules import RulesDirector
@@ -483,3 +486,58 @@ def test_short_quotes_speak_from_a_bubble_long_ones_stay_in_the_caption(tmp_path
     frame = np.asarray(book._draw(shot, t), np.int32)
     inside = frame[int(y0) + 12:int(y1) - 12, int(x0) + 12:int(x1) - 12]
     assert (inside.min(axis=2) > 246).mean() > .5                       # the bubble's own white, not the paper
+
+
+def _rest(book, f, shot, local):
+    """The figure alone on a clear overlay (camera at rest): its alpha as a bool array."""
+    overlay = Image.new('RGBA', book.size, (0, 0, 0, 0))
+    book._figure(overlay, f, shot, local, [.5, .5, 1.])
+    return np.asarray(overlay.getchannel('A')) > 128
+
+
+def test_resting_figures_sway_with_their_feet_planted_and_blink(tmp_path):
+    """Idle life without seasickness: a standing figure shifts its weight while every paw stays on the ground line
+    (no rocking-horse tilt lifting the front or back paws), and it blinks, Claude Fables style, about every 2-4 s for
+    three frames; a blink only shuts the eyes."""
+    prod, board, plan, tl = production(tmp_path)
+    book = prod.storybook
+    span = span_of(prod, 'Deep in the jungle')
+    shot, at = shot_of(span, prod, 'Deep in the jungle')
+    kojo = next(f for f in shot.figures if f.key == 'kojo')
+    assert kojo.pose == 'stand'
+    ends = [t for t in ((k * math.pi + math.pi / 2 - kojo.phase) / 1.4 for k in range(-4, 12)) if t >= 0][:2]
+    lows, tops = [], []
+    for t in ends:
+        alpha = _rest(book, kojo, shot, t)
+        rows = np.nonzero(alpha.any(axis=1))[0]
+        cols = np.nonzero(alpha[rows.max() - 60:].any(axis=0))[0]                       # the paws' columns
+        x0, x1 = cols.min(), cols.max()
+        third = (x1 - x0) // 3
+        low = lambda a, b: np.nonzero(alpha[:, a:b].any(axis=1))[0].max()
+        lows.append((low(x0, x0 + third), low(x1 - third, x1 + 1)))
+        rows = np.nonzero(alpha.any(axis=1))[0]
+        head = alpha[rows.min():rows.min() + 40]
+        tops.append(np.nonzero(head.any(axis=0))[0].mean())
+    (back1, front1), (back2, front2) = lows
+    assert max(back1, front1, back2, front2) - min(back1, front1, back2, front2) <= 2      # paws stay on the ground
+    assert abs(tops[0] - tops[1]) > 4                                                      # yet the body moves
+    frames = np.arange(0., 15., 1 / 30)
+    shut = [book._blinking(kojo, t) for t in frames]
+    starts = [frames[i] for i in range(len(frames)) if shut[i] and (i == 0 or not shut[i - 1])]
+    runs = [sum(1 for _ in g) for k, g in itertools.groupby(shut) if k]
+    assert len(starts) >= 4 and max(runs) <= 3
+    assert all(1.4 <= b - a <= 4.6 for a, b in zip(starts, starts[1:]))
+    blink = next(t for t in starts if shot.start + .3 < t < shot.end - .3)
+    shut_eyes = np.asarray(book._draw(shot, blink + .04), np.int32)
+    book._blinking = lambda f, t: False
+    open_eyes = np.asarray(book._draw(shot, blink + .04), np.int32)
+    changed = np.abs(shut_eyes - open_eyes).max(axis=2) > 40
+    ys, xs = np.nonzero(changed)
+    doodle, mirror, _ = book._pose_doodle(kojo, blink)
+    ex, ey = book._point(doodle, mirror, 'eye', kojo.x, kojo.ground, kojo.height, book._reference(kojo))
+    sx, sy, _ = book._to_screen(ex, ey, book._camera(shot, blink + .04))
+    w, h = book.size
+    assert len(xs) and np.hypot(xs.mean() - sx, ys.mean() - sy) < .03 * h                 # only the eye changes
+    assert changed.mean() < .002
+    ink = lambda a: (a[ys, xs].max(axis=1) < 45).sum()
+    assert ink(shut_eyes) < .6 * ink(open_eyes)                                            # the pupil shuts
