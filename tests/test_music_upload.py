@@ -201,3 +201,45 @@ def test_director_v3_videos_play_your_music_on_its_measured_beat_grid(tmp_path, 
     assert np.allclose(np.diff(saved['beats']), 60 / setting['bpm'])
     i, j = (round(s * SR) for s in GAPS[0])
     assert np.sqrt((out[i:j] ** 2).mean()) > 1e-3                 # the music plays where nobody speaks
+
+
+def test_the_studio_takes_your_music_paper_and_hand(tmp_path, monkeypatch):
+    import urllib.error
+    import urllib.request
+    from urllib.parse import quote
+    from kinodraw.studio import server
+    monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
+    root = tmp_path / 'videos'
+    server._save_config({'projects': str(root)})
+    pipeline.new_project(FIX / 'tiny.md', root / 'Honey')
+    httpd, url = server.serve(0)
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def post(path, data, json_body=True):
+        req = urllib.request.Request(url + 'api/projects/Honey/' + path, data=json.dumps(data).encode() if json_body
+                                     else data, headers={'X-Studio-Token': server.Handler.token,
+                                                         'Content-Type': 'application/json'})
+        with opener.open(req, timeout=60) as response:
+            return json.load(response)
+    try:
+        song = two_tones(tmp_path / 'My riff.wav').read_bytes()
+        setting = post('music?filename=' + quote('My riff.wav'), song, json_body=False)['music']
+        assert setting['file'] == 'music/My-riff.wav' and (root / 'Honey' / setting['file']).read_bytes() == song
+        assert not list((root / 'Honey').glob('.upload-music*'))
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            post('music?filename=notes.mp3', b'not music', json_body=False)
+        assert 'can play' in json.load(refused.value)['error']
+        assert post('options', {'paper': 'dots', 'paper_color': '#fdf6e3', 'hand': 'left'}) == {
+            'music': setting, 'paper': 'dots', 'paper_color': '#fdf6e3', 'hand': 'left'}
+        assert post('options', {'paper': 'kraft'})['paper_color'] is None              # kraft has its own colour
+        with pytest.raises(urllib.error.HTTPError):
+            post('options', {'paper': 'plain', 'paper_color': '#111111'})              # the writing would be unreadable
+        assert post('music', {'music': 'none'})['music'] is False
+        board = pipeline.storyboard(root / 'Honey')
+        assert (board['music'], board['paper'], board['hand']) == (False, 'kraft', 'left')
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    page = (server.STATIC / 'index.html').read_text(encoding='utf-8')
+    assert all(f'id="{i}"' in page for i in ('p-music', 'p-music-file', 'p-paper', 'p-paper-color', 'p-hand'))
+    assert '/static/options.js' in page and 'projectOptions(name, p);' in (server.STATIC / 'app.js').read_text()

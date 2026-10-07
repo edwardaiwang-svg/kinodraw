@@ -639,6 +639,51 @@ def save_take(name: str, filename: str, stream, length: int) -> dict:
     return narrator(name)
 
 
+def save_music(name: str, filename: str, stream, length: int) -> dict:
+    """Your own music under the video: the upload goes into the project's music folder once pipeline.set_music has
+    checked it (it plays, 10 s to 10 minutes, at most 150 MB) and measured its tempo."""
+    path = _project(name)
+    if not length:
+        raise ValueError(f'“{filename}” is empty. Choose your music again.')
+    if length > pipeline.MUSIC_MAX_BYTES:
+        raise ValueError(f'“{filename}” is too big (over 150 MB). Save it as .mp3 or .m4a and try again.')
+    suffix = Path(filename).suffix.lower()
+    part = path / ('.upload-music' + (suffix if re.fullmatch(r'\.[a-z0-9]{1,5}', suffix) else '.audio'))
+    try:
+        with part.open('wb') as f:
+            left = length
+            while left and (chunk := stream.read(min(left, 1 << 20))):
+                f.write(chunk)
+                left -= len(chunk)
+        if left:
+            raise ValueError(f'The upload of “{filename}” stopped part-way. Try again.')
+        return {'music': pipeline.set_music(path, part, name=Path(filename).name)}
+    finally:
+        part.unlink(missing_ok=True)
+
+
+def set_options(name: str, body: dict) -> dict:
+    """The project's music ("auto" or "none"; your own file is uploaded), paper, paper colour and hand, kept in the
+    storyboard (checked like any storyboard save)."""
+    path = _project(name)
+    if 'music' in body:
+        if body['music'] not in ('auto', 'none'):
+            raise ValueError('music must be "auto" or "none" (upload a file for your own)')
+        pipeline.set_music(path, None if body['music'] == 'auto' else 'none')
+    saved = _store(path).load()
+    board = saved['storyboard']
+    for key in ('paper', 'paper_color', 'hand'):
+        if key in body:
+            if body[key] is None:
+                board.pop(key, None)
+            else:
+                board[key] = body[key]
+    if board.get('paper') == 'kraft':
+        board.pop('paper_color', None)                    # kraft has its own colour
+    _store(path).save(board, saved['settings'], saved['revision'])
+    return {key: board.get(key) for key in ('music', 'paper', 'paper_color', 'hand')}
+
+
 def set_narrator(name: str, body: dict) -> dict:
     """Narrate with the built-in voice (your recording stays in the project) or with your own recording again."""
     path = _project(name)
@@ -1234,6 +1279,13 @@ class Handler(BaseHTTPRequestHandler):
             if p[2:] == ['recording'] and method == 'POST':      # the file itself is the body (it can be large)
                 return self._json(save_take(name, q.get('filename') or 'recording', self.rfile,
                                             int(self.headers.get('Content-Length') or 0)))
+            if p[2:] == ['music'] and method == 'POST':          # a file is the body; without a file name, JSON
+                if q.get('filename'):
+                    return self._json(save_music(name, q['filename'], self.rfile,
+                                                 int(self.headers.get('Content-Length') or 0)))
+                return self._json(set_options(name, self._body()))
+            if p[2:] == ['options'] and method == 'POST':
+                return self._json(set_options(name, self._body()))
             if p[2:] == ['pictures']:
                 if method == 'GET':
                     return self._json(list_pictures(name))
