@@ -84,6 +84,17 @@ def test_each_hit_lands_on_its_cue(kind):
             assert kind not in PERCUSSIVE or abs(int(np.argmax(y)) - at) <= SR // 1000
 
 
+@pytest.mark.parametrize('kind', ['roar', 'whimper', 'nudge', 'hyena_cackle', 'swipe', 'breath_puff'])
+def test_creature_sounds_play_from_their_cue(kind):
+    cue = {'t': 1.0, 'kind': kind, 'id': f'{kind}.0'}
+    y = sfx.render([cue], 3)
+    heard = np.flatnonzero(np.abs(y).max(1) > 1e-4)
+    assert len(heard) and 0 <= SR - heard[0] <= sfx.ATTACK * SR + SR // 1000      # from (just before) t
+    assert np.array_equal(y, sfx.render([cue], 3))                                # the same id sounds the same
+    assert not np.array_equal(y, sfx.render([dict(cue, id=f'{kind}.1')], 3))
+    assert np.abs(y).max() <= .71 * 10 ** (3 / 20)                                 # synth_sfx's .7 peak, +3 dB at most
+
+
 def test_hits_of_a_kind_keep_their_distance():
     pops = [{'t': 1 + .04 * i, 'kind': 'pop', 'id': f'p{i}'} for i in range(10)]            # 60 ms apart at least
     letters = [{'t': 1 + .03 * i, 'kind': 'letter', 'id': f'l{i}'} for i in range(10)]      # 35 ms for letters

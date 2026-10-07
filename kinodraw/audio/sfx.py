@@ -1,7 +1,8 @@
 """Sound effects for the animated looks: the renderer's cue list as one stereo bus.
 
 A cue is {t, kind, strength (0..1, default 1), id, dur (write and riser), x (0..1 across the screen)}. It plays one
-hit from its kind's bank, NumPy recipes plus the bundled CC0 samples (assets/sfx/<kind>_<n>.wav). The variant,
+hit from its kind's bank, NumPy recipes plus the bundled CC0 samples (assets/sfx/<kind>_<n>.wav), or a creature or
+animation sound made by synth_sfx (roar, whimper, ...: its KINDS) with a seed drawn per cue. The variant,
 ±3 semitones of pitch and ±3 dB of gain come from (seed, id) alone, so a video always sounds the same.
 Contact frames: a hit's transient peak lands on round(t * sr); a whoosh peaks on t and a riser builds up to t over
 dur (1.2 s by default); write scribbles from t for dur. A hit less than 60 ms (35 ms for letter and type) after the
@@ -236,12 +237,15 @@ def _rng(seed, cue_id):
 
 def _hit(cue, rng, sr) -> tuple[np.ndarray, int]:
     """One cue's sound and the index of its sample that lands on t."""
+    from . import synth_sfx                           # it builds on the recipes above
     kind = cue['kind']
     bank = _bank(kind, sr) if kind in RECIPES else None
     variant = int(rng.integers(len(bank))) if bank else 0
     semitones, db = rng.uniform(-3, 3), rng.uniform(-3, 3)
     if bank:
         x = bank[variant]
+    elif kind in synth_sfx.KINDS:                     # a creature or animation sound, already at its level
+        x = synth_sfx.render(kind, sr=sr, seed=int(rng.integers(1 << 32)))
     else:
         make, default = LONG[kind]
         x = _fit(make(rng, sr, float(cue.get('dur') or default) * 2 ** (semitones / 12)), kind, sr)
@@ -254,11 +258,13 @@ def _hit(cue, rng, sr) -> tuple[np.ndarray, int]:
 
 def render(cues, duration, sr=48000, seed=20260927) -> np.ndarray:
     """The cues as a stereo bus: float32, shape (round(duration * sr), 2). Unknown kinds are ignored."""
+    from . import synth_sfx
     out = np.zeros((round(duration * sr), 2), np.float32)
     last = {}
     for cue in sorted(cues, key=lambda c: (float(c['t']), str(c.get('id', '')))):
         kind, t = cue['kind'], float(cue['t'])
-        if kind not in LEVEL or t - last.get(kind, -np.inf) < SPACING.get(kind, MIN_SPACING):
+        if (kind not in LEVEL and kind not in synth_sfx.KINDS
+                or t - last.get(kind, -np.inf) < SPACING.get(kind, MIN_SPACING)):
             continue
         last[kind] = t
         x, anchor = _hit(cue, _rng(seed, cue.get('id', f'{kind}@{t}')), sr)
