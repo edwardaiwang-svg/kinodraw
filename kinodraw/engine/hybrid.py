@@ -174,7 +174,7 @@ class HybridProduction:
         # Same score selection as finish; the procedural score and every recording start on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
-        if self.style['music_mood'] != 'none' and episode.get('music', True):
+        if (self.style['music_mood'] != 'none' or score.own(episode.get('music'), '.')) and episode.get('music', True):
             _, bpm = score.source(episode.get('music'), self.style['music_mood'], self.style['tempo_bpm'])
             self.score_beats = score.beat_grid(self.duration, bpm)
         self.spans = []

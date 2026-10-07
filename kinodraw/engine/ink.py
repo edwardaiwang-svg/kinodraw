@@ -110,10 +110,11 @@ def rgba(color, alpha=None):
 
 # --------------------------------------------------------------------------- paper
 @lru_cache(maxsize=2)
-def paper(width=1920, height=1080) -> Image.Image:
+def paper(width=1920, height=1080, color=PAPER_RGB) -> Image.Image:
+    """The whiteboard: ``color`` with grain, fibres and a faint vignette."""
     rng = np.random.default_rng(20260923)
     base = np.empty((height, width, 3), np.float32)
-    base[:] = PAPER_RGB
+    base[:] = color
     grain = ndimage.gaussian_filter(rng.normal(0, 1, (height, width)), 1.1) * 3.2
     fibres = ndimage.gaussian_filter(rng.normal(0, 1, (height // 4, width // 4)), 3)
     fibres = np.kron(fibres, np.ones((4, 4)))[:height, :width] * 4.0
@@ -684,11 +685,13 @@ def circle_points(cx, cy, rx, ry, start=-math.pi / 2, turns=1.0, n=90, wobble=0.
 class Hand:
     """A photographed drawing hand, pre-processed (matte cleanup, -16° tilt, faded out across the wrist: a hand, no
     forearm) into assets/hand. ``tool`` restyles what it holds, in code from the same photo (engine/skin.hand_image):
-    'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil, or 'cursor' a pixel arrow."""
+    'marker' as photographed, 'chalk' a white chalk marker, 'pencil' a yellow pencil, or 'cursor' a pixel arrow.
+    ``side`` 'left' is a left hand: the photo mirrored, its pen tip with it (a cursor has no side)."""
 
-    def __init__(self, tool='marker'):
+    def __init__(self, tool='marker', side='right'):
         import json
         base = ASSETS / 'hand'
+        self.side = 'right' if tool == 'cursor' else side
         if tool == 'cursor':
             from .skin import cursor_image
             self.img, self.tip = cursor_image()
@@ -699,6 +702,9 @@ class Hand:
                 self.img = hand_image(self.img, tool)
             anchor = json.loads((base / 'hand.json').read_text(encoding='utf-8'))
             self.tip = (anchor['tip_x'], anchor['tip_y'])
+            if side == 'left':
+                self.img = ImageOps.mirror(self.img)
+                self.tip = (self.img.width - self.tip[0], self.tip[1])
         shadow = Image.new('RGBA', self.img.size, (0, 0, 0, 0))
         shadow.putalpha(self.img.getchannel('A').point(lambda v: int(v * .18)).filter(ImageFilter.GaussianBlur(9)))
         self.shadow = shadow

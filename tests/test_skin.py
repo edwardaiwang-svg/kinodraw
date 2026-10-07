@@ -65,7 +65,7 @@ def test_a_skin_reaches_every_drawing_the_paper_the_fonts_the_hand_and_the_capti
     probe = _Probe(id='probe', fonts=arimo, hand='chalk', caption=(200, 0, 0), caption_edge=(0, 0, 0))
     _Probe.seen, hands, used = [], [], set()
     real_hand, real_font = ink.Hand, ink.font
-    monkeypatch.setattr(ink, 'Hand', lambda tool='marker': hands.append(tool) or real_hand())
+    monkeypatch.setattr(ink, 'Hand', lambda tool='marker', side='right': hands.append(tool) or real_hand())
     monkeypatch.setattr(ink, 'font', lambda kind, size, fonts=ink.FONTS: used.add(fonts) or real_font(kind, size, fonts))
     monkeypatch.setattr(skins, 'for_look', lambda look: probe)
     prod = renderer.make_production(board, tl, 'en', tmp_path / 'p')
@@ -268,3 +268,106 @@ def test_the_studio_offers_its_styles_from_the_registry(monkeypatch):
     entries = [dict(e, render_ready=False) if e['id'] == 'chalkboard' else e for e in styles.looks()]
     monkeypatch.setattr(styles, '_looks', lambda: tuple(entries))
     assert 'chalkboard' not in [s['value'].split('/')[0] for s in server.state()['styles']]
+
+
+# ------------------------------------------------------------------ papers (storyboard "paper", "paper_color")
+def _lab(rgb):
+    c = np.asarray(rgb, np.float64) / 255
+    lin = np.where(c <= .04045, c / 12.92, ((c + .055) / 1.055) ** 2.4)
+    xyz = lin @ np.array([[.4124564, .2126729, .0193339], [.3575761, .7151522, .1191920],
+                          [.1804375, .0721750, .9503041]]) / (.95047, 1., 1.08883)
+    f = np.where(xyz > (6 / 29) ** 3, np.cbrt(xyz), xyz / (3 * (6 / 29) ** 2) + 4 / 29)
+    return np.array([116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])])
+
+
+def _ciede2000(lab1, lab2):
+    (l1, a1, b1), (l2, a2, b2) = lab1, lab2
+    cb = (np.hypot(a1, b1) + np.hypot(a2, b2)) / 2
+    g = .5 * (1 - np.sqrt(cb ** 7 / (cb ** 7 + 25 ** 7)))
+    a1, a2 = a1 * (1 + g), a2 * (1 + g)
+    c1, c2 = np.hypot(a1, b1), np.hypot(a2, b2)
+    h1, h2 = np.degrees(np.arctan2(b1, a1)) % 360, np.degrees(np.arctan2(b2, a2)) % 360
+    dh = 0 if c1 * c2 == 0 else (h2 - h1 + 180) % 360 - 180
+    dl, dc, dhh = l2 - l1, c2 - c1, 2 * np.sqrt(c1 * c2) * np.sin(np.radians(dh / 2))
+    lm, cm = (l1 + l2) / 2, (c1 + c2) / 2
+    hm = h1 + h2 if c1 * c2 == 0 else (h1 + h2) / 2 if abs(h1 - h2) <= 180 else (h1 + h2 + 360 * (1 if h1 + h2 < 360 else -1)) / 2
+    t = (1 - .17 * np.cos(np.radians(hm - 30)) + .24 * np.cos(np.radians(2 * hm)) + .32 * np.cos(np.radians(3 * hm + 6))
+         - .2 * np.cos(np.radians(4 * hm - 63)))
+    sl = 1 + .015 * (lm - 50) ** 2 / np.sqrt(20 + (lm - 50) ** 2)
+    sc, sh = 1 + .045 * cm, 1 + .015 * cm * t
+    rt = -np.sin(np.radians(60 * np.exp(-((hm - 275) / 25) ** 2))) * 2 * np.sqrt(cm ** 7 / (cm ** 7 + 25 ** 7))
+    return float(np.sqrt((dl / sl) ** 2 + (dc / sc) ** 2 + (dhh / sh) ** 2 + rt * dc / sc * dhh / sh))
+
+
+def _paper(**board):
+    return np.asarray(skins.for_board({'look': 'whiteboard', **board}).background(1920, 1080), np.float32)[..., :3]
+
+
+def test_ciede2000_matches_the_published_test_data():
+    assert abs(_ciede2000((50, 2.6772, -79.7751), (50, 0, -82.7485)) - 2.0425) < 1e-3       # Sharma et al., pair 1
+    assert abs(_ciede2000((50, 2.5, 0), (73, 25, -18)) - 27.1492) < 1e-3                    # pair 18
+
+
+def test_grid_paper_lines_repeat_at_the_grid_spacing():
+    from scipy import ndimage
+    step = skins.grid_spacing(1920, 1080)
+    assert step == 48 and 1920 % step == 0                       # whole cells across: the idle drift wraps it
+    cols = _paper(paper='grid').mean(-1).mean(0)
+    spectrum = np.abs(np.fft.rfft(cols - ndimage.gaussian_filter1d(cols, 96, mode='wrap')))     # minus the vignette
+    assert np.argmax(spectrum[5:]) + 5 == 1920 / step
+
+
+def test_dot_paper_has_a_darker_dot_on_every_crossing():
+    img, step = _paper(paper='dots').mean(-1), 48
+    base = np.mean(ink.PAPER_RGB)
+    centres = [(y, x) for y in np.arange(1080 % step // 2, 1080, step) for x in np.arange(0, 1920, step)]
+    darker = sum(img[y, x] < base - 20 for y, x in centres)
+    assert darker >= .9 * len(centres)
+    assert abs(img[24 + 1080 % step // 2, 24] - base) < 15                   # paper between the dots
+
+
+def test_kraft_and_your_own_paper_colour_look_as_chosen():
+    mean = lambda img: img.reshape(-1, 3).mean(0)
+    assert _ciede2000(_lab(mean(_paper(paper='kraft'))), _lab(ink.rgba('#d8bf98')[:3])) < 5
+    for kind in ('plain', 'grid', 'dots'):
+        own = _ciede2000(_lab(mean(_paper(paper=kind, paper_color='#fdf6e3')[200:880, 300:1620])),
+                         _lab(ink.rgba('#fdf6e3')[:3]))
+        assert own < (2 if kind == 'plain' else 6), (kind, own)
+
+
+def test_a_paper_colour_the_writing_cannot_be_read_on_is_refused():
+    import pytest
+    for board, words in (({'paper': 'plain', 'paper_color': '#303030'}, 'hard to read'),
+                         ({'paper': 'kraft', 'paper_color': '#fdf6e3'}, 'paper_color'),
+                         ({'paper': 'grid', 'paper_color': 'blue'}, 'paper_color'),
+                         ({'paper': 'cork'}, 'paper must be')):
+        with pytest.raises(ValueError, match=words):
+            skins.for_board({'look': 'whiteboard', **board})
+    for kind in skins.PAPERS:
+        sk = skins.for_board({'look': 'whiteboard', 'paper': kind})
+        assert skins.contrast(sk.ink, sk.base) >= 4.5 and skins.contrast(sk.caption, sk.caption_edge) >= 4.5
+    assert skins.for_board({'look': 'whiteboard'}) is skins.for_look('whiteboard')            # the default is untouched
+    assert skins.for_board({'look': 'chalkboard', 'paper': 'grid'}) is skins.for_look('chalkboard')   # its own board
+
+
+def test_each_paper_is_drawn_under_the_board_and_its_captions(tmp_path):
+    for kind in skins.PAPERS:
+        board = pipeline.new_project(FIX / 'tiny.md', tmp_path / kind, direction={'look': 'whiteboard'})
+        board['paper'] = kind
+        tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+        prod = renderer.make_production(board, tl, 'en', tmp_path / kind)
+        assert prod.skin.paper == ('whiteboard' if kind == 'plain' else kind)        # plain: the whiteboard's own
+        frame = np.asarray(prod.frame(tl['captions'][3]['start'] + .1).convert('RGB'), np.int16)
+        paper = np.asarray(prod.skin.background(1920, 1080).convert('RGB'), np.int16)
+        assert np.abs(frame[560:640, 1840:1900] - paper[560:640, 1840:1900]).max() <= 2, kind     # its paper
+        caps = frame[880:1046].reshape(-1, 3)
+        assert (np.abs(caps - prod.skin.caption).max(-1) < 30).sum() > 1500, kind               # its captions
+
+
+def test_a_storyboard_check_refuses_an_unknown_paper_or_an_unreadable_colour():
+    from kinodraw.director.validate import validate
+    base = {'lang': 'en', 'chapters': [], 'beats': []}
+    assert validate({**base, 'paper': 'dots', 'paper_color': '#fdf6e3'})['ok']
+    for bad in ({'paper': 'cork'}, {'paper': 'plain', 'paper_color': '#202020'}):
+        report = validate({**base, **bad})
+        assert not report['ok'] and any('paper' in e or 'read' in e for e in report['errors']), report

@@ -139,7 +139,7 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path, size=(
     if size in ((720, 1280), (720, 720)):
         return _portrait_thumbnail(storyboard, lang, path, project_dir, height=size[1])
     collage = storyboard.get('look') == 'collage'
-    skin = skins.for_look(storyboard.get('look'))
+    skin = skins.for_board(storyboard)
     if collage:
         from .engine import motion
         img = motion.paper_texture((1280, 720), 'cream').convert('RGBA')
@@ -186,7 +186,7 @@ def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Pa
     from .engine import motion
 
     collage = storyboard.get('look') == 'collage'
-    skin = skins.for_look(storyboard.get('look'))
+    skin = skins.for_board(storyboard)
     img = motion.paper_texture((720, height), 'cream').convert('RGBA') if collage else skin.background(720, height).copy()
     d = ImageDraw.Draw(img)
     storyboard = normalize(storyboard)
@@ -245,14 +245,17 @@ def publish(storyboard: dict, tl: dict, lang: str, build: Path, folder: Path, st
         ('作者本人的声音' if own_voice else 'Kokoro AI 语音')
     if voice_source and not own_voice:
         voice = voice_source
-    credit = (f'Made with {PRODUCT["name"]}. Narration: {voice}. Music: FreePD (CC0).' if lang == 'en' else
-              f'由 {PRODUCT["name"]} 制作。旁白：{voice}。音乐：FreePD（CC0）。')
+    own_music = isinstance(storyboard.get('music'), dict) and 'file' in storyboard['music']   # pipeline.set_music
+    music = ('chosen by the creator', '作者自选', 'elegida por el creador') if own_music else \
+        ('FreePD (CC0)', 'FreePD（CC0）', 'FreePD (CC0)')
+    credit = (f'Made with {PRODUCT["name"]}. Narration: {voice}. Music: {music[0]}.' if lang == 'en' else
+              f'由 {PRODUCT["name"]} 制作。旁白：{voice}。音乐：{music[1]}。')
     head = 'Chapters' if lang == 'en' else '章节'
     if lang == 'es':
         voice = 'la voz del creador' if own_voice else 'voz de IA de Kokoro'
         if voice_source and not own_voice:
             voice = voice_source
-        credit = f'Hecho con {PRODUCT["name"]}. Narración: {voice}. Música: FreePD (CC0).'
+        credit = f'Hecho con {PRODUCT["name"]}. Narración: {voice}. Música: {music[2]}.'
         head = 'Capítulos'
     (folder / f'{stem}-description.txt').write_text(
         f"{storyboard['title'][lang]}\n\n{head}\n" + '\n'.join(chapters) + f'\n\n{credit}\n', encoding='utf-8')

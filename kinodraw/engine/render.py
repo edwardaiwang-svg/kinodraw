@@ -53,6 +53,24 @@ def ease(u):
     return u * u * (3 - 2 * u)
 
 
+HANDS = ('right', 'left', 'none')     # storyboard "hand": which hand draws, or none
+HAND_IN, HAND_OUT = .45, .35           # seconds the hand takes to slide in before a board, and out after it
+HAND_EDGE = .55                        # ...half across the frame edge this far into the slide
+
+
+def reach(u, d, edge):
+    """How far the sliding hand is from its off-frame start, u (0..1) into the slide, on its way to the pen d away: it
+    starts and stops gently, passes ``edge`` (half across the frame edge) at HAND_EDGE and never turns back (two cubic
+    Hermite pieces whose speed at the join keeps each one-way)."""
+    c, u = HAND_EDGE, min(1., max(0., u))
+    v = min(d, 3 * edge / c, 3 * (d - edge) / (1 - c))
+    if u < c:
+        k = u / c
+        return (3 * k * k - 2 * k ** 3) * edge + (k ** 3 - k * k) * v * c
+    k = (u - c) / (1 - c)
+    return edge + (k ** 3 - 2 * k * k + k) * v * (1 - c) + (3 * k * k - 2 * k ** 3) * (d - edge)
+
+
 class Production:
     vertical = False               # set by vertical.Vertical: the frame is the board alone, laid out in 9:16 there
     size = SIZE
@@ -90,7 +108,7 @@ class Production:
                               for scene in plan['scenes'] for e in scene['elements']
                               if e['kind'] == 'diagram'} if plan else {}
         self._source_beats -= set(self._diagrams)
-        self.skin = skins.for_look(self.ep.get('look'))       # paper, ink, fills, fonts, hand and chrome
+        self.skin = skins.for_board(self.ep)                  # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
         self.layout = Layout(self.g)
         self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir, self.skin)
@@ -101,7 +119,10 @@ class Production:
         self.scene_marks = []         # automatic pages: (world x, screen kind)
         self.agenda_x = None
         self.warnings = []
-        self.hand = ink.Hand(self.skin.hand)
+        side = self.ep.get('hand', HANDS[0])
+        if side not in HANDS:
+            raise ValueError(f'hand must be one of {", ".join(HANDS)}, got {side!r}')
+        self.hand = None if side == 'none' else ink.Hand(self.skin.hand, side)
         self._build()
         if self.skin.emphasis == 'highlighter':              # each sentence's key phrase, where it is written
             skins.highlight_phrases(self.ep, self.tl, self.ctx.elements)
@@ -712,6 +733,8 @@ class Production:
                    and my <= p.y and p.y + p.h <= self.size[1] - my for p in parts)
 
     def _hand(self, frame, t, L):
+        if self.hand is None:
+            return
         i = bisect.bisect_right(self.hand_starts, t) - 1
         cur = self.hand_els[i] if i >= 0 else None
         if cur is not None and cur.start <= t < cur.end:
@@ -726,13 +749,11 @@ class Production:
         # travelling between drawings
         prev = cur if cur is not None and cur.end <= t else (self.hand_els[i - 1] if i > 0 else None)
         nxt = self.hand_els[i + 1] if i + 1 < len(self.hand_els) else None
-        if prev is None or nxt is None:
+        if prev is None or nxt is None or self._new_board(prev, nxt):
+            self._slide(frame, t, L, prev, nxt)
             return
         gap = nxt.start - prev.end
         if gap <= 0:
-            return
-        # A new board is a separate hand session, not a trip across the old page.
-        if gap > 1.4 and getattr(prev, 'stretch', 0) != getattr(nxt, 'stretch', 0):
             return
         p0 = self._last_pen(prev)
         p1 = self._first_pen(nxt)
@@ -745,6 +766,33 @@ class Production:
         x = (prev.x + p0[0]) * (1 - u) + (nxt.x + p1[0]) * u - L
         y = (prev.y + p0[1]) * (1 - u) + (nxt.y + p1[1]) * u
         self.hand.paste(frame, (x, y - 10 * math.sin(math.pi * u)), lifted=True)
+
+    @staticmethod
+    def _new_board(prev, nxt):
+        """A new board is a separate hand session, not a trip across the old page."""
+        return nxt.start - prev.end > 1.4 and getattr(prev, 'stretch', 0) != getattr(nxt, 'stretch', 0)
+
+    def _slide(self, frame, t, L, prev, nxt):
+        """Between hand sessions: over HAND_OUT after the last stroke the hand slides out of the frame, and over
+        HAND_IN before the next session's first stroke it slides in, across the right or the bottom edge, whichever
+        is nearer the pen (a left hand: the left or the bottom), so the arm it hangs from stays off-frame."""
+        if prev is not None and t < prev.end + HAND_OUT:
+            el, pen, u = prev, self._last_pen(prev), 1 - (t - prev.end) / HAND_OUT
+        elif nxt is not None and nxt.start - HAND_IN <= t:
+            el, pen, u = nxt, self._first_pen(nxt), (t - nxt.start + HAND_IN) / HAND_IN
+        else:
+            return
+        W, H = self.size
+        if pen is None or not (0 <= el.x - L + pen[0] < W and 0 <= el.y + pen[1] < H):
+            return                                   # the pen point is not on screen (yet)
+        x, y = el.x - L + pen[0], el.y + pen[1]
+        img, (tx, ty), margin = self.hand.img, self.hand.tip, 60 * H / 1080      # the margin covers the soft shadow
+        side = -(img.width - tx) - margin if self.hand.side == 'left' else W + tx + margin
+        bottom = H + ty + margin
+        start, extent = ((side, y), img.width) if abs(side - x) < bottom - y else ((x, bottom), img.height)
+        d = math.hypot(x - start[0], y - start[1])
+        f = reach(u, d, min(margin + extent / 2, (margin + d) / 2)) / d
+        self.hand.paste(frame, (start[0] + (x - start[0]) * f, start[1] + (y - start[1]) * f), lifted=True)
 
     @staticmethod
     def _first_pen(e):

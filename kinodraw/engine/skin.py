@@ -13,13 +13,16 @@ Looks (all drawn in code, no image models; the hand is a photographed drawing ha
   pixel_quest a cream quest world with pixel pictures, a cursor, speech bubbles and golden corner brackets
   mosaic      limestone tesserae with terracotta grout, a marker, caption plaques and tabula ansata tags
 
+The whiteboard look can draw on another paper (storyboard keys ``paper`` and ``paper_color``, for_board): plain,
+grid or dot grid in any light colour the ink stays readable on, or brown kraft.
+
 Materials affect pictures only, never board text, captions, chrome or the hand. Their cell grids and reveal
 are anchored to board coordinates; the seamless world backdrop pans with the board.
 """
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 
 import numpy as np
@@ -36,7 +39,8 @@ ON_YELLOW = (255, 96, 170, 140)             # a pink one, for words on a yellow 
 @dataclass(frozen=True)
 class Skin:
     id: str = 'whiteboard'
-    paper: str = 'whiteboard'           # background: whiteboard (ink.paper) | slate | lined | quest | mosaic
+    paper: str = 'whiteboard'           # background: whiteboard (ink.paper) | plain | grid | dots | kraft | slate |
+                                        # lined | quest | mosaic
     lines: str = 'identity'             # how line and text colours map: identity | chalk | graphite
     fills: str = 'identity'             # how fills map: identity | chalk | pencil
     grain: str = 'none'                 # texture of every mark: none | chalk | graphite
@@ -223,6 +227,30 @@ def for_look(look: str | None) -> Skin:
     return _skin(entry['id'])
 
 
+PAPERS = ('plain', 'grid', 'dots', 'kraft')     # the whiteboard look's papers; the first is the default
+KRAFT = (216, 191, 152)                         # brown kraft paper, #d8bf98
+INK_CONTRAST = 4.5                              # WCAG AA for the board's text, on any paper colour
+
+
+def for_board(episode: dict) -> Skin:
+    """The skin of a storyboard's look, on the paper it chose: ``paper`` (PAPERS) and, for plain, grid or dots,
+    ``paper_color`` ("#rrggbb"). Only looks drawn on the whiteboard's paper change paper; a colour the look's ink
+    is not readable on (WCAG contrast under 4.5) is refused."""
+    skin = for_look(episode.get('look'))
+    kind, color = episode.get('paper', PAPERS[0]), episode.get('paper_color')
+    if kind not in PAPERS:
+        raise ValueError(f'paper must be one of {", ".join(PAPERS)}, got {kind!r}')
+    if color is not None and (kind == 'kraft' or not isinstance(color, str)
+                              or not re.fullmatch(r'#[0-9a-fA-F]{6}', color)):
+        raise ValueError('paper_color must be a colour like "#fdf6e3", for plain, grid or dots paper')
+    if skin.paper != 'whiteboard' or (kind == 'plain' and color is None):
+        return skin
+    base = KRAFT if kind == 'kraft' else ink.rgba(color)[:3] if color else skin.base
+    if contrast(skin.ink, base) < INK_CONTRAST:
+        raise ValueError(f'The writing would be hard to read on {color}: choose a lighter paper colour.')
+    return replace(skin, paper=kind, base=base)
+
+
 @lru_cache(maxsize=16)
 def _skin(look: str) -> Skin:
     from .. import styles
@@ -333,9 +361,31 @@ def _hatch(shape, x, y):
 
 
 # ------------------------------------------------------------------ paper
+def grid_spacing(width, height) -> float:
+    """Grid and dot paper: square cells about 48 px at 1080p, a whole number of them across the frame (the idle drift
+    wraps the paper around)."""
+    return width / round(width / (height * 48 / 1080))
+
+
 @lru_cache(maxsize=4)
 def _paper(kind: str, base: tuple, width: int, height: int) -> Image.Image:
-    rng = np.random.default_rng({'slate': 31, 'lined': 32}[kind])
+    if kind == 'plain':
+        return ink.paper(width, height, base)
+    if kind in ('grid', 'dots'):
+        img = np.asarray(ink.paper(width, height, base), np.float32)[..., :3].copy()
+        step, scale = grid_spacing(width, height), height / 1080
+        near = lambda u: np.abs((u + step / 2) % step - step / 2)          # pixel centre to the nearest line
+        dx, dy = near(np.arange(width)), near(np.arange(height) - height % step / 2)     # rows centred
+        if kind == 'grid':              # faint blue lines, about a pixel and a half wide at 1080p
+            line = lambda d: np.clip(1 - d / (1.2 * scale), 0, 1)
+            mask = np.maximum(line(dx)[None, :], line(dy)[:, None]) * .5
+            color = np.array((150, 186, 226))
+        else:                           # a grey-blue dot on every crossing
+            mask = np.clip(2.4 * scale + .5 - np.hypot(dx[None, :], dy[:, None]), 0, 1) * .6
+            color = np.array((112, 124, 140))
+        img += (color - img) * mask[..., None]
+        return Image.fromarray(np.clip(img + .5, 0, 255).astype(np.uint8), 'RGB').convert('RGBA')
+    rng = np.random.default_rng({'slate': 31, 'lined': 32, 'kraft': 33}[kind])
     yy, xx = np.mgrid[0:height, 0:width]
     img = np.empty((height, width, 3), np.float32)
     img[:] = base
@@ -350,6 +400,13 @@ def _paper(kind: str, base: tuple, width: int, height: int) -> Image.Image:
         img += (np.array((226, 230, 222)) - img) * np.clip(dust, 0, .5)[..., None]
         r = np.sqrt(((xx - width / 2) / (width * .6)) ** 2 + ((yy - height / 2) / (height * .6)) ** 2)
         img *= (1 - .16 * np.clip(r - .5, 0, None) ** 1.5)[..., None]
+    elif kind == 'kraft':                   # brown wrapping paper: long fibres along it, darker flecks
+        fibres = ndimage.gaussian_filter(rng.standard_normal((height, width)), (.8, 14))
+        img += (grain / grain.std() * 2.4 + mottle / mottle.std() * 3.2 + fibres / fibres.std() * 3.)[..., None]
+        flecks = ndimage.gaussian_filter((rng.random((height, width)) < .0025) * 1., .7) * 3
+        img += (np.array((150, 118, 80)) - img) * np.clip(flecks, 0, .45)[..., None]
+        r = np.sqrt(((xx - width / 2) / (width * .62)) ** 2 + ((yy - height / 2) / (height * .62)) ** 2)
+        img *= (1 - .06 * np.clip(r - .5, 0, None) ** 1.6)[..., None]
     else:                                   # lined: cool white, faint blue rules, a red margin near the left edge
         img += (grain / grain.std() * 1.6 + mottle / mottle.std() * 1.2)[..., None]
         step, top = round(height * 46 / 1080), round(height * 118 / 1080)

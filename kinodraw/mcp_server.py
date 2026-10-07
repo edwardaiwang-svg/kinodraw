@@ -445,6 +445,11 @@ class Developer:
         config_refs(cfg)
         self._references(cfg, path)
         music = board.get('music')
+        if isinstance(music, dict) and 'file' in music:             # your own music: a file in music/ (set_music)
+            from .audio.score import own
+            target = self.path(str(path.relative_to(self.root) / own(music, path).file))
+            if not target.is_file():
+                raise ValueError('music file must exist in the project\'s music folder')
         if isinstance(music, dict):
             from .audio.mix import MUSIC
             for key in ('primary', 'secondary'):

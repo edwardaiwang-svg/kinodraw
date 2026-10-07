@@ -556,6 +556,7 @@ async function openProject(name, tab = null) {
       await openProject(name); toast(`End card ${p.credit ? 'on' : 'off'}. Make video to apply it.`);
     } catch (e) { credit.checked = p.credit; toast(e.message, 6000); }
   };
+  projectOptions(name, p);                                         // music, paper and hand: options.js
   $('#p-director').innerHTML = directorOptions(p.settings.director || 'rules');
   $('#p-redirect').onclick = async () => {
     if (await needsCloudSignIn($('#p-director').value, p.lang)) return;
@@ -942,7 +943,7 @@ function renderVideo(p) {
   const qa = p.qa ? `<div class="qa ${p.qa.ok ? 'ok' : 'bad'}">${p.qa.ok ? '✓ Checked: every frame decodes, audio matches, chapters embedded.' : `Check: ${esc(p.qa.problems.join('; '))}`}</div>` : '';
   box.innerHTML = `<video controls disableremoteplayback preload="metadata" poster="${fileSrc(`${stem}-thumbnail.png`)}" src="${fileSrc(video)}"></video>${qa}
     <div class="files">${files.map(([f, l]) => `<a href="${fileSrc(f)}" target="_blank">${l}</a>`).join('')}</div>
-    <p class="muted">The files are in your project folder (Open folder). Music: FreePD (CC0). ${p.settings.voice_server && !p.settings.recording ? `Narration: ${esc(p.settings.voice_server.voice || p.settings.voice_server.model)} from your voice server.` : p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
+    <p class="muted">The files are in your project folder (Open folder). Music: ${p.storyboard.music?.file ? 'your own' : 'FreePD (CC0)'}. ${p.settings.voice_server && !p.settings.recording ? `Narration: ${esc(p.settings.voice_server.voice || p.settings.voice_server.model)} from your voice server.` : p.settings.recording ? 'Narration: your own voice.' : 'Narration: Kokoro AI voice.'}</p>`;
 }
 
 // ---------------------------------------------------------------- narrator (your own voice)

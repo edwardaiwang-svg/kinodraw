@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/style.css">
 <script>window.STUDIO_TOKEN = '__STUDIO_TOKEN__';</script>
 <script src="/static/app.js" defer></script>
+<script src="/static/options.js" defer></script>
 </head>
 <body>
 <aside id="side">
@@ -128,6 +129,11 @@
         <button id="p-redirect" class="ghost">Re-plan visuals</button>
         <button id="p-reveal" class="ghost">Open folder</button>
         <label class="check"><input id="p-credit" type="checkbox" checked><span></span></label>
+        <select id="p-music" aria-label="Music"><option value="auto">Music: automatic</option><option value="own">Music: my own file…</option><option value="none">Music: none</option></select>
+        <input id="p-music-file" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" hidden>
+        <select id="p-paper" aria-label="Paper"><option value="plain">Plain paper</option><option value="grid">Grid paper</option><option value="dots">Dot grid paper</option><option value="kraft">Kraft paper</option></select>
+        <input id="p-paper-color" type="color" aria-label="Paper colour" title="Paper colour (plain, grid and dot paper)">
+        <select id="p-hand" aria-label="Hand"><option value="right">Right hand</option><option value="left">Left hand</option><option value="none">No hand</option></select>
         <button id="p-export" class="ghost hidden">Export</button><button id="p-projectzip" class="ghost hidden">Project ZIP</button><button id="p-make" class="primary">Make video</button>
       </div>
     </header>
