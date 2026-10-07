@@ -15,8 +15,10 @@ KINDS = {'roar': 1.4, 'whimper': .6, 'nudge': .18, 'hyena_cackle': .85,
          'swipe': .22, 'breath_puff': .3, 'wind': 3., 'rain': 3.,
          'fog_drone': 3., 'shooting_star': .8, 'type_tick': .07,
          'transition_whoosh': .6}
-LEVEL_KIND = {'roar': 'impact', 'whimper': 'paper', 'nudge': 'tap',
-              'hyena_cackle': 'pop', 'swipe': 'cut', 'breath_puff': 'paper',
+# The action sounds' levels put each one's loudest 400 ms about 12 LU under the narration's once the mix ducks it
+# (measured on a real narration): short sounds need a louder 100 ms level than long ones.
+LEVEL_KIND = {'roar': 'stamp', 'whimper': 'pop', 'nudge': 'impact',
+              'hyena_cackle': 'pop', 'swipe': 'impact', 'breath_puff': 'impact',
               'wind': 'write', 'rain': 'write', 'fog_drone': 'write',
               'shooting_star': 'confetti', 'type_tick': 'type',
               'transition_whoosh': 'whoosh'}

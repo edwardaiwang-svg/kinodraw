@@ -6,6 +6,7 @@ from functools import lru_cache
 
 import numpy as np
 import pytest
+from scipy.signal import sosfilt
 
 from kinodraw.audio import master, mix, sfx
 
@@ -93,6 +94,32 @@ def test_creature_sounds_play_from_their_cue(kind):
     assert np.array_equal(y, sfx.render([cue], 3))                                # the same id sounds the same
     assert not np.array_equal(y, sfx.render([dict(cue, id=f'{kind}.1')], 3))
     assert np.abs(y).max() <= .71 * 10 ** (3 / 20)                                 # synth_sfx's .7 peak, +3 dB at most
+
+
+def test_action_sounds_sit_8_to_14_lu_under_the_narration():
+    """Dropped mid-word into a -18 LUFS narration and ducked as the mix ducks them, each action sound's loudest 400 ms
+    sits 8-14 LU (median of 13 drops) under the narration's loudest 400 ms around it: heard, never louder than speech."""
+    def momentary(x):
+        y = sosfilt(master.kweighting(SR), x.reshape(len(x), -1).astype(np.float64), axis=0)
+        p = (y[:len(y) // (SR // 10) * (SR // 10)].reshape(-1, SR // 10, y.shape[1]) ** 2).sum((1, 2)) / (SR // 10)
+        return -.691 + 10 * np.log10(((p[:-3] + p[1:-2] + p[2:-1] + p[3:]) / 4).max())
+    speech = _speech(20)
+    speech *= 10 ** ((-18 - master.loudness(speech, SR)) / 20)
+    duck = (1 + (10 ** (mix.SFX_DUCK_DB / 20) - 1) * mix.envelope(speech))[:, None]
+    for kind in ('roar', 'whimper', 'nudge', 'hyena_cackle', 'swipe', 'breath_puff', 'impact'):
+        under = []
+        for n, t in enumerate(np.arange(1, 18, 1.37)):
+            w = slice(round(t * SR) - SR // 10, round(t * SR) + round(1.5 * SR))
+            fx = sfx.render([{'t': t, 'kind': kind, 'id': f'{kind}.{n}'}], 20) * duck
+            under.append(momentary(speech[w]) - momentary(fx[w]))
+        assert 8 <= np.median(under) <= 14, (kind, np.median(under))
+
+
+@pytest.mark.parametrize('kind,dur', [('rain', 4.5), ('wind', 4.5), ('fog_drone', 4.5), ('transition_whoosh', .65)])
+def test_beds_and_transition_whooshes_play_from_their_cue_for_dur(kind, dur):
+    y = np.abs(sfx.render([{'t': 1.0, 'kind': kind, 'dur': dur, 'id': f'{kind}.0'}], 7)).max(1)
+    heard = np.flatnonzero(y)
+    assert abs(heard[0] - SR) <= SR // 1000 and abs(heard[-1] - (1 + dur) * SR) <= .01 * dur * SR
 
 
 def test_hits_of_a_kind_keep_their_distance():

@@ -1,12 +1,14 @@
 """Sound effects for the animated looks: the renderer's cue list as one stereo bus.
 
-A cue is {t, kind, strength (0..1, default 1), id, dur (write and riser), x (0..1 across the screen)}. It plays one
-hit from its kind's bank, NumPy recipes plus the bundled CC0 samples (assets/sfx/<kind>_<n>.wav), or a creature or
-animation sound made by synth_sfx (roar, whimper, ...: its KINDS) with a seed drawn per cue. The variant,
-±3 semitones of pitch and ±3 dB of gain come from (seed, id) alone, so a video always sounds the same.
+A cue is {t, kind, strength (0..1, default 1), id, dur (write, riser and the synth_sfx kinds), x (0..1 across the
+screen)}. It plays one hit from its kind's bank, NumPy recipes plus the bundled CC0 samples
+(assets/sfx/<kind>_<n>.wav), or a creature, weather or animation sound made by synth_sfx (its KINDS) with a seed
+drawn per cue. The variant, ±3 semitones of pitch and ±3 dB of gain (none for synth_sfx kinds, which come at the level
+that sets them under the narration) come from (seed, id) alone, so a video always sounds the same.
 Contact frames: a hit's transient peak lands on round(t * sr); a whoosh peaks on t and a riser builds up to t over
-dur (1.2 s by default); write scribbles from t for dur. A hit less than 60 ms (35 ms for letter and type) after the
-last one of its kind is dropped.
+dur (1.2 s by default); write, the beds (wind, rain, fog_drone) and transition_whoosh play from t for dur (a synth_sfx
+kind's own length by default). A hit less than 60 ms (35 ms for letter and type) after the last one of its kind is
+dropped.
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ SPACING = {'letter': .035, 'type': .035}
 MIN_SPACING = .06
 SPREAD = .6               # x = 0 (or 1) pans 60% of the way to the left (or right)
 ATTACK = .05              # a hit's transient peak is in its first 50 ms
+FROM_T = {'write', 'wind', 'rain', 'fog_drone', 'transition_whoosh'}    # play from t for dur
 VARIANTS = 3              # synthesized per kind
 
 
@@ -244,13 +247,14 @@ def _hit(cue, rng, sr) -> tuple[np.ndarray, int]:
     semitones, db = rng.uniform(-3, 3), rng.uniform(-3, 3)
     if bank:
         x = bank[variant]
-    elif kind in synth_sfx.KINDS:                     # a creature or animation sound, already at its level
-        x = synth_sfx.render(kind, sr=sr, seed=int(rng.integers(1 << 32)))
+    elif kind in synth_sfx.KINDS:      # already at the level that sets it under the narration, so no random gain
+        seconds = float(cue.get('dur') or synth_sfx.KINDS[kind]) * 2 ** (semitones / 12)    # dur long once repitched
+        x, db = synth_sfx.render(kind, seconds, sr, int(rng.integers(1 << 32))), 0.
     else:
         make, default = LONG[kind]
         x = _fit(make(rng, sr, float(cue.get('dur') or default) * 2 ** (semitones / 12)), kind, sr)
     x = _repitch(x, semitones) * (10 ** (db / 20) * min(1., max(0., float(cue.get('strength', 1)))))
-    if kind == 'write':
+    if kind in FROM_T:
         return x, 0
     head = x if kind in ('whoosh', 'riser') else x[:int(ATTACK * sr)]
     return x, int(np.argmax(np.abs(head)))
