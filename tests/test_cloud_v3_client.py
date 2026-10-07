@@ -156,9 +156,9 @@ def test_byok_permanent_error_not_retried():
     error = RuntimeError('wrong key')
     error.status_code = 401
     provider, calls = openai_fake([error])
-    with pytest.raises(providers.ProviderError, match='wrong key'):
+    with pytest.raises(providers.ProviderError, match='did not accept your API key') as failure:
         provider.direct_plan({}, providers.Usage())
-    assert len(calls) == 1
+    assert len(calls) == 1 and 'wrong key' in failure.value.technical
 
 
 def test_byok_original_root_never_extracted():
@@ -185,14 +185,16 @@ def test_compat_json_mode_includes_whole_plan_schema():
     assert json.dumps(PLAN_SCHEMA) in calls[0]['messages'][0]['content']
 
 
-@pytest.mark.parametrize('status,expected_calls', [(429, 2), (503, 2), (400, 1), (403, 1)])
-def test_byok_transient_retry_is_bounded(status, expected_calls):
+@pytest.mark.parametrize('status,expected_calls', [(429, 3), (503, 3), (400, 1), (403, 1)])
+def test_byok_transient_retry_is_bounded(status, expected_calls, monkeypatch):
+    slept = []
+    monkeypatch.setattr(providers, '_sleep', slept.append)
     error = RuntimeError('mock failure')
     error.status_code = status
-    provider, calls = openai_fake([error, error])
+    provider, calls = openai_fake([error] * 4)
     with pytest.raises(providers.ProviderError):
         provider.direct_plan({}, providers.Usage())
-    assert len(calls) == expected_calls
+    assert len(calls) == expected_calls and slept == [1.5, 4.0][:expected_calls - 1]
 
 
 def test_anthropic_schema_retry_and_cache_billing():

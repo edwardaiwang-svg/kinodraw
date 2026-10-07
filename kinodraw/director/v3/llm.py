@@ -7,6 +7,7 @@ import time
 
 from ... import ingest, script, styles
 from ..llm.director import LLMDirector
+from ..llm import errors
 from ..llm.providers import CommandProvider, ProviderError, Usage, make_provider
 from ..rules import RulesDirector as PictureDirector
 from .rules import from_rules
@@ -33,7 +34,7 @@ def plan_v3(doc_or_script, provider=None):
             b['visuals'] = scientific[b['id']]
     name = provider if isinstance(provider, str) else (
         getattr(provider, 'name', type(provider).__name__) if provider is not None else 'rules')
-    repairs, reason, candidates = [], None, None
+    repairs, reason, candidates, help_ = [], None, None, None
     try:
         if provider is not None and provider != 'rules':
             if isinstance(provider, str):
@@ -66,8 +67,9 @@ def plan_v3(doc_or_script, provider=None):
         else:
             plan = from_rules(board)
     except Exception as error:  # noqa: BLE001 - provider or repair failure keeps the offline video usable
-        reason = f'{type(error).__name__}: {error}'
+        help_ = errors.explain(error, name)          # in plain words, with what to do; never a key
+        reason = errors.message(error, name)
         plan = from_rules(board)
     return plan, {'repairs': repairs, 'provider': name, 'seconds': time.monotonic() - started,
-                  'usage': usage, 'fallback': reason is not None, 'fallback_reason': reason,
+                  'usage': usage, 'fallback': reason is not None, 'fallback_reason': reason, 'fallback_help': help_,
                   'notes': [f'The offline v3 director planned this video ({reason})'] if reason else repairs}

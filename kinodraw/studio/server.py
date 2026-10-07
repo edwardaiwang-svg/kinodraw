@@ -150,8 +150,12 @@ class Jobs:
                 except (JobCancelled, Cancelled) as error:
                     job.update(state='cancelled', error=str(error))
                 except Exception as error:  # noqa: BLE001 - shown to the user
-                    job.update(state='failed', error=_plain(error))
-                    traceback.print_exc()
+                    help_ = _help(error)
+                    job.update(state='failed', error=_plain(error), error_help=help_)
+                    if help_:                   # an AI service's answer: logged without the SDK text, which can hold a key
+                        print(f"job {jid} failed: {help_['kind']}: {help_['detail']}", flush=True)
+                    else:
+                        traceback.print_exc()
         threading.Thread(target=run, daemon=True).start()
         return jid
 
@@ -179,7 +183,18 @@ def _plain(error: Exception) -> str:
         return error.plain
     if isinstance(error, ValueError):
         return str(error)
+    if _help(error):
+        from ..director.llm import errors
+        return errors.message(error)
     return f'Something went wrong ({type(error).__name__}: {error}). Please tell us using "Feedback or a problem?".'
+
+
+def _help(error: Exception) -> dict | None:
+    """For an AI service's failure: {kind, title, steps, setting, detail} (keys removed), for the Studio's problem
+    card and its "Copy details"; None for anything else."""
+    from ..director.llm import errors
+    from ..director.llm.providers import ProviderError
+    return errors.explain(error) if isinstance(error, ProviderError) else None
 
 
 def _project(name: str) -> Path:
@@ -488,7 +503,7 @@ def narrator(name: str) -> dict:
     take = take if take and take.is_file() else None
     digest = sha(take) if take else None
     return {'narrator': 'own' if cfg.get('recording') else 'builtin', 'voice': cfg['voice'], 'lang': cfg['lang'],
-            'server_voice': cfg.get('server_voice', ''),
+            'server_voice': cfg.get('server_voice', ''), 'clean': cfg.get('clean_recording', True),
             'take': take.name if take else None, 'lines': lines, 'check': _check(path, digest, lines),
             'changed': _changed(path, digest, lines)}
 
@@ -642,8 +657,17 @@ def save_take(name: str, filename: str, stream, length: int) -> dict:
 
 
 def set_narrator(name: str, body: dict) -> dict:
-    """Narrate with the built-in voice (your recording stays in the project) or with your own recording again."""
+    """Narrate with the built-in voice (your recording stays in the project) or with your own recording again;
+    ``clean`` (true or false) turns the background-noise clean-up of your recording on or off."""
     path = _project(name)
+    if 'clean' in body:
+        if not isinstance(body['clean'], bool):
+            raise ValueError('clean must be true or false')
+        saved = _store(path).load()
+        _store(path).save(saved['storyboard'], {**saved['settings'], 'clean_recording': body['clean']},
+                          saved['revision'])
+        if 'narrator' not in body:
+            return narrator(name)
     if body.get('narrator') == 'builtin':
         pipeline.set_recording(path, None)
     elif body.get('narrator') == 'own':

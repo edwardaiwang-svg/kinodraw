@@ -116,6 +116,31 @@ def _number(value, name, minimum=0, maximum=None):
     return value
 
 
+def _mp4(path, project):
+    """``path`` if it is an MP4 file inside ``project`` (after following links): top-level boxes that start with ftyp,
+    fit the file exactly and include moov. Checked before FFmpeg sees it, so a playlist or list can't pass."""
+    real = Path(path).resolve()
+    if Path(path).suffix.lower() != '.mp4' or not real.is_file() or not real.is_relative_to(Path(project).resolve()):
+        raise ValueError('video must be an existing MP4 file (.mp4) inside the project')
+    size, at, kinds = real.stat().st_size, 0, []
+    with real.open('rb') as stream:
+        while at < size and len(kinds) < 4096:
+            stream.seek(at)
+            head = stream.read(16)
+            length, kind = int.from_bytes(head[:4], 'big'), head[4:8]
+            if length == 1 and len(head) == 16:
+                length = int.from_bytes(head[8:16], 'big')
+            elif length == 0:
+                length = size - at
+            if len(head) < 8 or length < 8 or at + length > size or not all(32 < c < 127 for c in kind):
+                break
+            kinds.append(kind)
+            at += length
+    if at != size or not kinds or kinds[0] != b'ftyp' or b'moov' not in kinds:
+        raise ValueError('video is not an MP4 file: its contents do not follow the MP4 format')
+    return real
+
+
 def _worker_command(root, arguments):
     worker = [sys.executable, '--mcp-worker'] if getattr(sys, 'frozen', False) else \
         [sys.executable, '-m', 'kinodraw.mcp_server']
@@ -172,11 +197,9 @@ class Developer:
             raise ValueError('path escapes --root')
         return path
 
-    def project(self, name):
-        path = self.path(name)
-        if not path.is_dir():
-            raise ValueError(f'project not found: {name}')
-        # Also protect paths opened indirectly by the existing renderer.
+    @staticmethod
+    def _tree(path):
+        """The project's SVG files; refuses any symlink inside it (paths the renderer opens indirectly too)."""
         svgs = []
         for folder, dirs, files in os.walk(path, followlinks=False):
             if any((Path(folder) / item).is_symlink() for item in dirs + files):
@@ -184,6 +207,13 @@ class Developer:
             for item in files:
                 if Path(item).suffix.lower() == '.svg':
                     svgs.append(Path(folder) / item)
+        return svgs
+
+    def project(self, name):
+        path = self.path(name)
+        if not path.is_dir():
+            raise ValueError(f'project not found: {name}')
+        svgs = self._tree(path)
         cfg = loads((path / 'project.json').read_text(encoding='utf-8'))
         board = loads((path / 'storyboard.json').read_text(encoding='utf-8'))
         if not isinstance(cfg, dict) or not isinstance(board, dict):
@@ -555,7 +585,8 @@ class Developer:
         else:
             state = 'failed'
         return {'job': job, 'pid': entry['process'].pid, 'state': state, 'exit_code': code,
-                'path': str(output), 'diagnostics': str(entry['log']), 'synthetic_timing': True}
+                'path': str(output), 'diagnostics': str(entry['log']),
+                **({} if entry.get('export') else {'synthetic_timing': True})}
 
     def cancel(self, job):
         status = self.status(job)
@@ -564,8 +595,11 @@ class Developer:
         if status['state'] == 'running':
             # This process group was created by our Popen; never search command text or accept a PID.
             entry['cancelled'] = True
-            if 'mode' in entry:
-                entry['cancel'].write_text('cancel\n', encoding='utf-8')
+            if 'mode' in entry or entry.get('export'):
+                if 'mode' in entry:
+                    entry['cancel'].write_text('cancel\n', encoding='utf-8')
+                else:                       # the export worker's TERM handler stops and reaps its FFmpeg groups
+                    child.terminate()
                 try:
                     child.wait(timeout=10)
                 except subprocess.TimeoutExpired:
@@ -585,6 +619,98 @@ class Developer:
                     os.killpg(child.pid, signal.SIGKILL)
                 child.wait(timeout=2)
         return self.status(job)
+
+    def _saved(self, path):
+        """Settings, storyboard and revision of a confined, symlink-free project, read through ProjectStore."""
+        from .project_store import ProjectStore
+        self._tree(path)
+        saved = ProjectStore(path).load()
+        if not isinstance(saved['settings'], dict) or not isinstance(saved['storyboard'], dict):
+            raise ValueError('project and storyboard must be JSON objects')
+        return saved['settings'], saved['storyboard'], saved['revision']
+
+    def list_projects(self):
+        """Projects below --root (three folders deep at most); hidden folders and symlinks are never entered."""
+        found = []
+        for folder, dirs, files in os.walk(self.root, followlinks=False):
+            folder = Path(folder)
+            depth = len(folder.relative_to(self.root).parts)
+            dirs[:] = sorted(d for d in dirs if not d.startswith('.') and not (folder / d).is_symlink()
+                             and depth < 3)
+            if folder == self.root or 'project.json' not in files:
+                continue
+            dirs[:] = []                                   # a project holds no other projects
+            name = folder.relative_to(self.root).as_posix()
+            try:
+                cfg, board, revision = self._saved(folder)
+                lang = cfg.get('lang')
+                found.append({'project': name, 'title': (board.get('title') or {}).get(lang, name), 'lang': lang,
+                              'look': board.get('look') or 'whiteboard', 'aspect': cfg.get('aspect', '16:9'),
+                              'has_video': any(not v.name.endswith('.partial.mp4') for v in folder.glob('*.mp4')),
+                              'revision': revision})
+            except (ValueError, OSError, KeyError, TypeError, AttributeError) as error:
+                found.append({'project': name, 'error': str(error)})
+        return {'projects': sorted(found, key=lambda p: p['project'])}
+
+    SHOWN = ('lang', 'voice', 'speed', 'aspect', 'size', 'director', 'director_v3', 'credit')
+
+    def get_project(self, project):
+        """Chapters, beats (text and visual types), chosen settings, finished outputs and the last QA summary."""
+        path = self.path(project)
+        if not path.is_dir() or not (path / 'project.json').is_file():
+            raise ValueError(f'project not found: {project}')
+        cfg, board, revision = self._saved(path)
+        lang = cfg.get('lang')
+        text = lambda value: (value or {}).get(lang, '') if isinstance(value, dict) else ''
+        media = ('.mp4', '.webm', '.gif', '.srt', '.vtt', '.png', '.txt', '.md')
+        outputs = [p.relative_to(path).as_posix() for folder in (path, path / 'build/developer') if folder.is_dir()
+                   for p in sorted(folder.iterdir()) if p.is_file() and p.suffix.lower() in media
+                   and not p.name.endswith('.partial.mp4') and not (folder == path and p.name == cfg.get('script'))]
+        qa = None
+        if (path / 'build/qa.json').is_file():
+            report = loads((path / 'build/qa.json').read_text(encoding='utf-8'))
+            qa = {'ok': report.get('ok'), 'length': report.get('length'), 'problems': (report.get('problems') or [])[:10]}
+        return {'project': project, 'title': text(board.get('title')), 'revision': revision,
+                'settings': {**{k: cfg[k] for k in self.SHOWN if k in cfg}, 'look': board.get('look') or 'whiteboard',
+                             'recording': bool(cfg.get('recording')), 'plan_v3': bool(cfg.get('plan_v3'))},
+                'chapters': [{'id': c.get('id'), 'kind': c.get('kind'), 'title': text(c.get('title')) or text(c.get('label'))}
+                             for c in board.get('chapters', [])],
+                'beats': [{'id': b.get('id'), 'chapter': b.get('chapter'), 'kind': b.get('kind'),
+                           'text': text(b.get('display')), 'visuals': [v.get('type') for v in b.get('visuals', [])]}
+                          for b in board.get('beats', [])],
+                'outputs': outputs, 'qa': qa}
+
+    @staticmethod
+    def list_voices():
+        """Every bundled offline voice by language, with each language's default."""
+        from . import voice
+        languages = {lang: {'default': voice.LANGS[lang]['voice'],
+                            'voices': [{'id': vid, 'name': name} for vid, name in voices]}
+                     for lang, voices in voice.VOICES.items()}
+        return {'languages': languages, 'count': sum(len(v['voices']) for v in languages.values()),
+                'speeds': list(voice.SPEEDS)}
+
+    def export_video(self, project, video, format='webm'):
+        """Export an MP4 inside the project to GIF or WebM in an owned, cancellable worker (export.export_video)."""
+        if format not in ('gif', 'webm'):
+            raise ValueError('format must be gif or webm')
+        path = self.path(project)
+        if not path.is_dir():
+            raise ValueError(f'project not found: {project}')
+        self._tree(path)
+        source = _mp4(self.path(str(path.relative_to(self.root) / _text(video, 'video'))), path)
+        job = uuid.uuid4().hex
+        folder = path / 'build' / 'developer'
+        folder.mkdir(parents=True, exist_ok=True)
+        output, log = folder / f'{job}.{format}', folder / f'{job}.log'
+        command = _worker_command(self.root, ['--export-child', str(source.relative_to(self.root)),
+                                              '--output', str(output.relative_to(self.root))])
+        with log.open('wb') as diagnostics:
+            child = subprocess.Popen(command, cwd=Path(__file__).resolve().parents[1], stdin=subprocess.DEVNULL,
+                                     stdout=diagnostics, stderr=diagnostics, start_new_session=True)
+        self.jobs[job] = {'process': child, 'output': output, 'log': log, 'cancelled': False, 'export': True}
+        return {'job': job, 'pid': child.pid, 'state': 'running', 'format': format, 'path': str(output),
+                'diagnostics': str(log)}
 
     def close(self):
         for job in self.jobs:
@@ -618,8 +744,20 @@ TOOLS = [
                              'mode': {'type': 'string', 'enum': ['synthetic', 'make', 'cached'], 'default': 'synthetic'}}, ['project'])},
     {'name': 'status', 'description': 'Inspect an opaque job ID owned by this server; return its actual process exit code.',
      'inputSchema': _schema({'job': TEXT}, ['job'])},
-    {'name': 'cancel', 'description': 'Cancel an owned render process group and reap its child; no arbitrary PIDs.',
+    {'name': 'cancel', 'description': 'Cancel an owned render or export job and reap its child; no arbitrary PIDs.',
      'inputSchema': _schema({'job': TEXT}, ['job'])},
+    {'name': 'list_projects', 'description': 'List the projects below --root: title, language, look, aspect, whether a finished MP4 exists, and revision.',
+     'inputSchema': _schema({}, [])},
+    {'name': 'get_project', 'description': 'Read one project: chapters, beats with their text and visual types, chosen settings (never keys or commands), finished outputs and the last QA summary.',
+     'inputSchema': _schema(PROJECT, ['project'])},
+    {'name': 'list_voices', 'description': 'List the offline narration voices by language, with each language\'s default and the speed range.',
+     'inputSchema': _schema({}, [])},
+    {'name': 'export_video', 'description': (
+        'Explicit action: export an MP4 inside the project (for example a render output) to GIF or WebM (VP9/Opus) '
+        'with the shared exporter, in an owned job. The source is kept; the export goes to build/developer/. '
+        'Poll status; cancel stops and reaps its encoder.'),
+     'inputSchema': _schema({**PROJECT, 'video': TEXT, 'format': {'type': 'string', 'enum': ['gif', 'webm'], 'default': 'webm'}},
+                            ['project', 'video'])},
 ]
 
 
@@ -806,7 +944,7 @@ class Server:
         spec = next((tool for tool in TOOLS if tool['name'] == name), None)
         try:
             if spec is None:
-                raise ValueError(f'tool unavailable: {name}; use one of the seven advertised tools')
+                raise ValueError(f'tool unavailable: {name}; use one of the {len(TOOLS)} advertised tools')
             if not isinstance(arguments, dict):
                 raise ValueError('arguments must be an object')
             schema = spec['inputSchema']
@@ -860,6 +998,7 @@ def main(argv=None):
     parser.add_argument('--root', required=True)
     parser.add_argument('--render-child', help=argparse.SUPPRESS)
     parser.add_argument('--narrated-child', help=argparse.SUPPRESS)
+    parser.add_argument('--export-child', help=argparse.SUPPRESS)
     parser.add_argument('--mode', choices=('make', 'cached'), help=argparse.SUPPRESS)
     parser.add_argument('--receipt', help=argparse.SUPPRESS)
     parser.add_argument('--progress', help=argparse.SUPPRESS)
@@ -872,6 +1011,15 @@ def main(argv=None):
     try:
         if args.narrated_child:
             _narrated_worker(Developer(args.root), args)
+        elif args.export_child:
+            from .export import export_video
+            from .progress import CancellationToken, RenderContext
+            service = Developer(args.root)
+            token = CancellationToken()
+            signal.signal(signal.SIGTERM, lambda *_: token._event.set())   # export_video then stops its FFmpeg groups
+            source = service.path(args.export_child)
+            _mp4(source, service.root)             # checked again here, just before FFmpeg opens it
+            export_video(source, service.path(args.output), context=RenderContext(token=token))
         elif args.render_child:
             from .engine import render
             service = Developer(args.root)

@@ -333,7 +333,8 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
         beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
         try:
             clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
-                                         cfg['voice'], cfg['speed'], lexicon)
+                                         cfg['voice'], cfg['speed'], lexicon,
+                                         **({} if cfg.get('clean_recording', True) else {'clean': False}))
         except voice.RecordingError as error:
             raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: kinodraw voice '
                                        f'"{project_dir}" --recording none. The script to read, as it is narrated (one '

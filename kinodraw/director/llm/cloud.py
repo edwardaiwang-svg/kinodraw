@@ -137,12 +137,14 @@ def _call(path: str, body: dict | None = None, token: str | None = None, timeout
         if reply.get('code') == 'email_unavailable' and detail:     # no "KinoDraw Cloud 502:" and no error codes
             raise EmailUnavailable(detail[0].upper() + detail[1:] + '.') from error
         failure = ProviderError(f'KinoDraw Cloud {error.code}: {detail or error.reason}')
-        failure.status, failure.detail = error.code, detail
+        failure.status, failure.detail, failure.provider = error.code, detail, 'cloud'
         raise failure from error
     except (ValueError, TypeError) as error:
         raise ProviderError('KinoDraw Cloud returned invalid JSON') from error
     except urllib.error.URLError as error:
-        raise ProviderError(f'KinoDraw Cloud unreachable: {error.reason}') from error
+        failure = ProviderError(f'KinoDraw Cloud unreachable: {error.reason}')
+        failure.kind, failure.provider = 'network', 'cloud'
+        raise failure from error
 
 
 def signup(email: str) -> dict:

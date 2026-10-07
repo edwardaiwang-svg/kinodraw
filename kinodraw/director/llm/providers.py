@@ -14,9 +14,11 @@ import math
 import os
 import shlex
 import subprocess
+import time
 from dataclasses import dataclass, field
 
 from ... import paths
+from . import errors
 from .schema import SECTION_SCHEMA, STYLE_SYSTEM, SYSTEM, style_schema
 
 # $ per million tokens: input, output, cached input (OpenRouter model list, 2026-09-24)
@@ -119,28 +121,76 @@ def validate_structure(value, schema):
     return value
 
 
-def _structured(ask, schema):
-    for attempt in range(2):
-        try:
-            text = ask()
+BACKOFF = (1.5, 4.0)      # seconds before the 2nd and 3rd try of a busy, rate-limited or unreachable service
+_sleep = time.sleep       # tests replace it
+
+
+def _object_text(text: str) -> str:
+    """The first {...} in ``text`` (code fences and prose around it dropped), without trailing commas; strings kept."""
+    start = text.find('{')
+    if start < 0:
+        return text
+    out, depth, quoted, escaped = [], 0, False, False
+    for ch in text[start:]:
+        if quoted:
+            quoted = escaped or ch != '"'
+            escaped = not escaped and ch == '\\'
+        elif ch == '"':
+            quoted = True
+        elif ch in '}]':
+            while out and out[-1] in ' \t\r\n,':        # a trailing comma before the closing bracket
+                if out.pop() == ',':
+                    break
+            depth -= 1
+        elif ch in '{[':
+            depth += 1
+        out.append(ch)
+        if depth == 0:
+            break
+    return ''.join(out)
+
+
+def loads(text, lenient: bool = False):
+    """The answer's JSON value. ``lenient`` (OpenAI-compatible servers that only promise JSON mode) also reads an
+    answer wrapped in a code fence or prose, or with trailing commas; the schema is still checked afterwards."""
+    try:
+        return json.loads(text or '')
+    except (ValueError, TypeError) as error:
+        if lenient and isinstance(text, str):
             try:
-                value = json.loads(text or '')
-            except (ValueError, TypeError) as error:
-                raise StructuredResponseError('the answer was not valid JSON') from error
+                return json.loads(_object_text(text))
+            except ValueError:
+                pass
+        raise StructuredResponseError('the answer was not valid JSON') from error
+
+
+def _structured(ask, schema, lenient=False):
+    """One answer that follows ``schema``: one more try after a malformed answer, and up to 3 tries in all, after
+    BACKOFF waits, while the service is busy, rate-limiting or unreachable. Other failures are not retried."""
+    reasked = waited = 0
+    while True:
+        try:
+            value = loads(ask(), lenient)
             if not isinstance(value, dict):
                 raise StructuredResponseError('the answer must be a JSON object')
             return validate_structure(value, schema)
         except ProviderError as error:
-            if attempt or not (isinstance(error, StructuredResponseError) or getattr(error, 'transient', False)):
+            if isinstance(error, StructuredResponseError) and not reasked:
+                reasked = 1
+            elif getattr(error, 'transient', False) and waited < len(BACKOFF):
+                _sleep(BACKOFF[waited])
+                waited += 1
+            else:
                 raise
 
 
 def _api_failure(name, error):
-    failure = ProviderError(f'{name}: {type(error).__name__}: {error}')
-    status = getattr(error, 'status_code', None)
-    failure.status = status
-    failure.transient = status in (408, 429, 500, 502, 503, 504) or type(error).__name__ in (
-        'APIConnectionError', 'APITimeoutError', 'TimeoutError', 'ConnectionError')
+    """A ProviderError whose message says in plain words what happened (errors.explain); never a class name or key."""
+    kind = errors.classify(error)
+    failure = ProviderError(errors.explain(error, name)['title'])
+    failure.kind, failure.provider, failure.status = kind, name, getattr(error, 'status_code', None)
+    failure.transient = kind in errors.TRANSIENT
+    failure.technical = errors.redact(f'{type(error).__name__}: {error}')
     return failure
 
 
@@ -165,13 +215,15 @@ class OpenAIProvider(StructuredProvider):
         self.client = OpenAI(api_key=key or api_key(name) or 'none', base_url=base_url)
 
     def direct_section(self, payload: dict, usage: Usage) -> dict:
-        return _parse(self._ask(SYSTEM, SECTION_SCHEMA, 'section_visuals', payload, usage))
+        return _parse(self._ask(SYSTEM, SECTION_SCHEMA, 'section_visuals', payload, usage), not self.strict)
 
     def pick_style(self, payload: dict, usage: Usage) -> dict:
-        return _parse_style(self._ask(STYLE_SYSTEM, style_schema(_ids(payload)), 'style_pick', payload, usage))
+        return _parse_style(self._ask(STYLE_SYSTEM, style_schema(_ids(payload)), 'style_pick', payload, usage),
+                            not self.strict)
 
     def structured(self, system, schema, name, payload, usage):
-        return _structured(lambda: self._ask(system, schema, name, payload, usage, whole=True), schema)
+        return _structured(lambda: self._ask(system, schema, name, payload, usage, whole=True), schema,
+                           lenient=not self.strict)
 
     def _ask(self, system: str, schema: dict, name: str, payload: dict, usage: Usage, whole=False) -> str:
         user = json.dumps(payload, ensure_ascii=False)
@@ -280,17 +332,14 @@ class CommandProvider(StructuredProvider):
         except (OSError, subprocess.TimeoutExpired) as error:
             raise ProviderError(f'command: {type(error).__name__}: {error}') from error
         if done.returncode != 0:
-            raise ProviderError(f'command exited with {done.returncode}: {done.stderr.strip()[-300:]}')
+            raise ProviderError(f'command exited with {done.returncode}: {errors.redact(done.stderr.strip()[-300:])}')
         usage.add(f'command:{self.model}', 0, 0)       # tokens and cost are the program's business
         out = done.stdout.strip()
         return out if strict or out.startswith('{') else out[out.find('{'):out.rfind('}') + 1]
 
 
-def _parse(text: str) -> dict:
-    try:
-        data = json.loads(text or '')
-    except json.JSONDecodeError as error:
-        raise ProviderError(f'the answer was not valid JSON ({error})') from error
+def _parse(text: str, lenient: bool = False) -> dict:
+    data = loads(text, lenient)
     if not isinstance(data, dict) or not isinstance(data.get('beats'), list):
         raise ProviderError('the answer did not follow the section schema')
     return data
@@ -300,12 +349,9 @@ def _ids(payload: dict) -> list[str]:
     return [o['id'] for o in payload['options']]
 
 
-def _parse_style(text: str) -> dict:
+def _parse_style(text: str, lenient: bool = False) -> dict:
     """{style, reason} as the model answered; director/style.py checks the style is one it offered."""
-    try:
-        data = json.loads(text or '')
-    except json.JSONDecodeError as error:
-        raise ProviderError(f'the answer was not valid JSON ({error})') from error
+    data = loads(text, lenient)
     if not isinstance(data, dict) or not isinstance(data.get('style'), str):
         raise ProviderError('the answer did not name a style')
     return {'style': data['style'], 'reason': str(data.get('reason') or '')}

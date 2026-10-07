@@ -311,15 +311,47 @@ class RecordingError(ValueError):
         self.beat, self.plain = beat, plain or message
 
 
-def _decode(path: Path, rate: int = SR) -> np.ndarray:
-    """Any audio file as mono float32 at ``rate``, high-passed at 80 Hz."""
-    run = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-i', str(path), '-af', 'highpass=f=80',
+def _decode(path: Path, rate: int = SR, clean: bool = False) -> np.ndarray:
+    """Any audio file (read as a local file only) as mono float32 at ``rate``, high-passed at 80 Hz; ``clean``: with
+    its background noise reduced too (_clean)."""
+    run = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-protocol_whitelist', 'file',
+                          '-i', str(path), '-af', 'highpass=f=80',
                           '-ac', '1', '-ar', str(rate), '-f', 'f32le', '-'], capture_output=True)
     if run.returncode or not run.stdout:
         why = run.stderr.decode(errors='replace').strip()[-300:]
         raise RecordingError(f'Your recording ({path.name}) could not be read as audio: {why}. '
                              'Save it as WAV, M4A or MP3 and try again.')
-    return np.frombuffer(run.stdout, np.float32).copy()
+    audio = np.frombuffer(run.stdout, np.float32).copy()
+    return _clean(audio, rate) if clean else audio
+
+
+def _clean(audio: np.ndarray, rate: int) -> np.ndarray:
+    """Your recording with its background noise (hiss, hum, a fan) reduced: FFmpeg's FFT denoiser (afftdn) learns the
+    noise from the take's own quietest half second, then a gentle gate (at most 12 dB, ratio 2) lowers what is left
+    between phrases. Speech keeps its level (tests/test_recording.py measures both). Only recordings come here: the
+    AI voices are never cleaned."""
+    half, hop, late = rate // 2, rate // 100, int(rate * .025)    # afftdn outputs 25 ms late (FFmpeg 7.1, any rate)
+    n = len(audio) // hop
+    if n < 100:                                    # under a second: nothing to learn the noise from
+        return audio
+    power = (audio[:n * hop].reshape(n, hop).astype(np.float64) ** 2).mean(1)
+    window = np.convolve(power, np.ones(50), 'valid') / 50          # every half second, in 10 ms steps
+    k = int(np.argmin(window))
+    floor, loud = 10 * np.log10(window[k] + 1e-12), 10 * np.log10(np.percentile(power, 95) + 1e-12)
+    nf = float(np.clip(min(floor, loud - 25), -80, -20))
+    gate = 10 ** (min(floor + 10, loud - 20) / 20)  # over the noise, and well under the speech
+    chain = (f"asendcmd=c='0 afftdn sn start; 0.5 afftdn sn stop',afftdn=nr=30:nf={nf:.1f}:rf=-60,"
+             f"atrim=start_sample={half + late},"
+             f"agate=threshold={gate:.7f}:range=0.25:ratio=2:attack=10:release=250")
+    sample = audio[k * hop:k * hop + half]          # the quiet half second first, to learn from; trimmed off after
+    run = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'f32le', '-ar', str(rate), '-ac', '1',
+                          '-i', '-', '-af', chain, '-f', 'f32le', '-ar', str(rate), '-ac', '1', '-'],
+                         input=np.concatenate([sample, audio, sample[:late]]).astype(np.float32).tobytes(),
+                         capture_output=True)       # and 25 ms more at the end, so the take's own end comes out
+    if run.returncode or not run.stdout:
+        raise RuntimeError('cleaning the recording failed: ' + run.stderr.decode(errors='replace').strip()[-300:])
+    out = np.frombuffer(run.stdout, np.float32)[:len(audio)]
+    return np.pad(out, (0, len(audio) - len(out))).astype(np.float32)
 
 
 def _read_wav(path: Path) -> np.ndarray:
@@ -500,18 +532,21 @@ def _said(text: str) -> str:
 
 
 def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | None = None,
-                   speed: float = 1.0, lexicon: dict | None = None) -> dict:
+                   speed: float = 1.0, lexicon: dict | None = None, clean: bool = True) -> dict:
     """Clips like synthesize()'s, cut from one continuous reading of the script; ``beats`` is [(beat id, spoken
     text)] in order. Kokoro reads the beats as a guide, aligned to the take frame by frame (dynamic time warping):
     every cut lands in a pause, every character time follows the take, and each clip gets its guide's speech level.
     Writes recording-align.json next to the cache: where each beat and each sentence was found, and how well it
-    matched; a sentence that fits the take clearly worse than the rest (skipped, or other words) is marked check."""
+    matched; a sentence that fits the take clearly worse than the rest (skipped, or other words) is marked check.
+    ``clean``: background noise is reduced first (_clean), so the alignment and the clips both use the cleaned take."""
     recording, cache_dir = Path(recording), Path(cache_dir)
     voice = voice or LANGS[lang]['voice']
     digest = hashlib.sha256(recording.read_bytes()).hexdigest()
     content = [VERSION, RECORDING_VERSION, LANGS[lang]['model'], voice, speed, digest, [list(b) for b in beats]]
     if lexicon:
         content.append(sorted(lexicon.items()))
+    if clean:
+        content.append('clean-2')                  # bump when _clean changes (invalidates cached cuts)
     key = hashlib.sha256(json.dumps(content).encode()).hexdigest()[:16]
     out, report = cache_dir / 'recording', cache_dir / 'recording-align.json'
     meta = out / f'{key}.json'
@@ -523,7 +558,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
     guides = [synthesize(text, lang, cache_dir, voice, speed, lexicon) for _, text in beats]
     pieces = [_read_wav(g.wav) for g in guides]
     offsets = np.cumsum([0] + [len(p) for p in pieces])
-    take = _decode(recording)
+    take = _decode(recording, clean=clean)
     gl, gp = _spectrum(np.concatenate(pieces))
     tl, tp = _spectrum(take)
     (_, gq), (tr, tq) = _quiet(gl), _quiet(tl)
@@ -549,7 +584,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         cuts.append(_pause_between(pauses, tl, last[e], first[s]))
     cuts.append(min((p for p in long if p[1] > last[spans[-1][1]]), key=lambda p: p[0]))
     room = tl > tr                                 # anything over room tone stays: soft endings, releases, breaths
-    full, hop = _decode(recording, TAKE_SR), TAKE_SR // 100
+    full, hop = _decode(recording, TAKE_SR, clean), TAKE_SR // 100
 
     clips, rows, sounds, paces = [], [], [], []
     for k, ((bid, text), guide, (gs, ge)) in enumerate(zip(beats, guides, spans)):
@@ -600,7 +635,7 @@ def from_recording(recording, beats, lang: str, cache_dir: Path, voice: str | No
         s['check'] = s['fit'] < typical - FIT
     on = gl[path[:, 0]] > gq
     info = {'clips': clips, 'report': {
-        'recording': str(recording), 'sha256': digest, 'seconds': round(len(take) / SR, 2),
+        'recording': str(recording), 'sha256': digest, 'seconds': round(len(take) / SR, 2), 'cleaned': clean,
         'speech_ratio': round(said / script, 2), 'voice_scale': scale, 'match': round(1 - float(cost[on].mean()), 2),
         'note': f'match: about 0.35 for unrelated speech, 0.45 or more for a reading of the script; beats under '
                 f'{MATCH} are marked check, and sentences whose fit is {FIT} under the typical sentence\'s. speech: the '

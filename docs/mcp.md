@@ -6,9 +6,43 @@ Start the existing newline-framed stdio server with an explicit workspace root:
 python -m kinodraw.cli mcp --root /absolute/existing/workspace
 ```
 
+## Use it from Claude Code
+
+Use the Python that has KinoDraw installed (for example the project's
+`.venv/bin/python`) and an absolute folder that already exists. Every project the
+assistant makes or reads stays inside that folder.
+
+```sh
+claude mcp add kinodraw -- /absolute/path/to/python -m kinodraw.cli mcp --root /absolute/existing/workspace
+```
+
+Add `--scope project` to share it through a `.mcp.json` file at your project's
+root instead. The file looks like this:
+
+```json
+{
+  "mcpServers": {
+    "kinodraw": {
+      "command": "/absolute/path/to/python",
+      "args": ["-m", "kinodraw.cli", "mcp", "--root", "/absolute/existing/workspace"]
+    }
+  }
+}
+```
+
+Then ask for, say, "list my KinoDraw projects" (`list_projects`), "what is in
+demo?" (`get_project`: chapters, beats with their text and visual types, chosen
+settings, outputs and the last QA summary), "which voices are there?"
+(`list_voices`: 24 offline voices by language, with defaults), or "export the
+preview as WebM" (`export_video`: GIF or WebM from an MP4 inside the project,
+written to `build/developer/` as an owned job that `status` polls and `cancel`
+stops). `get_project` shows chosen settings only, never keys, commands or server
+addresses.
+
 Initialize JSON-RPC, send `notifications/initialized`, then use `tools/call`.
-The seven tools remain `create_project`, `validate_project`, `chart_add`,
-`preview_png`, `render`, `status`, and `cancel`. Creation produces the same
+There are eleven tools: `create_project`, `validate_project`, `chart_add`,
+`preview_png`, `render`, `status`, `cancel`, `list_projects`, `get_project`,
+`list_voices`, and `export_video`. Creation produces the same
 editable skeleton without narration, model search, credentials, or migration.
 Default `render` still makes a silent preview with estimated timing and a
 one-second default; its duration limit remains 1/30 to 30 seconds.

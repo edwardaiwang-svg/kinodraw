@@ -341,3 +341,14 @@ def test_a_generated_line_that_did_not_match_is_named_with_the_text_to_read(stud
     assert '! sentence 6 of read-aloud.txt ("Part one: It never spoils.") didn\'t match your recording' in out
     assert f'every sentence as written in {project / "read-aloud.txt"}' in out
     assert (project / 'read-aloud.txt').read_text(encoding='utf-8') == _read_aloud_page(studio, 'Honey')
+
+
+def test_background_noise_clean_up_is_on_until_turned_off(studio):
+    status, info = studio('/api/projects/Honey/narrator')
+    assert status == 200 and info['clean'] is True
+    status, info = studio('/api/projects/Honey/narrator', {'clean': False})
+    assert status == 200 and info['clean'] is False and info['narrator'] == 'builtin'
+    assert pipeline.settings(studio.root / 'Honey')['clean_recording'] is False
+    assert studio('/api/projects/Honey/narrator')[1]['clean'] is False
+    assert studio('/api/projects/Honey/narrator', {'clean': 'no'})[0] == 400
+    assert studio('/api/projects/Honey/narrator', {'clean': True})[1]['clean'] is True

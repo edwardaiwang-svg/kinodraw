@@ -110,7 +110,11 @@ receive no response and cannot launch tool calls.
 | `preview_png` | `project`, optional `time` (default 0) | PNG path plus MCP image content |
 | `render` | `project`, optional `mode` (`synthetic`, `make`, `cached`); `start`/`duration` for synthetic only | Opaque owned job ID and PID; poll status for actual completion |
 | `status` | `job` | Actual process state/exit code; narrated stages and encoded-frame progress |
-| `cancel` | `job` | Reaped owned process group and actual exit code |
+| `cancel` | `job` | Reaped owned process group (or export encoder) and actual exit code |
+| `list_projects` | none | Projects below the root: title, lang, look, aspect, `has_video`, revision |
+| `get_project` | `project` | Chapters, beats with text and visual types, chosen settings, outputs, QA summary |
+| `list_voices` | none | Offline voices by language with each default, and the speed range |
+| `export_video` | `project`, `video` (an MP4 inside the project), optional `format` (`webm` default, `gif`) | Opaque owned job ID; poll status for the exported file |
 
 Preview and default `mode=synthetic` render use `engine.timeline.synthetic_clips` / `layout` and the existing
 `engine.render.make_production` / `encode`. Timing is estimated and labeled
@@ -134,7 +138,8 @@ sidecars before reporting success. Polling `status` exposes real stage/encoded-f
 progress; this is not a JSON-RPC push notification. See [narrated MCP details](mcp.md)
 for prerequisites, preserved source bytes, guards and cancellation/publication rules.
 
-Writer, a separate export tool, ZIP packaging, and push progress notifications are not advertised.
+Writer, ZIP packaging, and push progress notifications are not advertised. To connect Claude Code,
+see [Use it from Claude Code](mcp.md#use-it-from-claude-code).
 Unknown tools return a truthful `isError`. Future modules need an explicit adapter
 and real checks before appearing in `tools/list`.
 
