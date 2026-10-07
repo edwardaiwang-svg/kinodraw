@@ -22,6 +22,7 @@ def writer(body):
     notes = body.get('notes')
     if isinstance(notes, str):
         notes = [n.strip() for n in notes.splitlines() if n.strip()]
+    selected = None
     try:
         from .server import STUDIO_HOOKS
         selected = STUDIO_HOOKS['provider'](body)
@@ -29,7 +30,9 @@ def writer(body):
             raise ValueError('The selected provider does not support topic writing')
         draft, report = write_draft(body.get('topic'), notes, selected, voice=body.get('voice'))
     except ProviderError as error:
-        return {'ok': False, 'error': str(error), 'usage': asdict(getattr(error, 'usage', Usage()))}
+        from ..director.llm import errors
+        return {'ok': False, 'error': str(error), 'error_help': errors.explain(error, getattr(selected, 'name', None)),
+                'usage': asdict(getattr(error, 'usage', Usage()))}
     return {'ok': True, 'text': draft_markdown(draft), 'markdown': draft_markdown(draft),
             'draft': draft, 'report': {**report, 'usage': asdict(report['usage'])},
             'usage': asdict(report['usage'])}
