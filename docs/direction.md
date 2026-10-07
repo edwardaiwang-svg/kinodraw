@@ -74,6 +74,14 @@ kicks, each hit with seeded pitch and gain variation). For every look except the
 under the whole video, ducked about 18 dB under the voice and swelling at cuts, and `audio/master.py` masters the
 mix to −14 LUFS with a −1 dBTP limiter. The whiteboard mix is unchanged.
 
+Director v3 hybrid videos get a procedural score by default (`audio/procedural.py`, synthesized offline from numpy
+and scipy, no samples): one chord per bar at the plan's tempo, played by a marimba, kalimba, celesta or vibraphone
+lead, a soft pad, a round bass and light hand percussion chosen by the plan's music mood. It changes progression and
+lead timbre at each chapter, swells into roars and other big actions, and thins out under tender lines (a whimper or
+nudge, or narration said gently, softly or quietly). The video's title seeds the key and the variations, so equal
+inputs give the same bytes. Scene joins snap to its beat grid. A storyboard that names a recording
+(`"music": {"primary": "natural_vibes"}`) keeps that recording at its measured tempo.
+
 ## The collage look (first)
 
 - **Paper kit:** cream, kraft, grid and lined paper, watercolor washes, torn edges, masking tape.
