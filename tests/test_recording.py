@@ -465,3 +465,80 @@ def test_a_chinese_take_is_cut_and_timed_as_well_as_an_english_one(tmp_path):
     assert np.median(errors) <= .06 and np.percentile(errors, 95) <= .15, (np.median(errors), np.percentile(errors, 95))
     assert not any(row['check'] for row in report['beats']) and report['match'] > voice.MATCH
     assert len(report['sentences']) == 6 and not any(row['check'] for row in report['sentences'])
+
+
+def _noisy_take(path, noise_db):
+    """Two beats read by another voice with pauses between them, plus white noise at ``noise_db`` dBFS RMS (None:
+    no noise), as a 24 kHz wav; and the take before the noise was added."""
+    rng = np.random.default_rng(3)
+    parts = [np.zeros(int(.6 * voice.SR), np.float32)]
+    for _, text in BEATS[:2]:
+        clip = voice.synthesize(text, 'en', path.parent / 'voice', 'am_michael', .9)
+        parts += [voice._read_wav(clip.wav), np.zeros(int(.8 * voice.SR), np.float32)]
+    x = np.concatenate(parts)
+    if noise_db is not None:
+        noise = rng.normal(0, 1, len(x))
+        x = x + (noise * 10 ** (noise_db / 20) / np.sqrt(np.mean(noise ** 2))).astype(np.float32)
+    voice._write_wav(path, x)
+    return path
+
+
+def _gaps_and_speech(raw, cleaned, rate):
+    """(change of RMS in the take's detected pauses, change of 100 Hz-4 kHz RMS while speaking), in dB: pauses and
+    speech found on the uncleaned take the way the alignment finds them, pauses 50 ms in from their edges."""
+    hop = rate // 100
+    n = len(raw) // hop
+    level = 10 * np.log10((raw[:n * hop].reshape(n, hop) ** 2).mean(1) + 1e-10)
+    _, speech = voice._quiet(level)
+    gaps = np.zeros(n, bool)
+    for a, b in voice._pauses(level, speech):
+        gaps[max(a, 0) + 5:min(b, n) - 5] = True
+    talk = level > speech
+    band = butter(4, [100, 4000], 'bandpass', fs=rate, output='sos')
+    def rms(x, mask, filtered=False):
+        x = sosfilt(band, x) if filtered else x
+        return 10 * np.log10((x[:n * hop].reshape(n, hop)[mask] ** 2).mean() + 1e-20)
+    assert gaps.sum() > 50 and talk.sum() > 100
+    return rms(cleaned, gaps) - rms(raw, gaps), rms(cleaned, talk, True) - rms(raw, talk, True)
+
+
+@needs_models
+@pytest.mark.parametrize('rate', [voice.SR, voice.TAKE_SR])
+def test_background_noise_is_cleaned_from_your_recording(tmp_path, rate):
+    take = _noisy_take(tmp_path / 'take.wav', -45)
+    raw, cleaned = voice._decode(take, rate), voice._decode(take, rate, clean=True)
+    assert len(cleaned) == len(raw)
+    gap, speech = _gaps_and_speech(raw, cleaned, rate)
+    assert gap <= -10 and abs(speech) <= 2, (gap, speech)
+    a, b = raw[rate:rate * 4], cleaned[rate:rate * 4]          # in step with the take: no delay from the filters
+    assert np.argmax(np.correlate(b, a[rate // 20:-rate // 20], 'valid')) == rate // 20
+
+
+@needs_models
+def test_a_take_without_noise_keeps_its_speech(tmp_path):
+    take = _noisy_take(tmp_path / 'take.wav', None)
+    raw, cleaned = voice._decode(take), voice._decode(take, clean=True)
+    assert abs(_gaps_and_speech(raw, cleaned, voice.SR)[1]) <= .5
+
+
+@needs_models
+def test_the_ai_voice_is_never_cleaned(tmp_path, monkeypatch):
+    monkeypatch.setattr(voice, '_decode', lambda *a, **k: pytest.fail('synthesized speech went through the clean-up'))
+    clip = voice.synthesize('Paste your script.', 'en', tmp_path, 'af_heart', 1.0)
+    assert len(voice._read_wav(clip.wav)) > voice.SR // 2
+
+
+def test_cleaning_follows_the_project_setting(tmp_path, monkeypatch):
+    project = tmp_path / 'video'
+    pipeline.new_project(Path(__file__).parent / 'fixtures' / 'tiny.md', project)
+    seen = []
+    monkeypatch.setattr(voice, 'synthesize', lambda text, *a: voice.Clip(Path('guide.wav'), 1., [0.] * len(text)))
+    monkeypatch.setattr(voice, 'from_recording', lambda *a, **k: seen.append(k.get('clean', True)) or {})
+    (tmp_path / 'take.wav').write_bytes(b'audio')
+    pipeline.set_recording(project, tmp_path / 'take.wav')
+    pipeline.narrate(project)
+    store = pipeline.ProjectStore(project)
+    saved = store.load()
+    store.save(saved['storyboard'], {**saved['settings'], 'clean_recording': False}, saved['revision'])
+    pipeline.narrate(project)
+    assert seen == [True, False]

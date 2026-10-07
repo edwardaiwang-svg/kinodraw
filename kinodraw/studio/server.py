@@ -501,7 +501,7 @@ def narrator(name: str) -> dict:
     take = take if take and take.is_file() else None
     digest = sha(take) if take else None
     return {'narrator': 'own' if cfg.get('recording') else 'builtin', 'voice': cfg['voice'], 'lang': cfg['lang'],
-            'server_voice': cfg.get('server_voice', ''),
+            'server_voice': cfg.get('server_voice', ''), 'clean': cfg.get('clean_recording', True),
             'take': take.name if take else None, 'lines': lines, 'check': _check(path, digest, lines),
             'changed': _changed(path, digest, lines)}
 
@@ -655,8 +655,17 @@ def save_take(name: str, filename: str, stream, length: int) -> dict:
 
 
 def set_narrator(name: str, body: dict) -> dict:
-    """Narrate with the built-in voice (your recording stays in the project) or with your own recording again."""
+    """Narrate with the built-in voice (your recording stays in the project) or with your own recording again;
+    ``clean`` (true or false) turns the background-noise clean-up of your recording on or off."""
     path = _project(name)
+    if 'clean' in body:
+        if not isinstance(body['clean'], bool):
+            raise ValueError('clean must be true or false')
+        saved = _store(path).load()
+        _store(path).save(saved['storyboard'], {**saved['settings'], 'clean_recording': body['clean']},
+                          saved['revision'])
+        if 'narrator' not in body:
+            return narrator(name)
     if body.get('narrator') == 'builtin':
         pipeline.set_recording(path, None)
     elif body.get('narrator') == 'own':
