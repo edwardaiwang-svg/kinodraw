@@ -265,7 +265,7 @@ def cmd_setup(args):
 
 def cmd_doodles(args):
     from .director.match import Matcher
-    m = Matcher(args.lang)
+    m = Matcher(args.lang, include_creatures=True)
     hits = {h.id: h for h in m.lexical(args.query)}
     for h in m.semantic(args.query, 12):
         hits.setdefault(h.id, h)

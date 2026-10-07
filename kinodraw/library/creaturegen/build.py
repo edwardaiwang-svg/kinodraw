@@ -92,10 +92,10 @@ def tag_entry(v, meta):
         en = [f'{v.names[0]} face', *v.names[:3], 'face', 'close-up', EXPR_EN[expr].split(',')[0]]
         zh = [*(f'{z}脸' for z in v.zh[:1]), *v.zh[:3], '特写', EXPR_ZH[expr]]
     else:
-        words, extra = POSE_EN.get(pose, (pose, (pose,)))
+        words = POSE_EN.get(pose, (pose,))[0]
         desc = f'{v.noun}, {words}, {FACING_EN[facing]} (full body)'
-        en = [*v.names, *extra]
-        zh = [*v.zh, POSE_ZH.get(pose, pose)]
+        en = list(v.names)          # keywords name the creature; the pose is in the description and the id
+        zh = list(v.zh)
     search = pose == v.poses[0] and facing == 'r'      # one searchable picture per look: its resting pose
     entry = {'category': v.category, 'desc': desc, 'en': list(dict.fromkeys(en)), 'zh': list(dict.fromkeys(zh))}
     if not search:

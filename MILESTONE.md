@@ -1,35 +1,38 @@
-# Creature presets — milestone 1: lions + jungle cast (2026-10-07)
+# Creature presets (2026-10-07)
 
 Generated offline by `scripts/gen_creatures.py` (code in `kinodraw/library/creaturegen/`), written to
 `kinodraw/assets/doodles/creatures/` with tags in `kinodraw/assets/doodles/tags/creatures.json`.
 Resolver: `kinodraw.library.creatures.best_preset(species, age, sex, pose, facing, marks, variant, expression)`.
 
 Ids: `cr_<species>_<sex>_<age>[_<variant>]_<pose>_<facing>`; facing `r`/`l` (full body) or `f` (front
-head close-up `face_<neutral|scared|determined|sad|happy>`). Body poses for four-legged animals:
-stand, walk1, walk2, run, sit, lie, sleep, roar, look_up, scared, carry (carry presets record a `carry`
-anchor; quadrupeds also record a `scruff` anchor so a cub can hang from a parent's mouth).
+head close-up `face_<neutral|scared|determined|sad|happy>`). Each look's resting picture (stand, or swim1
+for fish) facing right is its one searchable picture; every other pose is reached by id or the resolver.
+Carry poses record a `carry` anchor; quadrupeds also record `scruff` (where a parent's mouth holds a cub).
 
-| Character | id prefix | presets |
+Milestone 1 (commit a63fd6a): lions + jungle cast. King Kojo = `cr_lion_male_adult_blackmane_scar_*`,
+lioness = `cr_lion_female_adult_*`, Pendo = `cr_lion_any_young_*`, plus elephant and calf, gorilla, chimpanzee,
+monkey, red-eyed tree frog, black and red ants, hyena, porcupine.
+
+| family | presets | looks |
 |---|---|---|
-| King Kojo (black mane + nose scar) | `cr_lion_male_adult_blackmane_scar_` | 27 |
-| other male lions (golden / dark / black mane, with or without scar) | `cr_lion_male_adult[_darkmane][_blackmane][_scar]_` | 135 |
-| lioness | `cr_lion_female_adult_` | 27 |
-| Pendo, lion cub (oversized paws, baby face) | `cr_lion_any_young_` | 27 |
-| elephant / baby elephant | `cr_elephant_any_adult_`, `cr_elephant_any_young_` | 54 |
-| gorilla, chimpanzee, monkey | `cr_gorilla_any_adult_`, `cr_chimpanzee_any_adult_`, `cr_monkey_any_adult_` | 81 |
-| red-eyed tree frog | `cr_frog_any_adult_tree_` (stand walk1 walk2 jump sit lie sleep roar=croak look_up scared) | 25 |
-| black ant, red ant | `cr_ant_any_adult_black_`, `cr_ant_any_adult_red_` | 46 |
-| hyena, porcupine | `cr_hyena_any_adult_`, `cr_porcupine_any_adult_` | 54 |
+| big_cat (lions, tiger, white tiger, leopard, black panther, cheetah, 4 house cats, kitten) | 486 | 18 |
+| canine (5 dog breeds, puppy, wolf, red fox) | 216 | 8 |
+| hyena | 27 | 1 |
+| bear (brown, black, polar, panda) | 108 | 4 |
+| primate (gorilla, chimpanzee, monkey) | 81 | 3 |
+| elephant (adult, calf) | 54 | 2 |
+| hoofed (giraffe, zebra, 4 horses, foal, stag, doe, fawn, antelope, 2 cows, calf, pig, sheep, lamb, goat) | 484 | 18 |
+| rodent (3 rabbits, mouse, porcupine) | 135 | 5 |
+| bird (4 songbirds, 2 owls, eagle, 2 parrots, hen x2, rooster, chick, 2 ducks, duckling, penguin, penguin chick, flamingo) | 505 | 19 |
+| amphibian (tree frog) | 25 | 1 |
+| reptile (turtle, 2 snakes, crocodile) | 86 | 4 |
+| fish (goldfish, clownfish, blue tang, shark) | 76 | 4 |
+| insect (2 ants, bee, ladybug, green beetle, 2 butterflies) | 135 | 7 |
+| human, category "characters" (king, queen, old king, villagers, teachers, explorers, boy, girl, princess, grandparents; 3 skin tones each) | 1305 | 45 |
+| **total** | **3723** | |
 
-Total: 476 presets, all passing `kinodraw.library.check` (creatures/fluent rules).
+All pass `kinodraw.library.check` (creatures/fluent rules, no warnings).
 
-Contact sheets (this session's scratchpad):
-- lion cast: `/private/tmp/claude-501/-Users-edwardai/17c51340-5cc3-4775-97c1-6064073c1738/scratchpad/q-creatures/lion_cast.png`
-- per character: `.../scratchpad/q-creatures/sheets_m1/*.png`
-- whiteboard renderer still: `.../scratchpad/q-creatures/whiteboard_still.png`
-
-Regenerate sheets: `python scripts/gen_creatures.py --out /tmp/cr --sheets /tmp/cr/sheets`.
+Regenerate: `python scripts/gen_creatures.py` (contact sheets: `--out /tmp/cr --sheets /tmp/cr/sheets`).
 Verify the committed files: `python scripts/gen_creatures.py --check`.
-
-Open: the bundled search embeddings (`assets/doodles/{embed,picture}-*.npz`) are rebuilt at the end of
-the run (`python -m kinodraw.director.match`); until then the app recomputes them once on first search.
+After changing creature names, rebuild the search bundles: `python -m kinodraw.director.match`.

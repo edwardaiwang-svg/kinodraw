@@ -59,7 +59,7 @@ CUB = replace(LION, mane=0, L=.62, hip_h=.46, sh_h=.48, chest_r=.27, hip_r=.25, 
 MANES = {  # variant -> (mane colour, tuft colour, en words, zh words, marks)
     '': ('#9A5A25', '#5A3A22', ('golden mane',), ('金色鬃毛',), ('mane_gold',)),
     'darkmane': ('#5E3A20', '#3E2A1C', ('dark mane', 'brown mane'), ('深色鬃毛',), ('mane_dark',)),
-    'blackmane': ('#3B2B24', '#2E2420', ('black mane', 'black-maned'), ('黑色鬃毛', '黑鬃'), ('mane_black',)),
+    'blackmane': ('#3B2B24', '#2E2420', ('black mane', 'black-maned lion'), ('黑色鬃毛', '黑鬃'), ('mane_black',)),
 }
 
 
@@ -68,7 +68,7 @@ def _lions():
     for key, (mane_c, tip, en, zh, marks) in MANES.items():
         for scar in (False, True):
             variant = '_'.join(x for x in (key, 'scar' if scar else '') if x)
-            words = en + (('scar', 'scarred', 'nose scar') if scar else ())
+            words = en + (('scar', 'scarred lion', 'nose scar') if scar else ())
             out.append(Variant('lion', 'male', 'adult', variant, genes=replace(LION, mane_c=mane_c, tip=tip, scar=scar),
                                face=Face('bigcat', LION.coat, LION.under, '#C98B6B', ears='round', ear_size=.85,
                                          mane=1.0, mane_c=mane_c, scar=scar, iris='#C98A2E'),
@@ -204,7 +204,7 @@ def _quads():
           ('black panther', 'panther', 'black leopard'), ('黑豹',), 'black panther', 'big_cat', variant='black'))
     add(Q('cheetah', CHEETAH, _f('bigcat', CHEETAH, pattern='tears', mark_c='#2A2420', ears='round', ear_size=.7,
                                 iris='#C98A2E'), ('cheetah', 'fastest cat', 'big cat'), ('猎豹',), 'cheetah', 'big_cat'))
-    cats = (('', CAT, 'ginger tabby cat', ('cat', 'ginger cat', 'tabby cat', 'kitty'), ('猫', '橘猫')),
+    cats = (('', CAT, 'ginger tabby cat', ('cat', 'ginger cat', 'tabby cat'), ('猫', '橘猫')),
             ('grey', replace(CAT, coat='#A5ABB2', under='#EEF0F2', muzzle='#EEF0F2', mark_c='#70767E'), 'grey tabby cat',
              ('cat', 'grey cat', 'tabby'), ('猫', '灰猫')),
             ('black', replace(CAT, coat='#3A3536', under='#3A3536', muzzle='#55504F', pattern='none', ear_in='#8A6A6A'),
@@ -261,7 +261,7 @@ def _quads():
     add(giraffe)
     add(Q('zebra', ZEBRA, _f('horse', ZEBRA, ears='pointed', ear_size=.8, pattern='zebra', mark_c='#2A2627',
                             under='#3A3536'), ('zebra', 'striped horse'), ('斑马',), 'zebra', 'hoofed'))
-    horses = (('', HORSE, 'bay horse', ('horse', 'brown horse', 'steed'), ('马', '骏马')),
+    horses = (('', HORSE, 'bay horse', ('horse', 'brown horse'), ('马', '骏马')),
               ('chestnut', replace(HORSE, coat='#B5653A', under='#B5653A', muzzle='#8E4A2A', mane_c='#8E4A2A',
                                    blaze='#FBF6EE'), 'chestnut horse', ('horse', 'chestnut horse'), ('马', '栗色马')),
               ('white', replace(HORSE, coat='#F1EFEA', under='#F1EFEA', muzzle='#D8D2CA', mane_c='#D8D2CA'), 'white horse',
@@ -274,7 +274,7 @@ def _quads():
     add(Q('horse', foal, _f('horse', foal, ears='pointed', ear_size=.85, young=True), ('foal', 'pony', 'baby horse'),
           ('小马', '马驹'), 'foal', 'hoofed', age='young', jitter=.5))
     add(Q('deer', replace(DEER, horns='antlers'), _f('deer', DEER, ears='small', ear_size=1.1, horns='antlers'),
-          ('deer', 'stag', 'buck'), ('鹿', '雄鹿'), 'stag with antlers', 'hoofed', sex='male'))
+          ('deer', 'stag'), ('鹿', '雄鹿'), 'stag with antlers', 'hoofed', sex='male'))
     add(Q('deer', DEER, _f('deer', DEER, ears='small', ear_size=1.1), ('deer', 'doe'), ('鹿', '母鹿'), 'doe', 'hoofed',
           sex='female'))
     fawn = replace(DEER, L=.55, hip_h=.56, sh_h=.58, head_r=.2, eye_r=.2, pattern='spots', mark_c='#FBF4EA', cub=True)
@@ -301,7 +301,7 @@ def _quads():
     calf = replace(COW, L=.66, hip_h=.52, sh_h=.54, head_r=.23, horns='none', eye_r=.17, cub=True)
     add(Q('cow', calf, _f('cow', calf, ears='small', young=True, under='#F4B5B0', ear_in='#F4B5B0'),
           ('calf', 'baby cow', 'cow'), ('小牛', '牛犊'), 'calf', 'hoofed', age='young', jitter=.5))
-    add(Q('pig', PIG, _f('pig', PIG, ears='pointed', ear_size=.8, ear_in='#E58A8A'), ('pig', 'piggy', 'hog'),
+    add(Q('pig', PIG, _f('pig', PIG, ears='pointed', ear_size=.8, ear_in='#E58A8A'), ('pig', 'piggy'),
           ('猪', '小猪'), 'pink pig', 'hoofed'))
     add(Q('sheep', SHEEP, _f('sheep', SHEEP, ears='small', wool=True, under='#55504F', ear_in='#55504F'),
           ('sheep', 'ewe', 'woolly sheep'), ('羊', '绵羊'), 'woolly sheep', 'hoofed'))
@@ -330,7 +330,7 @@ def _small():
                 names=('bee', 'honey bee', 'bumblebee'), zh=('蜜蜂', '小蜜蜂'), noun='honey bee'),
         Variant('beetle', variant='ladybug', genes=_insect.Bug('beetle', '#E53935'), plan='insect',
                 poses=_insect.POSES['beetle'], family='insect', face=Face('beetle', '#E53935'),
-                names=('ladybug', 'ladybird', 'beetle'), zh=('瓢虫', '甲虫'), noun='red ladybug'),
+                names=('ladybug', 'beetle'), zh=('瓢虫', '甲虫'), noun='red ladybug'),
         Variant('beetle', variant='green', genes=_insect.Bug('beetle', '#3E9B5A', spots='#2C6E40'), plan='insect',
                 poses=_insect.POSES['beetle'], family='insect', face=Face('beetle', '#3E9B5A'),
                 names=('beetle', 'green beetle', 'bug'), zh=('甲虫', '绿甲虫'), noun='green beetle'),
@@ -362,7 +362,7 @@ def _primates():
         Variant('chimpanzee', genes=CHIMP, plan='primate', poses=APE_POSES, family='primate',
                 face=Face('monkey', CHIMP.coat, CHIMP.face_c, CHIMP.face_c, ears='side', ear_size=1.2,
                           face_c=CHIMP.face_c),
-                names=('chimpanzee', 'chimp', 'ape'), zh=('黑猩猩',), noun='chimpanzee'),
+                names=('chimpanzee', 'ape'), zh=('黑猩猩',), noun='chimpanzee'),
         Variant('monkey', genes=MONKEY, plan='primate', poses=APE_POSES, family='primate',
                 face=Face('monkey', MONKEY.coat, MONKEY.face_c, MONKEY.face_c, ears='side', ear_size=1.0,
                           face_c=MONKEY.face_c),
@@ -397,14 +397,14 @@ def catalogue():
     out.append(Variant('hyena', genes=HYENA, family='hyena',
                        face=Face('hyena', HYENA.coat, '#6A5442', '#8A6A50', ears='round', ear_size=1.0,
                                  pattern='spots', mark_c='#6A5038', nose_c=C.NOSE),
-                       names=('hyena', 'spotted hyena', 'laughing hyena', 'scavenger'), zh=('鬣狗', '斑鬣狗'), noun='spotted hyena'))
+                       names=('hyena', 'spotted hyena', 'laughing hyena'), zh=('鬣狗', '斑鬣狗'), noun='spotted hyena'))
     out.append(Variant('porcupine', genes=PORCUPINE, family='rodent',
                        face=Face('porcupine', PORCUPINE.coat, PORCUPINE.under, '#9C8470', ears='round', ear_size=.6,
                                  quills=True, nose_c=C.NOSE),
-                       names=('porcupine', 'quills', 'prickly'), zh=('豪猪', '箭猪'), noun='porcupine with raised quills'))
+                       names=('porcupine', 'quills'), zh=('豪猪', '箭猪'), noun='porcupine with raised quills'))
     out.append(Variant('elephant', 'any', 'adult', genes=ELEPHANT, family='elephant',
                        face=Face('elephant', ELEPHANT.coat, ELEPHANT.under, '#D9A8A8', ears='elephant', tusks=True),
-                       names=('elephant', 'african elephant', 'tusker'), zh=('大象', '象'), noun='elephant with tusks'))
+                       names=('elephant', 'african elephant'), zh=('大象', '象'), noun='elephant with tusks'))
     out.append(Variant('elephant', 'any', 'young', genes=CALF, family='elephant',
                        face=Face('elephant', CALF.coat, CALF.under, '#E3B5B5', ears='elephant', young=True),
                        names=('baby elephant', 'elephant calf', 'calf', 'elephant'), zh=('小象', '象宝宝'),
@@ -486,7 +486,7 @@ def _birds():
                     eye_r=.03)
     add(B('chicken', chick, ('chick', 'baby chick', 'little chick'), ('小鸡', '鸡仔'), 'yellow chick', age='young',
           jitter=.5))
-    add(B('duck', DUCK, ('duck', 'mallard', 'drake'), ('鸭子', '绿头鸭'), 'mallard duck', sex='male'))
+    add(B('duck', DUCK, ('duck', 'mallard'), ('鸭子', '绿头鸭'), 'mallard duck', sex='male'))
     white_duck = replace(DUCK, coat='#FAFAF7', head_c='', belly='', wing_c='#E8E3DA', beak_c='#F28C28')
     add(B('duck', white_duck, ('white duck', 'duck', 'farm duck'), ('白鸭', '鸭子'), 'white duck', variant='white'))
     duckling = replace(DUCK, body_rx=.2, body_ry=.14, head_r=.12, head_at=(.2, .2), neck=0.0, coat='#F8D84A',
@@ -519,13 +519,13 @@ def _reptiles_and_fish():
     add(R('turtle', turtle, ('turtle', 'tortoise', 'green turtle'), ('乌龟', '龟'), 'turtle',
           Face('turtle', turtle.coat, '#D8E3A0')))
     snake = Reptile('snake', coat='#5DAA4A', mark='#3E7E35')
-    add(R('snake', snake, ('snake', 'green snake', 'serpent'), ('蛇', '青蛇'), 'green snake',
+    add(R('snake', snake, ('snake', 'green snake'), ('蛇', '青蛇'), 'green snake',
           Face('snake', snake.coat, '#D8E3A0'), variant='green'))
     python = Reptile('snake', coat='#C9A15A', mark='#6B4A2E')
     add(R('snake', python, ('python', 'brown snake', 'snake'), ('蟒蛇', '蛇'), 'striped python',
           Face('snake', python.coat, '#EADBB0'), variant='python'))
     croc = Reptile('crocodile', coat='#5E8A3E', belly='#C9C98A')
-    add(R('crocodile', croc, ('crocodile', 'alligator', 'croc'), ('鳄鱼',), 'crocodile',
+    add(R('crocodile', croc, ('crocodile', 'alligator'), ('鳄鱼',), 'crocodile',
           Face('crocodile', croc.coat, '')))
     fish = (('goldfish', Fish('goldfish', '#F28C28', belly='#FBC36B', fin='#F6A44A'), ('goldfish', 'fish', 'orange fish'),
              ('金鱼', '鱼'), 'goldfish'),
@@ -554,10 +554,10 @@ def _people():
     """Role x age x sex looks, each in three skin tones; category "characters" (not stick-figure "people")."""
     looks = [
         # role, sex, age, noun, names, zh, genes
-        ('king', 'male', 'adult', 'king with a crown and red cape', ('king', 'ruler', 'monarch'), ('国王',),
+        ('king', 'male', 'adult', 'king with a crown and red cape', ('king', 'monarch'), ('国王',),
          Person('adult', 'male', hair='#3B2B24', hair_style='short', outfit='king', top='#7B3FA0', bottom='#4A2E6A',
                 accent='#C62828', beard=True)),
-        ('queen', 'female', 'adult', 'queen with a crown and gown', ('queen', 'ruler'), ('王后', '女王'),
+        ('queen', 'female', 'adult', 'queen with a crown and gown', ('queen', 'monarch'), ('王后', '女王'),
          Person('adult', 'female', hair='#5A3A26', hair_style='long', outfit='queen', top='#8E44AD', bottom='#8E44AD',
                 dress=True)),
         ('king', 'male', 'elder', 'old king with a white beard', ('old king', 'king'), ('老国王', '国王'),

@@ -141,10 +141,14 @@ def _en_key(text: str) -> str:
 
 
 class Matcher:
-    def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',)):
+    def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',),
+                 include_creatures: bool = False):
+        """``include_creatures``: also index the generated creature presets (doodle search does; the automatic
+        directors do not, so their picture choices stay as reviewed — story casting uses ``library.creatures``)."""
         self.lang = lang
         self.entries = {i: e for i, e in searchable().items()
-                        if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')}
+                        if e.get('category') not in exclude_categories and (include_fluent or e['set'] == 'bespoke')
+                        and (include_creatures or e['set'] != 'creatures')}
         self.index: dict[str, list[tuple[str, float]]] = {}
         for did, e in self.entries.items():
             keywords = e.get('en' if lang == 'es' else lang) or []
@@ -155,7 +159,7 @@ class Matcher:
                 if not key or (lang in ('en', 'es') and (key in EN_STOP or len(key) < 3 or key.isdigit())) or \
                         (lang == 'zh' and (len(key) < 2 or key in ZH_STOP)):
                     continue
-                weight = (1.0 - .04 * min(rank, 5)) * (1.08 if e['set'] == 'bespoke' else .8)
+                weight = (1.0 - .04 * min(rank, 5)) * {'bespoke': 1.08, 'fluent': .8}.get(e['set'], .76)
                 self.index.setdefault(key, []).append((did, weight))
         # keywords shared by many doodles say little about any one of them
         self.rarity = {k: 1 / (1 + math.log(len(v))) for k, v in self.index.items()}

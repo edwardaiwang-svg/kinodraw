@@ -41,10 +41,15 @@ def test_tags_and_files_agree_and_only_canonical_pictures_are_searchable():
 
 
 def test_matcher_indexes_only_searchable_creatures():
-    from kinodraw.director.match import searchable
+    from kinodraw.director.match import Matcher, searchable
     found = {i for i, e in searchable().items() if e['set'] == 'creatures'}
     assert found and all(TAGS[i].get('search', True) for i in found)
     assert 'cr_lion_male_adult_roar_r' not in found
+    search = Matcher('en', exclude_categories=(), include_creatures=True)     # doodle search sees them
+    assert 'cr_lion_female_adult_stand_r' in {h.id for h in search.lexical('a lioness')}
+    assert 'cr_lion_male_adult_stand_r' in {h.id for h in Matcher('es', include_creatures=True).lexical('un león')}
+    director = Matcher('en')                                                  # automatic directors do not
+    assert not any(e['set'] == 'creatures' for e in director.entries.values())
 
 
 def test_story_cast_resolves_exactly():
