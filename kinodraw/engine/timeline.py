@@ -39,6 +39,39 @@ class Pacing(dict):
         self.takeaways = {}
 
 
+def _cue_options(episode, lang):
+    look_skin = skin.for_look(episode.get('look'))
+    if not (look_skin.textured and lang in ('en', 'es', 'zh')):
+        return {}
+
+    def fits(text, lang):
+        lines, size = skin.caption_layout(text, lang, look_skin)
+        kind = 'en_caption' if lang != 'zh' else 'zh_caption'
+        return len(lines) <= 2 and all(skin._run_width(line, kind, size, look_skin.fonts) <= 1640 for line in lines)
+    return {'fits': fits}
+
+
+def word_times(episode, tline, lang):
+    """When each caption's words are said: its own 'words' (layout() stores them), or for a timeline laid out before
+    captions carried them, the times layout() would have given, from the same measured character times (None for a
+    cue it cannot match). The timeline is not changed."""
+    if all('words' in c for c in tline['captions']):
+        return [c['words'] for c in tline['captions']]
+    episode = normalize(episode)
+    cue_options, found = _cue_options(episode, lang), {}
+    for beat in episode['beats']:
+        info = tline['beats'].get(beat['id'])
+        if not info or not info.get('char_times'):
+            continue
+        ct, start = info['char_times'], info['start']
+        for a, _, text, words in cap.cues_for_beat(beat['spoken'][lang], beat['display'][lang], lang,
+                                                   lambda pos: ct[min(max(pos, 0), len(ct) - 1)],
+                                                   info['speech_end'] - start, words=True, **cue_options):
+            found.setdefault(text, []).append((start + a, [round(start + w, 4) for w in words]))
+    return [c.get('words') or next((words for at, words in found.get(c['text'], ()) if abs(at - c['start']) < .001),
+                                   None) for c in tline['captions']]
+
+
 def take_hold(beat, lang):
     return .05            # the note is read during its narration, then pinned immediately
 
@@ -49,15 +82,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
     pauses = {} if pauses is None else pauses
     takeaways = getattr(pauses, "takeaways", {})
     episode = normalize(episode)
-    cue_options = {}
-    look_skin = skin.for_look(episode.get('look'))
-    if look_skin.textured and lang in ('en', 'es', 'zh'):
-        def fits(text, lang):
-            lines, size = skin.caption_layout(text, lang, look_skin)
-            kind = 'en_caption' if lang != 'zh' else 'zh_caption'
-            return len(lines) <= 2 and all(skin._run_width(line, kind, size, look_skin.fonts) <= 1640
-                                          for line in lines)
-        cue_options['fits'] = fits
+    cue_options = _cue_options(episode, lang)
     beats = episode['beats']
     chapters = {c['id']: c for c in episode['chapters']}
     cursor = 0.
@@ -98,9 +123,10 @@ def layout(episode, lang, clips, pauses=None, credit=True):
 
         def char_time(pos, ct=ct):
             return ct[min(max(pos, 0), len(ct) - 1)] if ct else 0.
-        for a, b, text in cap.cues_for_beat(beat['spoken'][lang], beat['display'][lang], lang, char_time,
-                                           clip['speech'] - .15, **cue_options):
-            capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text})
+        for a, b, text, words in cap.cues_for_beat(beat['spoken'][lang], beat['display'][lang], lang, char_time,
+                                                  clip['speech'] - .15, words=True, **cue_options):
+            capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text,
+                          'words': [round(start + w, 4) for w in words]})
         cursor = end
     tail = END_CARD + (CREDIT if credit else 0.)
     duration = cursor + tail
