@@ -152,7 +152,7 @@ def test_fresh_cli_raw_frames_equal_single_process(tmp_path, size, aspect):
     prod = render.make_production(board, timing, 'en', tmp_path, size=size, aspect=aspect)
     assert isinstance(prod, HybridProduction) and prod.plan == plan
     assert any(e.values == (42.5, -7) for e in prod.spans[2].motion.elements)
-    assert any('r="120"' in e.svg for e in prod.spans[1].motion.elements if e.svg)
+    assert prod.spans[1].story is not None and prod.spans[1].motion is None   # a story's scene is a storybook page
     times = [1., prod.spans[1].start+1.1, prod.spans[2].start+1.1, timing['end_card']['end']-.1]
     command = [sys.executable, '-m', 'kinodraw.engine.render', '--project', str(tmp_path),
         '--episode', str(episode), '--timeline', str(timeline), '--lang', 'en', '--aspect', aspect,
