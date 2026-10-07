@@ -300,6 +300,40 @@ def build(doc: Document, story: str = 'explain') -> dict:
             'chapters': chapters, 'beats': beats}
 
 
+SCAFFOLD = ('title', 'agenda', 'opener', 'take', 'closing')
+
+
+def tell_straight(board: dict, story: str = 'story') -> dict:
+    """An explainer skeleton retold as a story: only the script's own sentences, in order.
+
+    Drops the spoken title, agenda, "Part N" openers, takeaways and sign-off. A takeaway that carried the source's
+    own closing sentence (moved out of the narration when the explainer was built) becomes narration again, so no
+    source words are lost. Beat ids, visuals and edits of the remaining beats are kept.
+    """
+    lang = board.get('lang', 'en')
+    text = lambda b: (b.get('display') or {}).get(lang, '')
+    told = ' '.join(text(b) for b in board['beats'] if b.get('kind') not in SCAFFOLD)
+    flat = lambda value: re.sub(r'\W+', ' ', value).strip().lower()
+    beats = []
+    for beat in board['beats']:
+        kind = beat.get('kind', 'narration')
+        if kind == 'take':
+            head = ((beat.get('take') or {}).get('headline') or {}).get(lang, '')
+            if head and flat(head) not in flat(told):
+                beat = {k: v for k, v in beat.items() if k != 'take'}
+                beat.update(kind='narration', display={lang: head}, spoken={lang: normalize(head, lang).spoken})
+                told += ' ' + head
+            else:
+                continue
+        elif kind in SCAFFOLD:
+            continue
+        beats.append({**beat, 'chapter': 'main'})
+    title = board.get('title') or {lang: ''}
+    return {**board, 'story': story, 'beats': beats,
+            'chapters': [{'id': 'main', 'kind': 'board', 'label': title if isinstance(title, dict) else {lang: title},
+                          'title': {lang: ''}}]}
+
+
 def _lean(doc: Document, story: str) -> dict:
     lang = doc.lang
     paragraphs = list(doc.preamble) + [p for s in doc.sections for p in s.paragraphs]
