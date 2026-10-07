@@ -486,7 +486,6 @@ class Storybook:
 
     def _draw(self, shot, local):
         w, h = self.size
-        canvas = self.paper(w, h).copy()
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
         cam = [.5, .5, 1. + .035 * u]                      # gentle push in
         shake = 0.
@@ -498,6 +497,7 @@ class Storybook:
             cam = self._eye_camera(shot, local, cam)
         cam[0] += shake * .0016 * math.sin(local * 39)
         cam[1] += shake * .0016 * math.sin(local * 31)
+        canvas = self._page(cam)
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         for doodle, x, y, height in shot.sky:
             bob = .006 * math.sin(local * .9 + x * 7)
@@ -523,6 +523,18 @@ class Storybook:
         if shot.title:
             self._title(canvas, shot.title, local)
         return canvas
+
+    def _page(self, cam):
+        """The paper under the camera: a push or a shake reads as a camera move over the page. The grain is soft,
+        so a bilinear box resize (a fraction of an affine transform's cost) is enough."""
+        w, h = self.size
+        paper = self.paper(w, h)
+        if cam[2] <= 1:
+            return paper.copy()
+        bw, bh = w / cam[2], h / cam[2]
+        x0 = min(w - bw, max(0., cam[0] * w - bw / 2))
+        y0 = min(h - bh, max(0., cam[1] * h - bh / 2))
+        return paper.resize((w, h), Image.Resampling.BILINEAR, box=(x0, y0, x0 + bw, y0 + bh))
 
     def _to_screen(self, x, y, cam, parallax=1.):
         w, h = self.size
@@ -572,6 +584,8 @@ class Storybook:
         rotate, squash, dy = 0., 0., 0.
         breath = math.sin(local * 2.6 + f.phase)
         squash = .012 * breath
+        if pose in ('stand', 'look', 'sit', 'lie', 'sleep', 'look_up'):   # a resting figure shifts its weight
+            rotate = direction * (.8 if pose == 'sleep' else 2.2) * math.sin(local * 1.4 + f.phase)
         if pose in ('walk', 'run', 'carry') or (f.travel and pose != 'stand'):
             rate = 2.2 if pose == 'run' else 1.4
             step = abs(math.sin(math.pi * rate * (local + f.phase)))

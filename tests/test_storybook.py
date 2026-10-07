@@ -253,3 +253,17 @@ def test_a_story_ends_on_the_end_and_other_videos_on_their_title():
                                                            T=lambda value: value[lang]))
     assert (card('story', 'en'), card('story', 'zh')) == ('The End', '完')
     assert card('explain', 'en') == title['en']
+
+
+def test_a_lone_resting_figure_never_freezes_the_picture(tmp_path):
+    """The QA's freezedetect (-50 dB over 1 s) flagged the jungle's lone small cub, held for 8 s while the narration
+    described him; the page now drifts with the camera push and resting figures shift their weight. Captions, whose
+    word highlight also moves, are left out here."""
+    prod, *_ = production(tmp_path)
+    prod.frame(0.)
+    shot = next(shot for span in prod.spans if span.story for shot in span.story
+                if len(shot.figures) == 1 and shot.figures[0].age == 'baby')
+    shot.end = shot.start + 8
+    frames = [np.asarray(prod.storybook.frame([shot], shot.start + 2 + k / 4), np.float32) / 255 for k in range(5)]
+    # freezedetect keeps its reference frame until the picture moves away from it by more than -50 dB MAFD
+    assert np.abs(frames[4] - frames[0]).mean() > 10 ** (-50 / 20)
