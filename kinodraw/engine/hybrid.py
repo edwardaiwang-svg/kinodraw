@@ -1313,7 +1313,10 @@ class HybridProduction:
                 # Keep the existing endcard clock; ease out of a cinematic scene
                 # instead of making an extra unaligned hard cut at its boundary.
                 previous = self._frame(last, end_start - 1 / 30, quotes=False)
-                current = self.whiteboard.frame(t).convert('RGB')
+                # A storybook ends on the end card's blank page: the whiteboard camera is still crossing its own
+                # legacy pages (labelled icons, people) during the join, which never belong in a story.
+                card_t = max(t, end_start + last.join_length) if last.story is not None else t
+                current = self.whiteboard.frame(card_t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
                                           *self.size, kind='match', duration=last.join_length)
                 image = Image.fromarray(array).convert('RGBA')
