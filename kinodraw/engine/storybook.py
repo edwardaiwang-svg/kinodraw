@@ -41,6 +41,14 @@ SMALL = {'ant': .06, 'frog': .11, 'bird': .1, 'mouse': .08, 'snake': .12, 'porcu
          'parrot': .12, 'fox': .15, 'wolf': .19, 'deer': .24, 'zebra': .26, 'gorilla': .26, 'bear': .27,
          'crocodile': .14, 'elephant': .34, 'giraffe': .4}
 ARBOREAL = {'monkey', 'bird', 'parrot', 'owl'}
+# Group staging (J's jungle, 2026-10-07): no head behind another body. A group too wide for the page is drawn
+# smaller, as if the camera pulled back; animals bigger than the cast stand a little behind it, smaller ones in
+# front of it. HEAD is a head's half height as a share of its figure's height.
+SCALES = (1., .88, .77, .67, .58)
+GAP = .015
+BACK_ROW = .035
+FRONT_ROW = 3
+HEAD = .16
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -254,6 +262,7 @@ class Storybook:
         self.title = title
         self.first = plan['scenes'][0]['beat_ids'][0] if plan['scenes'] else None
         self.facing = {}
+        self.at = {}             # where each character stood last: they keep their side
         self._paper = {}
 
     # ---------------- planning
@@ -317,20 +326,29 @@ class Storybook:
         props = list(dict.fromkeys([p for p in line.props if not _sky(p)] +
                                    [p for p in pictures if not _sky(p) and p not in line.props
                                     and not _animal(p)]))[:2]
-        sky = list(dict.fromkeys(line.sky + [p for p in pictures if _sky(p)]))[:2]
+        sky = []
+        for doodle in line.sky + [p for p in pictures if _sky(p)]:
+            if _sky_kind(doodle) not in [_sky_kind(d) for d in sky]:
+                sky.append(doodle)                              # one sun, one moon: never two different suns
+        sky = sky[:2]
         atmosphere = spec['atmosphere']['kind']
-        if atmosphere in ('night_stars', 'shooting_star', 'fog_with_shooting_star') and 'fl_crescent_moon' not in sky:
+        kinds = [_sky_kind(d) for d in sky]
+        if atmosphere in ('night_stars', 'shooting_star', 'fog_with_shooting_star') and 'moon' not in kinds:
             sky.append('fl_crescent_moon')
         if atmosphere == 'rain' and 'fl_cloud_with_rain' not in sky:
             sky.append('fl_cloud_with_rain')
-        if atmosphere in ('dawn', 'rays') and 'fl_sun' not in sky:
+        if atmosphere in ('dawn', 'rays') and 'sun' not in kinds:
             sky.append('fl_sun')
         if not (figures or line.crowd or props):
             props = ['fl_palm_tree', 'fl_deciduous_tree']      # never an empty page
         sides = [.12, .88]
+        resting = [f for f in figures if f.pose in ('lie', 'sleep', 'sit')] if any(f.travel for f in figures) else []
         for i, doodle in enumerate(props):
             tall = doodle in ('fl_deciduous_tree', 'fl_palm_tree', 'fl_evergreen_tree', 'fl_mountain')
-            shot.props.append((doodle, sides[i], GROUND - .02, .5 if tall else .3))
+            x = sides[i]
+            if resting and doodle in ('fl_deciduous_tree', 'fl_palm_tree'):
+                x, resting = sum(f.x for f in resting) / len(resting), []   # "where his parents rested": under it
+            shot.props.append((doodle, x, GROUND - .02, .5 if tall else .3))
         for i, doodle in enumerate(sky[:2]):
             shot.sky.append((doodle, (.83, .2)[i], .15, .16))
         shot.atmosphere = atmosphere
@@ -339,6 +357,7 @@ class Storybook:
 
     def _remember(self, f):
         self.facing[f.key] = f.facing
+        self.at[f.key] = f.x
 
     def _layout(self, figures, line):
         n = len(figures)
@@ -361,25 +380,70 @@ class Storybook:
                 f.travel = .14 if f.pose == 'walk' else .22
             self._remember(f)
             return
-        # Adults on the outside facing in; a cub in front of them, between.
+        if walking and len(walking) < n:
+            self._arrive(walking, [f for f in figures if f not in walking])
+            for f in figures:
+                self._remember(f)
+            return
+        # Adults on the outside facing in, a cub between them; everyone keeps the side they had in the last shot.
+        side = lambda group: sorted(group, key=lambda f: self.at[f.key]) if all(f.key in self.at for f in group) else group
         babies = [f for f in figures if f.age == 'baby']
-        adults = [f for f in figures if f.age != 'baby']
-        order = adults[:1] + babies + adults[1:] if babies and len(adults) >= 2 else adults + babies
-        slots = {2: (.32, .68), 3: (.24, .5, .76), 4: (.18, .4, .62, .84)}[min(4, n)]
-        for f, x in zip(order, slots):
-            f.x = x
-            f.facing = 'r' if x < .5 else 'l' if x > .5 else ('r' if not adults else 'l')
+        adults = side([f for f in figures if f.age != 'baby'])
+        order = adults[:1] + babies + adults[1:] if babies and len(adults) >= 2 else side(adults + babies)
+        travel = .1 if walking else 0.
+        self._fit(order, lambda: self._pack(order, .04, .96 - travel))
+        for f in order:
+            f.facing = 'r' if f.x < .5 else 'l' if f.x > .5 else ('r' if not adults else 'l')
             if f.age == 'baby':
                 f.depth = 2
-        if walking:
-            for f in walking:
-                f.facing, f.travel = 'r', .1
+        for f in walking:
+            f.facing, f.travel = 'r', travel
         for f in figures:
             if f.pose == 'nuzzle':
                 partner = min((g for g in figures if g is not f), key=lambda g: abs(g.x - f.x))
                 f.facing = 'r' if partner.x > f.x else 'l'
                 f.x += (partner.x - f.x) * .35
             self._remember(f)
+
+    def _arrive(self, travellers, resting):
+        """"He ran to the great fig tree where his parents rested": the resting ones together on the right, facing
+        the one who comes running in from the left and stops in front of them instead of running over them."""
+        for f in resting:
+            f.facing = 'l'
+        for f in travellers:
+            f.facing, f.depth = 'r', 2
+
+        def arrange():
+            if not self._pack(resting, .3, .96, align='right'):
+                return False
+            self._pack(travellers, .04, .3, align='left')
+            stop = min(f.x - self._half(f) for f in resting) - .03
+            room = stop - max(f.x + self._half(f) for f in travellers)
+            for f in travellers:
+                f.travel = max(0., min(.22 if f.pose == 'run' else .14, room))
+            return room >= .1
+        self._fit(travellers + resting, arrange)
+
+    def _fit(self, figures, arrange):
+        """Run arrange() at the largest scale at which it fits the page: the figures shrink together, as when the
+        camera pulls back for a group shot."""
+        base = [f.height for f in figures]
+        for k in SCALES:
+            for f, height in zip(figures, base):
+                f.height = height * k
+            if arrange():
+                return k
+        return SCALES[-1]
+
+    def _pack(self, order, lo, hi, align='center'):
+        """Side by side between lo and hi with a small gap; False when they do not fit."""
+        halves = [self._half(f) for f in order]
+        total = 2 * sum(halves) + GAP * (len(order) - 1)
+        x = {'center': (lo + hi - total) / 2, 'right': hi - total, 'left': lo}[align]
+        for f, half in zip(order, halves):
+            f.x = x + half
+            x += 2 * half + GAP
+        return total <= hi - lo + 1e-9
 
     def _layout_lesson(self, figures, line):
         """Pendo's point of view: the cub small in the foreground corner looking up, the parent large, roaring."""
@@ -393,11 +457,71 @@ class Storybook:
 
     def _half_width(self, f):
         """Half the figure's drawn width, as a share of the frame width."""
-        doodle = preset(f.species, f.age, f.sex, 'stand', f.facing, f.marks)[0]
-        left, top, right, bottom = _bbox(doodle)
+        return self._half(f)
+
+    @staticmethod
+    def _pose_name(pose):
+        return {'look': 'stand', 'happy': 'stand', 'nuzzle': 'stand', 'bow': 'stand'}.get(pose, pose)
+
+    def _shape(self, f, pose, x):
+        """(body, head) frame boxes (x0, y0, x1, y1 shares) of a figure in one pose with its feet at (x, ground)."""
+        doodle, mirror = preset(f.species, f.age, f.sex, pose, f.facing, f.marks)
+        left, top, right, bottom = _bbox(doodle, mirror)
+        box = _box(doodle, f.height, self._reference(f))
         _, sw, sh = _svg(doodle)
         w, h = self.size
-        return f.height / max(.05, bottom - top) * (right - left) * sw / sh * h / w / 2
+        width = box * sw / sh * h / w
+        middle = (left + right) / 2
+        body = (x + (left - middle) * width, f.ground - (bottom - top) * box, x + (right - middle) * width, f.ground)
+        ax, ay = anchor(doodle, 'head', mirror)
+        hx, hy, r = x + (ax - middle) * width, f.ground - (bottom - ay) * box, HEAD * f.height
+        return body, (hx - r * h / w, hy - r, hx + r * h / w, hy + r)
+
+    def _shapes(self, f):
+        """Every (body, head) a figure shows in its shot: standing and in its pose, where it starts and ends."""
+        ends = {f.x, f.x + (1 if f.facing == 'r' else -1) * f.travel}
+        return [self._shape(f, pose, x) for pose in {'stand', self._pose_name(f.pose)} for x in ends]
+
+    def _half(self, f):
+        return max(body[2] - body[0] for body, _ in (self._shape(f, pose, 0.)
+                                                     for pose in {'stand', self._pose_name(f.pose)})) / 2
+
+    def _clear(self, f, others):
+        """No body of f's covers a head drawn behind it, no head of f's is behind a body in front of it, and within
+        one row f stands beside the others instead of on them."""
+        mine = self._shapes(f)
+        for g in others:
+            if g is f or 'nuzzle' in (f.pose, g.pose) or g.carried is f or f.carried is g:
+                continue
+            for body, head in mine:
+                for other, other_head in self._shapes(g):
+                    if (g.depth > f.depth and _overlap(head, other) or g.depth < f.depth and _overlap(other_head, body)
+                            or g.depth == f.depth and _overlap(body, other, .03)):
+                        return False
+        return True
+
+    def _place(self, m, placed, subject):
+        """Somewhere on the page where m keeps every head in sight, clear of the cast and spread from the other
+        animals, else beside the cast member it turns to (``subject``); False when there is no such place."""
+        half = self._half(m)
+        lo, hi = half + .02, 1 - half - .02 - m.travel
+        if lo > hi:
+            return False
+        cast = [body for g in placed if not g.crowd for body, _ in self._shapes(g)]
+        crowd = [g.x for g in placed if g.crowd]
+
+        def cost(x):
+            covers = sum(max(0., min(x + half, b[2]) - max(x - half, b[0])) for b in cast)
+            return (round(covers, 3), -round(min((abs(x - c) for c in crowd), default=1.), 2),
+                    abs(x - subject.x) if subject else 0.)
+        for x in sorted((lo + (hi - lo) * i / 40 for i in range(41)), key=cost):
+            if m.depth < min((g.depth for g in placed if not g.crowd), default=m.depth) and cost(x)[0]:
+                continue                  # the back row stands beside the cast, never in a gap between its heads
+            m.x = x
+            m.facing = ('r' if subject.x > x else 'l') if subject else ('r' if x < .5 else 'l')
+            if self._clear(m, placed):
+                return True
+        return False
 
     def _crowd(self, shot, line, figures):
         crowd = list(line.crowd)
@@ -415,47 +539,49 @@ class Storybook:
         members = [Figure(f'crowd-{name}-{i}', name, 'adult', None, (), pose=pose, height=SMALL.get(name, .16),
                           depth=0, crowd=True, phase=_seed(name + str(i))) for i, name in enumerate(species)]
         climbers = [m for m in members if m.species in ARBOREAL and trees and leader is None]
-        walkers = [m for m in members if m not in climbers]
         for i, m in enumerate(climbers):
             m.x, m.ground = trees[0] - .04 + .05 * (i % 3), .44 + .05 * (i % 2)
+        walkers = [m for m in members if m not in climbers]
+        sizes = {m.key: m.height for m in walkers}
         if leader is not None:
-            # A procession: the leader in front, everyone else in a line behind on the path.
+            # A procession: the leader in front, everyone else in one line behind on the path, smaller if the line
+            # is long; whoever still does not fit stays off the page.
             leader.x = .6
-            x = leader.x - self._half_width(leader)
-            for m in walkers:
-                half = self._half_width(m)
-                x -= half + .015
-                m.x, m.ground, m.facing, m.travel, m.pose = x, GROUND - .03, leader.facing, leader.travel, leader.pose
-                x -= half
-            behind = [m for m in walkers if m.x - self._half_width(m) < .02][:3]
-            walkers[:] = [m for m in walkers if m.x - self._half_width(m) >= .02] + behind
-            for i, m in enumerate(behind):            # the tail of the line walks on the path further back
-                m.height *= .75
-                m.x, m.ground = .56 + .09 * i, GROUND - .17
+            for k in SCALES:
+                x = leader.x - self._half(leader) - GAP
+                for m in walkers:
+                    m.height, m.ground, m.facing, m.travel, m.pose = sizes[m.key] * k, GROUND - .03, leader.facing, \
+                        leader.travel, leader.pose
+                    half = self._half(m)
+                    m.x = x - half
+                    x -= 2 * half + GAP
+                if x >= 0.:
+                    break
+            walkers = [m for m in walkers if m.x - self._half(m) >= .01]
         else:
-            blocked = [(f.x, self._half_width(f) + .03) for f in figures] + \
-                      [(x, .07) for _, x, *_ in shot.props]
-            slots = [x for x in (.08, .2, .32, .44, .56, .68, .8, .92)]
-            free = [x for x in slots if all(abs(x - c) > r + .04 for c, r in blocked)]
-            back = []
-            if len(walkers) > len(free):
-                back, walkers = walkers[len(free):], walkers[:len(free)]
-            if walkers and len(walkers) < len(free):
-                free = [free[round(j * (len(free) - 1) / max(1, len(walkers) - 1))] for j in range(len(walkers))] \
-                    if len(walkers) > 1 else [free[len(free) // 2]]
-            for m, x in zip(walkers, free):
-                m.x, m.ground = x, GROUND - .04
-            for i, m in enumerate(back):               # those who do not fit stand further back, smaller
-                m.height *= .7
-                m.x, m.ground = .14 + .72 * (i + .5) / len(back), GROUND - .17
-            subject = next(iter(figures), None)
-            for i, m in enumerate(members):
-                m.facing = ('r' if subject.x > m.x else 'l') if subject else ('r' if i % 2 else 'l')
-        members = climbers + walkers + [m for m in members if m not in climbers and m not in walkers]
-        if leader is not None:
-            members = climbers + walkers
+            # A gathering: the cast where the layout put it (drawn smaller if the page is crowded), animals bigger
+            # than the cast a little behind it, smaller ones in front, each where no head is hidden.
+            homes = [(f.x, f.height, f.travel) for f in figures]
+            shortest = min((f.height for f in figures), default=.2)
+            behind = sorted((m for m in walkers if m.height >= shortest), key=lambda m: -m.height)
+            front = sorted((m for m in walkers if m.height < shortest), key=lambda m: -m.height)
+            subject = figures[-1] if figures else None     # "bowed her head, not to Kojo, but to Pendo"
+            for k in SCALES:
+                for f, (x, height, travel) in zip(figures, homes):
+                    f.x, f.height, f.travel = .5 + (x - .5) * k, height * k, travel * k
+                placed, missing = list(figures) + climbers, []
+                for m in behind + front:
+                    m.height = sizes[m.key] * k * (.9 if m in behind else 1.)
+                    m.ground, m.depth = (GROUND - BACK_ROW, 0) if m in behind else (GROUND, FRONT_ROW)
+                    (placed if self._place(m, placed, subject) else missing).append(m)
+                if not missing:
+                    break
+            walkers = [m for m in walkers if m not in missing]
+            for f in figures:
+                self._remember(f)
+        members = climbers + walkers
         for m in members:
-            half = self._half_width(m)
+            half = self._half(m)
             m.x = min(1 - half - .01 - m.travel, max(half + .01, m.x)) if half < .45 else .5
         shot.figures.extend(members)
 
@@ -793,6 +919,16 @@ def _wrap(text, font, width, draw):
         else:
             line = trial
     return lines + ([line] if line else [])
+
+
+def _overlap(a, b, slack=.004) -> bool:
+    """Two (x0, y0, x1, y1) boxes overlap by more than ``slack``."""
+    return a[0] < b[2] - slack and b[0] < a[2] - slack and a[1] < b[3] - slack and b[1] < a[3] - slack
+
+
+def _sky_kind(doodle_id) -> str:
+    """'sun', 'moon' or the doodle itself: a sky shows one of each."""
+    return next((kind for kind in ('sun', 'moon') if re.search(rf'(?:^|_){kind}(?:_|$)', doodle_id)), doodle_id)
 
 
 def _sky(doodle_id) -> bool:

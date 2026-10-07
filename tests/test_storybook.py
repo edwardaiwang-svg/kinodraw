@@ -305,3 +305,87 @@ def test_page_changes_never_overlay_two_pictures(tmp_path, monkeypatch):
     landed = max(shot.start, shot.eyes_at - .3) + 1.3
     alphas = [(book._face_overlay(shot, t) or (None, 0.))[1] for t in frames(landed - .1, landed + .4)]
     assert max(alphas) == 1 and sum(.1 < a < .9 for a in alphas) <= 2      # the face close-up cuts in on the eyes
+
+
+RIDGE = ('# The Ridge\n\n'
+         'Deep in the jungle lived King Kojo. His mane was dark as wet bark. Every creature in the jungle, from the '
+         'proudest gorilla to the smallest tree frog, knew his voice.\n\n'
+         'Beside him ruled Queen Mara, sleek and golden-eyed, who spoke softly but was never ignored.\n\n'
+         'And then there was Pendo, their only cub.\n\n'
+         'Pendo was small for his age, with oversized paws he had not grown into. He ran to the great fig tree where '
+         'his parents rested.\n\n'
+         'That night, under pounding rain, King Kojo roared the alarm across the valley. But it was Pendo who led the '
+         'way. He guided the antelope, the warthogs, the porcupines, and even the monkeys who had teased him, up the '
+         'secret elephant path to the ridge.\n\n'
+         'When the sun came out, the animals gathered around the royal family. The oldest elephant stepped forward and '
+         'bowed her head, not to Kojo, but to Pendo.\n\n'
+         'Pendo grinned and tried a roar of his own. It still came out as a squeak.')
+
+
+def royal_family(tmp_path, text=RIDGE):
+    """The jungle's cast as its saved plan has it: Queen Mara is a lioness (the offline rules read her as a woman)."""
+    board = script.build(ingest.read(text), story='story')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    for c in plan['cast']:
+        if c['id'] == 'mara':
+            c.update(kind='quadruped', species='lioness', family='feline')
+    (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    prod.frame(0.)
+    return prod
+
+
+def _staged(book, f, local, end):
+    """A figure's drawn body box and head box (frame shares x0, y0, x1, y1) at this time, wherever its walk or run
+    has taken it by then, read from the doodle's own alpha bounds and head anchor."""
+    from kinodraw.engine import storybook
+    doodle, mirror, pose = book._pose_doodle(f, local)
+    reference = book._reference(f)
+    left, top, right, bottom = storybook._bbox(doodle, mirror)
+    box = storybook._box(doodle, f.height, reference)
+    _, sw, sh = storybook._svg(doodle)
+    w, h = book.size
+    width = box * sw / sh * h / w
+    x = f.x + (1 if f.facing == 'r' else -1) * f.travel * (local >= end)
+    middle = (left + right) / 2
+    body = (x + (left - middle) * width, f.ground - (bottom - top) * box, x + (right - middle) * width, f.ground)
+    ax, ay = storybook.anchor(doodle, 'head', mirror)
+    hx, hy, r = x + (ax - middle) * width, f.ground - (bottom - ay) * box, .16 * f.height
+    return body, (hx - r * h / w, hy - r, hx + r * h / w, hy + r)
+
+
+def _overlap(a, b, slack=.004):
+    return a[0] < b[2] - slack and b[0] < a[2] - slack and a[1] < b[3] - slack and b[1] < a[3] - slack
+
+
+def test_group_shots_keep_every_head_in_sight(tmp_path):
+    """J's jungle: an elephant's head between two lions with the cub on top of it; a running cub on a lying lioness.
+    No figure's head is behind another figure's body, at the start of a shot or where walks and runs end; smaller
+    animals stand in front, and everyone stays on the page."""
+    prod = royal_family(tmp_path)
+    book = prod.storybook
+    shots = [shot for span in prod.spans if span.story for shot in span.story]
+    gathered = next(s for s in shots if {'kojo', 'mara', 'pendo'} <= {f.key for f in s.figures}
+                    and any(f.crowd for f in s.figures))
+    assert len([f for f in gathered.figures if f.crowd]) >= 2          # the animals are there, not dropped
+    ran = next(s for s in shots if any(f.key == 'pendo' and f.pose == 'run' for f in s.figures))
+    assert {'kojo', 'mara'} <= {f.key for f in ran.figures}
+    for shot in shots:
+        for local in (shot.end - .01, shot.end):          # poses are set by then; the second is where travel ends
+            order = sorted(shot.figures, key=lambda f: f.depth)
+            staged = [_staged(book, f, local, shot.end) for f in order]
+            for i, (behind, (_, head)) in enumerate(zip(order, staged)):
+                for front, (body, _) in zip(order[i + 1:], staged[i + 1:]):
+                    if behind.carried is front or 'nuzzle' in (behind.pose, front.pose):
+                        continue                             # touching on purpose
+                    assert not _overlap(head, body), (shot.start, behind.key, front.key)
+            for f, (body, _) in zip(order, staged):
+                assert -.01 < body[0] and body[2] < 1.01, (shot.start, f.key)
+        for m in (f for f in shot.figures if f.crowd):
+            for c in (f for f in shot.figures if not f.crowd and f.height > m.height):
+                if any(_overlap(a, b) for a in _staged(book, m, shot.end, shot.end)[:1]
+                       for b in _staged(book, c, shot.end, shot.end)[:1]):
+                    assert m.depth > c.depth, (shot.start, m.key, c.key)     # a smaller animal stands in front
+
