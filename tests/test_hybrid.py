@@ -105,6 +105,79 @@ def test_actions_cue_their_synthesized_sounds(tmp_path):
         assert np.abs(y[at:at + sfx.SAMPLE_RATE // 10]).max() > 1e-3                 # it sounds on the action's cue
 
 
+def test_every_action_sound_plays_at_full_strength_and_puffs_follow_the_exhales(tmp_path):
+    from kinodraw.engine.creatures.actions import action_pose
+    board = script.build(ingest.read('# Night\n\nPendo, a lion cub, watched Mara, a tigress.\n\nPendo whimpered.\n\n'
+                                     'After the long run through the tall wet grass of the valley, Pendo was breathing '
+                                     'heavily and could not keep up with anyone at all that night.\n\nMara laughed at '
+                                     'Pendo.\n\nKojo, a male lion, pounced on the hyenas.'), story='story')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    for scene in plan['scenes']:
+        scene['treatment'] = 'character'
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = save_production(tmp_path, board, plan, tl)
+    cues = prod.cues()
+    acted = [c for c in cues if c['id'].startswith('hybrid.action.')]
+    assert all(c.get('strength', 1) == 1 for c in acted)                    # intensity no longer buries a sound
+    kinds = {}
+    for i, span in enumerate(prod.spans):
+        for j, (actor, action, _) in enumerate(span.actions):
+            kinds[action.name] = [c['kind'] for c in acted if c['id'].split('.')[2:4] == [str(i), str(j)]]
+            if action.name == 'breathe_heavy':
+                puffs = [c['t'] - span.start for c in acted if c['id'].split('.')[2:4] == [str(i), str(j)]]
+                exhales = [x for x in np.arange(.01, action.seconds, .01)
+                           if action_pose(action, action.start + x).puffs > 0 >= action_pose(action, action.start + x - .01).puffs]
+                assert len(puffs) == len(exhales) >= 2 and np.allclose(puffs, [action.start + x for x in exhales])
+    assert kinds['whimper'] == ['whimper'] and kinds['laugh'] == ['hyena_cackle'] and kinds['pounce'] == ['impact']
+    assert set(kinds['breathe_heavy']) == {'breath_puff'}
+
+
+def test_scenes_cue_chapter_whooshes_beds_shooting_stars_and_typing(tmp_path):
+    from kinodraw.audio import sfx
+    from kinodraw.engine.bold.model import TYPE_CPS
+    board = script.build(ingest.read('# Night\n\n## The storm\n\nRain fell on the valley all night.\n\nThe wind blew dust '
+                                     'over the plain.\n\n## The morning\n\nThick fog held a shooting star.\n\nEvery cub '
+                                     'must learn to read the sky.'))
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style'].update(mode='hybrid', motion_floor='breathing', music_mood='warm', tempo_bpm=96)
+    by_beat = {s['beat_ids'][0]: s for s in plan['scenes']}
+    by_beat['b005'].update(treatment='atmosphere', atmosphere={'kind': 'rain', 'density': .55})
+    by_beat['b006'].update(treatment='atmosphere', atmosphere={'kind': 'dust', 'density': .55})
+    by_beat['b008'].update(treatment='atmosphere', atmosphere={'kind': 'fog_with_shooting_star', 'density': .55})
+    by_beat['b009'].update(treatment='kinetic_type', text={'kind': 'kinetic', 'ref': 'b009'})
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = save_production(tmp_path, board, plan, tl)
+    cues = prod.cues()
+    spans = {s.spec['beat_ids'][0]: (i, s) for i, s in enumerate(prod.spans)}
+    sections = [board['beats'][int(s.spec['beat_ids'][0][1:]) - 1]['chapter'] for s in prod.spans]
+    for i, span in enumerate(prod.spans[1:], 1):                             # the long whoosh marks new chapters only
+        scene = next(c for c in cues if c['id'] == f'hybrid.scene.{i}')
+        assert (scene['kind'] == 'transition_whoosh') == (sections[i] != sections[i - 1])
+        assert scene['kind'] != 'transition_whoosh' or scene['dur'] == span.join_length
+    assert sum(c['kind'] == 'transition_whoosh' for c in cues) == len(set(sections)) - 1
+    for beat, bed in (('b005', 'rain'), ('b006', 'wind'), ('b008', 'fog_drone')):   # a bed for the scene's time on screen
+        i, span = spans[beat]
+        cue = next(c for c in cues if c['id'] == f'hybrid.bed.{i}')
+        assert cue['kind'] == bed and cue['t'] == span.join and cue['t'] + cue['dur'] == prod.spans[i + 1].join
+    i, span = spans['b008']
+    star = next(c for c in cues if c['kind'] == 'shooting_star')
+    a, b = (span.start + x for x in next(o['window'] for name, _, o in span.atmos.layers if name == 'shooting_star'))
+    assert star['t'] == min(beat for beat in prod.score_beats if a <= beat < b)          # while the star crosses
+    i, span = spans['b009']
+    typed = [e for e in span.motion.elements if e.kind == 'text' and e.preset == 'type_on' and e.text.strip()]
+    ticks = [c['t'] for c in cues if c['kind'] == 'type_tick']
+    assert typed and len(ticks) == sum(not ch.isspace() for e in typed for ch in e.text)
+    assert ticks[0] == span.start + typed[0].start + (len(typed[0].text) - len(typed[0].text.lstrip()) + 1) / TYPE_CPS
+    for kind in ('transition_whoosh', 'rain', 'wind', 'fog_drone', 'shooting_star', 'type_tick'):
+        cue = next(c for c in cues if c['kind'] == kind)
+        y = sfx.render([cue], prod.duration)
+        at = round(cue['t'] * sfx.SAMPLE_RATE)
+        assert np.abs(y[at:at + sfx.SAMPLE_RATE // 10]).max() > 1e-4, kind      # it sounds from its cue
+
+
 def test_saved_plan_no_provider_and_series_override(tmp_path):
     source = '# Cast\n\nMara, a lioness, nudged Pendo, a lion cub.'
     pipeline.new_project(source, tmp_path, director_v3=True,

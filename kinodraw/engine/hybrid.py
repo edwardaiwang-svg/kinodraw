@@ -1334,26 +1334,57 @@ class HybridProduction:
         return image.convert('RGB')
 
     def cues(self):
+        from .bold.model import TYPE_CPS
+        from .creatures.actions import action_pose
         cues = []
         for i, span in enumerate(self.spans):
             if span.spec['treatment'] == 'whiteboard':
                 continue
             neutral = span.scientific or (i and self.spans[i - 1].scientific)
-            cues.append({'t': span.join if i else span.start, 'kind': 'cut' if span.spec['transition_in'] == 'cut' or neutral else 'whoosh',
-                         'strength': .35, 'id': f'hybrid.scene.{i}'})
+            start = span.join if i else span.start
+            following = self.spans[i + 1] if i + 1 < len(self.spans) else None
+            until = (span.end if following is None else following.start
+                     if following.spec['treatment'] == 'whiteboard' else following.join)      # on screen until
+            kind = 'cut' if span.spec['transition_in'] == 'cut' or neutral else 'whoosh'
+            if kind == 'whoosh' and i and (self.by_id[span.spec['beat_ids'][0]]['section'] !=
+                                           self.by_id[self.spans[i - 1].spec['beat_ids'][0]]['section']):
+                cues.append({'t': start, 'kind': 'transition_whoosh', 'dur': span.join_length,
+                             'id': f'hybrid.scene.{i}'})     # a new chapter: one long, soft whoosh across the transition
+            else:
+                cues.append({'t': start, 'kind': kind, 'strength': .35, 'id': f'hybrid.scene.{i}'})
+            if span.atmos and not span.source_proof and not (span.spec['treatment'] == 'character' and not span.actors):
+                bed = {'rain': 'rain', 'fog': 'fog_drone', 'fog_with_shooting_star': 'fog_drone', 'dust': 'wind',
+                       'snow': 'wind'}.get(span.spec['atmosphere']['kind'])
+                if bed:                                      # a low bed under the scene; the mix ducks it under speech
+                    cues.append({'t': start, 'kind': bed, 'dur': until - start, 'id': f'hybrid.bed.{i}'})
+                for name, _, options in span.atmos.layers:
+                    if name == 'shooting_star':              # on the first score beat while the star crosses
+                        a, b = (span.start + x for x in options['window'])
+                        beats = self.score_beats[(self.score_beats >= a) & (self.score_beats < b)]
+                        cues.append({'t': float(beats[0]) if len(beats) else a, 'kind': 'shooting_star',
+                                     'id': f'hybrid.star.{i}'})
+            if span.spec['treatment'] == 'kinetic_type' and span.motion:
+                for j, e in enumerate(span.motion.elements):  # a tick as each typed character appears
+                    if e.kind == 'text' and e.preset == 'type_on':
+                        cues += [{'t': span.start + e.start + (k + 1) / TYPE_CPS, 'kind': 'type_tick', 'strength': .7,
+                                  'id': f'hybrid.type.{i}.{j}.{k}'} for k, char in enumerate(e.text)
+                                 if not char.isspace() and span.start + e.start + (k + 1) / TYPE_CPS < until]
             for j, (actor, action, target) in enumerate(span.actions):
-                # An action with its own synthesized sound (audio.synth_sfx) plays it; a pounce keeps its pop.
-                kind = {'roar': 'roar', 'whimper': 'whimper', 'nudge': 'nudge', 'swipe': 'swipe',
-                        'breathe_heavy': 'breath_puff', 'pounce': 'pop'}.get(action.name)
-                if action.name == 'laugh' and self.cast[actor].species == 'hyena':
-                    kind = 'hyena_cackle'
-                if kind:
+                # An action with its own synthesized sound (audio.synth_sfx) plays it, at full strength: the kind's
+                # level keeps it audible under the narration. A pounce lands with an impact.
+                kind = {'roar': 'roar', 'whimper': 'whimper', 'nudge': 'nudge', 'swipe': 'swipe', 'laugh': 'hyena_cackle',
+                        'breathe_heavy': 'breath_puff', 'pounce': 'impact'}.get(action.name)
+                if kind == 'breath_puff':                    # a puff as each drawn exhale begins
+                    steps = np.arange(0, action.seconds, .01)
+                    out = np.array([action_pose(action, action.start + x).puffs > 0 for x in steps])
+                    cues += [{'t': float(span.start + action.start + x), 'kind': kind, 'id': f'hybrid.action.{i}.{j}.{k}'}
+                             for k, x in enumerate(steps[1:][out[1:] & ~out[:-1]])]
+                elif kind:
                     at = span.start + action.start
                     available = self.score_beats[(self.score_beats >= span.start) & (self.score_beats < span.end)]
                     if len(available):
                         at = float(available[np.argmin(abs(available - at))])
-                    cues.append({'t': at, 'kind': kind, 'strength': min(1, action.intensity),
-                                 'id': f'hybrid.action.{i}.{j}'})
+                    cues.append({'t': at, 'kind': kind, 'id': f'hybrid.action.{i}.{j}'})
         return cues
 
 
