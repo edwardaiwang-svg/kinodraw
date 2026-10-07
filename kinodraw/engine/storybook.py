@@ -23,6 +23,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
+from . import ink
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
@@ -52,6 +53,12 @@ HEAD = .16
 # Marks the storybook draws on a preset: a crown (the library's) sits on the head, CROWN of the character's height.
 MARKS = {'crown'}
 CROWN, CROWN_SIZE = 'fl_crown', .15
+# Claude Fables' speech bubble: a quoted line of BUBBLE_WORDS or fewer pops up in a hand-drawn bubble by the speaker's
+# mouth and types itself at TYPE_CPS characters a second; longer quotes stay in the caption alone.
+BUBBLE_WORDS = 12
+BUBBLE_POP, BUBBLE_OUT = .25, .15
+TYPE_CPS = 30
+BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -272,6 +279,15 @@ class Shot:
     lesson: bool = False
     title: str | None = None
     atmosphere: str = 'none'
+    bubbles: list = field(default_factory=list)
+
+
+@dataclass(eq=False)
+class Bubble:
+    speaker: str
+    text: str
+    start: float                      # span-local seconds it pops in and out
+    end: float
 
 
 def _seed(text):
@@ -291,6 +307,7 @@ class Storybook:
         self.facing = {}
         self.at = {}             # where each character stood last: they keep their side
         self._paper = {}
+        self._bubbles = {}
 
     # ---------------- planning
     def prepare(self, spec, start, end):
@@ -309,6 +326,7 @@ class Storybook:
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
+                    previous.bubbles += [b for b in shot.bubbles if b.speaker in [g.key for g in previous.figures]]
                     for f in shot.figures:
                         if f.pose != 'stand' and f.cue is not None:
                             match = next((g for g in previous.figures if g.key == f.key), None)
@@ -322,6 +340,10 @@ class Storybook:
             shot.end = following.start
         shots[0].start = 0.
         shots[-1].end = end - start
+        for shot in shots:
+            for b in shot.bubbles:
+                b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
+            shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
         if spec['beat_ids'][0] == self.first and titled(self.title, self.by_id[self.first]['spoken']):
             shots[0].title = self.title         # the title once, on the first page
         return shots
@@ -380,6 +402,14 @@ class Storybook:
             shot.sky.append((doodle, (.83, .2)[i], .15, .16))
         shot.atmosphere = atmosphere
         self._crowd(shot, line, figures)
+        if line.speaker in [f.key for f in figures] and shot.eyes is None:
+            for q0, q1 in line.quotes:
+                text = line.text[q0 - line.start:q1 - line.start].strip().rstrip(',;:').strip()
+                cjk = sum(1 for ch in text if ink.is_cjk(ch))
+                if text and (cjk / 2 if cjk else len(text.split())) <= BUBBLE_WORDS:
+                    if shot.bubbles:
+                        shot.bubbles[-1].end = min(shot.bubbles[-1].end, at(q0) - .1)
+                    shot.bubbles.append(Bubble(line.speaker, text, max(begin, at(q0) - .1), at(q1) + .6))
         return shot
 
     def _remember(self, f):
@@ -669,10 +699,10 @@ class Storybook:
             return preset(f.species, f.age, f.sex, 'walk', f.facing, f.marks) + (pose,)
         return preset(f.species, f.age, f.sex, name, f.facing, f.marks) + (pose,)
 
-    def _draw(self, shot, local):
-        w, h = self.size
+    def _camera(self, shot, local):
+        """[x, y, zoom] of the camera over the page: a gentle push in, a push into the eyes, a roar's shake."""
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
-        cam = [.5, .5, 1. + .035 * u]                      # gentle push in
+        cam = [.5, .5, 1. + .035 * u]
         shake = 0.
         roaring = [f for f in shot.figures if f.pose == 'roar' and f.cue is not None]
         for f in roaring:
@@ -682,6 +712,11 @@ class Storybook:
             cam = self._eye_camera(shot, local, cam)
         cam[0] += shake * .0016 * math.sin(local * 39)
         cam[1] += shake * .0016 * math.sin(local * 31)
+        return cam
+
+    def _draw(self, shot, local):
+        w, h = self.size
+        cam = self._camera(shot, local)
         canvas = self._page(cam)
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         for doodle, x, y, height in shot.sky:
@@ -701,6 +736,9 @@ class Storybook:
         for effect in effects:
             effect(overlay)
         face = self._face_overlay(shot, local)
+        for bubble in shot.bubbles:
+            if bubble.start <= local < bubble.end:
+                self._bubble(overlay, shot, bubble, local, cam)
         canvas.paste(overlay, (0, 0), overlay)
         if face is not None:
             image, alpha = face
@@ -924,6 +962,94 @@ class Storybook:
                     crown=.2 * push if 'crown' in f.marks else 0.)
         return page.convert('RGB'), alpha
 
+    def _bubble_plan(self, shot, bubble):
+        """Where a bubble sits on the page (camera at rest), worked out once: (mouth in frame shares, box and tip in
+        pixels, text lines, font size, language). The box sits as near the speaker's mouth as it can, above it,
+        clear of every head on the page and above the captions; the tail runs down from its bottom edge to the mouth."""
+        if bubble in self._bubbles:
+            return self._bubbles[bubble]
+        w, h = self.size
+        f = next(g for g in shot.figures if g.key == bubble.speaker)
+        middle = (bubble.start + bubble.end) / 2
+        doodle, mirror, _ = self._pose_doodle(f, middle)
+        mouth = self._point(doodle, mirror, 'mouth', f.x, f.ground, f.height, self._reference(f))
+        mx, my = mouth[0] * w, mouth[1] * h
+        lang = 'zh' if any(ink.is_cjk(ch) for ch in bubble.text) else 'en'
+        lines, size = ink.fit_text(bubble.text, lang, .3 * w, 3, round(.04 * h), min_size=round(.028 * h))
+        bw = max(ink.text_width(line, lang, size) for line in lines) + 1.6 * size
+        bh = len(lines) * 1.25 * size + 1.1 * size
+        heads = [(x0 * w, y0 * h, x1 * w, y1 * h) for g in shot.figures for _, (x0, y0, x1, y1) in self._shapes(g)]
+        bodies = [(x0 * w, y0 * h, x1 * w, y1 * h) for g in shot.figures for (x0, y0, x1, y1), _ in self._shapes(g)]
+        pad, side, edge = .015 * h, (1 if f.facing == 'r' else -1), (.55 + .4) * size    # corner radius + tail
+        best = None
+        for y0 in np.arange(.03 * h, min(.76 * h, my - .08 * h) - bh, .015 * h):     # a tail long enough to read
+            for x0 in np.arange(.02 * w, .98 * w - bw, .01 * w):
+                box = (x0, y0, x0 + bw, y0 + bh)
+                if any(_overlap(box, (a - pad, b - pad, c + pad, d + pad), 0) for a, b, c, d in heads):
+                    continue
+                base = min(max(mx, x0 + edge), x0 + bw - edge)
+                tail = math.hypot(base - mx, y0 + bh - my)
+                covered = sum(max(0, min(box[2], c) - max(x0, a)) * max(0, min(box[3], d) - max(y0, b))
+                              for a, b, c, d in bodies) / (bw * bh)
+                cost = tail + .25 * h * covered + (.04 * h if (x0 + bw / 2 - mx) * side < 0 else 0)
+                if best is None or cost < best[0]:
+                    best = (cost, box, base)
+        if best is None:
+            self._bubbles[bubble] = None
+            return None
+        _, box, base = best
+        reach = math.hypot(base - mx, box[3] - my)
+        tip = (mx + (base - mx) * .03 * h / max(1., reach), my + (box[3] - my) * .03 * h / max(1., reach))
+        plan = (mouth, box, tip, base, lines, size, lang, _seed(bubble.text))
+        self._bubbles[bubble] = plan
+        return plan
+
+    def _bubble_layout(self, shot, bubble, local):
+        """(box, tip, scale) on screen: the bubble follows its speaker's mouth under the camera; it pops in with a
+        little overshoot and shrinks away at its end."""
+        plan = self._bubble_plan(shot, bubble)
+        if plan is None:
+            return None
+        (mx, my), box, tip, *_ = plan
+        w, h = self.size
+        sx, sy, _ = self._to_screen(mx, my, self._camera(shot, local))
+        dx, dy = sx - mx * w, sy - my * h
+        u = (local - bubble.start) / BUBBLE_POP
+        if u < 1:
+            c = 1.70158
+            scale = .4 + .6 * (1 + (c + 1) * (u - 1) ** 3 + c * (u - 1) ** 2)
+        else:
+            scale = min(1., max(0., (bubble.end - local) / BUBBLE_OUT)) ** .5
+        return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy), (tip[0] + dx, tip[1] + dy), scale
+
+    def _bubble(self, overlay, shot, bubble, local, cam):
+        layout = self._bubble_layout(shot, bubble, local)
+        if layout is None or layout[2] <= .05:
+            return
+        (x0, y0, x1, y1), (tx, ty), scale = layout
+        _, box, tip, base, lines, size, lang, seed = self._bubble_plan(shot, bubble)
+        image, (ox, oy) = _bubble_shape(round(box[2] - box[0]), round(box[3] - box[1]), round(base - box[0]),
+                                        round(tip[0] - box[0]), round(tip[1] - box[1]), size, seed)
+        image = image.copy()
+        cps = max(TYPE_CPS, len(bubble.text) / max(.4, .55 * (bubble.end - bubble.start)))
+        shown = int(max(0., local - bubble.start - .1) * cps)
+        draw = ImageDraw.Draw(image)
+        y = oy + .55 * size
+        for line in lines:
+            x = ox + .8 * size
+            for text, font in ink.font_runs(line[:max(0, shown)], lang, size):
+                draw.text((x, y), text, font=font, fill=BUBBLE_INK)
+                x += font.getlength(text)
+            shown -= len(line) + 1
+            y += 1.25 * size
+        px, py = ox + tip[0] - box[0], oy + tip[1] - box[1]       # the tail's tip in the image
+        if scale != 1:
+            image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+                                 Image.Resampling.BICUBIC)
+            px, py = px * scale, py * scale
+        at = (round(tx - px), round(ty - py))
+        overlay.alpha_composite(image, (max(0, at[0]), max(0, at[1])), (max(0, -at[0]), max(0, -at[1])))
+
     def _title(self, canvas, title, local):
         if local > 4.5:
             return
@@ -958,6 +1084,41 @@ class Storybook:
                 else:
                     out.append((shot.start, shot.end))
         return out
+
+
+@lru_cache(maxsize=32)
+def _bubble_shape(bw, bh, base, tx, ty, size, seed):
+    """A hand-drawn speech bubble: a wobbly rounded box with its tail running from ``base`` on the bottom edge to the
+    tip (tx, ty), all in box pixels. Returns (image, offset of the box's top-left corner in the image)."""
+    k, stroke, r, tail = 3, max(3, round(size * .13)), .55 * size, .4 * size
+    corners = ((bw - r, r, -90), (bw - r, bh - r, 0), (r, bh - r, 90), (r, r, 180))
+    points = []
+    for cx, cy, a0 in corners:
+        for i in range(9):
+            a = math.radians(a0 + 90 * i / 8)
+            points.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        if a0 == 0:                                   # along the bottom edge, right to left: the tail
+            points += [(base + tail, bh), (tx, ty), (base - tail, bh)]
+    wobbly, run = [], 0.             # a slow wobble along the outline, as if drawn by hand; the tail's tip stays put
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1]):
+        length = math.hypot(x1 - x0, y1 - y0)
+        for i in range(max(1, math.ceil(length / (.4 * size)))):
+            u = i / max(1, math.ceil(length / (.4 * size)))
+            x, y = x0 + (x1 - x0) * u, y0 + (y1 - y0) * u
+            calm = min(1., math.hypot(x - tx, y - ty) / size)
+            wobbly.append((x + calm * .06 * size * math.sin((run + u * length) / (2.2 * size) + seed),
+                           y + calm * .06 * size * math.sin((run + u * length) / (1.7 * size) + 2 * seed)))
+        run += length
+    margin = stroke + 2
+    left, top = min(0, tx) - margin, -margin
+    width, height = max(bw, tx) - left + margin, max(bh, ty) - top + margin
+    big = Image.new('RGBA', (round(width * k), round(height * k)), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(big)
+    outline = [((x - left) * k, (y - top) * k) for x, y in wobbly]
+    draw.polygon(outline, fill=BUBBLE_FILL)
+    draw.line(outline + outline[:2], fill=BUBBLE_INK, width=stroke * k, joint='curve')
+    image = big.resize((round(width), round(height)), Image.Resampling.LANCZOS)
+    return image, (-left, -top)
 
 
 def _wrap(text, font, width, draw):

@@ -447,3 +447,39 @@ def test_drawn_story_rain_has_a_rain_bed(tmp_path):
         middle = (a + b) / 2
         covered = any(c['t'] <= middle <= c['t'] + c['dur'] for c in beds)
         assert covered == rain, (a, b, rain)
+
+
+LONG_QUOTE = ('\n\nKojo turned to Mara and said, "The river rises every rainy season, and every single year the frogs and '
+              'the ants tell us it will flood."')
+
+
+def test_short_quotes_speak_from_a_bubble_long_ones_stay_in_the_caption(tmp_path):
+    """Claude Fables' speech bubble: a quoted line of 12 words or fewer pops up in a hand-drawn bubble near the
+    speaker's mouth, its tail pointing at the speaker, clear of the speaker's head; a long quote stays in the caption
+    alone. The bubble pops in and out inside its shot."""
+    prod, board, plan, tl = production(tmp_path, STORY + LONG_QUOTE)
+    book = prod.storybook
+    span = span_of(prod, 'Roar louder')
+    shot, at = shot_of(span, prod, 'Roar louder')
+    [bubble] = shot.bubbles
+    assert bubble.speaker == 'kojo' and bubble.text == 'Roar louder, son. A king must be heard.'
+    assert shot.start <= bubble.start <= at + .3 and bubble.end <= shot.end
+    assert not [b for s in span_of(prod, 'The river rises').story for b in s.bubbles]
+    t = (bubble.start + bubble.end) / 2
+    (x0, y0, x1, y1), tip, scale = book._bubble_layout(shot, bubble, t)
+    assert scale == 1 and book._bubble_layout(shot, bubble, bubble.start + .03)[2] < .8      # it pops in
+    kojo = next(f for f in shot.figures if f.key == 'kojo')
+    doodle, mirror, _ = book._pose_doodle(kojo, t)
+    mx, my = book._point(doodle, mirror, 'mouth', kojo.x, kojo.ground, kojo.height, book._reference(kojo))
+    sx, sy, _ = book._to_screen(mx, my, book._camera(shot, t))
+    w, h = book.size
+    assert np.hypot(tip[0] - sx, tip[1] - sy) < .06 * h                  # the tail points at Kojo's mouth
+    assert np.hypot(tip[0] - sx, tip[1] - sy) < np.hypot((x0 + x1) / 2 - sx, (y0 + y1) / 2 - sy)
+    _, head = book._shape(kojo, book._pose_name(kojo.pose), kojo.x)
+    hx0, hy0, _ = book._to_screen(head[0], head[1], book._camera(shot, t))
+    hx1, hy1, _ = book._to_screen(head[2], head[3], book._camera(shot, t))
+    assert not (x0 < hx1 and hx0 < x1 and y0 < hy1 and hy0 < y1)        # clear of the speaker's head
+    assert 0 <= x0 and x1 <= w and 0 <= y0 and y1 < .8 * h               # on the page, above the captions
+    frame = np.asarray(book._draw(shot, t), np.int32)
+    inside = frame[int(y0) + 12:int(y1) - 12, int(x0) + 12:int(x1) - 12]
+    assert (inside.min(axis=2) > 246).mean() > .5                       # the bubble's own white, not the paper
