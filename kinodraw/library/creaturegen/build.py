@@ -53,6 +53,9 @@ def builders():
 
 def _canvas(fig, long_side=300.0):
     b = fig.bounds()
+    w, h = b[2] - b[0], b[3] - min(0.0, b[1])
+    if w > 2.2 * h:         # long, low animals: widen the picture so the 200 px minimum height is not mostly empty
+        long_side = min(600.0, 176.0 * w / h + 24.0)
     return Canvas((b[0], min(0.0, b[1]), b[2], b[3]), long_side=long_side)
 
 
@@ -93,7 +96,7 @@ def tag_entry(v, meta):
         desc = f'{v.noun}, {words}, {FACING_EN[facing]} (full body)'
         en = [*v.names, *extra]
         zh = [*v.zh, POSE_ZH.get(pose, pose)]
-    search = pose == 'stand' and facing == 'r'
+    search = pose == v.poses[0] and facing == 'r'      # one searchable picture per look: its resting pose
     entry = {'category': v.category, 'desc': desc, 'en': list(dict.fromkeys(en)), 'zh': list(dict.fromkeys(zh))}
     if not search:
         entry['search'] = False

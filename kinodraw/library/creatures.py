@@ -96,7 +96,9 @@ VARIANT_WORDS = {
     'macaw': ('parrot', 'macaw'), 'green parrot': ('parrot', 'green'), 'parakeet': ('parrot', 'green'),
     'white duck': ('duck', 'white'), 'white hen': ('chicken', 'white'), 'ladybug': ('beetle', 'ladybug'),
     'ladybird': ('beetle', 'ladybug'), 'monarch': ('butterfly', 'monarch'), 'blue butterfly': ('butterfly', 'blue'),
-    'honey bee': ('bee', 'honey'), 'bumblebee': ('bee', 'honey'),
+    'honey bee': ('bee', 'honey'), 'bumblebee': ('bee', 'honey'), 'goldfish': ('fish', 'goldfish'),
+    'clownfish': ('fish', 'clown'), 'clown fish': ('fish', 'clown'), 'blue tang': ('fish', 'tang'),
+    'python': ('snake', 'python'), 'green snake': ('snake', 'green'),
 }
 HUMAN_ROLES = {'king': 'king', 'queen': 'queen', 'teacher': 'teacher', 'villager': 'villager', 'explorer': 'explorer'}
 # animals we may not have, mapped to their closest drawn relative (same family, never a person)
@@ -266,8 +268,10 @@ def best_preset(species: str, age: str | None = None, sex: str | None = None, po
             return None                     # never cross between animals and people
         try:
             p_rank = pose_order.index(m['pose'])
-        except ValueError:
-            return None
+        except ValueError:                  # nothing near: the species' resting picture (a fish has no "stand")
+            if m['pose'].startswith('face_') != want_face:
+                return None
+            p_rank = len(pose_order) + (0 if m['pose'] in ('stand', 'swim1') else 2)
         f_rank = facing_order.index(m['facing']) if m['facing'] in facing_order else 9
         return character_score(m) - 30 * p_rank - 4 * f_rank
 

@@ -420,4 +420,75 @@ def _bird(fc: Face, expr: str) -> Figure:
     return f
 
 
-SPECIAL = {'frog': _frog, 'ant': _bug, 'bee': _bug, 'beetle': _bug, 'bird': _bird}
+def _reptile(fc: Face, expr: str) -> Figure:
+    """Turtle / snake / crocodile front face."""
+    f = Figure()
+    k = fc.kind
+    if k == 'crocodile':
+        for sx in (-1, 1):
+            f.fill(Circle(V(sx * .42, .55), .3), fc.coat, SW, 'eye_bump')
+        head = Union([Ellipse(V(0, .1), 1.0, .55), Poly([V(-.62, 0), V(.62, 0), V(.45, -.95), V(-.45, -.95)], r=.12)],
+                     k=.1)
+    elif k == 'snake':
+        head = Ellipse(V(0, 0), 1.0, .78)
+    else:
+        head = Ellipse(V(0, 0), .82, .85)
+    f.fill(head, fc.coat, SW, 'head')
+    if fc.under:
+        f.patch(Ellipse(V(0, -.85), .7, .35), fc.under, head, 'chin')
+    if k == 'crocodile':
+        if expr in ('happy', 'scared'):
+            f.fill(Ellipse(V(0, -.72), .38, .14 if expr == 'scared' else .2), C.MOUTH, SW_DETAIL, 'mouth')
+        f.line([V(-.55, -.62), V(-.2, -.7), V(.2, -.7), V(.55, -.62)], SW_DETAIL, name='jaw')
+        teeth = [Poly([V(x - .05, -.66), V(x + .05, -.66), V(x, -.8)], r=.01) for x in (-.42, -.22, .22, .42)]
+        f.fill(Union(teeth), C.WHITE, SW_FINE, 'teeth')
+        for sx in (-1, 1):
+            f.dot(V(sx * .14, -.3), .04, C.INK, 'nostril', SW_FINE)
+        eyes(f, expr, (.42, .58), .95, '#C9B23A')
+        return f
+    eyes(f, expr, (.42, .18) if k != 'snake' else (.5, .2), 1.1, '#E3B23C' if k == 'snake' else '')
+    for sx in (-1, 1):
+        f.dot(V(sx * .1, -.18), .03, C.INK, 'nostril', SW_FINE)
+    if k == 'snake' and expr in ('happy', 'scared', 'determined'):
+        f.fill(Union([Cone(V(0, -.48), V(0, -.85), .04, .03), Cone(V(0, -.85), V(-.1, -1.0), .03, .02),
+                      Cone(V(0, -.85), V(.1, -1.0), .03, .02)], k=.01), C.MOUTH, SW_FINE, 'tongue')
+    mouth(f, expr, (0, -.32), .22, 'bug')
+    return f
+
+
+def _fish(fc: Face, expr: str) -> Figure:
+    """Fish front face: round body, eyes on the sides, puckered mouth, fins around."""
+    f = Figure()
+    fin = C.shade(fc.coat, .12)
+    if fc.horns == 'shark':
+        f.fill(Poly([V(-.2, .7), V(0, 1.45), V(.2, .7)], r=.04), fin, SW_DETAIL, 'dorsal')
+    else:
+        f.fill(Ellipse(V(0, .95), .25, .3), fin, SW_DETAIL, 'dorsal')
+    for sx in (-1, 1):
+        f.fill(Ellipse(V(sx * .95, -.35), .28, .14, sx * deg(-30)), fin, SW_DETAIL, 'fin')
+    head = Ellipse(V(0, 0), .9, .95)
+    f.fill(head, fc.coat, SW, 'body')
+    if fc.under:
+        f.patch(Ellipse(V(0, -.85), .75, .45), fc.under, head, 'belly')
+    if fc.pattern == 'bands':
+        f.patch(Union([Ellipse(V(0, .4), 1.0, .14)]), C.WHITE, head, 'band')
+    eyes(f, expr, (.5, .2), 1.15, fc.iris)
+    if fc.horns == 'shark':
+        if expr in ('happy', 'scared', 'determined'):
+            f.fill(Ellipse(V(0, -.5), .45, .16 if expr != 'scared' else .22), C.MOUTH, SW_DETAIL, 'mouth')
+            f.fill(Union([Poly([V(x - .06, -.38), V(x + .06, -.38), V(x, -.5)], r=.01) for x in (-.3, -.1, .1, .3)]),
+                   C.WHITE, SW_FINE, 'teeth')
+        else:
+            f.line([V(-.45, -.45), V(0, -.55), V(.45, -.45)], SW_DETAIL, name='mouth')
+        return f
+    if expr in ('happy', 'scared'):
+        f.fill(Ellipse(V(0, -.42), .16, .18 if expr == 'scared' else .14), C.MOUTH, SW_DETAIL, 'mouth')
+    else:
+        f.fill(Ellipse(V(0, -.42), .12, .08), C.shade(fc.coat, .25), SW_DETAIL, 'mouth')
+    if expr == 'sad':
+        f.line([V(-.25, -.62), V(0, -.55), V(.25, -.62)], SW_FINE, name='frown')
+    return f
+
+
+SPECIAL = {'frog': _frog, 'ant': _bug, 'bee': _bug, 'beetle': _bug, 'bird': _bird, 'turtle': _reptile,
+           'snake': _reptile, 'crocodile': _reptile, 'fish': _fish}

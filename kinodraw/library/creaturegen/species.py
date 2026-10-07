@@ -10,7 +10,9 @@ from dataclasses import dataclass, field, replace
 from . import colors as C
 from .faces import Face
 from . import bird as _bird
+from . import fish as _fish
 from . import frog as _frog
+from . import reptile as _reptile
 from . import insect as _insect
 from .primate import Ape
 from .primate import POSES as APE_POSES
@@ -87,6 +89,7 @@ def _lions():
     out += _small()
     out += _quads()
     out += _birds()
+    out += _reptiles_and_fish()
     return out
 
 
@@ -495,4 +498,45 @@ def _birds():
     add(B('penguin', p_chick, ('penguin chick', 'baby penguin', 'penguin'), ('小企鹅', '企鹅'), 'fluffy penguin chick',
           age='young', face=_bf(p_chick, under='#D9DCE0'), poses=_bird.FLIGHTLESS_POSES, jitter=.5))
     add(B('flamingo', FLAMINGO, ('flamingo', 'pink flamingo', 'wading bird'), ('火烈鸟',), 'pink flamingo'))
+    return out
+
+
+Reptile = _reptile.Reptile
+Fish = _fish.Fish
+
+
+def R(species, g, names, zh, noun, face, variant='', family='reptile', plan='reptile', poses=None, age='adult'):
+    return Variant(species, 'any', age, variant, genes=g, face=face, family=family, names=names, zh=zh, noun=noun,
+                   plan=plan, poses=poses or _reptile.POSES[g.kind], jitter=0)
+
+
+def _reptiles_and_fish():
+    out = []
+    add = out.append
+    turtle = Reptile('turtle')
+    add(R('turtle', turtle, ('turtle', 'tortoise', 'green turtle'), ('乌龟', '龟'), 'turtle',
+          Face('turtle', turtle.coat, '#D8E3A0')))
+    snake = Reptile('snake', coat='#5DAA4A', mark='#3E7E35')
+    add(R('snake', snake, ('snake', 'green snake', 'serpent'), ('蛇', '青蛇'), 'green snake',
+          Face('snake', snake.coat, '#D8E3A0'), variant='green'))
+    python = Reptile('snake', coat='#C9A15A', mark='#6B4A2E')
+    add(R('snake', python, ('python', 'brown snake', 'snake'), ('蟒蛇', '蛇'), 'striped python',
+          Face('snake', python.coat, '#EADBB0'), variant='python'))
+    croc = Reptile('crocodile', coat='#5E8A3E', belly='#C9C98A')
+    add(R('crocodile', croc, ('crocodile', 'alligator', 'croc'), ('鳄鱼',), 'crocodile',
+          Face('crocodile', croc.coat, '')))
+    fish = (('goldfish', Fish('goldfish', '#F28C28', belly='#FBC36B', fin='#F6A44A'), ('goldfish', 'fish', 'orange fish'),
+             ('金鱼', '鱼'), 'goldfish'),
+            ('clown', Fish('clownfish', '#F27A1A', fin='#F28C28', bands='#2E2A27', tail='fan', body_ry=.23),
+             ('clownfish', 'clown fish', 'fish'), ('小丑鱼', '鱼'), 'clownfish'),
+            ('tang', Fish('tang', '#2F6FD6', fin='#2A4FA0', tail_c='#F6C343', tail='fork', dorsal='tall', body_ry=.28),
+             ('blue fish', 'tang', 'fish'), ('蓝鱼', '鱼'), 'blue tang fish'))
+    for variant, g, names, zh, noun in fish:
+        add(R('fish', g, names, zh, noun, Face('fish', g.coat, g.belly, iris='',
+                                              pattern='bands' if g.bands else 'none'),
+              variant=variant, family='fish', plan='fish', poses=_fish.POSES))
+    shark = Fish('shark', '#8A97A6', belly='#F1F3F5', fin='#7A8796', tail='moon', dorsal='shark', body_rx=.62,
+                 body_ry=.2)
+    add(R('shark', shark, ('shark', 'great white shark'), ('鲨鱼',), 'shark',
+          Face('fish', shark.coat, shark.belly, horns='shark'), family='fish', plan='fish', poses=_fish.POSES))
     return out

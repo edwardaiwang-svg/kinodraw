@@ -33,7 +33,8 @@ def test_tags_and_files_agree_and_only_canonical_pictures_are_searchable():
     for pid, entry in TAGS.items():
         c = entry['creature']
         assert pid.startswith('cr_') and pid.endswith('_' + c['facing'])
-        assert entry.get('search', True) == (c['pose'] == 'stand' and c['facing'] == 'r'), pid
+        resting = 'swim1' if c['family'] == 'fish' else 'stand'
+        assert entry.get('search', True) == (c['pose'] == resting and c['facing'] == 'r'), pid
         assert entry['category'] in ('animals', 'characters')
     shipped = {i for i, e in catalog().items() if e['set'] == 'creatures'}
     assert shipped == files
