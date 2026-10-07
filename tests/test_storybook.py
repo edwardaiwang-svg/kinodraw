@@ -1,9 +1,12 @@
 """Offline story videos are picture books: preset doodles on the whiteboard paper (J, 2026-10-07)."""
+import itertools
 import json
+import math
 import re
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from kinodraw import ingest, pipeline, script
 from kinodraw.director.rules import RulesDirector
@@ -267,3 +270,274 @@ def test_a_lone_resting_figure_never_freezes_the_picture(tmp_path):
     frames = [np.asarray(prod.storybook.frame([shot], shot.start + 2 + k / 4), np.float32) / 255 for k in range(5)]
     # freezedetect keeps its reference frame until the picture moves away from it by more than -50 dB MAFD
     assert np.abs(frames[4] - frames[0]).mean() > 10 ** (-50 / 20)
+
+
+def _overlaid(frame, before, after, times):
+    """Frames (at these times) that show two pictures on top of each other: where the two pictures differ, the frame
+    matches neither of them. A cut or a wipe shows one picture or the other at every pixel."""
+    count = 0
+    for t in times:
+        a, b, f = (np.asarray(make(t), np.int16) for make in (before, after, frame))
+        differ = np.abs(a - b).max(axis=2) > 60
+        mixed = differ & (np.abs(f - a).max(axis=2) > 24) & (np.abs(f - b).max(axis=2) > 24)
+        count += bool(differ.sum()) and mixed.sum() / differ.sum() > .2
+    return count
+
+
+def test_page_changes_never_overlay_two_pictures(tmp_path, monkeypatch):
+    """J's jungle: shot dissolves, scene morphs and the face fade ghosted two crowded pictures for 10-20 frames. A
+    page change is a cut, a wipe or a page turn; a dissolve lasts at most two frames, where the same set continues."""
+    prod, board, plan, tl = production(tmp_path)
+    monkeypatch.setattr(prod.whiteboard, '_caption', lambda *a, **k: None)
+    book = prod.storybook
+    prod.frame(0.)
+    frames = lambda a, b: [a + k / 30 for k in range(int((b - a) * 30) + 1)]
+    first = prod.spans[0]
+    for k in (1, 2):                          # a new set (the palm tree goes) and the same set (Mara joins)
+        shot, previous = first.story[k], first.story[k - 1]
+        assert _overlaid(lambda t: book.frame(first.story, t), lambda t: book._draw(previous, t),
+                         lambda t: book._draw(shot, t), frames(shot.start - .04, shot.start + .3)) <= 2
+    for words in ('Roar louder', 'carrying the slowest'):     # a scene join into the lesson, and out of a face
+        span = span_of(prod, words)
+        before = prod.spans[prod.spans.index(span) - 1]
+        assert _overlaid(prod.frame, lambda t: prod._frame(before, t), lambda t: prod._frame(span, t),
+                         frames(span.join - .04, span.join + .3)) <= 2, words
+    span = span_of(prod, "Pendo's eyes")
+    shot = next(s for s in span.story if s.eyes)
+    shot.end = shot.eyes_at + 3                         # long enough for the push to land on the eyes
+    landed = max(shot.start, shot.eyes_at - .3) + 1.3
+    alphas = [(book._face_overlay(shot, t) or (None, 0.))[1] for t in frames(landed - .1, landed + .4)]
+    assert max(alphas) == 1 and sum(.1 < a < .9 for a in alphas) <= 2      # the face close-up cuts in on the eyes
+
+
+RIDGE = ('# The Ridge\n\n'
+         'Deep in the jungle lived King Kojo. His mane was dark as wet bark. Every creature in the jungle, from the '
+         'proudest gorilla to the smallest tree frog, knew his voice.\n\n'
+         'Beside him ruled Queen Mara, sleek and golden-eyed, who spoke softly but was never ignored.\n\n'
+         'And then there was Pendo, their only cub.\n\n'
+         'Pendo was small for his age, with oversized paws he had not grown into. He ran to the great fig tree where '
+         'his parents rested.\n\n'
+         'That night, under pounding rain, King Kojo roared the alarm across the valley. But it was Pendo who led the '
+         'way. He guided the antelope, the warthogs, the porcupines, and even the monkeys who had teased him, up the '
+         'secret elephant path to the ridge.\n\n'
+         'When the sun came out, the animals gathered around the royal family. The oldest elephant stepped forward and '
+         'bowed her head, not to Kojo, but to Pendo.\n\n'
+         'Pendo grinned and tried a roar of his own. It still came out as a squeak.')
+
+
+def royal_family(tmp_path, text=RIDGE):
+    """The jungle's cast as its saved plan has it: Queen Mara is a lioness (the offline rules read her as a woman)."""
+    board = script.build(ingest.read(text), story='story')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    for c in plan['cast']:
+        if c['id'] == 'mara':
+            c.update(kind='quadruped', species='lioness', family='feline')
+    (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    prod.frame(0.)
+    return prod
+
+
+def _staged(book, f, local, end):
+    """A figure's drawn body box and head box (frame shares x0, y0, x1, y1) at this time, wherever its walk or run
+    has taken it by then, read from the doodle's own alpha bounds and head anchor."""
+    from kinodraw.engine import storybook
+    doodle, mirror, pose = book._pose_doodle(f, local)
+    reference = book._reference(f)
+    left, top, right, bottom = storybook._bbox(doodle, mirror)
+    box = storybook._box(doodle, f.height, reference)
+    _, sw, sh = storybook._svg(doodle)
+    w, h = book.size
+    width = box * sw / sh * h / w
+    x = f.x + (1 if f.facing == 'r' else -1) * f.travel * (local >= end)
+    middle = (left + right) / 2
+    body = (x + (left - middle) * width, f.ground - (bottom - top) * box, x + (right - middle) * width, f.ground)
+    ax, ay = storybook.anchor(doodle, 'head', mirror)
+    hx, hy, r = x + (ax - middle) * width, f.ground - (bottom - ay) * box, .16 * f.height
+    return body, (hx - r * h / w, hy - r, hx + r * h / w, hy + r)
+
+
+def _overlap(a, b, slack=.004):
+    return a[0] < b[2] - slack and b[0] < a[2] - slack and a[1] < b[3] - slack and b[1] < a[3] - slack
+
+
+def test_group_shots_keep_every_head_in_sight(tmp_path):
+    """J's jungle: an elephant's head between two lions with the cub on top of it; a running cub on a lying lioness.
+    No figure's head is behind another figure's body, at the start of a shot or where walks and runs end; smaller
+    animals stand in front, and everyone stays on the page."""
+    prod = royal_family(tmp_path)
+    book = prod.storybook
+    shots = [shot for span in prod.spans if span.story for shot in span.story]
+    gathered = next(s for s in shots if {'kojo', 'mara', 'pendo'} <= {f.key for f in s.figures}
+                    and any(f.crowd for f in s.figures))
+    assert len([f for f in gathered.figures if f.crowd]) >= 2          # the animals are there, not dropped
+    ran = next(s for s in shots if any(f.key == 'pendo' and f.pose == 'run' for f in s.figures))
+    assert {'kojo', 'mara'} <= {f.key for f in ran.figures}
+    for shot in shots:
+        for local in (shot.end - .01, shot.end):          # poses are set by then; the second is where travel ends
+            order = sorted(shot.figures, key=lambda f: f.depth)
+            staged = [_staged(book, f, local, shot.end) for f in order]
+            for i, (behind, (_, head)) in enumerate(zip(order, staged)):
+                for front, (body, _) in zip(order[i + 1:], staged[i + 1:]):
+                    if behind.carried is front or 'nuzzle' in (behind.pose, front.pose):
+                        continue                             # touching on purpose
+                    assert not _overlap(head, body), (shot.start, behind.key, front.key)
+            for f, (body, _) in zip(order, staged):
+                assert -.01 < body[0] and body[2] < 1.01, (shot.start, f.key)
+        for m in (f for f in shot.figures if f.crowd):
+            for c in (f for f in shot.figures if not f.crowd and f.height > m.height):
+                if any(_overlap(a, b) for a in _staged(book, m, shot.end, shot.end)[:1]
+                       for b in _staged(book, c, shot.end, shot.end)[:1]):
+                    assert m.depth > c.depth, (shot.start, m.key, c.key)     # a smaller animal stands in front
+
+
+
+def test_a_crowned_character_wears_the_crown_on_its_head_in_every_pose(tmp_path):
+    """Kojo's and Mara's 'crown' mark had no picture and was dropped with a warning. The library's crown sits on the
+    head (above its head anchor, centred on it) whether the king stands, roars or walks."""
+    from kinodraw.engine import storybook
+    prod = royal_family(tmp_path)
+    book = prod.storybook
+    assert not [w for w in prod.warnings if 'crown' in w]
+    kojo = book._cast_figure('kojo')
+    assert 'crown' in kojo.marks
+    w, h = book.size
+    for pose in ('stand', 'roar', 'walk'):
+        f = storybook.Figure(**{**kojo.__dict__, 'pose': pose, 'cue': 0., 'x': .5})
+        shot = storybook.Shot(0., 2., figures=[f])
+        frame = np.asarray(book._draw(shot, 1.), np.int32)
+        doodle, mirror, _ = book._pose_doodle(f, 1.)
+        hx, hy = book._point(doodle, mirror, 'head', f.x, f.ground, f.height, book._reference(f))
+        jewel = (np.abs(frame - [0x00, 0xA6, 0xED]).max(axis=2) < 40)       # the crown's blue stones
+        ys, xs = np.nonzero(jewel)
+        assert len(xs) > 30, pose
+        assert abs(xs.mean() / w - hx) < .04, pose                        # centred on the head
+        assert hy - .25 < ys.mean() / h < hy, pose                        # on top of it, not floating off
+
+
+def test_a_cubs_roar_sounds_small_and_the_kings_full(tmp_path):
+    """J's jungle at 189 s: "Pendo grinned and tried a roar of his own. It still came out as a squeak." played the
+    adult roar. A baby or young figure's roar is its own short, high sound; the king keeps the full roar."""
+    from scipy.signal import welch
+    from kinodraw.audio import synth_sfx
+    prod = royal_family(tmp_path)
+    roars = {}
+    for span in prod.spans:
+        for shot in span.story or []:
+            for f in shot.figures:
+                if f.pose == 'roar' and f.cue is not None:
+                    roars[f.key] = span.start + f.cue
+    assert {'kojo', 'pendo'} <= set(roars)
+    cues = {round(c['t'], 3): c['kind'] for c in prod.cues() if c['id'].startswith('hybrid.story.')}
+    assert cues[round(roars['kojo'], 3)] == 'roar'
+    assert cues[round(roars['pendo'], 3)] == 'cub_roar'
+    centroid = lambda x: (lambda f, p: (f * p).sum() / p.sum())(*welch(x, 48000, nperseg=2048))
+    adult, cub = synth_sfx.render('roar'), synth_sfx.render('cub_roar')
+    assert len(cub) < len(adult) / 2 and centroid(cub) > 2 * centroid(adult)
+
+
+def test_drawn_story_rain_has_a_rain_bed(tmp_path):
+    """Story pages draw rain (Storybook._rain) but set no atmosphere layer, so the hybrid cued no rain sound. Every
+    rainy page now plays a rain bed for as long as it is on screen, and dry pages stay dry."""
+    prod = royal_family(tmp_path)
+    beds = [c for c in prod.cues() if c['kind'] == 'rain']
+    pages = [(span.start + shot.start, span.start + shot.end, prod.storybook._raining(shot))
+             for span in prod.spans for shot in span.story or []]
+    assert any(rain for *_, rain in pages)
+    for a, b, rain in pages:
+        middle = (a + b) / 2
+        covered = any(c['t'] <= middle <= c['t'] + c['dur'] for c in beds)
+        assert covered == rain, (a, b, rain)
+
+
+LONG_QUOTE = ('\n\nKojo turned to Mara and said, "The river rises every rainy season, and every single year the frogs and '
+              'the ants tell us it will flood."')
+
+
+def test_short_quotes_speak_from_a_bubble_long_ones_stay_in_the_caption(tmp_path):
+    """Claude Fables' speech bubble: a quoted line of 12 words or fewer pops up in a hand-drawn bubble near the
+    speaker's mouth, its tail pointing at the speaker, clear of the speaker's head; a long quote stays in the caption
+    alone. The bubble pops in and out inside its shot."""
+    prod, board, plan, tl = production(tmp_path, STORY + LONG_QUOTE)
+    book = prod.storybook
+    span = span_of(prod, 'Roar louder')
+    shot, at = shot_of(span, prod, 'Roar louder')
+    [bubble] = shot.bubbles
+    assert bubble.speaker == 'kojo' and bubble.text == 'Roar louder, son. A king must be heard.'
+    assert shot.start <= bubble.start <= at + .3 and bubble.end <= shot.end
+    assert not [b for s in span_of(prod, 'The river rises').story for b in s.bubbles]
+    t = (bubble.start + bubble.end) / 2
+    (x0, y0, x1, y1), tip, scale = book._bubble_layout(shot, bubble, t)
+    assert scale == 1 and book._bubble_layout(shot, bubble, bubble.start + .03)[2] < .8      # it pops in
+    kojo = next(f for f in shot.figures if f.key == 'kojo')
+    doodle, mirror, _ = book._pose_doodle(kojo, t)
+    mx, my = book._point(doodle, mirror, 'mouth', kojo.x, kojo.ground, kojo.height, book._reference(kojo))
+    sx, sy, _ = book._to_screen(mx, my, book._camera(shot, t))
+    w, h = book.size
+    assert np.hypot(tip[0] - sx, tip[1] - sy) < .06 * h                  # the tail points at Kojo's mouth
+    assert np.hypot(tip[0] - sx, tip[1] - sy) < np.hypot((x0 + x1) / 2 - sx, (y0 + y1) / 2 - sy)
+    _, head = book._shape(kojo, book._pose_name(kojo.pose), kojo.x)
+    hx0, hy0, _ = book._to_screen(head[0], head[1], book._camera(shot, t))
+    hx1, hy1, _ = book._to_screen(head[2], head[3], book._camera(shot, t))
+    assert not (x0 < hx1 and hx0 < x1 and y0 < hy1 and hy0 < y1)        # clear of the speaker's head
+    assert 0 <= x0 and x1 <= w and 0 <= y0 and y1 < .8 * h               # on the page, above the captions
+    frame = np.asarray(book._draw(shot, t), np.int32)
+    inside = frame[int(y0) + 12:int(y1) - 12, int(x0) + 12:int(x1) - 12]
+    assert (inside.min(axis=2) > 246).mean() > .5                       # the bubble's own white, not the paper
+
+
+def _rest(book, f, shot, local):
+    """The figure alone on a clear overlay (camera at rest): its alpha as a bool array."""
+    overlay = Image.new('RGBA', book.size, (0, 0, 0, 0))
+    book._figure(overlay, f, shot, local, [.5, .5, 1.])
+    return np.asarray(overlay.getchannel('A')) > 128
+
+
+def test_resting_figures_sway_with_their_feet_planted_and_blink(tmp_path):
+    """Idle life without seasickness: a standing figure shifts its weight while every paw stays on the ground line
+    (no rocking-horse tilt lifting the front or back paws), and it blinks, Claude Fables style, about every 2-4 s for
+    three frames; a blink only shuts the eyes."""
+    prod, board, plan, tl = production(tmp_path)
+    book = prod.storybook
+    span = span_of(prod, 'Deep in the jungle')
+    shot, at = shot_of(span, prod, 'Deep in the jungle')
+    kojo = next(f for f in shot.figures if f.key == 'kojo')
+    assert kojo.pose == 'stand'
+    ends = [t for t in ((k * math.pi + math.pi / 2 - kojo.phase) / 1.4 for k in range(-4, 12)) if t >= 0][:2]
+    lows, tops = [], []
+    for t in ends:
+        alpha = _rest(book, kojo, shot, t)
+        rows = np.nonzero(alpha.any(axis=1))[0]
+        cols = np.nonzero(alpha[rows.max() - 60:].any(axis=0))[0]                       # the paws' columns
+        x0, x1 = cols.min(), cols.max()
+        third = (x1 - x0) // 3
+        low = lambda a, b: np.nonzero(alpha[:, a:b].any(axis=1))[0].max()
+        lows.append((low(x0, x0 + third), low(x1 - third, x1 + 1)))
+        rows = np.nonzero(alpha.any(axis=1))[0]
+        head = alpha[rows.min():rows.min() + 40]
+        tops.append(np.nonzero(head.any(axis=0))[0].mean())
+    (back1, front1), (back2, front2) = lows
+    assert max(back1, front1, back2, front2) - min(back1, front1, back2, front2) <= 2      # paws stay on the ground
+    assert abs(tops[0] - tops[1]) > 4                                                      # yet the body moves
+    frames = np.arange(0., 15., 1 / 30)
+    shut = [book._blinking(kojo, t) for t in frames]
+    starts = [frames[i] for i in range(len(frames)) if shut[i] and (i == 0 or not shut[i - 1])]
+    runs = [sum(1 for _ in g) for k, g in itertools.groupby(shut) if k]
+    assert len(starts) >= 4 and max(runs) <= 3
+    assert all(1.4 <= b - a <= 4.6 for a, b in zip(starts, starts[1:]))
+    blink = next(t for t in starts if shot.start + .3 < t < shot.end - .3)
+    shut_eyes = np.asarray(book._draw(shot, blink + .04), np.int32)
+    book._blinking = lambda f, t: False
+    open_eyes = np.asarray(book._draw(shot, blink + .04), np.int32)
+    changed = np.abs(shut_eyes - open_eyes).max(axis=2) > 40
+    ys, xs = np.nonzero(changed)
+    doodle, mirror, _ = book._pose_doodle(kojo, blink)
+    ex, ey = book._point(doodle, mirror, 'eye', kojo.x, kojo.ground, kojo.height, book._reference(kojo))
+    sx, sy, _ = book._to_screen(ex, ey, book._camera(shot, blink + .04))
+    w, h = book.size
+    assert len(xs) and np.hypot(xs.mean() - sx, ys.mean() - sy) < .03 * h                 # only the eye changes
+    assert changed.mean() < .002
+    ink = lambda a: (a[ys, xs].max(axis=1) < 45).sum()
+    assert ink(shut_eyes) < .6 * ink(open_eyes)                                            # the pupil shuts

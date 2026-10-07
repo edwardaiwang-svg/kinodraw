@@ -161,6 +161,9 @@ class HybridProduction:
             if c['family'] not in ('feline', 'canine', 'human', 'other'):
                 self.warnings.append(f"hybrid: cast family {c['family']} uses quadruped fallback")
             dropped = set(c['marks']) - set(self.cast[c['id']].marks) - {'none'}
+            if STORY_DOODLES and plan['storyboard']['genre'] == 'story':
+                from .storybook import MARKS
+                dropped -= MARKS                 # the storybook draws these on its preset doodles
             if dropped:
                 self.warnings.append(f"hybrid: cast {c['id']} unsupported marks {sorted(dropped)}")
         self.style = plan['style']
@@ -1525,8 +1528,9 @@ class HybridProduction:
                 # legacy pages (labelled icons, people) during the join, which never belong in a story.
                 card_t = max(t, end_start + last.join_length) if last.story is not None else t
                 current = self.whiteboard.frame(card_t).convert('RGB')
-                array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
-                                          *self.size, kind='match', duration=last.join_length)
+                array = render_transition(np.asarray(previous), np.asarray(current), t - end_start, *self.size,
+                                          kind='page' if last.story is not None else 'match',
+                                          duration=last.join_length)      # a picture book turns to its last page
                 image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
                     self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
@@ -1543,6 +1547,16 @@ class HybridProduction:
             # Scientific panels follow the source clock and retain their exact
             # canvas/axis transform through both sides of every scene boundary.
             image = self._frame(span, t)
+        elif span.story is not None and i and self.spans[i - 1].story is not None:
+            # Two story pages: the old page keeps living until the join, then turns like any shot change (a wipe, or
+            # a two-frame dissolve where the same set continues), never a long dissolve of two crowded pictures.
+            previous = self.spans[i - 1]
+            if local < 0:
+                image = self._frame(previous, t)
+            elif kind == 'cut':
+                image = self._frame(span, t)
+            else:
+                image = self.storybook.turn(previous.story, t - previous.start, span.story, t - span.start, local)
         elif span.diagram and t >= span.diagram.window[0]:
             # The spoken glide cue owns these panels. A score-delayed join must
             # not hide their labels or substitute the previous scene.
@@ -1608,8 +1622,12 @@ class HybridProduction:
                     if start <= at < until:
                         cues.append({'t': at, 'kind': kind, 'strength': strength, 'id': f'hybrid.hit.{i}.{j}'})
             if span.story is not None:                       # the storybook's roars, timed to its drawn jaw
-                for j, at in enumerate(self.storybook.roar_cues(span.story, span.start)):
-                    cues.append({'t': at, 'kind': 'roar', 'id': f'hybrid.story.{i}.{j}'})
+                for j, (at, roar) in enumerate(self.storybook.roar_cues(span.story, span.start)):
+                    cues.append({'t': at, 'kind': roar, 'id': f'hybrid.story.{i}.{j}'})
+                for j, (a, b) in enumerate(self.storybook.rain(span.story)):    # drawn rain: a rain bed under it
+                    a = start if a <= 0 else span.start + a
+                    b = until if b >= span.end - span.start - 1e-6 else span.start + b
+                    cues.append({'t': a, 'kind': 'rain', 'dur': b - a, 'id': f'hybrid.rain.{i}.{j}'})
             for j, (actor, action, target) in enumerate(span.actions):
                 # An action with its own synthesized sound (audio.synth_sfx) plays it, at full strength: the kind's
                 # level keeps it audible under the narration. A pounce lands with an impact; only an animal cackles.

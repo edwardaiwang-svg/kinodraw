@@ -23,11 +23,18 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
+from . import ink
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
 ROAR_SECONDS = 2.4
-SHOT_DISSOLVE = .3
+# Page changes never ghost two pictures (J's jungle, 2026-10-07): a new set arrives behind a short slanted wipe
+# (Claude Fables' style change: eight frames, cubic out); a dissolve is kept only where the same set continues,
+# and lasts two frames. The face close-up cuts in on the eyes the camera pushed into.
+WIPE = .27
+BLEND = .07
+WIPE_ANGLE = 20                 # the edge leans like '/', revealing the new page from the left
+FACE_CUT = .07
 GROUND = .8                      # feet line as a share of the frame height, clear of the caption band
 ADULT_HEIGHT = .42               # an adult cast member's height as a share of the frame height
 SMALL = {'ant': .06, 'frog': .11, 'bird': .1, 'mouse': .08, 'snake': .12, 'porcupine': .13, 'rabbit': .12,
@@ -35,6 +42,27 @@ SMALL = {'ant': .06, 'frog': .11, 'bird': .1, 'mouse': .08, 'snake': .12, 'porcu
          'parrot': .12, 'fox': .15, 'wolf': .19, 'deer': .24, 'zebra': .26, 'gorilla': .26, 'bear': .27,
          'crocodile': .14, 'elephant': .34, 'giraffe': .4}
 ARBOREAL = {'monkey', 'bird', 'parrot', 'owl'}
+# Group staging (J's jungle, 2026-10-07): no head behind another body. A group too wide for the page is drawn
+# smaller, as if the camera pulled back; animals bigger than the cast stand a little behind it, smaller ones in
+# front of it. HEAD is a head's half height as a share of its figure's height.
+SCALES = (1., .88, .77, .67, .58)
+GAP = .015
+BACK_ROW = .035
+FRONT_ROW = 3
+HEAD = .16
+# Marks the storybook draws on a preset: a crown (the library's) sits on the head, CROWN of the character's height.
+MARKS = {'crown'}
+CROWN, CROWN_SIZE = 'fl_crown', .15
+# Claude Fables' speech bubble: a quoted line of BUBBLE_WORDS or fewer pops up in a hand-drawn bubble by the speaker's
+# mouth and types itself at TYPE_CPS characters a second; longer quotes stay in the caption alone.
+BUBBLE_WORDS = 12
+BUBBLE_POP, BUBBLE_OUT = .25, .15
+TYPE_CPS = 30
+BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
+# Idle life (J's jungle, 2026-10-07): a resting figure shifts its weight by leaning from its planted feet (a shear,
+# never a tilt that lifts the front or back paws) and blinks for BLINK seconds (3 frames) every 2.4-3.9 s.
+SWAY = .045
+BLINK = .1
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -138,10 +166,41 @@ def _svg(doodle_id):
     return raw, w, h
 
 
+@lru_cache(maxsize=256)
+def _shut(doodle_id):
+    """The doodle's SVG with its eyes shut, or None when it has no pupil (a dark circle) level with its eye anchor
+    (a face preset: on its eye line). Each pupil, with the iris, white and highlight drawn around it, becomes a closed
+    lid's curve."""
+    raw, _, _ = _svg(doodle_id)
+    anchors = meta(doodle_id).get('anchors') or {}
+    circles = [(m, float(m['cx']), float(m['cy']), float(m['r'])) for m in re.finditer(
+        r'<circle cx="(?P<cx>[-\d.]+)" cy="(?P<cy>[-\d.]+)" r="(?P<r>[-\d.]+)"[^>]*/>', raw)]
+    eye, line = anchors.get('eye'), (anchors.get('eyes') or [None, None])[1]
+    pupils = [(cx, cy, r) for m, cx, cy, r in circles if 'fill="#1B1B1B"' in m[0] and (
+        eye and r <= 14 and abs(cy - eye[1]) < 6 and abs(cx - eye[0]) < 60 or line is not None and abs(cy - line) < 6)]
+    if not pupils:
+        return None
+    cut, lids = set(), {}
+    for cx, cy, r in pupils:
+        reach = max(c[3] for c in circles if math.dist((c[1], c[2]), (cx, cy)) < 2.5)
+        drawn = [c for c in circles if math.dist((c[1], c[2]), (cx, cy)) + c[3] <= reach + 2.5]
+        cut |= {c[0].span() for c in drawn}
+        lids[min(c[0].start() for c in drawn)] = (
+            f'<path d="M{cx - reach:.1f} {cy:.1f}Q{cx:.1f} {cy + .55 * reach:.1f} {cx + reach:.1f} {cy:.1f}" '
+            f'fill="none" stroke-width="{max(3., .3 * reach):.1f}"/>')
+    out, at = [], 0
+    for a, b in sorted(cut):
+        out += [raw[at:a], lids.get(a, '')]
+        at = b
+    return ''.join(out) + raw[at:]
+
+
 @lru_cache(maxsize=160)
-def sprite(doodle_id, height, mirror=False):
-    """RGBA doodle at an exact pixel height, in its own colours (never recoloured), and its scale."""
+def sprite(doodle_id, height, mirror=False, shut=False):
+    """RGBA doodle at an exact pixel height, in its own colours (never recoloured), and its scale; ``shut`` draws it
+    with its eyes closed when it can."""
     raw, w, h = _svg(doodle_id)
+    raw = (_shut(doodle_id) if shut else None) or raw
     height = max(8, int(height))
     width = max(8, round(w * height / h))
     png = resvg_py.svg_to_bytes(svg_string=raw, width=width, height=height)
@@ -149,6 +208,30 @@ def sprite(doodle_id, height, mirror=False):
     if mirror:
         image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
     return image
+
+
+@lru_cache(maxsize=160)
+def crowned(doodle_id, px, mirror, crown_px, shut=False):
+    """The doodle at ``px`` with the crown on its head: centred over the head anchor (a face close-up's eyes), seated
+    a little into the top of the head or mane above it, the canvas grown upward when the crown rises above the
+    doodle's box. Returns (image, rows added on top)."""
+    image = sprite(doodle_id, px, mirror, shut)
+    c_left, c_top, c_right, c_bottom = _bbox(CROWN)
+    crown = sprite(CROWN, round(crown_px / max(.1, c_bottom - c_top)))       # crown_px is the drawn crown's height
+    anchors = meta(doodle_id).get('anchors') or {}
+    ax, ay = anchor(doodle_id, 'head' if 'head' in anchors or 'eyes' not in anchors else 'eyes', mirror)
+    cx = round(ax * image.width)
+    reach = max(1, round((c_right - c_left) * crown.width * .4))
+    alpha = np.asarray(image.getchannel('A'))[:round(ay * image.height), max(0, cx - reach):cx + reach + 1] > 128
+    tops = [int(np.argmax(column)) for column in alpha.T if column.any()]       # the head or mane under its rim
+    top = round(sum(tops) / len(tops)) if tops else round(ay * image.height)
+    y = top + round(.3 * crown_px) - round(c_bottom * crown.height)       # its rim sunk into the head or mane
+    pad = max(0, -y)
+    out = Image.new('RGBA', (image.width, image.height + pad), (0, 0, 0, 0))
+    out.alpha_composite(image, (0, pad))
+    x = cx - round((c_left + c_right) / 2 * crown.width)
+    out.alpha_composite(crown, (min(max(0, x), max(0, image.width - crown.width)), y + pad))
+    return out, pad
 
 
 @lru_cache(maxsize=384)
@@ -231,6 +314,15 @@ class Shot:
     lesson: bool = False
     title: str | None = None
     atmosphere: str = 'none'
+    bubbles: list = field(default_factory=list)
+
+
+@dataclass(eq=False)
+class Bubble:
+    speaker: str
+    text: str
+    start: float                      # span-local seconds it pops in and out
+    end: float
 
 
 def _seed(text):
@@ -248,7 +340,9 @@ class Storybook:
         self.title = title
         self.first = plan['scenes'][0]['beat_ids'][0] if plan['scenes'] else None
         self.facing = {}
+        self.at = {}             # where each character stood last: they keep their side
         self._paper = {}
+        self._bubbles = {}
 
     # ---------------- planning
     def prepare(self, spec, start, end):
@@ -267,6 +361,7 @@ class Storybook:
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
+                    previous.bubbles += [b for b in shot.bubbles if b.speaker in [g.key for g in previous.figures]]
                     for f in shot.figures:
                         if f.pose != 'stand' and f.cue is not None:
                             match = next((g for g in previous.figures if g.key == f.key), None)
@@ -280,6 +375,10 @@ class Storybook:
             shot.end = following.start
         shots[0].start = 0.
         shots[-1].end = end - start
+        for shot in shots:
+            for b in shot.bubbles:
+                b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
+            shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
         if spec['beat_ids'][0] == self.first and titled(self.title, self.by_id[self.first]['spoken']):
             shots[0].title = self.title         # the title once, on the first page
         return shots
@@ -311,28 +410,46 @@ class Storybook:
         props = list(dict.fromkeys([p for p in line.props if not _sky(p)] +
                                    [p for p in pictures if not _sky(p) and p not in line.props
                                     and not _animal(p)]))[:2]
-        sky = list(dict.fromkeys(line.sky + [p for p in pictures if _sky(p)]))[:2]
+        sky = []
+        for doodle in line.sky + [p for p in pictures if _sky(p)]:
+            if _sky_kind(doodle) not in [_sky_kind(d) for d in sky]:
+                sky.append(doodle)                              # one sun, one moon: never two different suns
+        sky = sky[:2]
         atmosphere = spec['atmosphere']['kind']
-        if atmosphere in ('night_stars', 'shooting_star', 'fog_with_shooting_star') and 'fl_crescent_moon' not in sky:
+        kinds = [_sky_kind(d) for d in sky]
+        if atmosphere in ('night_stars', 'shooting_star', 'fog_with_shooting_star') and 'moon' not in kinds:
             sky.append('fl_crescent_moon')
         if atmosphere == 'rain' and 'fl_cloud_with_rain' not in sky:
             sky.append('fl_cloud_with_rain')
-        if atmosphere in ('dawn', 'rays') and 'fl_sun' not in sky:
+        if atmosphere in ('dawn', 'rays') and 'sun' not in kinds:
             sky.append('fl_sun')
         if not (figures or line.crowd or props):
             props = ['fl_palm_tree', 'fl_deciduous_tree']      # never an empty page
         sides = [.12, .88]
+        resting = [f for f in figures if f.pose in ('lie', 'sleep', 'sit')] if any(f.travel for f in figures) else []
         for i, doodle in enumerate(props):
             tall = doodle in ('fl_deciduous_tree', 'fl_palm_tree', 'fl_evergreen_tree', 'fl_mountain')
-            shot.props.append((doodle, sides[i], GROUND - .02, .5 if tall else .3))
+            x = sides[i]
+            if resting and doodle in ('fl_deciduous_tree', 'fl_palm_tree'):
+                x, resting = sum(f.x for f in resting) / len(resting), []   # "where his parents rested": under it
+            shot.props.append((doodle, x, GROUND - .02, .5 if tall else .3))
         for i, doodle in enumerate(sky[:2]):
             shot.sky.append((doodle, (.83, .2)[i], .15, .16))
         shot.atmosphere = atmosphere
         self._crowd(shot, line, figures)
+        if line.speaker in [f.key for f in figures] and shot.eyes is None:
+            for q0, q1 in line.quotes:
+                text = line.text[q0 - line.start:q1 - line.start].strip().rstrip(',;:').strip()
+                cjk = sum(1 for ch in text if ink.is_cjk(ch))
+                if text and (cjk / 2 if cjk else len(text.split())) <= BUBBLE_WORDS:
+                    if shot.bubbles:
+                        shot.bubbles[-1].end = min(shot.bubbles[-1].end, at(q0) - .1)
+                    shot.bubbles.append(Bubble(line.speaker, text, max(begin, at(q0) - .1), at(q1) + .6))
         return shot
 
     def _remember(self, f):
         self.facing[f.key] = f.facing
+        self.at[f.key] = f.x
 
     def _layout(self, figures, line):
         n = len(figures)
@@ -355,25 +472,70 @@ class Storybook:
                 f.travel = .14 if f.pose == 'walk' else .22
             self._remember(f)
             return
-        # Adults on the outside facing in; a cub in front of them, between.
+        if walking and len(walking) < n:
+            self._arrive(walking, [f for f in figures if f not in walking])
+            for f in figures:
+                self._remember(f)
+            return
+        # Adults on the outside facing in, a cub between them; everyone keeps the side they had in the last shot.
+        side = lambda group: sorted(group, key=lambda f: self.at[f.key]) if all(f.key in self.at for f in group) else group
         babies = [f for f in figures if f.age == 'baby']
-        adults = [f for f in figures if f.age != 'baby']
-        order = adults[:1] + babies + adults[1:] if babies and len(adults) >= 2 else adults + babies
-        slots = {2: (.32, .68), 3: (.24, .5, .76), 4: (.18, .4, .62, .84)}[min(4, n)]
-        for f, x in zip(order, slots):
-            f.x = x
-            f.facing = 'r' if x < .5 else 'l' if x > .5 else ('r' if not adults else 'l')
+        adults = side([f for f in figures if f.age != 'baby'])
+        order = adults[:1] + babies + adults[1:] if babies and len(adults) >= 2 else side(adults + babies)
+        travel = .1 if walking else 0.
+        self._fit(order, lambda: self._pack(order, .04, .96 - travel))
+        for f in order:
+            f.facing = 'r' if f.x < .5 else 'l' if f.x > .5 else ('r' if not adults else 'l')
             if f.age == 'baby':
                 f.depth = 2
-        if walking:
-            for f in walking:
-                f.facing, f.travel = 'r', .1
+        for f in walking:
+            f.facing, f.travel = 'r', travel
         for f in figures:
             if f.pose == 'nuzzle':
                 partner = min((g for g in figures if g is not f), key=lambda g: abs(g.x - f.x))
                 f.facing = 'r' if partner.x > f.x else 'l'
                 f.x += (partner.x - f.x) * .35
             self._remember(f)
+
+    def _arrive(self, travellers, resting):
+        """"He ran to the great fig tree where his parents rested": the resting ones together on the right, facing
+        the one who comes running in from the left and stops in front of them instead of running over them."""
+        for f in resting:
+            f.facing = 'l'
+        for f in travellers:
+            f.facing, f.depth = 'r', 2
+
+        def arrange():
+            if not self._pack(resting, .3, .96, align='right'):
+                return False
+            self._pack(travellers, .04, .3, align='left')
+            stop = min(f.x - self._half(f) for f in resting) - .03
+            room = stop - max(f.x + self._half(f) for f in travellers)
+            for f in travellers:
+                f.travel = max(0., min(.22 if f.pose == 'run' else .14, room))
+            return room >= .1
+        self._fit(travellers + resting, arrange)
+
+    def _fit(self, figures, arrange):
+        """Run arrange() at the largest scale at which it fits the page: the figures shrink together, as when the
+        camera pulls back for a group shot."""
+        base = [f.height for f in figures]
+        for k in SCALES:
+            for f, height in zip(figures, base):
+                f.height = height * k
+            if arrange():
+                return k
+        return SCALES[-1]
+
+    def _pack(self, order, lo, hi, align='center'):
+        """Side by side between lo and hi with a small gap; False when they do not fit."""
+        halves = [self._half(f) for f in order]
+        total = 2 * sum(halves) + GAP * (len(order) - 1)
+        x = {'center': (lo + hi - total) / 2, 'right': hi - total, 'left': lo}[align]
+        for f, half in zip(order, halves):
+            f.x = x + half
+            x += 2 * half + GAP
+        return total <= hi - lo + 1e-9
 
     def _layout_lesson(self, figures, line):
         """Pendo's point of view: the cub small in the foreground corner looking up, the parent large, roaring."""
@@ -387,11 +549,71 @@ class Storybook:
 
     def _half_width(self, f):
         """Half the figure's drawn width, as a share of the frame width."""
-        doodle = preset(f.species, f.age, f.sex, 'stand', f.facing, f.marks)[0]
-        left, top, right, bottom = _bbox(doodle)
+        return self._half(f)
+
+    @staticmethod
+    def _pose_name(pose):
+        return {'look': 'stand', 'happy': 'stand', 'nuzzle': 'stand', 'bow': 'stand'}.get(pose, pose)
+
+    def _shape(self, f, pose, x):
+        """(body, head) frame boxes (x0, y0, x1, y1 shares) of a figure in one pose with its feet at (x, ground)."""
+        doodle, mirror = preset(f.species, f.age, f.sex, pose, f.facing, f.marks)
+        left, top, right, bottom = _bbox(doodle, mirror)
+        box = _box(doodle, f.height, self._reference(f))
         _, sw, sh = _svg(doodle)
         w, h = self.size
-        return f.height / max(.05, bottom - top) * (right - left) * sw / sh * h / w / 2
+        width = box * sw / sh * h / w
+        middle = (left + right) / 2
+        body = (x + (left - middle) * width, f.ground - (bottom - top) * box, x + (right - middle) * width, f.ground)
+        ax, ay = anchor(doodle, 'head', mirror)
+        hx, hy, r = x + (ax - middle) * width, f.ground - (bottom - ay) * box, HEAD * f.height
+        return body, (hx - r * h / w, hy - r, hx + r * h / w, hy + r)
+
+    def _shapes(self, f):
+        """Every (body, head) a figure shows in its shot: standing and in its pose, where it starts and ends."""
+        ends = {f.x, f.x + (1 if f.facing == 'r' else -1) * f.travel}
+        return [self._shape(f, pose, x) for pose in {'stand', self._pose_name(f.pose)} for x in ends]
+
+    def _half(self, f):
+        return max(body[2] - body[0] for body, _ in (self._shape(f, pose, 0.)
+                                                     for pose in {'stand', self._pose_name(f.pose)})) / 2
+
+    def _clear(self, f, others):
+        """No body of f's covers a head drawn behind it, no head of f's is behind a body in front of it, and within
+        one row f stands beside the others instead of on them."""
+        mine = self._shapes(f)
+        for g in others:
+            if g is f or 'nuzzle' in (f.pose, g.pose) or g.carried is f or f.carried is g:
+                continue
+            for body, head in mine:
+                for other, other_head in self._shapes(g):
+                    if (g.depth > f.depth and _overlap(head, other) or g.depth < f.depth and _overlap(other_head, body)
+                            or g.depth == f.depth and _overlap(body, other, .03)):
+                        return False
+        return True
+
+    def _place(self, m, placed, subject):
+        """Somewhere on the page where m keeps every head in sight, clear of the cast and spread from the other
+        animals, else beside the cast member it turns to (``subject``); False when there is no such place."""
+        half = self._half(m)
+        lo, hi = half + .02, 1 - half - .02 - m.travel
+        if lo > hi:
+            return False
+        cast = [body for g in placed if not g.crowd for body, _ in self._shapes(g)]
+        crowd = [g.x for g in placed if g.crowd]
+
+        def cost(x):
+            covers = sum(max(0., min(x + half, b[2]) - max(x - half, b[0])) for b in cast)
+            return (round(covers, 3), -round(min((abs(x - c) for c in crowd), default=1.), 2),
+                    abs(x - subject.x) if subject else 0.)
+        for x in sorted((lo + (hi - lo) * i / 40 for i in range(41)), key=cost):
+            if m.depth < min((g.depth for g in placed if not g.crowd), default=m.depth) and cost(x)[0]:
+                continue                  # the back row stands beside the cast, never in a gap between its heads
+            m.x = x
+            m.facing = ('r' if subject.x > x else 'l') if subject else ('r' if x < .5 else 'l')
+            if self._clear(m, placed):
+                return True
+        return False
 
     def _crowd(self, shot, line, figures):
         crowd = list(line.crowd)
@@ -409,47 +631,49 @@ class Storybook:
         members = [Figure(f'crowd-{name}-{i}', name, 'adult', None, (), pose=pose, height=SMALL.get(name, .16),
                           depth=0, crowd=True, phase=_seed(name + str(i))) for i, name in enumerate(species)]
         climbers = [m for m in members if m.species in ARBOREAL and trees and leader is None]
-        walkers = [m for m in members if m not in climbers]
         for i, m in enumerate(climbers):
             m.x, m.ground = trees[0] - .04 + .05 * (i % 3), .44 + .05 * (i % 2)
+        walkers = [m for m in members if m not in climbers]
+        sizes = {m.key: m.height for m in walkers}
         if leader is not None:
-            # A procession: the leader in front, everyone else in a line behind on the path.
+            # A procession: the leader in front, everyone else in one line behind on the path, smaller if the line
+            # is long; whoever still does not fit stays off the page.
             leader.x = .6
-            x = leader.x - self._half_width(leader)
-            for m in walkers:
-                half = self._half_width(m)
-                x -= half + .015
-                m.x, m.ground, m.facing, m.travel, m.pose = x, GROUND - .03, leader.facing, leader.travel, leader.pose
-                x -= half
-            behind = [m for m in walkers if m.x - self._half_width(m) < .02][:3]
-            walkers[:] = [m for m in walkers if m.x - self._half_width(m) >= .02] + behind
-            for i, m in enumerate(behind):            # the tail of the line walks on the path further back
-                m.height *= .75
-                m.x, m.ground = .56 + .09 * i, GROUND - .17
+            for k in SCALES:
+                x = leader.x - self._half(leader) - GAP
+                for m in walkers:
+                    m.height, m.ground, m.facing, m.travel, m.pose = sizes[m.key] * k, GROUND - .03, leader.facing, \
+                        leader.travel, leader.pose
+                    half = self._half(m)
+                    m.x = x - half
+                    x -= 2 * half + GAP
+                if x >= 0.:
+                    break
+            walkers = [m for m in walkers if m.x - self._half(m) >= .01]
         else:
-            blocked = [(f.x, self._half_width(f) + .03) for f in figures] + \
-                      [(x, .07) for _, x, *_ in shot.props]
-            slots = [x for x in (.08, .2, .32, .44, .56, .68, .8, .92)]
-            free = [x for x in slots if all(abs(x - c) > r + .04 for c, r in blocked)]
-            back = []
-            if len(walkers) > len(free):
-                back, walkers = walkers[len(free):], walkers[:len(free)]
-            if walkers and len(walkers) < len(free):
-                free = [free[round(j * (len(free) - 1) / max(1, len(walkers) - 1))] for j in range(len(walkers))] \
-                    if len(walkers) > 1 else [free[len(free) // 2]]
-            for m, x in zip(walkers, free):
-                m.x, m.ground = x, GROUND - .04
-            for i, m in enumerate(back):               # those who do not fit stand further back, smaller
-                m.height *= .7
-                m.x, m.ground = .14 + .72 * (i + .5) / len(back), GROUND - .17
-            subject = next(iter(figures), None)
-            for i, m in enumerate(members):
-                m.facing = ('r' if subject.x > m.x else 'l') if subject else ('r' if i % 2 else 'l')
-        members = climbers + walkers + [m for m in members if m not in climbers and m not in walkers]
-        if leader is not None:
-            members = climbers + walkers
+            # A gathering: the cast where the layout put it (drawn smaller if the page is crowded), animals bigger
+            # than the cast a little behind it, smaller ones in front, each where no head is hidden.
+            homes = [(f.x, f.height, f.travel) for f in figures]
+            shortest = min((f.height for f in figures), default=.2)
+            behind = sorted((m for m in walkers if m.height >= shortest), key=lambda m: -m.height)
+            front = sorted((m for m in walkers if m.height < shortest), key=lambda m: -m.height)
+            subject = figures[-1] if figures else None     # "bowed her head, not to Kojo, but to Pendo"
+            for k in SCALES:
+                for f, (x, height, travel) in zip(figures, homes):
+                    f.x, f.height, f.travel = .5 + (x - .5) * k, height * k, travel * k
+                placed, missing = list(figures) + climbers, []
+                for m in behind + front:
+                    m.height = sizes[m.key] * k * (.9 if m in behind else 1.)
+                    m.ground, m.depth = (GROUND - BACK_ROW, 0) if m in behind else (GROUND, FRONT_ROW)
+                    (placed if self._place(m, placed, subject) else missing).append(m)
+                if not missing:
+                    break
+            walkers = [m for m in walkers if m not in missing]
+            for f in figures:
+                self._remember(f)
+        members = climbers + walkers
         for m in members:
-            half = self._half_width(m)
+            half = self._half(m)
             m.x = min(1 - half - .01 - m.travel, max(half + .01, m.x)) if half < .45 else .5
         shot.figures.extend(members)
 
@@ -462,11 +686,37 @@ class Storybook:
     def frame(self, shots, local):
         i = max(0, next((k for k in range(len(shots) - 1, -1, -1) if local >= shots[k].start), 0))
         image = self._draw(shots[i], local)
-        if i and local - shots[i].start < SHOT_DISSOLVE:
-            before = self._draw(shots[i - 1], local)
-            u = (local - shots[i].start) / SHOT_DISSOLVE
-            image = Image.blend(before, image, u * u * (3 - 2 * u))
+        if i:
+            kind = self.turn_kind(shots[i - 1], shots[i])
+            since = local - shots[i].start
+            if since < (BLEND if kind == 'blend' else WIPE):
+                image = self._turn(self._draw(shots[i - 1], local), image, kind, since)
         return image
+
+    def turn(self, before_shots, before_local, after_shots, after_local, since):
+        """A scene join between two story spans, ``since`` seconds after it: the page turns like any shot change."""
+        after = self.frame(after_shots, after_local)
+        i = max(0, next((k for k in range(len(after_shots) - 1, -1, -1) if after_local >= after_shots[k].start), 0))
+        kind = self.turn_kind(before_shots[-1], after_shots[i])
+        if since >= (BLEND if kind == 'blend' else WIPE):
+            return after
+        return self._turn(self.frame(before_shots, before_local), after, kind, max(0., since))
+
+    @staticmethod
+    def _set(shot):
+        """What a page shows besides its cast and crowd: its setting, sky, weather and framing."""
+        return (tuple(shot.props), tuple(d for d, *_ in shot.sky), shot.atmosphere, shot.lesson, bool(shot.title))
+
+    def turn_kind(self, before, after):
+        """'blend' where the same set continues, 'wipe' for a new set or after a close-up."""
+        return 'blend' if before.eyes is None and self._set(before) == self._set(after) else 'wipe'
+
+    def _turn(self, before, after, kind, since):
+        if kind == 'blend':
+            return Image.blend(before, after, min(1., since / BLEND))
+        from .motion import wipe_mask
+        p = 1 - (1 - min(1., since / WIPE)) ** 3
+        return Image.composite(after, before, wipe_mask(self.size, p, WIPE_ANGLE, soft=4))
 
     def _pose_doodle(self, f, local):
         """(doodle, mirror) for the figure's pose at this time."""
@@ -484,10 +734,10 @@ class Storybook:
             return preset(f.species, f.age, f.sex, 'walk', f.facing, f.marks) + (pose,)
         return preset(f.species, f.age, f.sex, name, f.facing, f.marks) + (pose,)
 
-    def _draw(self, shot, local):
-        w, h = self.size
+    def _camera(self, shot, local):
+        """[x, y, zoom] of the camera over the page: a gentle push in, a push into the eyes, a roar's shake."""
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
-        cam = [.5, .5, 1. + .035 * u]                      # gentle push in
+        cam = [.5, .5, 1. + .035 * u]
         shake = 0.
         roaring = [f for f in shot.figures if f.pose == 'roar' and f.cue is not None]
         for f in roaring:
@@ -497,6 +747,11 @@ class Storybook:
             cam = self._eye_camera(shot, local, cam)
         cam[0] += shake * .0016 * math.sin(local * 39)
         cam[1] += shake * .0016 * math.sin(local * 31)
+        return cam
+
+    def _draw(self, shot, local):
+        w, h = self.size
+        cam = self._camera(shot, local)
         canvas = self._page(cam)
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         for doodle, x, y, height in shot.sky:
@@ -511,11 +766,14 @@ class Storybook:
         effects = []
         for f in sorted(shot.figures, key=lambda f: f.depth):
             effects += self._figure(overlay, f, shot, local, cam)
-        if getattr(shot, 'atmosphere', 'none') == 'rain' or any(d == 'fl_cloud_with_rain' for d, *_ in shot.sky):
+        if self._raining(shot):
             self._rain(overlay, local)
         for effect in effects:
             effect(overlay)
         face = self._face_overlay(shot, local)
+        for bubble in shot.bubbles:
+            if bubble.start <= local < bubble.end:
+                self._bubble(overlay, shot, bubble, local, cam)
         canvas.paste(overlay, (0, 0), overlay)
         if face is not None:
             image, alpha = face
@@ -543,11 +801,14 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1., pin=None, reference=None):
+               anchor_y=1., pin=None, reference=None, crown=0., shear=0., shut=False):
         """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
 
         ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
-        character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground)."""
+        character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground);
+        ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every sway and lean;
+        ``shear`` leans the doodle from its feet (the share of its height its top moves sideways); ``shut`` closes
+        its eyes."""
         w, h = self.size
         sx, sy, zoom = self._to_screen(x, ground, cam, parallax)
         left, top, right, bottom = _bbox(doodle, mirror)
@@ -556,14 +817,25 @@ class Storybook:
             return None
         step = max(2, int(px * .015))
         px = round(px / step) * step        # a bounded set of cached sizes during camera pushes
-        image = sprite(doodle, px, mirror)
+        image = sprite(doodle, px, mirror, shut)
+        foot_x, foot_y = (left + right) / 2 * image.width, (top + (bottom - top) * anchor_y) * image.height
+        if pin is not None:
+            foot_x, foot_y = pin[0] * image.width, pin[1] * image.height
+        if crown:
+            image, pad = crowned(doodle, px, mirror, max(8, round(crown * h * zoom / step) * step), shut)
+            foot_y += pad
         if squash:
+            before = image.size
             image = image.resize((max(1, round(image.width / (1 - squash))), max(1, round(image.height * (1 - squash)))),
                                  Image.Resampling.BICUBIC)
+            foot_x, foot_y = foot_x * image.width / before[0], foot_y * image.height / before[1]
+        if shear:
+            k = shear * image.height / max(1., foot_y)          # per row, so the top moves shear of the height
+            pad = math.ceil(abs(k) * foot_y) + 2
+            image = image.transform((image.width + 2 * pad, image.height), Image.Transform.AFFINE,
+                                    (1, k, -pad - k * foot_y, 0, 1, 0), resample=Image.Resampling.BICUBIC)
+            foot_x += pad
         iw, ih = image.size
-        foot_x, foot_y = (left + right) / 2 * iw, (top + (bottom - top) * anchor_y) * ih
-        if pin is not None:
-            foot_x, foot_y = pin[0] * iw, pin[1] * ih
         if rotate:
             pad = round(max(iw, ih) * .25)
             padded = Image.new('RGBA', (iw + 2 * pad, ih + 2 * pad), (0, 0, 0, 0))
@@ -581,11 +853,11 @@ class Storybook:
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
         x, ground = f.x, f.ground
         direction = 1 if f.facing == 'r' else -1
-        rotate, squash, dy = 0., 0., 0.
+        rotate, squash, dy, shear = 0., 0., 0., 0.
         breath = math.sin(local * 2.6 + f.phase)
         squash = .012 * breath
         if pose in ('stand', 'look', 'sit', 'lie', 'sleep', 'look_up'):   # a resting figure shifts its weight
-            rotate = direction * (.8 if pose == 'sleep' else 2.2) * math.sin(local * 1.4 + f.phase)
+            shear = direction * SWAY * (.4 if pose == 'sleep' else 1.) * math.sin(local * 1.4 + f.phase)
         if pose in ('walk', 'run', 'carry') or (f.travel and pose != 'stand'):
             rate = 2.2 if pose == 'run' else 1.4
             step = abs(math.sin(math.pi * rate * (local + f.phase)))
@@ -610,7 +882,8 @@ class Storybook:
             x += direction * roar.dx * .0006
         reference = self._reference(f)
         self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash,
-                    reference=reference)
+                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0., shear=shear,
+                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local))
         effects = []
         if f.carried is not None:
             c = f.carried
@@ -629,6 +902,13 @@ class Storybook:
                 o, 'fl_zzz', fig.facing == 'l', x0 + (.06 if fig.facing == 'r' else -.06) * fig.height / ADULT_HEIGHT,
                 fig.ground - fig.height * .75 + .01 * math.sin(local * 2), fig.height * .3, cam))
         return effects
+
+    @staticmethod
+    def _blinking(f, local):
+        """A character's idle blink: BLINK long, at an irregular moment of every 3 s (2.4 or 3.9 s apart)."""
+        t = local + 3 * f.phase / math.tau
+        k = math.floor(t / 3)
+        return 0 <= t - 3 * k - 1.5 * ((k * .618034 + f.phase) % 1) < BLINK
 
     def _reference(self, f):
         """The character's standing preset: the scale every one of its poses is drawn at."""
@@ -680,6 +960,11 @@ class Storybook:
             rx, ry = f.height * h * zoom * .55, f.height * h * zoom * .06
             draw.ellipse((sx - rx, sy - ry, sx + rx, sy + ry), fill=(60, 60, 50, 34))
 
+    @staticmethod
+    def _raining(shot):
+        """The page draws falling rain."""
+        return shot.atmosphere == 'rain' or any(d == 'fl_cloud_with_rain' for d, *_ in shot.sky)
+
     def _fog(self, overlay, local):
         w, h = self.size
         band = Image.new('RGBA', (w, h), (0, 0, 0, 0))
@@ -720,12 +1005,101 @@ class Storybook:
         start = max(shot.start, shot.eyes_at - .3) + 1.3          # once the push has landed on the eyes
         if doodle is None or local < start:
             return None
-        alpha = min(1., (local - start) / .25)
+        alpha = min(1., (local - start) / FACE_CUT)
         w, h = self.size
         page = self.paper(w, h).copy().convert('RGBA')
         push = 1 + .05 * min(1., (local - start) / 3)
-        self._paste(page, doodle, False, .5, .5 + .36 * push, .72 * push, [.5, .5, 1.], anchor_y=1.)
+        self._paste(page, doodle, False, .5, .5 + .36 * push, .72 * push, [.5, .5, 1.], anchor_y=1.,
+                    crown=.2 * push if 'crown' in f.marks else 0., shut=self._blinking(f, local))
         return page.convert('RGB'), alpha
+
+    def _bubble_plan(self, shot, bubble):
+        """Where a bubble sits on the page (camera at rest), worked out once: (mouth in frame shares, box and tip in
+        pixels, text lines, font size, language). The box sits as near the speaker's mouth as it can, above it,
+        clear of every head on the page and above the captions; the tail runs down from its bottom edge to the mouth."""
+        if bubble in self._bubbles:
+            return self._bubbles[bubble]
+        w, h = self.size
+        f = next(g for g in shot.figures if g.key == bubble.speaker)
+        middle = (bubble.start + bubble.end) / 2
+        doodle, mirror, _ = self._pose_doodle(f, middle)
+        mouth = self._point(doodle, mirror, 'mouth', f.x, f.ground, f.height, self._reference(f))
+        mx, my = mouth[0] * w, mouth[1] * h
+        lang = 'zh' if any(ink.is_cjk(ch) for ch in bubble.text) else 'en'
+        lines, size = ink.fit_text(bubble.text, lang, .3 * w, 3, round(.04 * h), min_size=round(.028 * h))
+        bw = max(ink.text_width(line, lang, size) for line in lines) + 1.6 * size
+        bh = len(lines) * 1.25 * size + 1.1 * size
+        heads = [(x0 * w, y0 * h, x1 * w, y1 * h) for g in shot.figures for _, (x0, y0, x1, y1) in self._shapes(g)]
+        bodies = [(x0 * w, y0 * h, x1 * w, y1 * h) for g in shot.figures for (x0, y0, x1, y1), _ in self._shapes(g)]
+        pad, side, edge = .015 * h, (1 if f.facing == 'r' else -1), (.55 + .4) * size    # corner radius + tail
+        best = None
+        for y0 in np.arange(.03 * h, min(.76 * h, my - .08 * h) - bh, .015 * h):     # a tail long enough to read
+            for x0 in np.arange(.02 * w, .98 * w - bw, .01 * w):
+                box = (x0, y0, x0 + bw, y0 + bh)
+                if any(_overlap(box, (a - pad, b - pad, c + pad, d + pad), 0) for a, b, c, d in heads):
+                    continue
+                base = min(max(mx, x0 + edge), x0 + bw - edge)
+                tail = math.hypot(base - mx, y0 + bh - my)
+                covered = sum(max(0, min(box[2], c) - max(x0, a)) * max(0, min(box[3], d) - max(y0, b))
+                              for a, b, c, d in bodies) / (bw * bh)
+                cost = tail + .25 * h * covered + (.04 * h if (x0 + bw / 2 - mx) * side < 0 else 0)
+                if best is None or cost < best[0]:
+                    best = (cost, box, base)
+        if best is None:
+            self._bubbles[bubble] = None
+            return None
+        _, box, base = best
+        reach = math.hypot(base - mx, box[3] - my)
+        tip = (mx + (base - mx) * .03 * h / max(1., reach), my + (box[3] - my) * .03 * h / max(1., reach))
+        plan = (mouth, box, tip, base, lines, size, lang, _seed(bubble.text))
+        self._bubbles[bubble] = plan
+        return plan
+
+    def _bubble_layout(self, shot, bubble, local):
+        """(box, tip, scale) on screen: the bubble follows its speaker's mouth under the camera; it pops in with a
+        little overshoot and shrinks away at its end."""
+        plan = self._bubble_plan(shot, bubble)
+        if plan is None:
+            return None
+        (mx, my), box, tip, *_ = plan
+        w, h = self.size
+        sx, sy, _ = self._to_screen(mx, my, self._camera(shot, local))
+        dx, dy = sx - mx * w, sy - my * h
+        u = (local - bubble.start) / BUBBLE_POP
+        if u < 1:
+            c = 1.70158
+            scale = .4 + .6 * (1 + (c + 1) * (u - 1) ** 3 + c * (u - 1) ** 2)
+        else:
+            scale = min(1., max(0., (bubble.end - local) / BUBBLE_OUT)) ** .5
+        return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy), (tip[0] + dx, tip[1] + dy), scale
+
+    def _bubble(self, overlay, shot, bubble, local, cam):
+        layout = self._bubble_layout(shot, bubble, local)
+        if layout is None or layout[2] <= .05:
+            return
+        (x0, y0, x1, y1), (tx, ty), scale = layout
+        _, box, tip, base, lines, size, lang, seed = self._bubble_plan(shot, bubble)
+        image, (ox, oy) = _bubble_shape(round(box[2] - box[0]), round(box[3] - box[1]), round(base - box[0]),
+                                        round(tip[0] - box[0]), round(tip[1] - box[1]), size, seed)
+        image = image.copy()
+        cps = max(TYPE_CPS, len(bubble.text) / max(.4, .55 * (bubble.end - bubble.start)))
+        shown = int(max(0., local - bubble.start - .1) * cps)
+        draw = ImageDraw.Draw(image)
+        y = oy + .55 * size
+        for line in lines:
+            x = ox + .8 * size
+            for text, font in ink.font_runs(line[:max(0, shown)], lang, size):
+                draw.text((x, y), text, font=font, fill=BUBBLE_INK)
+                x += font.getlength(text)
+            shown -= len(line) + 1
+            y += 1.25 * size
+        px, py = ox + tip[0] - box[0], oy + tip[1] - box[1]       # the tail's tip in the image
+        if scale != 1:
+            image = image.resize((max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+                                 Image.Resampling.BICUBIC)
+            px, py = px * scale, py * scale
+        at = (round(tx - px), round(ty - py))
+        overlay.alpha_composite(image, (max(0, at[0]), max(0, at[1])), (max(0, -at[0]), max(0, -at[1])))
 
     def _title(self, canvas, title, local):
         if local > 4.5:
@@ -746,9 +1120,56 @@ class Storybook:
         canvas.paste(layer, (0, 0), layer)
 
     def roar_cues(self, shots, start):
-        """Absolute times of on-screen roars, for the synthesized roar."""
-        return sorted({start + f.cue for shot in shots for f in shot.figures if f.pose == 'roar' and f.cue is not None
-                       and shot.start - .05 <= f.cue < shot.end})
+        """(absolute time, sound) of on-screen roars: a cub's try is its own small 'cub_roar', an adult's the roar."""
+        return sorted({(start + f.cue, 'cub_roar' if f.age in ('baby', 'young') else 'roar')
+                       for shot in shots for f in shot.figures
+                       if f.pose == 'roar' and f.cue is not None and shot.start - .05 <= f.cue < shot.end})
+
+    def rain(self, shots):
+        """Span-local (start, end) stretches whose pages draw rain, neighbouring rainy pages joined."""
+        out = []
+        for shot in shots:
+            if self._raining(shot):
+                if out and abs(out[-1][1] - shot.start) < 1e-6:
+                    out[-1] = (out[-1][0], shot.end)
+                else:
+                    out.append((shot.start, shot.end))
+        return out
+
+
+@lru_cache(maxsize=32)
+def _bubble_shape(bw, bh, base, tx, ty, size, seed):
+    """A hand-drawn speech bubble: a wobbly rounded box with its tail running from ``base`` on the bottom edge to the
+    tip (tx, ty), all in box pixels. Returns (image, offset of the box's top-left corner in the image)."""
+    k, stroke, r, tail = 3, max(3, round(size * .13)), .55 * size, .4 * size
+    corners = ((bw - r, r, -90), (bw - r, bh - r, 0), (r, bh - r, 90), (r, r, 180))
+    points = []
+    for cx, cy, a0 in corners:
+        for i in range(9):
+            a = math.radians(a0 + 90 * i / 8)
+            points.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+        if a0 == 0:                                   # along the bottom edge, right to left: the tail
+            points += [(base + tail, bh), (tx, ty), (base - tail, bh)]
+    wobbly, run = [], 0.             # a slow wobble along the outline, as if drawn by hand; the tail's tip stays put
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1]):
+        length = math.hypot(x1 - x0, y1 - y0)
+        for i in range(max(1, math.ceil(length / (.4 * size)))):
+            u = i / max(1, math.ceil(length / (.4 * size)))
+            x, y = x0 + (x1 - x0) * u, y0 + (y1 - y0) * u
+            calm = min(1., math.hypot(x - tx, y - ty) / size)
+            wobbly.append((x + calm * .06 * size * math.sin((run + u * length) / (2.2 * size) + seed),
+                           y + calm * .06 * size * math.sin((run + u * length) / (1.7 * size) + 2 * seed)))
+        run += length
+    margin = stroke + 2
+    left, top = min(0, tx) - margin, -margin
+    width, height = max(bw, tx) - left + margin, max(bh, ty) - top + margin
+    big = Image.new('RGBA', (round(width * k), round(height * k)), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(big)
+    outline = [((x - left) * k, (y - top) * k) for x, y in wobbly]
+    draw.polygon(outline, fill=BUBBLE_FILL)
+    draw.line(outline + outline[:2], fill=BUBBLE_INK, width=stroke * k, joint='curve')
+    image = big.resize((round(width), round(height)), Image.Resampling.LANCZOS)
+    return image, (-left, -top)
 
 
 def _wrap(text, font, width, draw):
@@ -761,6 +1182,16 @@ def _wrap(text, font, width, draw):
         else:
             line = trial
     return lines + ([line] if line else [])
+
+
+def _overlap(a, b, slack=.004) -> bool:
+    """Two (x0, y0, x1, y1) boxes overlap by more than ``slack``."""
+    return a[0] < b[2] - slack and b[0] < a[2] - slack and a[1] < b[3] - slack and b[1] < a[3] - slack
+
+
+def _sky_kind(doodle_id) -> str:
+    """'sun', 'moon' or the doodle itself: a sky shows one of each."""
+    return next((kind for kind in ('sun', 'moon') if re.search(rf'(?:^|_){kind}(?:_|$)', doodle_id)), doodle_id)
 
 
 def _sky(doodle_id) -> bool:

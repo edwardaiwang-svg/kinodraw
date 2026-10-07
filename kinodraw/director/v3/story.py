@@ -118,6 +118,7 @@ class Sentence:
     eyes_at: int = 0
     roar_lesson: bool = False                          # a parent roars for a watching cub
     crowd_pose: str | None = None                      # "The ants were marching": the crowd's own action
+    quotes: list = field(default_factory=list)         # (start, end) char offsets in the beat of each quoted line
 
 
 def sentences(text: str) -> list[tuple[int, int]]:
@@ -239,6 +240,7 @@ class Reader:
             quotes = _quoted(body)
             refs = self.references(body, quotes)
             s = Sentence(a, b, body)
+            s.quotes = [(a + q0 + 1, a + q1) for q0, q1 in quotes]
             named = list(dict.fromkeys(cid for _, cid, _, _ in refs))
             outside = [r for r in refs if not _inside(quotes, r[0])]
             s.subject = outside[0][1] if outside else None
