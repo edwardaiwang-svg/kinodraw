@@ -1,8 +1,7 @@
 """Picture-book story scenes: preset doodle characters on the whiteboard paper.
 
-J's ruling (2026-10-07): story characters are full-body preset doodles from the picture library ("regress to the
-preset doodles instead of inventing entirely new sprites locally"), never the procedural creature rig or a human
-figure standing in for an animal. Library doodles keep their own colours.
+Story characters are full-body preset doodles from the picture library, never the procedural creature rig or a
+human figure standing in for an animal. Library doodles keep their own colours.
 
 Each scene span is cut into shots, one per narrated sentence, timed by the narration's character times. A shot stages
 who the sentence puts on stage (named, pronoun or kin references), in poses read from its verbs, with the animals
@@ -28,7 +27,7 @@ from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
 ROAR_SECONDS = 2.4
-# Page changes never ghost two pictures (J's jungle, 2026-10-07): a new set arrives behind a short slanted wipe
+# Page changes never ghost two pictures: a new set arrives behind a short slanted wipe
 # (Claude Fables' style change: eight frames, cubic out); a dissolve is kept only where the same set continues,
 # and lasts two frames. The face close-up cuts in on the eyes the camera pushed into.
 WIPE = .27
@@ -42,7 +41,7 @@ SMALL = {'ant': .06, 'frog': .11, 'bird': .1, 'mouse': .08, 'snake': .12, 'porcu
          'parrot': .12, 'fox': .15, 'wolf': .19, 'deer': .24, 'zebra': .26, 'gorilla': .26, 'bear': .27,
          'crocodile': .14, 'elephant': .34, 'giraffe': .4}
 ARBOREAL = {'monkey', 'bird', 'parrot', 'owl'}
-# Group staging (J's jungle, 2026-10-07): no head behind another body. A group too wide for the page is drawn
+# Group staging: no head behind another body. A group too wide for the page is drawn
 # smaller, as if the camera pulled back; animals bigger than the cast stand a little behind it, smaller ones in
 # front of it. HEAD is a head's half height as a share of its figure's height.
 SCALES = (1., .88, .77, .67, .58)
@@ -59,7 +58,7 @@ BUBBLE_WORDS = 12
 BUBBLE_POP, BUBBLE_OUT = .25, .15
 TYPE_CPS = 30
 BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
-# Idle life (J's jungle, 2026-10-07): a resting figure shifts its weight by leaning from its planted feet (a shear,
+# Idle life: a resting figure shifts its weight by leaning from its planted feet (a shear,
 # never a tilt that lifts the front or back paws) and blinks for BLINK seconds (3 frames) every 2.4-3.9 s.
 SWAY = .045
 LONE_PUSH = .10                  # the camera's push over a shot of one resting figure (any other shot: .035)
