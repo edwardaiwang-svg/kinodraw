@@ -109,7 +109,7 @@ def test_pack_pictures_draw_with_a_visible_ink_line(pack):
     assert lined.sum() > .6 * drawn.sum()           # the line layer is the picture itself, not an empty sheet
 
 
-def test_coloured_doodles_stay_first_and_the_offline_director_ignores_packs():
+def test_coloured_doodles_stay_first_and_the_director_matches_doodles_first():   # icons: tests/test_icon_fallback.py
     studio = Matcher('en', exclude_categories=())
     for query in ('lion', 'river', 'teacher', 'rocket', 'heart'):
         first = studio.lexical(query)[0].id
