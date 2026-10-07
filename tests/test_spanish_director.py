@@ -167,6 +167,15 @@ def test_legacy_directors_and_annotations_match_prechange_snapshots(name):
             assert next(iter(hook.values())).removesuffix('…') in source
             assert actual_chapters[chapter['id']]['hook'] == hook
             chapter['hook'] = hook
+    if name == 'tiny.md':   # no doodle shows "two million flowers": the ink flower icon (tests/test_icon_fallback.py)
+        expected_beats = {b['id']: b for b in expected['beats']}
+        flowers = [{'id': 'b009v0', 'type': 'cluster',
+                    'items': [{'doodle': 'tb_flower', 'label': {'en': 'Flowers'}, 'trigger': {'en': 'flowers'}}],
+                    'relation': 'none', 'trigger': {'en': 'flowers'}}]
+        assert expected_beats['b009']['visuals'] == [{'id': 'b009v0', 'type': 'cluster',
+                                                      'items': [{'doodle': 'narrator_explain'}], 'relation': 'none'}]
+        assert {b['id']: b for b in board['beats']}['b009']['visuals'] == flowers
+        expected_beats['b009']['visuals'] = flowers
     if name == 'sleep_zh.md':
         actual_beats = {b['id']: b for b in board['beats']}
         expected_beats = {b['id']: b for b in expected['beats']}
