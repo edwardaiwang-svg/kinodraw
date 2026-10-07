@@ -26,7 +26,7 @@ def test_an_ai_failure_shows_a_plain_card_and_the_noise_clean_up_is_a_checkbox(s
     name = make_project(starters.read('explainer-en'), 'en')
 
     def refused(*args, **kwargs):
-        error = ProviderError('Error code: 401 - invalid x-api-key sk-ant-api03-abcdefghijklmnop')
+        error = ProviderError('Error code: 401 - invalid x-api-key sk-' 'ant-api03-abcdefghijklmnop')
         error.kind, error.provider = 'key', 'anthropic'
         raise error
     monkeypatch.setattr(server.director, 'direct', refused)

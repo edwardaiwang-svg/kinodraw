@@ -10,7 +10,7 @@ from kinodraw.director.llm import errors, providers
 from kinodraw.director.v3.llm import plan_v3
 
 TEXT = '# Lesson\n\nA book holds an idea.'
-KEY = 'sk-proj-Zx81kQm3Vb7Lp2Nw9Rt4Yh6Js0Df5Gc'          # a made-up key the messages must never repeat
+KEY = 'sk-' 'proj-Zx81kQm3Vb7Lp2Nw9Rt4Yh6Js0Df5Gc'       # a made-up key the messages must never repeat (split: no key shape in the source)
 REQUEST = httpx.Request('POST', 'https://api.example.test/v1/chat/completions')
 
 
@@ -104,9 +104,9 @@ def test_refusal_bad_answer_and_cloud_limits_have_their_own_kinds():
 
 def test_secrets_are_redacted_from_details():
     text = (f'Incorrect API key provided: {KEY}; Authorization: Bearer abc.def-123; '
-            'sk-ant-api03-AbCdEf0123456789xyz; gsk_0123456789abcdefABCDEF; api_key=hunter2hunter2')
+            'sk-' 'ant-api03-AbCdEf0123456789xyz; gsk_0123456789abcdefABCDEF; api_key=hunter2hunter2')
     clean = errors.redact(text)
-    for secret in (KEY, 'abc.def-123', 'sk-ant-api03', 'gsk_0123456789', 'hunter2'):
+    for secret in (KEY, 'abc.def-123', 'sk-' 'ant-api03', 'gsk_0123456789', 'hunter2'):
         assert secret not in clean
     assert 'Incorrect API key provided' in clean
 
