@@ -696,7 +696,7 @@ class Storybook:
         effects = []
         for f in sorted(shot.figures, key=lambda f: f.depth):
             effects += self._figure(overlay, f, shot, local, cam)
-        if getattr(shot, 'atmosphere', 'none') == 'rain' or any(d == 'fl_cloud_with_rain' for d, *_ in shot.sky):
+        if self._raining(shot):
             self._rain(overlay, local)
         for effect in effects:
             effect(overlay)
@@ -871,6 +871,11 @@ class Storybook:
             rx, ry = f.height * h * zoom * .55, f.height * h * zoom * .06
             draw.ellipse((sx - rx, sy - ry, sx + rx, sy + ry), fill=(60, 60, 50, 34))
 
+    @staticmethod
+    def _raining(shot):
+        """The page draws falling rain."""
+        return shot.atmosphere == 'rain' or any(d == 'fl_cloud_with_rain' for d, *_ in shot.sky)
+
     def _fog(self, overlay, local):
         w, h = self.size
         band = Image.new('RGBA', (w, h), (0, 0, 0, 0))
@@ -938,9 +943,21 @@ class Storybook:
         canvas.paste(layer, (0, 0), layer)
 
     def roar_cues(self, shots, start):
-        """Absolute times of on-screen roars, for the synthesized roar."""
-        return sorted({start + f.cue for shot in shots for f in shot.figures if f.pose == 'roar' and f.cue is not None
-                       and shot.start - .05 <= f.cue < shot.end})
+        """(absolute time, sound) of on-screen roars: a cub's try is its own small 'cub_roar', an adult's the roar."""
+        return sorted({(start + f.cue, 'cub_roar' if f.age in ('baby', 'young') else 'roar')
+                       for shot in shots for f in shot.figures
+                       if f.pose == 'roar' and f.cue is not None and shot.start - .05 <= f.cue < shot.end})
+
+    def rain(self, shots):
+        """Span-local (start, end) stretches whose pages draw rain, neighbouring rainy pages joined."""
+        out = []
+        for shot in shots:
+            if self._raining(shot):
+                if out and abs(out[-1][1] - shot.start) < 1e-6:
+                    out[-1] = (out[-1][0], shot.end)
+                else:
+                    out.append((shot.start, shot.end))
+        return out
 
 
 def _wrap(text, font, width, draw):

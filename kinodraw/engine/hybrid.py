@@ -1394,8 +1394,12 @@ class HybridProduction:
                                   'id': f'hybrid.type.{i}.{j}.{k}'} for k, char in enumerate(e.text)
                                  if not char.isspace() and span.start + e.start + (k + 1) / TYPE_CPS < until]
             if span.story is not None:                       # the storybook's roars, timed to its drawn jaw
-                for j, at in enumerate(self.storybook.roar_cues(span.story, span.start)):
-                    cues.append({'t': at, 'kind': 'roar', 'id': f'hybrid.story.{i}.{j}'})
+                for j, (at, roar) in enumerate(self.storybook.roar_cues(span.story, span.start)):
+                    cues.append({'t': at, 'kind': roar, 'id': f'hybrid.story.{i}.{j}'})
+                for j, (a, b) in enumerate(self.storybook.rain(span.story)):    # drawn rain: a rain bed under it
+                    a = start if a <= 0 else span.start + a
+                    b = until if b >= span.end - span.start - 1e-6 else span.start + b
+                    cues.append({'t': a, 'kind': 'rain', 'dur': b - a, 'id': f'hybrid.rain.{i}.{j}'})
             for j, (actor, action, target) in enumerate(span.actions):
                 # An action with its own synthesized sound (audio.synth_sfx) plays it, at full strength: the kind's
                 # level keeps it audible under the narration. A pounce lands with an impact.

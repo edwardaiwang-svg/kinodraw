@@ -412,3 +412,38 @@ def test_a_crowned_character_wears_the_crown_on_its_head_in_every_pose(tmp_path)
         assert len(xs) > 30, pose
         assert abs(xs.mean() / w - hx) < .04, pose                        # centred on the head
         assert hy - .25 < ys.mean() / h < hy, pose                        # on top of it, not floating off
+
+
+def test_a_cubs_roar_sounds_small_and_the_kings_full(tmp_path):
+    """J's jungle at 189 s: "Pendo grinned and tried a roar of his own. It still came out as a squeak." played the
+    adult roar. A baby or young figure's roar is its own short, high sound; the king keeps the full roar."""
+    from scipy.signal import welch
+    from kinodraw.audio import synth_sfx
+    prod = royal_family(tmp_path)
+    roars = {}
+    for span in prod.spans:
+        for shot in span.story or []:
+            for f in shot.figures:
+                if f.pose == 'roar' and f.cue is not None:
+                    roars[f.key] = span.start + f.cue
+    assert {'kojo', 'pendo'} <= set(roars)
+    cues = {round(c['t'], 3): c['kind'] for c in prod.cues() if c['id'].startswith('hybrid.story.')}
+    assert cues[round(roars['kojo'], 3)] == 'roar'
+    assert cues[round(roars['pendo'], 3)] == 'cub_roar'
+    centroid = lambda x: (lambda f, p: (f * p).sum() / p.sum())(*welch(x, 48000, nperseg=2048))
+    adult, cub = synth_sfx.render('roar'), synth_sfx.render('cub_roar')
+    assert len(cub) < len(adult) / 2 and centroid(cub) > 2 * centroid(adult)
+
+
+def test_drawn_story_rain_has_a_rain_bed(tmp_path):
+    """Story pages draw rain (Storybook._rain) but set no atmosphere layer, so the hybrid cued no rain sound. Every
+    rainy page now plays a rain bed for as long as it is on screen, and dry pages stay dry."""
+    prod = royal_family(tmp_path)
+    beds = [c for c in prod.cues() if c['kind'] == 'rain']
+    pages = [(span.start + shot.start, span.start + shot.end, prod.storybook._raining(shot))
+             for span in prod.spans for shot in span.story or []]
+    assert any(rain for *_, rain in pages)
+    for a, b, rain in pages:
+        middle = (a + b) / 2
+        covered = any(c['t'] <= middle <= c['t'] + c['dur'] for c in beds)
+        assert covered == rain, (a, b, rain)

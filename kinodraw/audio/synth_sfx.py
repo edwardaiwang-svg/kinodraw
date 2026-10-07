@@ -11,13 +11,13 @@ from scipy.signal import sawtooth
 from .sfx import _band, _fit, _pink, _tone
 
 
-KINDS = {'roar': 1.4, 'whimper': .6, 'nudge': .18, 'hyena_cackle': .85,
+KINDS = {'roar': 1.4, 'cub_roar': .55, 'whimper': .6, 'nudge': .18, 'hyena_cackle': .85,
          'swipe': .22, 'breath_puff': .3, 'wind': 3., 'rain': 3.,
          'fog_drone': 3., 'shooting_star': .8, 'type_tick': .07,
          'transition_whoosh': .6}
 # The action sounds' levels put each one's loudest 400 ms about 12 LU under the narration's once the mix ducks it
 # (measured on a real narration): short sounds need a louder 100 ms level than long ones.
-LEVEL_KIND = {'roar': 'stamp', 'whimper': 'pop', 'nudge': 'impact',
+LEVEL_KIND = {'roar': 'stamp', 'cub_roar': 'pop', 'whimper': 'pop', 'nudge': 'impact',
               'hyena_cackle': 'pop', 'swipe': 'impact', 'breath_puff': 'impact',
               'wind': 'write', 'rain': 'write', 'fog_drone': 'write',
               'shooting_star': 'confetti', 'type_tick': 'type',
@@ -56,6 +56,15 @@ def _recipe(kind, rng, t, u, sr):
         noise = _unit(_filtered(rng.standard_normal(n), 160, 2800, sr))
         env = np.minimum(1, u / .07) * (1 - u) ** .7
         return (growl + .65 * noise) * env * (1 + .18 * np.sin(2 * np.pi * 31 * t))
+    if kind == 'cub_roar':
+        # A cub's try at a roar: a short, high growl that cracks into a squeak.
+        crack = np.clip((u - .4) / .12, 0, 1)
+        freq = (280 + 110 * np.sin(np.pi * u)) * (1 + .035 * np.sin(2 * np.pi * 19 * t))
+        growl = _unit(_filtered(sawtooth(2 * np.pi * np.cumsum(freq) / sr), 260, 4200, sr))
+        squeak = _tone(np.minimum(950 + 650 * u, .4 * sr), sr) + .3 * _tone(np.minimum(1900 + 1300 * u, .4 * sr), sr)
+        breath = _unit(_filtered(rng.standard_normal(n), 700, 4500, sr))
+        env = np.minimum(1, u / .05) * (1 - u) ** .9
+        return ((1 - .75 * crack) * growl + .8 * crack * squeak + .25 * breath) * env
     if kind == 'whimper':
         freq = (520 + 240 * np.sin(np.pi * u) - 170 * u) * (1 + .045 * np.sin(2 * np.pi * 7 * t))
         tone = _tone(freq, sr) + .22 * _tone(2 * freq, sr)
