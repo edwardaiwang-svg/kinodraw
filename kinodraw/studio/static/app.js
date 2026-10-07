@@ -735,7 +735,7 @@ async function pickDoodle(query, onPick) {
     if (board !== opened || $('#main').inert) { toast('Your picture was not placed because the board changed while it uploaded. Choose it again under Your pictures.', 7000); return; }
     closeModal(); onPick(id);
   };
-  const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
+  const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" type="search" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…" aria-label="Search the pictures"><div id="packs" class="chips" role="group" aria-label="Show"></div><p id="pick-count" class="muted" role="status" aria-live="polite"></p><div class="pick-grid" id="picks"></div><button id="pick-more" type="button" class="hidden">More</button>`);
   $('#picture-file', body).onchange = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -749,14 +749,54 @@ async function pickDoodle(query, onPick) {
   api(`/api/projects/${encodeURIComponent(project)}/pictures`).then((items) => {
     if (!items.length) return;
     $('#own-pictures', body).classList.remove('hidden');
-    $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc(d.name)}</div></div>`).join('');
-    $('#own-picks', body).querySelectorAll('.pick').forEach((p) => (p.onclick = () => pick(p.dataset.id)));
+    $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick"><button type="button" class="pick-it" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}" alt=""><span>${esc(d.name)}</span></button></div>`).join('');
+    $('#own-picks', body).onclick = (e) => { const it = e.target.closest('[data-id]'); if (it) pick(it.dataset.id); };
   }).catch((e) => toast(e.message, 6000));
-  const run = async () => {
-    const items = await api(`/api/doodles?q=${encodeURIComponent($('#q', body).value)}&lang=${board.lang}`);
-    $('#picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc((d.desc || d.id).slice(0, 40))}</div></div>`).join('');
-    body.querySelectorAll('.pick').forEach((p) => (p.onclick = () => pick(p.dataset.id)));
+  // The library: a search (or a whole set), chips for each set and for the user's ★ favourites and recent pictures
+  // (kept by the Studio, POST /api/settings), a count, and More.
+  let pack = '', shown = 0, asked = 0, packs = [], mine = { favourites: [], recent: [] };
+  const chips = () => {
+    const all = [['', 'All'], ['favourites', `★ Favourites (${mine.favourites.length})`], ['recent', `Recent (${mine.recent.length})`],
+      ...packs.map((p) => [p.id, `${p.name} (${p.count.toLocaleString('en-US')})`])];
+    $('#packs', body).innerHTML = all.map(([id, label]) => `<button type="button" class="chip" data-pack="${esc(id)}" aria-pressed="${id === pack}">${esc(label)}</button>`).join('');
   };
+  const tile = (d) => `<div class="pick"><button type="button" class="pick-it" data-id="${esc(d.id)}" title="${esc(d.desc || d.id)}"><img src="${doodleSrc(d.id)}" alt=""><span>${esc((d.desc || d.id).slice(0, 40))}</span></button>`
+    + `<button type="button" class="star" data-star="${esc(d.id)}" aria-pressed="${mine.favourites.includes(d.id)}" aria-label="Favourite: ${esc(d.desc || d.id)}">★</button></div>`;
+  const run = async (more = false) => {
+    const ask = ++asked, offset = more ? shown : 0, q = $('#q', body).value ?? '';
+    try {
+      const { items = [], total = 0, packs: sets = [], mine: lists = mine } = await api(`/api/doodles?q=${encodeURIComponent(q)}&lang=${board.lang}&pack=${encodeURIComponent(pack)}&offset=${offset}`);
+      if (ask !== asked) return;                     // a newer search is on its way
+      packs = sets; mine = lists; chips();
+      if (more) $('#picks', body).insertAdjacentHTML('beforeend', items.map(tile).join(''));
+      else $('#picks', body).innerHTML = items.map(tile).join('');
+      shown = offset + items.length;
+      const n = (k) => k.toLocaleString('en-US');
+      $('#pick-count', body).textContent = total ? `${shown < total ? `${n(shown)} of ` : ''}${n(total)} picture${total === 1 ? '' : 's'}`
+        : { favourites: 'No favourites yet: press ★ on a picture to keep it here.', recent: 'The pictures you choose appear here.' }[pack]
+          || 'No pictures found. Try another word.';
+      $('#pick-more', body).classList.toggle('hidden', shown >= total);
+    } catch (e) { toast(e.message, 6000); }
+  };
+  const remember = (choice) => api('/api/settings', { method: 'POST', body: JSON.stringify(choice) }).then((r) => { mine = r.pictures; chips(); });
+  $('#packs', body).onclick = (e) => {
+    const chip = e.target.closest('[data-pack]');
+    if (!chip) return;
+    pack = chip.dataset.pack;
+    if (pack === 'favourites' || pack === 'recent') $('#q', body).value = '';     // these show in their own order
+    run();
+  };
+  $('#picks', body).onclick = (e) => {
+    const star = e.target.closest('[data-star]'), it = e.target.closest('[data-id]');
+    if (star) {
+      const on = star.getAttribute('aria-pressed') !== 'true';
+      remember({ favourite: star.dataset.star, on }).then(() => star.setAttribute('aria-pressed', String(on))).catch((err) => toast(err.message, 6000));
+    } else if (it) {
+      remember({ recent: it.dataset.id }).catch((err) => toast(err.message, 6000));
+      pick(it.dataset.id);
+    }
+  };
+  $('#pick-more', body).onclick = () => run(true);
   let timer;
   $('#q', body).oninput = () => { clearTimeout(timer); timer = setTimeout(run, 250); };
   run();

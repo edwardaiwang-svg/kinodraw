@@ -121,9 +121,20 @@ video { width: 100%; border-radius: 14px; border: 2px solid var(--ink); backgrou
 .modal-box { background: var(--card); border: 2px solid var(--ink); border-radius: 18px; padding: 22px; width: min(760px, 92vw); max-height: 86vh; overflow: auto; position: relative; box-shadow: var(--shadow); }
 .modal .close { position: absolute; right: 12px; top: 10px; border: none; background: none; font-size: 22px; }
 .pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; margin-top: 12px; }
-.pick { border: 2px solid var(--line); border-radius: 12px; padding: 6px; text-align: center; cursor: pointer; background: #fff; font-size: 11px; }
-.pick:hover { border-color: var(--orange); }
+.pick { position: relative; border: 2px solid var(--line); border-radius: 12px; background: #fff; }
+.pick:hover, .pick:focus-within { border-color: var(--orange); }
+.pick-it { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; padding: 6px; border: none;
+  border-radius: 10px; background: none; font-size: 11px; }
 .pick img { width: 84px; height: 84px; object-fit: contain; }
+.pick .star { position: absolute; top: 2px; right: 2px; padding: 2px 5px; border: none; background: none; font-size: 17px;
+  line-height: 1; color: #c9c3b8; }
+.pick .star:hover { color: var(--soft); }
+.pick .star[aria-pressed="true"] { color: var(--orange); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.chip { padding: 3px 11px; border-width: 1.5px; border-radius: 99px; font-size: 13px; }
+.chip[aria-pressed="true"] { background: var(--ink); color: #fff; }
+#pick-count { margin: 8px 0 0; }
+#pick-more { display: block; margin: 12px auto 0; }
 .picture-hint { font-size: 13px; margin: 8px 0 16px; }
 #own-pictures { margin-bottom: 18px; }
 .progress-box { width: min(460px, 90vw); text-align: center; }

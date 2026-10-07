@@ -69,8 +69,68 @@ async function a11y() {
   assert.equal(await page.inputValue('#script'), 'Why? Because.');
 }
 
+const tiles = () => page.locator('#picks [data-id]').evaluateAll((all) => all.map((e) => e.dataset.id));
+const chips = () => page.locator('#packs [data-pack]').evaluateAll((all) => all.map((e) => e.textContent));
+let inflight = 0;                                    // requests still answering (a search waits 250 ms for typing)
+for (const done of ['requestfinished', 'requestfailed']) page.on(done, () => inflight--);
+page.on('request', () => inflight++);
+const settle = async () => { await page.waitForTimeout(300); while (inflight > 0) await page.waitForTimeout(50); };
+const choose = async (name) => { await page.locator('#packs [data-pack]', { hasText: name }).click(); await settle(); };
+async function openPicker() {
+  await page.locator('.beat .add').first().click();
+  await page.waitForSelector('#picks [data-id]');
+  await settle();
+}
+
+async function picker() {
+  await page.goto(url);
+  await page.waitForSelector('.beat .add');
+  await openPicker();
+  assert.equal((await active()).id, 'q', 'the picker does not start in its search box');
+  const names = await chips();
+  for (const name of ['All', '★ Favourites (0)', 'Recent (0)', 'Doodles', 'Fluent Emoji', 'Tabler Icons', 'Health Icons'])
+    assert.ok(names.some((c) => c.startsWith(name)), 'no chip ' + name + ' in ' + names);
+  await page.fill('#q', '');
+  await choose('Tabler Icons');
+  let shown = await tiles();
+  assert.equal(shown.length, 32);
+  assert.ok(shown.every((id) => id.startsWith('tb_')), 'Tabler Icons shows other pictures');
+  assert.match(await page.textContent('#pick-count'), /^32 of 3,\d{3} pictures$/);
+  await page.click('#pick-more'); await settle();
+  assert.equal((await tiles()).length, 64);
+  await choose('All');
+  await page.fill('#q', 'elefant'); await settle();
+  shown = await tiles();
+  assert.ok(shown.slice(0, 5).includes('fl_elephant'), 'elefant does not find the elephant: ' + shown.slice(0, 5));
+  await page.locator('[data-star="fl_elephant"]').click(); await settle();
+  assert.equal(await page.getAttribute('[data-star="fl_elephant"]', 'aria-pressed'), 'true');
+  const picked = shown.find((id) => id !== 'fl_elephant');
+  await page.locator(`#picks [data-id="${picked}"]`).click(); await settle();
+  assert.equal(await open(), false, 'picking did not close the picker');
+  assert.ok(await page.locator(`.item img[src*="/doodle/${picked}.svg"]`).count(), 'the picked picture is not on the board');
+
+  await openPicker();
+  await page.fill('#q', 'elefant'); await settle();
+  await shot('picker-1-typo-chips');
+  await choose('★ Favourites');
+  assert.deepEqual(await tiles(), ['fl_elephant']);
+  assert.equal(await page.inputValue('#q'), '', 'Favourites kept the search');
+  await shot('picker-2-favourites');
+  await choose('Recent');
+  assert.deepEqual(await tiles(), [picked]);
+  await page.keyboard.press('Escape');
+
+  await page.reload();                           // kept by the Studio, not by this page
+  await page.waitForSelector('.beat .add');
+  await openPicker();
+  await choose('★ Favourites');
+  assert.deepEqual(await tiles(), ['fl_elephant']);
+  await page.locator('[data-star="fl_elephant"]').click(); await settle();
+  assert.ok((await chips()).includes('★ Favourites (0)'));
+}
+
 try {
-  await { a11y }[scenario]();
+  await { a11y, picker }[scenario]();
   assert.deepEqual(errors, [], 'the page logged errors');
   console.log(JSON.stringify({ scenario, passed: true }));
 } catch (error) {
