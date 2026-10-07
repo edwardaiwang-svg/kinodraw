@@ -139,7 +139,7 @@ def thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Path, size=(
     if size in ((720, 1280), (720, 720)):
         return _portrait_thumbnail(storyboard, lang, path, project_dir, height=size[1])
     collage = storyboard.get('look') == 'collage'
-    skin = skins.for_look(storyboard.get('look'))
+    skin = skins.for_board(storyboard)
     if collage:
         from .engine import motion
         img = motion.paper_texture((1280, 720), 'cream').convert('RGBA')
@@ -186,7 +186,7 @@ def _portrait_thumbnail(storyboard: dict, lang: str, path: Path, project_dir: Pa
     from .engine import motion
 
     collage = storyboard.get('look') == 'collage'
-    skin = skins.for_look(storyboard.get('look'))
+    skin = skins.for_board(storyboard)
     img = motion.paper_texture((720, height), 'cream').convert('RGBA') if collage else skin.background(720, height).copy()
     d = ImageDraw.Draw(img)
     storyboard = normalize(storyboard)

@@ -90,7 +90,7 @@ class Production:
                               for scene in plan['scenes'] for e in scene['elements']
                               if e['kind'] == 'diagram'} if plan else {}
         self._source_beats -= set(self._diagrams)
-        self.skin = skins.for_look(self.ep.get('look'))       # paper, ink, fills, fonts, hand and chrome
+        self.skin = skins.for_board(self.ep)                  # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
         self.layout = Layout(self.g)
         self.ctx = scenes.Ctx(self.ep, lang, tline, self.layout, project_dir, self.skin)

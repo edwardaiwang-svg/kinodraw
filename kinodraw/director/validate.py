@@ -109,6 +109,12 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
     for dial, values in DIALS.items():
         if dial in board and board[dial] not in values:
             errors.append(f'{dial} must be one of {", ".join(values)}, got {board[dial]!r}')
+    if 'paper' in board or 'paper_color' in board:
+        from ..engine.skin import for_board
+        try:
+            for_board(board)
+        except ValueError as error:
+            errors.append(str(error))
     brand = board.get('brand')
     if brand is not None and (not isinstance(brand, dict) or not all(isinstance(v, str) for v in brand.values())):
         errors.append('brand must be {"name": ..., "url": ..., "cta": ...} with text values')

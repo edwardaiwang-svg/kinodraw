@@ -110,10 +110,11 @@ def rgba(color, alpha=None):
 
 # --------------------------------------------------------------------------- paper
 @lru_cache(maxsize=2)
-def paper(width=1920, height=1080) -> Image.Image:
+def paper(width=1920, height=1080, color=PAPER_RGB) -> Image.Image:
+    """The whiteboard: ``color`` with grain, fibres and a faint vignette."""
     rng = np.random.default_rng(20260923)
     base = np.empty((height, width, 3), np.float32)
-    base[:] = PAPER_RGB
+    base[:] = color
     grain = ndimage.gaussian_filter(rng.normal(0, 1, (height, width)), 1.1) * 3.2
     fibres = ndimage.gaussian_filter(rng.normal(0, 1, (height // 4, width // 4)), 3)
     fibres = np.kron(fibres, np.ones((4, 4)))[:height, :width] * 4.0
