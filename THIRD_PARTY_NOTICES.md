@@ -10,6 +10,8 @@ The packaged apps on the Releases page also contain GPL components (FFmpeg built
 |---|---|---|
 | Microsoft Fluent Emoji (converted to outlined SVG) | `assets/doodles/fluent/` | MIT, © Microsoft Corporation; see `fluent/LICENSE` and `fluent/NOTICE.md` |
 | Unicode CLDR annotations (Chinese emoji keywords) | `assets/doodles/tags/fluent.json` | Unicode License v3; see `fluent/NOTICE.md` |
+| Tabler Icons 3.49.0 (outline icons, redrawn as ink line pictures) | `assets/doodles/tabler/`, `assets/doodles/tags/tabler.json` | MIT, © 2020-2026 Paweł Kuna; see `tabler/LICENSE`, `tabler/NOTICE.md` and `tabler/MANIFEST.json` |
+| Health Icons (outline icons, commit 36887b2, redrawn as ink pictures) | `assets/doodles/healthicons/`, `assets/doodles/tags/healthicons.json` | MIT, © 2021 Resolve to Save Lives; see `healthicons/LICENSE`, `healthicons/NOTICE.md` and `healthicons/MANIFEST.json` |
 | Playpen Sans Bold (static instance) | `assets/fonts/` | SIL OFL 1.1, © The Playpen Sans Project Authors |
 | Doodle Kai Medium (a subset of LXGW WenKai, renamed as the OFL Reserved Font Name clause requires) | `assets/fonts/` | SIL OFL 1.1, © LXGW |
 | Arimo Bold (static instance) | `assets/fonts/` | SIL OFL 1.1, © The Arimo Project Authors |

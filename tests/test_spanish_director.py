@@ -48,12 +48,12 @@ def test_lexicon_is_sorted_spanish_and_uses_catalog_keys():
     from kinodraw.library import catalog
     path = match.ASSETS / 'es_en.json'
     lexicon = json.loads(path.read_text(encoding='utf-8'))
-    index = match.Matcher('en').index
+    index = match.Matcher('en', include_packs=False).index    # the curated lexicon covers the doodles, not the icon packs
     assert len(lexicon) >= 1200
     assert list(lexicon) == sorted(lexicon)
     assert all(key == key.lower() and key.strip() == key for key in lexicon)
     assert all(isinstance(value, str) and match._en_key(value) in index for value in lexicon.values())
-    bespoke = {match._en_key(kw) for entry in catalog().values() if entry['set'] != 'fluent'
+    bespoke = {match._en_key(kw) for entry in catalog().values() if entry['set'] == 'bespoke'
                for kw in entry.get('en', []) if len(kw.split()) == 1}
     assert bespoke & set(index) <= {match._en_key(value) for value in lexicon.values()}
 

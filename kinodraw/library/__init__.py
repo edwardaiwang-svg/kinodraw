@@ -1,7 +1,7 @@
 """Doodle library: resolve a doodle id to its SVG file, and the tagged catalog.
 
 Search order: the project's own ``doodles/`` folder (user or private presets),
-then the bundled bespoke set, then the converted Fluent Emoji set.
+then the bundled bespoke set, the converted Fluent Emoji set, then the imported open packs (PACKS).
 """
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ from functools import lru_cache
 from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets' / 'doodles'
-SETS = ('bespoke', 'fluent')
+PACKS = ('tabler', 'healthicons')        # imported ink line pictures (library/packs.py); listed below the rest
+SETS = ('bespoke', 'fluent') + PACKS
 MISSING = ASSETS / 'missing.svg'
 OWN = 'own:'
 PICTURE_TYPES = ('.png', '.jpg', '.jpeg', '.svg')
@@ -85,13 +86,30 @@ def resolve(doodle_id: str, project_dir: Path | None = None) -> Path | None:
     return None
 
 
+def _licensed(pack: str) -> set:
+    """Ids of an imported pack whose MANIFEST.json row carries an allowed licence (packs.ALLOWED)."""
+    from .packs import MANIFEST, allowed_ids
+    try:
+        return allowed_ids(json.loads((ASSETS / pack / MANIFEST).read_text(encoding='utf-8')))
+    except (OSError, ValueError):
+        return set()
+
+
+def imported(entry: dict) -> bool:
+    """A picture from an imported open pack (an ink line icon), not a bespoke doodle or a Fluent emoji."""
+    return entry.get('set') in PACKS
+
+
 @lru_cache(maxsize=1)
 def catalog() -> dict:
-    """id -> {desc, category, en: [...], zh: [...], set} for every shipped doodle that has an SVG and is not banned."""
+    """id -> {desc, category, en: [...], zh: [...], set} for every shipped doodle that has an SVG and is not banned.
+    A picture from an imported pack is listed only when its pack manifest gives it an allowed licence."""
     out, skip = {}, banned()['doodles']
     for path in sorted((ASSETS / 'tags').glob('*.json')):
-        doodle_set = 'fluent' if path.stem == 'fluent' else 'bespoke'
+        doodle_set = path.stem if path.stem in PACKS else 'fluent' if path.stem == 'fluent' else 'bespoke'
+        licensed = _licensed(doodle_set) if doodle_set in PACKS else None
         for did, entry in json.loads(path.read_text(encoding='utf-8')).items():
-            if did not in skip and (ASSETS / doodle_set / f'{did}.svg').exists():
+            if did not in skip and (licensed is None or did in licensed) \
+                    and (ASSETS / doodle_set / f'{did}.svg').exists():
                 out[did] = {**entry, 'set': doodle_set}
     return out

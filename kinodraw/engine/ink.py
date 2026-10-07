@@ -273,7 +273,9 @@ def _svg_layers(svg_path: str, box_w: int, box_h: int):
     scale = min(box_w / vw, box_h / vh)
     out_w, out_h = max(1, round(vw * scale)), max(1, round(vh * scale))
     color = Image.open(io.BytesIO(resvg_py.svg_to_bytes(svg_string=text, width=out_w, height=out_h))).convert('RGBA')
-    white = re.sub(r'fill="(?!none)[^"]*"', 'fill="#FFFFFF"', text)
+    # fills turn white so only the ink lines remain; a fill that is itself the ink line (data-inkfill, set
+    # after fill= by library/packs.py) stays, and the hand traces it like a stroke
+    white = re.sub(r'fill="(?!none)[^"]*"(?![^>]*data-inkfill="1")', 'fill="#FFFFFF"', text)
     lineimg = Image.open(io.BytesIO(resvg_py.svg_to_bytes(svg_string=white, width=out_w, height=out_h))).convert('RGBA')
     if lineimg.size != color.size:
         lineimg = lineimg.resize(color.size, Image.LANCZOS)

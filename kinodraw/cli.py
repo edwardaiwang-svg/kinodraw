@@ -266,10 +266,10 @@ def cmd_setup(args):
 def cmd_doodles(args):
     from .director.match import Matcher
     m = Matcher(args.lang)
-    hits = {h.id: h for h in m.lexical(args.query)}
-    for h in m.semantic(args.query, 12):
+    hits = {h.id: h for h in m.lexical(args.query)}   # pictures named by the words first, as the Studio lists them
+    for h in m.semantic(args.query, 12):              # (the two scores are on different scales)
         hits.setdefault(h.id, h)
-    for h in sorted(hits.values(), key=lambda h: -h.score)[:12]:
+    for h in list(hits.values())[:12]:
         e = m.entries[h.id]
         print(f"{h.id:32s} {e['set']:8s} {e.get('desc', '')[:60]}")
 

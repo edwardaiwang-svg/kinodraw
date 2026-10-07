@@ -95,7 +95,7 @@ def find(text: str, lang: str, k: int = 1) -> list[str]:
     pick = curated(text, lang)
     if pick and k == 1:
         return [pick]
-    m = _MATCHERS.get(lang) or _MATCHERS.setdefault(lang, Matcher(lang))
+    m = _MATCHERS.get(lang) or _MATCHERS.setdefault(lang, Matcher(lang, include_packs=False))
     hits = m.lexical(text)
     if len(hits) < k:
         seen = {h.id for h in hits}
