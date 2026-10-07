@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, replace
 
 from . import colors as C
 from .faces import Face
+from . import bird as _bird
 from . import frog as _frog
 from . import insect as _insect
 from .primate import Ape
@@ -85,6 +86,7 @@ def _lions():
     out += _primates()
     out += _small()
     out += _quads()
+    out += _birds()
     return out
 
 
@@ -318,6 +320,21 @@ def _small():
         Variant('ant', variant='red', genes=_insect.Bug('ant', '#C0482E'), plan='insect',
                 poses=_insect.POSES['ant'], family='insect', face=Face('ant', '#C0482E'),
                 names=('red ant', 'ant', 'fire ant'), zh=('红蚂蚁', '蚂蚁'), noun='red ant'),
+        Variant('bee', variant='honey', genes=_insect.Bug('bee', '#2E2A27', '#F2C230'), plan='insect',
+                poses=_insect.POSES['bee'], family='insect', face=Face('bee', '#F2C230'),
+                names=('bee', 'honey bee', 'bumblebee'), zh=('蜜蜂', '小蜜蜂'), noun='honey bee'),
+        Variant('beetle', variant='ladybug', genes=_insect.Bug('beetle', '#E53935'), plan='insect',
+                poses=_insect.POSES['beetle'], family='insect', face=Face('beetle', '#E53935'),
+                names=('ladybug', 'ladybird', 'beetle'), zh=('瓢虫', '甲虫'), noun='red ladybug'),
+        Variant('beetle', variant='green', genes=_insect.Bug('beetle', '#3E9B5A', spots='#2C6E40'), plan='insect',
+                poses=_insect.POSES['beetle'], family='insect', face=Face('beetle', '#3E9B5A'),
+                names=('beetle', 'green beetle', 'bug'), zh=('甲虫', '绿甲虫'), noun='green beetle'),
+        Variant('butterfly', variant='monarch', genes=_insect.Bug('butterfly', '#F28C28', '#FFF4D6', spots='#2E2A27'),
+                plan='insect', poses=_insect.POSES['butterfly'], family='insect', face=None,
+                names=('butterfly', 'monarch butterfly'), zh=('蝴蝶',), noun='orange monarch butterfly'),
+        Variant('butterfly', variant='blue', genes=_insect.Bug('butterfly', '#4A90E2', '#BFE3FF', spots='#1F3A68'),
+                plan='insect', poses=_insect.POSES['butterfly'], family='insect', face=None,
+                names=('blue butterfly', 'butterfly'), zh=('蓝蝴蝶', '蝴蝶'), noun='blue butterfly'),
     ]
 
 
@@ -387,4 +404,95 @@ def catalogue():
                        face=Face('elephant', CALF.coat, CALF.under, '#E3B5B5', ears='elephant', young=True),
                        names=('baby elephant', 'elephant calf', 'calf', 'elephant'), zh=('小象', '象宝宝'),
                        noun='baby elephant', jitter=.5))
+    return out
+
+
+Bird = _bird.Bird
+ROBIN = Bird('songbird', coat='#8B6B4E', belly='#F07A3A', wing_c='#76583F', beak_c='#E8B13A', leg_c='#B07A4A')
+OWL = Bird('owl', body_rx=.26, body_ry=.3, tilt=72, head_r=.24, head_at=(.36, .02), beak='hook', beak_len=.05,
+           beak_c='#E8B13A', coat='#9C7350', belly='#E8D2AE', wing_c='#86603F', disc='#F1E1C6', tufts=True,
+           tail='short', tail_len=.1, tail_up=-10, leg_len=.08, leg_c='#E8B13A', feet='talons', iris='#F6C343',
+           span=1.25)
+EAGLE = Bird('eagle', body_rx=.38, body_ry=.22, tilt=38, head_r=.15, head_at=(.36, .14), beak='hook', beak_len=.13,
+             beak_c='#F6C343', coat='#5A3D2B', head_c='#FAFAF7', tail_c='#FAFAF7', tail='fan', tail_len=.24,
+             tail_up=-6, leg_len=.15, leg_c='#F6C343', feet='talons', brow=True, iris='#F6C343', span=1.5)
+MACAW = Bird('parrot', body_rx=.27, body_ry=.2, tilt=58, head_r=.17, head_at=(.33, .06), beak='hook', beak_len=.13,
+             beak_c='#F4F1EA', beak_lo='#3A3536', coat='#E53935', wing_c='#E53935', cheek='#FAFAF7',
+             bands=('#F6C343', '#2F7FD6'), tail='long', tail_len=.55, tail_c='#E53935', tail_up=0, leg_len=.1,
+             leg_c='#8A8A8A', span=1.3)
+HEN = Bird('chicken', body_rx=.3, body_ry=.24, tilt=14, head_r=.13, head_at=(.33, .3), neck=.1, beak_len=.08,
+           beak_c='#F2B33D', coat='#C8743A', wing_c='#A85E2E', comb='#E53935', tail='wedge', tail_len=.2, tail_up=55,
+           leg_len=.18, leg_c='#F2B33D', span=.9)
+DUCK = Bird('duck', body_rx=.36, body_ry=.2, tilt=6, head_r=.14, head_at=(.36, .3), neck=.1, beak='flat',
+            beak_len=.15, beak_c='#F2B33D', coat='#B9B4AC', head_c='#2E7D4F', belly='#8A5A3C', wing_c='#9C968D',
+            tail='short', tail_len=.12, tail_up=30, leg_len=.08, leg_c='#F28C28', feet='webbed', span=1.2)
+PENGUIN = Bird('penguin', body_rx=.36, body_ry=.22, tilt=84, head_r=.15, head_at=(.4, -.02), beak_len=.1,
+               beak_c='#F28C28', coat='#2E2A2B', belly='#FAFAF7', eye_ring='#FAFAF7', flippers=True, tail='short',
+               tail_len=.08, tail_up=-30, leg_len=.04, leg_c='#F28C28', feet='webbed')
+FLAMINGO = Bird('flamingo', body_rx=.28, body_ry=.15, tilt=12, head_r=.075, head_at=(.3, .3), neck=.55, beak='bent',
+                beak_len=.13, beak_c='#F8C8D6', beak_tip='#2E2A2B', coat='#F48FB1', wing_c='#EF6F9A', tail='short',
+                tail_len=.1, tail_up=10, leg_len=.62, leg_c='#F48FB1', span=1.2)
+
+
+def _bf(g, **kw):
+    """Front face for a bird variant."""
+    return Face('bird', kw.pop('coat', g.head_c or g.coat), kw.pop('under', ''), beak=g.beak if g.beak != 'bent' else 'cone',
+                beak_c=g.beak_c, comb=g.comb, crest=g.crest, disc=g.disc, ears='tufts' if g.tufts else 'none',
+                iris=g.iris if g.kind in ('owl', 'eagle') else '', **kw)
+
+
+def B(species, g, names, zh, noun, sex='any', age='adult', variant='', face=None, poses=_bird.POSES, jitter=1.0):
+    return Variant(species, sex, age, variant, genes=g, face=face if face is not None else _bf(g), family='bird',
+                   names=names, zh=zh, noun=noun, plan='bird', poses=poses, jitter=jitter)
+
+
+def _birds():
+    out = []
+    add = out.append
+    add(B('songbird', ROBIN, ('robin', 'bird', 'little bird', 'songbird'), ('知更鸟', '小鸟', '鸟'), 'robin',
+          variant='robin'))
+    blue = replace(ROBIN, coat='#3F7FD0', wing_c='#2F67B5', belly='#F2B27A', beak_c='#3A3536', leg_c='#6A6A6A')
+    add(B('songbird', blue, ('bluebird', 'bird', 'little bird'), ('蓝鸲', '小鸟', '鸟'), 'bluebird', variant='blue'))
+    cardinal = replace(ROBIN, coat='#D93A2F', wing_c='#B92F27', belly='', crest='#D93A2F', mask='#2E2A2B',
+                       beak_c='#F28C28', leg_c='#B07A4A')
+    add(B('songbird', cardinal, ('cardinal', 'red bird', 'bird'), ('红雀', '红鸟', '鸟'), 'red cardinal',
+          variant='cardinal'))
+    sparrow = replace(ROBIN, coat='#A57A57', wing_c='#7E5A3E', belly='#EADFCF', beak_c='#5A4A3A')
+    add(B('songbird', sparrow, ('sparrow', 'bird', 'little brown bird'), ('麻雀', '小鸟', '鸟'), 'sparrow',
+          variant='sparrow'))
+    add(B('owl', OWL, ('owl', 'brown owl', 'night bird'), ('猫头鹰', '鸮'), 'brown owl'))
+    snowy = replace(OWL, coat='#F4F1EA', belly='#FFFFFF', wing_c='#E6E0D4', disc='#FFFFFF', tufts=False)
+    add(B('owl', snowy, ('snowy owl', 'white owl', 'owl'), ('雪鸮', '白猫头鹰'), 'snowy owl', variant='snowy'))
+    add(B('eagle', EAGLE, ('eagle', 'bald eagle', 'bird of prey', 'hawk'), ('老鹰', '白头鹰', '鹰'), 'bald eagle'))
+    add(B('parrot', MACAW, ('parrot', 'macaw', 'scarlet macaw'), ('鹦鹉', '金刚鹦鹉'), 'red macaw parrot',
+          variant='macaw'))
+    green = replace(MACAW, coat='#43A047', wing_c='#2E7D32', tail_c='#43A047', bands=('#2F7FD6',), cheek='',
+                    head_c='#7CC576', beak_c='#3A3536', beak_lo='#3A3536')
+    add(B('parrot', green, ('green parrot', 'parrot', 'parakeet'), ('绿鹦鹉', '鹦鹉'), 'green parrot', variant='green'))
+    add(B('chicken', HEN, ('hen', 'chicken', 'farm bird'), ('母鸡', '鸡'), 'brown hen', sex='female'))
+    white_hen = replace(HEN, coat='#FAFAF7', wing_c='#E8E3DA')
+    add(B('chicken', white_hen, ('white hen', 'chicken', 'hen'), ('白母鸡', '鸡'), 'white hen', sex='female',
+          variant='white'))
+    rooster = replace(HEN, coat='#C0502E', wing_c='#8E3A22', head_c='#E6A03C', tail='rooster', tail_c='#2E5E4A',
+                      tail_len=.42, comb='#E53935', body_ry=.25, leg_len=.2)
+    add(B('chicken', rooster, ('rooster', 'cockerel', 'chicken'), ('公鸡', '鸡'), 'rooster', sex='male'))
+    chick = replace(HEN, body_rx=.17, body_ry=.15, head_r=.13, head_at=(.16, .18), neck=0.0, coat='#F8D84A',
+                    wing_c='#EBC63A', comb='', tail='short', tail_len=.05, leg_len=.08, beak_len=.05, young=True,
+                    eye_r=.03)
+    add(B('chicken', chick, ('chick', 'baby chick', 'little chick'), ('小鸡', '鸡仔'), 'yellow chick', age='young',
+          jitter=.5))
+    add(B('duck', DUCK, ('duck', 'mallard', 'drake'), ('鸭子', '绿头鸭'), 'mallard duck', sex='male'))
+    white_duck = replace(DUCK, coat='#FAFAF7', head_c='', belly='', wing_c='#E8E3DA', beak_c='#F28C28')
+    add(B('duck', white_duck, ('white duck', 'duck', 'farm duck'), ('白鸭', '鸭子'), 'white duck', variant='white'))
+    duckling = replace(DUCK, body_rx=.2, body_ry=.14, head_r=.12, head_at=(.2, .2), neck=0.0, coat='#F8D84A',
+                       head_c='', belly='', wing_c='#EBC63A', beak_len=.09, leg_len=.06, young=True)
+    add(B('duck', duckling, ('duckling', 'baby duck', 'duck'), ('小鸭', '鸭子'), 'yellow duckling', age='young',
+          jitter=.5))
+    add(B('penguin', PENGUIN, ('penguin', 'emperor penguin', 'bird'), ('企鹅',), 'penguin',
+          face=_bf(PENGUIN, under='#FAFAF7'), poses=_bird.FLIGHTLESS_POSES))
+    p_chick = replace(PENGUIN, body_rx=.24, body_ry=.17, head_r=.13, head_at=(.26, -.02), coat='#8E9196',
+                      belly='#D9DCE0', eye_ring='#FAFAF7', beak_len=.06, young=True)
+    add(B('penguin', p_chick, ('penguin chick', 'baby penguin', 'penguin'), ('小企鹅', '企鹅'), 'fluffy penguin chick',
+          age='young', face=_bf(p_chick, under='#D9DCE0'), poses=_bird.FLIGHTLESS_POSES, jitter=.5))
+    add(B('flamingo', FLAMINGO, ('flamingo', 'pink flamingo', 'wading bird'), ('火烈鸟',), 'pink flamingo'))
     return out

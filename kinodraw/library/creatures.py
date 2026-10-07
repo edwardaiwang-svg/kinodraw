@@ -69,7 +69,8 @@ SPECIES_WORDS = {
     'chimp': ('chimpanzee', None, None), 'ape': ('gorilla', None, None), 'silverback': ('gorilla', None, None),
     'pony': ('horse', None, None), 'stallion': ('horse', 'male', None), 'mare': ('horse', 'female', None),
     'doe': ('deer', 'female', None), 'stag': ('deer', 'male', None), 'buck': ('deer', 'male', None),
-    'fawn': ('deer', None, 'young'), 'piglet': ('pig', None, 'young'), 'joey': ('rabbit', None, 'young'),
+    'fawn': ('deer', None, 'young'), 'duckling': ('duck', None, 'young'), 'cockerel': ('chicken', 'male', None),
+    'drake': ('duck', 'male', None), 'piglet': ('pig', None, 'young'), 'joey': ('rabbit', None, 'young'),
     'man': ('human', 'male', 'adult'), 'woman': ('human', 'female', 'adult'), 'boy': ('human', 'male', 'child'),
     'girl': ('human', 'female', 'child'), 'child': ('human', None, 'child'), 'kid': ('human', None, 'child'),
     'person': ('human', None, 'adult'), 'king': ('human', 'male', 'adult'), 'queen': ('human', 'female', 'adult'),
@@ -90,6 +91,12 @@ VARIANT_WORDS = {
     'white horse': ('horse', 'white'), 'chestnut horse': ('horse', 'chestnut'), 'brown cow': ('cow', 'brown'),
     'white rabbit': ('rabbit', 'white'), 'brown rabbit': ('rabbit', 'brown'), 'red ant': ('ant', 'red'),
     'fire ant': ('ant', 'red'), 'black ant': ('ant', 'black'), 'tree frog': ('frog', 'tree'),
+    'robin': ('songbird', 'robin'), 'sparrow': ('songbird', 'sparrow'), 'bluebird': ('songbird', 'blue'),
+    'cardinal': ('songbird', 'cardinal'), 'snowy owl': ('owl', 'snowy'), 'white owl': ('owl', 'snowy'),
+    'macaw': ('parrot', 'macaw'), 'green parrot': ('parrot', 'green'), 'parakeet': ('parrot', 'green'),
+    'white duck': ('duck', 'white'), 'white hen': ('chicken', 'white'), 'ladybug': ('beetle', 'ladybug'),
+    'ladybird': ('beetle', 'ladybug'), 'monarch': ('butterfly', 'monarch'), 'blue butterfly': ('butterfly', 'blue'),
+    'honey bee': ('bee', 'honey'), 'bumblebee': ('bee', 'honey'),
 }
 HUMAN_ROLES = {'king': 'king', 'queen': 'queen', 'teacher': 'teacher', 'villager': 'villager', 'explorer': 'explorer'}
 # animals we may not have, mapped to their closest drawn relative (same family, never a person)

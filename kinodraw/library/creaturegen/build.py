@@ -18,13 +18,16 @@ POSE_EN = {
     'scared': ('crouching, scared', ('scared', 'afraid', 'crouching', 'frightened')),
     'carry': ('carrying something', ('carrying', 'carry')),
     'fly': ('flying with wings spread', ('flying', 'fly')),
+    'fly2': ('flying, wings swept back', ('flying', 'fly')),
+    'swim1': ('swimming', ('swimming', 'swim')),
+    'swim2': ('swimming (tail sweep)', ('swimming', 'swim')),
     'swim': ('swimming', ('swimming', 'swim')),
     'jump': ('jumping', ('jumping', 'jump', 'leaping')),
     'wave': ('waving', ('waving', 'wave', 'hello')),
 }
 POSE_ZH = {'stand': '站立', 'walk1': '行走', 'walk2': '行走', 'run': '奔跑', 'sit': '坐着', 'lie': '趴着',
            'sleep': '睡觉', 'roar': '吼叫', 'shout': '喊叫', 'look_up': '抬头看', 'scared': '害怕', 'carry': '叼着东西',
-           'fly': '飞翔', 'swim': '游泳', 'jump': '跳跃', 'wave': '挥手'}
+           'fly': '飞翔', 'fly2': '飞翔', 'swim': '游泳', 'swim1': '游泳', 'swim2': '游泳', 'jump': '跳跃', 'wave': '挥手'}
 EXPR_EN = {'neutral': 'calm', 'scared': 'wide-eyed and scared', 'determined': 'determined, brows lowered',
            'sad': 'sad, with a tear', 'happy': 'happy, smiling'}
 EXPR_ZH = {'neutral': '平静', 'scared': '害怕', 'determined': '坚定', 'sad': '难过', 'happy': '开心'}
