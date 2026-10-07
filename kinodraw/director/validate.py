@@ -115,6 +115,8 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
             for_board(board)
         except ValueError as error:
             errors.append(str(error))
+    if board.get('hand', 'right') not in ('right', 'left', 'none'):
+        errors.append(f"hand must be one of right, left, none, got {board['hand']!r}")
     brand = board.get('brand')
     if brand is not None and (not isinstance(brand, dict) or not all(isinstance(v, str) for v in brand.values())):
         errors.append('brand must be {"name": ..., "url": ..., "cta": ...} with text values')

@@ -221,6 +221,7 @@ class _NativeHand(ink.Hand):
         self.shadow = source.shadow.resize(self.img.size, Image.Resampling.LANCZOS)
         self.tip = tuple(v * scale for v in source.tip)
         self.paths = source.paths
+        self.side = source.side
 
     def paste(self, frame, point, lifted=False):
         s = self.scale
@@ -393,7 +394,7 @@ class NativeProduction(Production):
                     new[field] = tuple(round(v*s) if field == 'mini_size' else v*s for v in new[field])
             new['x'] *= s
             self.notes[key] = new
-        self.hand = _NativeHand(base.hand, s)
+        self.hand = _NativeHand(base.hand, s) if base.hand else None
         self._pin_notes()
         self._index()
         self._caption_cache = {}

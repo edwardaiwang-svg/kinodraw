@@ -65,7 +65,7 @@ def test_a_skin_reaches_every_drawing_the_paper_the_fonts_the_hand_and_the_capti
     probe = _Probe(id='probe', fonts=arimo, hand='chalk', caption=(200, 0, 0), caption_edge=(0, 0, 0))
     _Probe.seen, hands, used = [], [], set()
     real_hand, real_font = ink.Hand, ink.font
-    monkeypatch.setattr(ink, 'Hand', lambda tool='marker': hands.append(tool) or real_hand())
+    monkeypatch.setattr(ink, 'Hand', lambda tool='marker', side='right': hands.append(tool) or real_hand())
     monkeypatch.setattr(ink, 'font', lambda kind, size, fonts=ink.FONTS: used.add(fonts) or real_font(kind, size, fonts))
     monkeypatch.setattr(skins, 'for_look', lambda look: probe)
     prod = renderer.make_production(board, tl, 'en', tmp_path / 'p')
