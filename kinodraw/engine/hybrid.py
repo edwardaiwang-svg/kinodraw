@@ -157,6 +157,9 @@ class HybridProduction:
             if c['family'] not in ('feline', 'canine', 'human', 'other'):
                 self.warnings.append(f"hybrid: cast family {c['family']} uses quadruped fallback")
             dropped = set(c['marks']) - set(self.cast[c['id']].marks) - {'none'}
+            if STORY_DOODLES and plan['storyboard']['genre'] == 'story':
+                from .storybook import MARKS
+                dropped -= MARKS                 # the storybook draws these on its preset doodles
             if dropped:
                 self.warnings.append(f"hybrid: cast {c['id']} unsupported marks {sorted(dropped)}")
         self.style = plan['style']

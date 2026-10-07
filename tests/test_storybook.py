@@ -389,3 +389,26 @@ def test_group_shots_keep_every_head_in_sight(tmp_path):
                        for b in _staged(book, c, shot.end, shot.end)[:1]):
                     assert m.depth > c.depth, (shot.start, m.key, c.key)     # a smaller animal stands in front
 
+
+
+def test_a_crowned_character_wears_the_crown_on_its_head_in_every_pose(tmp_path):
+    """Kojo's and Mara's 'crown' mark had no picture and was dropped with a warning. The library's crown sits on the
+    head (above its head anchor, centred on it) whether the king stands, roars or walks."""
+    from kinodraw.engine import storybook
+    prod = royal_family(tmp_path)
+    book = prod.storybook
+    assert not [w for w in prod.warnings if 'crown' in w]
+    kojo = book._cast_figure('kojo')
+    assert 'crown' in kojo.marks
+    w, h = book.size
+    for pose in ('stand', 'roar', 'walk'):
+        f = storybook.Figure(**{**kojo.__dict__, 'pose': pose, 'cue': 0., 'x': .5})
+        shot = storybook.Shot(0., 2., figures=[f])
+        frame = np.asarray(book._draw(shot, 1.), np.int32)
+        doodle, mirror, _ = book._pose_doodle(f, 1.)
+        hx, hy = book._point(doodle, mirror, 'head', f.x, f.ground, f.height, book._reference(f))
+        jewel = (np.abs(frame - [0x00, 0xA6, 0xED]).max(axis=2) < 40)       # the crown's blue stones
+        ys, xs = np.nonzero(jewel)
+        assert len(xs) > 30, pose
+        assert abs(xs.mean() / w - hx) < .04, pose                        # centred on the head
+        assert hy - .25 < ys.mean() / h < hy, pose                        # on top of it, not floating off

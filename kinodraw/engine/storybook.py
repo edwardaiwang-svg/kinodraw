@@ -49,6 +49,9 @@ GAP = .015
 BACK_ROW = .035
 FRONT_ROW = 3
 HEAD = .16
+# Marks the storybook draws on a preset: a crown (the library's) sits on the head, CROWN of the character's height.
+MARKS = {'crown'}
+CROWN, CROWN_SIZE = 'fl_crown', .15
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -163,6 +166,30 @@ def sprite(doodle_id, height, mirror=False):
     if mirror:
         image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
     return image
+
+
+@lru_cache(maxsize=160)
+def crowned(doodle_id, px, mirror, crown_px):
+    """The doodle at ``px`` with the crown on its head: centred over the head anchor (a face close-up's eyes), seated
+    a little into the top of the head or mane above it, the canvas grown upward when the crown rises above the
+    doodle's box. Returns (image, rows added on top)."""
+    image = sprite(doodle_id, px, mirror)
+    c_left, c_top, c_right, c_bottom = _bbox(CROWN)
+    crown = sprite(CROWN, round(crown_px / max(.1, c_bottom - c_top)))       # crown_px is the drawn crown's height
+    anchors = meta(doodle_id).get('anchors') or {}
+    ax, ay = anchor(doodle_id, 'head' if 'head' in anchors or 'eyes' not in anchors else 'eyes', mirror)
+    cx = round(ax * image.width)
+    reach = max(1, round((c_right - c_left) * crown.width * .4))
+    alpha = np.asarray(image.getchannel('A'))[:round(ay * image.height), max(0, cx - reach):cx + reach + 1] > 128
+    tops = [int(np.argmax(column)) for column in alpha.T if column.any()]       # the head or mane under its rim
+    top = round(sum(tops) / len(tops)) if tops else round(ay * image.height)
+    y = top + round(.3 * crown_px) - round(c_bottom * crown.height)       # its rim sunk into the head or mane
+    pad = max(0, -y)
+    out = Image.new('RGBA', (image.width, image.height + pad), (0, 0, 0, 0))
+    out.alpha_composite(image, (0, pad))
+    x = cx - round((c_left + c_right) / 2 * crown.width)
+    out.alpha_composite(crown, (min(max(0, x), max(0, image.width - crown.width)), y + pad))
+    return out, pad
 
 
 @lru_cache(maxsize=384)
@@ -701,11 +728,12 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1., pin=None, reference=None):
+               anchor_y=1., pin=None, reference=None, crown=0.):
         """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
 
         ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
-        character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground)."""
+        character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground);
+        ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every sway and lean."""
         w, h = self.size
         sx, sy, zoom = self._to_screen(x, ground, cam, parallax)
         left, top, right, bottom = _bbox(doodle, mirror)
@@ -715,13 +743,18 @@ class Storybook:
         step = max(2, int(px * .015))
         px = round(px / step) * step        # a bounded set of cached sizes during camera pushes
         image = sprite(doodle, px, mirror)
+        foot_x, foot_y = (left + right) / 2 * image.width, (top + (bottom - top) * anchor_y) * image.height
+        if pin is not None:
+            foot_x, foot_y = pin[0] * image.width, pin[1] * image.height
+        if crown:
+            image, pad = crowned(doodle, px, mirror, max(8, round(crown * h * zoom / step) * step))
+            foot_y += pad
         if squash:
+            before = image.size
             image = image.resize((max(1, round(image.width / (1 - squash))), max(1, round(image.height * (1 - squash)))),
                                  Image.Resampling.BICUBIC)
+            foot_x, foot_y = foot_x * image.width / before[0], foot_y * image.height / before[1]
         iw, ih = image.size
-        foot_x, foot_y = (left + right) / 2 * iw, (top + (bottom - top) * anchor_y) * ih
-        if pin is not None:
-            foot_x, foot_y = pin[0] * iw, pin[1] * ih
         if rotate:
             pad = round(max(iw, ih) * .25)
             padded = Image.new('RGBA', (iw + 2 * pad, ih + 2 * pad), (0, 0, 0, 0))
@@ -768,7 +801,7 @@ class Storybook:
             x += direction * roar.dx * .0006
         reference = self._reference(f)
         self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash,
-                    reference=reference)
+                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0.)
         effects = []
         if f.carried is not None:
             c = f.carried
@@ -882,7 +915,8 @@ class Storybook:
         w, h = self.size
         page = self.paper(w, h).copy().convert('RGBA')
         push = 1 + .05 * min(1., (local - start) / 3)
-        self._paste(page, doodle, False, .5, .5 + .36 * push, .72 * push, [.5, .5, 1.], anchor_y=1.)
+        self._paste(page, doodle, False, .5, .5 + .36 * push, .72 * push, [.5, .5, 1.], anchor_y=1.,
+                    crown=.2 * push if 'crown' in f.marks else 0.)
         return page.convert('RGB'), alpha
 
     def _title(self, canvas, title, local):
