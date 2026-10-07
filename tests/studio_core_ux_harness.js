@@ -54,14 +54,15 @@ const nodes = new Map();
 for (const [, tag, id] of html.matchAll(/<(\w+)\b[^>]*\bid="([^"]+)"[^>]*>/g)) nodes.set('#' + id, new Element(tag.toUpperCase()));
 nodes.set('#modal .close', new Element('BUTTON'));
 const node = id => nodes.get(id);
-const requests = [], ticks = [], snapshots = [];
-let responder = () => { throw Error('Unexpected request'); }, ready;
+const requests = [], ticks = [], snapshots = [], confirms = [];
+let responder = () => { throw Error('Unexpected request'); }, ready, confirmAnswer = true;
 const context = vm.createContext({
   window: { STUDIO_TOKEN: 'test-token', addEventListener() {} }, Blob, console,
   document: { querySelector: node, querySelectorAll: () => [],
     addEventListener: (name, fn) => { if (name === 'DOMContentLoaded') ready = fn; },
     createElement: tag => new Element(tag.toUpperCase()) },
   localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+  confirm: message => { confirms.push(message); return confirmAnswer; },
   setTimeout: (fn, ms) => { if (ms === 800) ticks.push(fn); return 1; }, clearTimeout() {},
   fetch: async (path, opts = {}) => {
     requests.push({ path, opts });
@@ -78,7 +79,7 @@ const state = { projects_root: 'isolated', hooks: { writer: true }, advanced: tr
   styles: [{ value: 'whiteboard/explain', label: 'Whiteboard' }], formats: [],
   voices: { en: [{ id: 'en-voice', name: 'English' }], zh: [{ id: 'zh-voice', name: 'Chinese' }], es: [] },
   voice_server: { on: false }, product: 'KinoDraw' };
-run(`STATE = ${JSON.stringify(state)}; loadProjects = () => {};`);
+run(`STATE = ${JSON.stringify(state)}; realLoadProjects = loadProjects; loadProjects = () => {};`);
 const type = (id, value) => { const e = node(id); assert.ok(e, 'Missing actual template control: ' + id); e.value = value; e.oninput?.({ target: e }); };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 const draftText = '# 销量\n\n## 变化\n\n销量增长12%。\n';
@@ -203,12 +204,67 @@ async function importScenario() {
   assert.equal(run('current'), 'imported-uuid');
   assert.equal(input.value, '');
 }
+const STARTERS = [['comparison', 'Two ways to share notes', '两种分享笔记的方法'], ['explainer', 'How a library works', '图书角怎样运转'],
+  ['process', 'Packing a picnic', '准备一次野餐']].flatMap(([kind, en, zh]) => [
+  { id: kind + '-en', lang: 'en', title: en, example_data: true }, { id: kind + '-zh', lang: 'zh', title: zh, example_data: true }]);
+const shown = () => [...node('#starters').innerHTML.matchAll(/data-starter="([^"]+)"/g)].map(m => m[1]);
+const choose = id => node('#starters').onclick({ target: { closest: sel => (sel === '[data-starter]' ? { dataset: { starter: id } } : null) } });
+async function startersScenario() {
+  run(`STATE.starters = ${JSON.stringify(STARTERS)};`);
+  run('showNew()');
+  assert.equal(requests.length, 0, 'opening New video sent a request');
+  assert.ok(node('#starters'), 'New video has no example gallery');
+  assert.deepEqual(shown(), STARTERS.map(s => s.id), 'Detect shows every example');
+  for (const [lang, ids] of [['en', ['comparison-en', 'explainer-en', 'process-en']], ['es', []], ['', STARTERS.map(s => s.id)]]) {
+    node('#lang').value = lang; node('#lang').onchange();
+    assert.deepEqual(shown(), ids, 'examples are not filtered by the chosen language ' + lang);
+    assert.equal(node('#starter-wrap').classList.contains('hidden'), !ids.length);
+  }
+  const zh = '# 图书角怎样运转\n\n虚构示例故事与数据，并非真实记录。\n';
+  responder = path => {
+    const id = path.split('/').pop();
+    const entry = STARTERS.find(s => s.id === id);
+    assert.ok(path.startsWith('/api/starters/') && entry, 'unexpected request ' + path);
+    return { ...entry, text: id === 'explainer-zh' ? zh : '# ' + entry.title + '\n' };
+  };
+  await choose('explainer-zh');
+  assert.equal(node('#script').value, zh);
+  assert.equal(node('#lang').value, 'zh');
+  assert.equal(node('#voice').value, 'zh-voice', 'the voice list did not follow the example language');
+  assert.deepEqual(shown(), ['comparison-zh', 'explainer-zh', 'process-zh']);
+  await choose('comparison-zh');                    // an unedited example is swapped without asking
+  assert.equal(node('#script').value, '# 两种分享笔记的方法\n');
+  assert.equal(confirms.length, 0);
+  type('#script', 'My own words');
+  confirmAnswer = false;
+  const before = requests.length;
+  await choose('process-zh');
+  assert.equal(node('#script').value, 'My own words', 'an example replaced typed words without asking');
+  assert.equal(confirms.length, 1); assert.equal(requests.length, before);
+  confirmAnswer = true;
+  await choose('process-zh');
+  assert.equal(node('#script').value, '# 准备一次野餐\n');
+}
+async function thumbnailsScenario() {
+  responder = path => {
+    assert.equal(path, '/api/projects');
+    return [{ name: 'Rain cycle', title: 'Rain cycle', lang: 'en', videos: ['Rain cycle.mp4'], thumbnail: 'Rain cycle-thumbnail.png' },
+      { name: 'Draft', title: 'Draft', lang: 'zh', videos: [], thumbnail: null }];
+  };
+  await run('realLoadProjects()');
+  const [withVideo, draft] = node('#projects').innerHTML.split('</a>');
+  assert.match(withVideo, /<img\b[^>]*\bsrc="\/files\/Rain%20cycle\/Rain%20cycle-thumbnail\.png\?token=test-token"/);
+  assert.match(withVideo, /<img\b[^>]*\balt=""/);
+  assert.doesNotMatch(draft, /<img\b/);
+}
 const scenario = process.argv[2];
 try {
   if (scenario === 'eta') await etaScenario();
   else if (scenario === 'writer-unavailable') await unavailableScenario();
   else if (scenario.startsWith('writer')) await writerScenario(scenario);
   else if (scenario === 'import') await importScenario();
+  else if (scenario === 'starters') await startersScenario();
+  else if (scenario === 'thumbnails') await thumbnailsScenario();
   else throw Error('Unknown scenario ' + scenario);
   console.log(JSON.stringify({ scenario, actualHandlers: true, controlledResponses: true, requests: requests.map(r => r.path), snapshots, passed: true }));
 } catch (error) { console.error(error); process.exitCode = 1; }

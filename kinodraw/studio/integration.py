@@ -273,9 +273,17 @@ def importzip(stream, length):
 
 def starters():
     # Sibling worker owns the module. A missing module is an honest unavailable
-    # response, never a generated pretend starter list.
+    # response, never a generated pretend starter list. The page never needs the file path.
     from ..starters import list_starters
-    return list_starters()
+    return [{k: v for k, v in entry.items() if k != 'path'} for entry in list_starters()]
+
+
+def starter(name):
+    """One example script for New video; an unknown name is a ValueError (400)."""
+    from ..starters import read
+    text = read(name)
+    entry = next(e for e in starters() if e['id'] == name)
+    return {'id': name, 'lang': entry['lang'], 'title': entry['title'], 'text': text}
 
 
 def transfer_assets(source, destination):
@@ -321,7 +329,7 @@ def validate_references(board, cfg, path):
 
 def hooks():
     return {'provider': provider_for, 'writer': writer, 'make': make, 'export': export,
-            'projectzip': projectzip, 'starters': starters}
+            'projectzip': projectzip, 'starters': starters, 'starter': starter}
 
 
 def choose_style(doc, body, lang, aspect, brand, provider=None):

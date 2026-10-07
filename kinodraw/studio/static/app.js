@@ -189,8 +189,11 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
 // ---------------------------------------------------------------- sidebar
 async function loadProjects() {
   const items = await api('/api/projects');
+  const thumb = (p) => (p.thumbnail      // the finished video's thumbnail; a storyboard keeps an empty frame
+    ? `<img class="thumb" alt="" loading="lazy" src="/files/${encodeURIComponent(p.name)}/${encodeURIComponent(p.thumbnail)}?token=${T}">`
+    : '<span class="thumb"></span>');
   $('#projects').innerHTML = items.map((p) => `<a data-name="${esc(p.name)}" class="${p.name === current ? 'on' : ''}">
-    ${esc(p.title)}<small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
+    ${thumb(p)}<span>${esc(p.title)}</span><small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
     || '<div class="muted">No videos yet.</div>';
   $('#projects').querySelectorAll('a').forEach((a) => (a.onclick = () => openProject(a.dataset.name)));
 }
@@ -246,9 +249,28 @@ function showNew() {
     }
   };
   const scriptInput = $('#script');
-  let scriptEdits = 0;
-  langSel.onchange = fillVoices; scriptInput.oninput = () => { scriptEdits++; if (!langSel.value) fillVoices(); };
-  fillVoices();
+  let scriptEdits = 0, example = '';            // example: the starter text as loaded, so swapping it never asks
+  const showStarters = () => {                  // the shipped fictional examples in the chosen language (all on Detect)
+    const list = (STATE.starters || []).filter((s) => !langSel.value || s.lang === langSel.value);
+    $('#starter-wrap').classList.toggle('hidden', !list.length);
+    $('#starters').innerHTML = list.map((s) => `<button type="button" class="starter" data-starter="${esc(s.id)}" lang="${esc(s.lang)}">
+      <b>${esc(s.title)}</b><small>${esc(s.id.slice(0, s.id.lastIndexOf('-')).replace('-', ' '))} · ${esc(LANG_NAMES[s.lang] || s.lang)}</small></button>`).join('');
+  };
+  $('#starters').onclick = async (event) => {
+    const id = event.target.closest?.('[data-starter]')?.dataset.starter;
+    if (!id) return;
+    if (scriptInput.value.trim() && scriptInput.value !== example && !confirm('Replace your script with this example?')) return;
+    try {
+      const s = await api(`/api/starters/${encodeURIComponent(id)}`);
+      if (!scriptInput.isConnected) return;
+      scriptInput.value = example = s.text; langSel.value = s.lang; scriptEdits++;
+      $('#file-name').textContent = '';
+      fillVoices(); showStarters();
+    } catch (e) { toast(e.message, 6000); }
+  };
+  langSel.onchange = () => { fillVoices(); showStarters(); };
+  scriptInput.oninput = () => { scriptEdits++; if (!langSel.value) fillVoices(); };
+  fillVoices(); showStarters();
   $('#speed-wrap').innerHTML = speedRow('speed');
   bindSpeed('speed');
   $('#voice-play').onclick = (e) => (STATE.voice_server?.on ? playServerSample($('#server-voice').value.trim(), e.currentTarget)

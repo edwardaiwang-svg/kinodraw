@@ -112,7 +112,7 @@ class JobContext:
 
 
 # Main integration registers only exported, implemented seams. Nothing fakes success.
-STUDIO_HOOKS = integration.hooks()  # provider(body), writer(body), starters(), export(path, body, context), projectzip(path, body, context)
+STUDIO_HOOKS = integration.hooks()  # provider(body), writer(body), starters(), starter(name), export(path, body, context), projectzip(path, body, context)
 
 
 class Jobs:
@@ -972,6 +972,7 @@ def state() -> dict:
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if cloud.URL else 'rules',   # signed out, a first video needs no account
             'hooks': {k: k in STUDIO_HOOKS for k in ('writer', 'starters', 'export', 'projectzip')},
+            'starters': STUDIO_HOOKS['starters']() if 'starters' in STUDIO_HOOKS else [],   # New video's examples
             'cloud': None, 'install_id': cloud.kept_install_id(),     # shown in Settings, to ask for its data to be deleted
             'cloud_languages': list(cloud.CloudProvider.languages),   # others are planned offline, never asked
             'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
@@ -1124,6 +1125,10 @@ class Handler(BaseHTTPRequestHandler):
                 if error.name != 'kinodraw.starters':
                     raise
                 return self._json({'error': 'Starter projects await the sibling starters module.'}, 503)
+        if len(p) == 2 and p[0] == 'starters' and method == 'GET':
+            if 'starter' not in STUDIO_HOOKS:
+                return self._json({'error': 'Starter projects are not integrated.'}, 503)
+            return self._json(STUDIO_HOOKS['starter'](p[1]))
         if p == ['state'] and method == 'GET':
             return self._json(state())
         if p == ['voice-server'] and method == 'POST':
