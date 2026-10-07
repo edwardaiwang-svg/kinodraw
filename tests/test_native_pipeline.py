@@ -105,7 +105,7 @@ runpy.run_module('kinodraw.cli',run_name='__main__')
     prod=render.make_production(pipeline.storyboard(project),pipeline._load(project/'build/timeline.json'),'en',project,size=size,aspect=aspect)
     assert prod.whiteboard.native and prod.whiteboard.size==size
     assert any(e.values==(42.5,-7) for e in prod.spans[2].motion.elements)
-    assert any('r="120"' in e.svg for e in prod.spans[1].motion.elements if e.svg)
+    assert prod.spans[1].story is not None and prod.spans[1].motion is None   # a story's scene is a storybook page
     evidence('public-cli-'+str(size[0]),dict(argv=argv,exit=result.returncode,stdout=result.stdout,media=media,cached_hashes=baseline,factory=type(prod).__name__,whiteboard=type(prod.whiteboard).__name__,native_size=prod.whiteboard.size))
 
 
