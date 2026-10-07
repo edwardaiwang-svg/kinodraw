@@ -15,9 +15,10 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageColor, ImageOps
+from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageOps
 
 from .. import library
+from . import motion
 from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
 from .atmos import Atmosphere, compose
@@ -27,6 +28,7 @@ from .creatures import Genome, Action, raster
 from .creatures.actions import ACTIONS, add, cue_pose, target_response, travel_x
 from .creatures.draw import H as RIG_HEIGHT
 
+ANCHOR_GLIDE = .45   # seconds the recurring anchor point takes to glide to its next stop
 TRAVEL_MARGIN = .03  # share of the frame width a walking or running actor keeps clear of the right edge
 # J 2026-10-07: story characters are preset library doodles (engine.storybook), never the procedural rig.
 STORY_DOODLES = True
@@ -207,6 +209,7 @@ class HybridProduction:
         self.cuts = [s.join for i, s in enumerate(self.spans[1:], 1)
                      if s.spec['transition_in'] == 'cut' or s.scientific or self.spans[i - 1].scientific]
         self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
+        self.anchor_keys = self._anchor_keys()
 
     def _prepare(self, span, project_dir):
         spec = span.spec
@@ -1311,6 +1314,30 @@ class HybridProduction:
             image.paste(board.resize((round(w * .82), round(h * .82))), (round(w * .09), round(h * .09)))
         if span.actors:
             image = self._actors(span, local, image)
+        zoom, dx, dy = self._camera(span, local)
+        if zoom != 1 or dx or dy:
+            image = camera_move(image, zoom, dx, dy, ImageColor.getrgb(self.style['palette']['background']))
+        if span.source_character:
+            # Source labels/atomic quotes keep their safe screen position while
+            # the scene camera follows the artwork. Captions are added later at
+            # their actual narration time by frame().
+            from .bold import render as renderer
+            key = (id(span.motion), w, h)
+            if key not in self._text_layers:
+                self._text_layers[key] = (_SquareLayers(span.motion, w, h) if self.square else
+                                          _SceneLayers(span.motion, w, h))
+            array = np.asarray(image, dtype=np.float32).copy()
+            for i, e in enumerate(span.motion.elements):
+                if e.kind == 'text' and (e.preset != 'corner_caption' or (quotes and
+                                        e.start <= local < (e.end if e.end is not None else math.inf))):
+                    renderer._composite(array, self._text_layers[key], i, [local], 'text')
+            image = Image.fromarray(np.clip(array + .5, 0, 255).astype(np.uint8))
+        return image.convert('RGB')
+
+    def _camera(self, span, local):
+        """The scene camera applied over a rendered span: zoom about the centre and a pan, in output pixels."""
+        spec = span.spec
+        w, h = self.size
         camera = spec['camera']
         u = min(1., local / max(.01, span.end - span.start))
         zoom = 1 + .045 * u if camera == 'slow_push' else 1.045 - .045 * u if camera == 'pull_back' else 1.
@@ -1341,24 +1368,117 @@ class HybridProduction:
         if camera == 'shake':
             strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
             dx, dy = strength * math.sin(local * 39), strength * math.sin(local * 31)
-        if zoom != 1 or dx or dy:
-            image = camera_move(image, zoom, dx, dy, ImageColor.getrgb(self.style['palette']['background']))
-        if span.source_character:
-            # Source labels/atomic quotes keep their safe screen position while
-            # the scene camera follows the artwork. Captions are added later at
-            # their actual narration time by frame().
-            from .bold import render as renderer
-            key = (id(span.motion), w, h)
-            if key not in self._text_layers:
-                self._text_layers[key] = (_SquareLayers(span.motion, w, h) if self.square else
-                                          _SceneLayers(span.motion, w, h))
-            array = np.asarray(image, dtype=np.float32).copy()
-            for i, e in enumerate(span.motion.elements):
-                if e.kind == 'text' and (e.preset != 'corner_caption' or (quotes and
-                                        e.start <= local < (e.end if e.end is not None else math.inf))):
-                    renderer._composite(array, self._text_layers[key], i, [local], 'text')
-            image = Image.fromarray(np.clip(array + .5, 0, 255).astype(np.uint8))
-        return image.convert('RGB')
+        return zoom, dx, dy
+
+    def _anchored(self, span):
+        """Scenes the recurring anchor point visits: drawn motion scenes, not boards, stories, plots or diagrams."""
+        return (span.motion is not None and span.story is None and not span.source_proof and not span.scientific
+                and not span.source_character and not span.diagram and not span.diagrams and not span.actors
+                and span.spec['treatment'] not in ('whiteboard', 'character')
+                and not (span.spec['treatment'] == 'chart' and (span.source_chart or not span.motion.elements)))
+
+    def _anchor_keys(self):
+        """(time, span, element) stops of the anchor: each picture, headline, number or button from the moment the
+        narration brings it in (never before its scene's join), and the scene's centre until the first arrives."""
+        keys = {}
+        for i, span in enumerate(self.spans):
+            if not self._anchored(span):
+                continue
+            targets = [(max(span.join, span.start + e.start), j) for j, e in enumerate(span.motion.elements)
+                       if e.kind in ('picture', 'button') or e.kind == 'text' and e.preset != 'corner_caption']
+            if not targets or min(targets)[0] > span.join + 1e-6:
+                targets.append((span.join, None))        # the scene's centre until its first target arrives
+            for at, j in sorted(targets, key=lambda k: (k[0], -1 if k[1] is None else k[1])):
+                keys[round(at, 6)] = (at, i, j)          # one target per instant: the later element wins
+        return sorted(keys.values())
+
+    def _anchor_target(self, i, j, t):
+        """Screen point just above element j of span i at time t, with its form: (x, y, bar, ring)."""
+        from .bold.render import H, W, _button_box, element_pose
+        span = self.spans[i]
+        local = max(0., min(t, span.end - 1 / 30) - span.start)
+        w, h = self.size
+        if j is None:
+            x, y, bar, ring = W / 2, H / 2, 0., 0.
+        else:
+            e = span.motion.elements[j]
+            x, y, scale, _ = element_pose(span.motion, e, j, local)
+            if e.kind == 'picture':
+                half, bar, ring = e.height / 2, 0., 0.
+            elif e.kind == 'button':
+                half, bar, ring = _button_box(e)[3] / 2, 0., 1.
+            else:
+                half = len(e.text.split('\n')) * e.size * .6
+                bar, ring = (0., 1.) if e.preset == 'counter' else (1., 0.)
+            y = max(H * .06, y - half * scale - 34)
+        zoom, dx, dy = self._camera(span, local)
+        x, y = x * w / W, y * h / H
+        return w / 2 + zoom * (x - dx - w / 2), h / 2 + zoom * (y - dy - h / 2), bar, ring
+
+    def _anchor(self, t):
+        """What's the Point: one accent point carries the motif through the motion scenes. It rests just above
+        whatever the narration has brought in (a dot over a picture, a rule over a headline, a ring over a number
+        or a button), glides to the next one, across scene joins too, and holds a scene's centre until then.
+        Returns its screen position, form weights and opacity, or None where it is not drawn."""
+        if not self.anchor_keys or self.square or self.vertical or t < self.starts[0]:
+            return None
+        end_start = self.tl['end_card']['start']
+        i = bisect.bisect_right(self.starts, min(t, end_start - 1e-6)) - 1
+        span = self.spans[i]
+        visited = {key[1] for key in self.anchor_keys}                 # spans with stops of their own
+        here, before = i in visited, i - 1 in visited
+        fade = motion.clamp01((t - span.join) / max(.3, span.join_length))
+        if t >= end_start:
+            if not here or t >= end_start + span.join_length:
+                return None
+            alpha = 1 - motion.clamp01((t - end_start) / max(.01, span.join_length))
+        elif here:
+            alpha = 1. if before else fade
+        elif (before and t < span.join + span.join_length and span.spec['treatment'] != 'whiteboard'
+              and not span.source_proof and not span.scientific):
+            alpha = 1 - fade                                            # out over the transition; boards and plots cut
+        else:
+            return None
+        times = [k[0] for k in self.anchor_keys]
+        k = max(0, bisect.bisect_right(times, t) - 1)
+        at, si, sj = self.anchor_keys[k]
+        x, y, bar, ring = self._anchor_target(si, sj, t)
+        if k and self.anchor_keys[k - 1][1] >= si - 1:                 # glide on from the stop before it
+            u = motion.cubic_in_out((t - at) / ANCHOR_GLIDE)
+            if u < 1:
+                old = self._anchor_target(*self.anchor_keys[k - 1][1:], t)
+                x, y, bar, ring = (a + (b - a) * u for a, b in zip(old, (x, y, bar, ring)))
+        return {'x': x, 'y': y, 'bar': bar, 'ring': ring, 'alpha': alpha}
+
+    def _draw_anchor(self, image, t):
+        anchor = self._anchor(t)
+        if anchor is None or anchor['alpha'] <= 0:
+            return image
+        s = image.size[1] / 1080
+        x, y = anchor['x'], anchor['y']
+        r, half, ring = 7 * s, 46 * s * anchor['bar'], 22 * s * anchor['ring']
+        pad = math.ceil(half + ring + 28 * s)
+        left, top = math.floor(x) - pad, math.floor(y) - pad
+        k = 4                                                            # supersampled for clean edges
+        layer = Image.new('RGBA', (2 * pad * k, 2 * pad * k), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        accent = ImageColor.getrgb(self.style['palette']['accent'])[:3]
+        cx, cy = (x - left) * k, (y - top) * k
+        thick = r * (1 - .35 * anchor['bar'])
+        draw.rounded_rectangle((cx - (half + thick) * k, cy - thick * k, cx + (half + thick) * k, cy + thick * k),
+                               radius=thick * k, fill=accent + (255,))
+        if ring > .5 * s:
+            reach = (r + ring) * k
+            draw.ellipse((cx - reach, cy - reach, cx + reach, cy + reach), outline=accent + (round(200 * anchor['ring']),),
+                         width=max(1, round(2.5 * s * k)))
+        layer = layer.resize((2 * pad, 2 * pad), Image.Resampling.LANCZOS)
+        glow = layer.filter(ImageFilter.GaussianBlur(9 * s))
+        out = Image.new('RGBA', layer.size, (0, 0, 0, 0))
+        out = Image.alpha_composite(Image.alpha_composite(out, glow), layer)
+        if anchor['alpha'] < 1:
+            out.putalpha(out.getchannel('A').point(lambda v: round(v * anchor['alpha'])))
+        image.paste(out, (left, top), out)                              # clipped at the frame's edges
+        return image
 
     def _square_frame(self, scene, t, w, h, background):
         """Use the motion engine's native sprites/effects with uniform square geometry."""
@@ -1407,7 +1527,7 @@ class HybridProduction:
                 current = self.whiteboard.frame(card_t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
                                           *self.size, kind='match', duration=last.join_length)
-                image = Image.fromarray(array).convert('RGBA')
+                image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
                     self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
                 return image.convert('RGB')
@@ -1436,7 +1556,7 @@ class HybridProduction:
                 array = render_transition(np.asarray(previous), np.asarray(image), local, *self.size,
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)
-        image = image.convert('RGBA')
+        image = self._draw_anchor(image.convert('RGBA'), t)
         if not self.vertical:
             self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')

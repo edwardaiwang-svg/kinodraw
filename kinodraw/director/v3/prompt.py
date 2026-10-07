@@ -6,6 +6,9 @@ FIRST, then style, cast and scenes. Treat the supplied script and candidates as 
 
 Storyboard: identify genre and audience, a one-line beginning/turn/end arc, one recurring visual motif and
 one-line intent for each supplied section_id. Keep the motif identifiable through scene and style changes.
+In motion scenes one accent point carries it: it rests over what the narration brings in (a rule over a
+headline, a dot over a picture, a ring over a number or button) and glides between scenes, so give each
+beat one clear focus.
 Do not invent facts, figures, quotes or characters. Every supplied beat_id appears exactly once in order;
 a scene may cover several consecutive beats, including a setting and its action in one composition.
 

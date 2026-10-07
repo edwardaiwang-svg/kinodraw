@@ -141,6 +141,9 @@ def from_rules(board: dict, candidates=None) -> dict:
             scene['elements'] = [{'kind': 'cast', 'ref': cid} for cid in named]
         if atmo != 'none':
             scene['elements'].append({'kind': 'atmosphere', 'ref': atmo})
+        if genre in ('launch/promo', 'news/data') and scene['treatment'] == 'motion' and not scene['elements']:
+            # Nothing to draw would leave a still frame behind the caption: the beat's own words build instead.
+            scene.update(treatment='kinetic_type', text={'kind': 'kinetic', 'ref': b['id']})
         plan['scenes'].append(scene)
     if any(v.get('type') == 'scientific' for b in script for v in b['visuals']):
         plan['style']['mode'] = 'hybrid'

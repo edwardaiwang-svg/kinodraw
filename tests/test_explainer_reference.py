@@ -3,6 +3,7 @@
 Each check builds a real starter/fixture project through the rules director, the v3 adapter and the hybrid
 renderer, on the synthetic narration clock, and reads the plan, the motion scene and rendered pixels.
 """
+import math
 from pathlib import Path
 
 import numpy as np
@@ -187,3 +188,88 @@ def test_call_to_action_button_is_pressed_on_a_beat(launch):
     w, h = prod.size
     pill = frame[round(h * .5):round(h * .82), round(w * .35):round(w * .65)]
     assert (np.abs(pill - accent).sum(axis=2) < 60).mean() > .08          # an accent pill holds the label
+
+
+# ------------------------------------------------------------ 3. What's the Point: one recurring anchor point
+def test_anchor_point_rests_over_what_the_narration_names(launch, news):
+    board, plan, tl, prod = launch
+    bid = next(b['id'] for b in beats(board) if b['text'].startswith('Introducing our new app'))
+    span = span_of(prod, bid)
+    from kinodraw.engine.bold.render import H, W, layout_position
+    pictures = [(j, e) for j, e in enumerate(span.motion.elements) if e.kind == 'picture']
+    w, h = prod.size
+    for (j, picture), word in zip(pictures, ('app', 'ideas')):
+        at = spoken_time(tl, board, bid, word) + .6
+        anchor = prod._anchor(at)
+        x, y = layout_position(span.motion, picture, j)
+        assert anchor['alpha'] == pytest.approx(1)
+        assert abs(anchor['x'] - x * w / W) < .04 * w                    # over the picture just named
+        assert anchor['y'] < (y - picture.height / 2) * h / H             # just above it
+        assert anchor['bar'] < .05 and anchor['ring'] < .05               # as a dot
+    # A headline takes an accent rule above it; a proof number takes a ring.
+    board, plan, tl, prod = news
+    bid, _ = scene_for(plan, board, 'Key takeaway: The report shows')
+    span = span_of(prod, bid)
+    headline = next(e for e in span.motion.elements if e.preset == 'clauses')
+    counter = next(e for e in span.motion.elements if e.preset == 'counter')
+    assert prod._anchor(span.start + headline.start + .6)['bar'] == pytest.approx(1)
+    ring = prod._anchor(span.start + counter.start + .6)
+    assert ring['ring'] == pytest.approx(1) and ring['y'] < counter.y * prod.size[1]       # over the number
+
+
+def test_anchor_glides_across_scene_joins_without_a_jump(launch):
+    board, plan, tl, prod = launch
+    w, h = prod.size
+    joins = [s for i, s in enumerate(prod.spans[1:], 1) if s.spec['transition_in'] != 'cut'
+             and prod._anchored(s) and prod._anchored(prod.spans[i - 1])]
+    assert joins
+    moved = 0.
+    for span in joins:
+        times = np.arange(span.start - .3, span.join + 1.2, 1 / 30)
+        points = [prod._anchor(t) for t in times]
+        assert all(p is not None and p['alpha'] == pytest.approx(1) for p in points)   # it persists, never re-enters
+        steps = [math.hypot(b['x'] - a['x'], b['y'] - a['y']) for a, b in zip(points, points[1:])]
+        assert max(steps) < .035 * w                                                # glides, never jumps
+        moved = max(moved, math.hypot(points[-1]['x'] - points[0]['x'], points[-1]['y'] - points[0]['y']))
+    assert moved > .02 * w
+
+
+def test_anchor_holds_the_centre_until_a_scene_brings_something_in(launch):
+    from kinodraw.engine.hybrid import ANCHOR_GLIDE
+    board, plan, tl, prod = launch
+    bid = next(b['id'] for b in beats(board) if b['text'].startswith('Introducing our new app'))
+    span = span_of(prod, bid)
+    at = span.join + ANCHOR_GLIDE + .1
+    assert min(e.start for e in span.motion.elements if e.kind == 'picture') > at - span.start
+    anchor = prod._anchor(at)
+    w, h = prod.size
+    assert abs(anchor['x'] - w / 2) < .03 * w and abs(anchor['y'] - h / 2) < .05 * h   # the lone point
+    x, y = round(anchor['x']), round(anchor['y'])
+    accent = np.array(ImageColor.getrgb(plan['style']['palette']['accent']))
+    patch = np.asarray(prod.frame(at)).astype(int)[y - 6:y + 7, x - 6:x + 7]
+    assert (np.abs(patch - accent).sum(axis=2) < 90).mean() > .3
+
+
+def test_anchor_never_touches_whiteboard_scenes(tmp_path):
+    board, plan, tl, prod = project(tmp_path, GENRE / 'explainer.md')
+    boards = [s for s in prod.spans if s.spec['treatment'] == 'whiteboard']
+    kinetic = [s for s in prod.spans if s.spec['treatment'] == 'kinetic_type']
+    assert boards and kinetic
+    for span in boards:
+        for t in np.linspace(span.start, span.end - .05, 5):
+            assert prod._anchor(t) is None
+    assert prod._anchor(prod.starts[0] - .5) is None if prod.starts[0] > .5 else True
+    assert any(prod._anchor((s.join + s.end) / 2) is not None for s in kinetic)
+
+
+def test_rules_never_leave_a_motion_scene_empty(launch, news):
+    # An empty motion scene is a still frame behind its caption (4.7 s frozen in the launch fixture): its own
+    # words build clause by clause instead, under the anchor point.
+    for board, plan, tl, prod in (launch, news):
+        for scene in plan['scenes']:
+            if scene['treatment'] == 'motion':
+                assert scene['elements'] or scene['actions'], scene['beat_ids']
+    board, plan, tl, prod = launch
+    bid, scene = scene_for(plan, board, "Here's what we'll cover")
+    assert (scene['treatment'], scene['text']['kind']) == ('kinetic_type', 'kinetic')
+    assert any(e.preset == 'clauses' for e in span_of(prod, bid).motion.elements)
