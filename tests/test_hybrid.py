@@ -596,3 +596,19 @@ def test_review_picture_read_is_explicit_utf8(tmp_path, monkeypatch):
     assert not repairs, repairs
     prod = save_production(tmp_path, board, validated, tl)
     assert 'café' in prod.spans[0].motion.elements[0].svg
+
+
+def test_only_animals_cackle_when_they_laugh(tmp_path):
+    board = script.build(ingest.read('# Market\n\nAmara, a girl, watched Pendo, a lion cub.\n\nAmara laughed at Pendo.'
+                                     '\n\nThe hyenas laughed at Pendo.'), story='story')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    for scene in plan['scenes']:
+        scene['treatment'] = 'character'
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = save_production(tmp_path, board, plan, tl)
+    cues = {c['id']: c['kind'] for c in prod.cues()}
+    laughs = {prod.cast[actor].family: cues.get(f'hybrid.action.{i}.{j}') for i, span in enumerate(prod.spans)
+              for j, (actor, action, _) in enumerate(span.actions) if action.name == 'laugh'}
+    assert laughs == {'human': None, 'hyenid': 'hyena_cackle'}           # a girl's laugh is no hyena's yelp

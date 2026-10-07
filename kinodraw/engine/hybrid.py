@@ -1384,8 +1384,9 @@ class HybridProduction:
                     cues.append({'t': at, 'kind': 'roar', 'id': f'hybrid.story.{i}.{j}'})
             for j, (actor, action, target) in enumerate(span.actions):
                 # An action with its own synthesized sound (audio.synth_sfx) plays it, at full strength: the kind's
-                # level keeps it audible under the narration. A pounce lands with an impact.
-                kind = {'roar': 'roar', 'whimper': 'whimper', 'nudge': 'nudge', 'swipe': 'swipe', 'laugh': 'hyena_cackle',
+                # level keeps it audible under the narration. A pounce lands with an impact; only an animal cackles.
+                kind = {'roar': 'roar', 'whimper': 'whimper', 'nudge': 'nudge', 'swipe': 'swipe',
+                        'laugh': None if self.cast[actor].family == 'human' else 'hyena_cackle',
                         'breathe_heavy': 'breath_puff', 'pounce': 'impact'}.get(action.name)
                 if kind == 'breath_puff':                    # a puff as each drawn exhale begins
                     steps = np.arange(0, action.seconds, .01)
