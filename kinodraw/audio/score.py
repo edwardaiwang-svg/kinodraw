@@ -1,20 +1,24 @@
-"""Mood-selected CC0 score, bar-aligned loops and narration sidechain.
+"""Procedural or mood-selected CC0 score, bar-aligned loops and narration sidechain.
 
-render() returns the quiet, ducked music stem, the mastered narration/music mix and its beat grid. Requested
-tempo selects a recording; bpm and beats describe its measured tempo, without repitching it. Measurements
-in assets/music/score_tags.json are made once with scripts/measure_bpm.py, including its analysis delay.
-The source starts at its first downbeat, so the output's beat and bar grids start at zero.
+render() returns the quiet, ducked music stem, the mastered narration/music mix and its beat grid. With
+track='procedural' the score is synthesized (audio/procedural.py) at the requested tempo, changing at section
+starts and swelling or hushing at intensity marks. Otherwise a recording plays: the named one, or the one the
+mood and requested tempo select; bpm and beats then describe its measured tempo, without repitching it.
+Measurements in assets/music/score_tags.json are made once with scripts/measure_bpm.py, including its analysis
+delay. Every source starts at its first downbeat, so the output's beat and bar grids start at zero.
+source() is the projects' choice: a saved storyboard music track, else the procedural score.
 """
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
 from scipy.signal import butter, sosfilt
 
-from . import master, mix
+from . import master, mix, procedural
 
 SR = mix.SR
 TAGS = mix.MUSIC / 'score_tags.json'
@@ -22,6 +26,12 @@ DUCK_DB, ATTACK, RELEASE = -10.0, .08, .4
 CHORDS = {'bright': (130.81, 164.81, 196.00), 'discovery': (146.83, 220.00, 261.63),
           'calm': (130.81, 196.00, 246.94), 'mysterious': (110.00, 130.81, 164.81),
           'somber': (130.81, 155.56, 196.00), 'neutral': (130.81, 174.61, 196.00)}
+PROCEDURAL = 'procedural'
+# Intensity marks from the sound cues: big actions swell into their cue (strength), gentle ones hush their line.
+SWELLS = {'roar': 1., 'impact': .8, 'pounce': .8, 'swipe': .6, 'shooting_star': .5}
+HUSHES = {'whimper': .8, 'nudge': .5}
+TENDER = re.compile(r'\b(?:gentl[ey]|softly|quietly|whisper\w*|nuzzl\w*|hug(?:s|ged|ging)?|cuddl\w*|tears?|'
+                    r'lullab\w*|tender\w*)\b', re.I)
 
 
 @dataclass
@@ -45,6 +55,43 @@ def choose(music_mood, tempo_bpm) -> str:
     mood = music_mood.strip().lower()
     matches = [slug for slug, tag in tags().items() if mood in tag['moods']]
     return min(matches or tags(), key=lambda slug: (abs(np.log2(tags()[slug]['bpm'] / tempo_bpm)), slug))
+
+
+def source(setting, music_mood, tempo_bpm) -> tuple[str, float]:
+    """(track, bpm) for a project: the recording a storyboard's music setting names ({"primary": slug}, which
+    projects saved before the procedural score keep), at its measured tempo; otherwise the procedural score at the
+    requested tempo. The renderer snaps joins to this grid and finish plays this track, so both use it."""
+    _tempo(tempo_bpm)
+    slug = setting.get('primary') if isinstance(setting, dict) else None
+    if slug and slug != PROCEDURAL:
+        if slug not in tags():
+            raise ValueError(f'unknown music track {slug!r}')
+        return slug, tags()[slug]['bpm']
+    return PROCEDURAL, float(tempo_bpm)
+
+
+def story_marks(board, tl, cues=()) -> tuple[list[float], list[tuple[float, float, float]]]:
+    """Section starts (the chapter joins) and intensity marks (time, strength, span) for the procedural score.
+    Roars and other big actions swell into their cue; a whimper or nudge, or a line said gently, softly or
+    quietly (or a whisper, nuzzle, hug, cuddle, tear, lullaby), hushes for that beat's narration."""
+    sections = [float(c['start']) for c in tl.get('chapters', [])[1:]]
+    marks = [(float(c['t']), SWELLS[c['kind']], 0.) for c in cues if c.get('kind') in SWELLS]
+    order = tl.get('beat_order') or [b['id'] for b in board.get('beats', [])]
+    end = tl.get('end_card', {}).get('start', tl['duration'])
+    spans = {bid: (tl['beats'][bid]['start'], tl['beats'][after]['start'] if after else end)
+             for bid, after in zip(order, order[1:] + [None]) if bid in tl['beats']}
+    lang = tl.get('language') or board.get('lang')
+    for beat in board.get('beats', []):
+        spoken = beat.get('spoken', '')
+        text = spoken.get(lang, '') if isinstance(spoken, dict) else spoken
+        if beat['id'] in spans and TENDER.search(text or ''):
+            a, b = spans[beat['id']]
+            marks.append((a, -.7, b - a))
+    for c in cues:
+        if c.get('kind') in HUSHES:
+            a, b = next(((a, b) for a, b in spans.values() if a <= c['t'] < b), (c['t'], c['t'] + 2.))
+            marks.append((a, -HUSHES[c['kind']], b - a))
+    return sections, sorted(marks)
 
 
 def _tempo(bpm):
@@ -153,11 +200,13 @@ def _track(slug):
 
 
 def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambient=False,
-           seed=20260927) -> Score:
+           seed=20260927, track=None, sections=(), marks=()) -> Score:
     """Stereo 48 kHz music and final -14 LUFS / -1 dBTP mix. Narration must already be at 48 kHz.
 
-    Set ambient=True to use a pad when the mood has no tagged recording. Short narration is zero-padded;
-    longer narration is cropped. The beat grid is available to a caller snapping transitions to beats/bars.
+    track: 'procedural' synthesizes the score (sections and marks shape it, seed varies it); a recording's slug
+    plays that recording; None selects a recording by mood and tempo, or with ambient=True a pad when the mood has
+    no tagged recording. Short narration is zero-padded; longer narration is cropped. The beat grid is available
+    to a caller snapping transitions to beats/bars.
     """
     beat_grid(duration, tempo_bpm)
     n = round(duration * SR)
@@ -170,11 +219,19 @@ def render(duration, music_mood='neutral', tempo_bpm=120., narration=None, ambie
             voice = voice[:, None]
         speech[:min(n, len(voice))] = voice[:n]
     mood = music_mood.strip().lower()
-    use_pad = ambient and not any(mood in t['moods'] for t in tags().values())
-    slug = None if use_pad else choose(mood, tempo_bpm)
-    bpm = tempo_bpm if use_pad else tags()[slug]['bpm']
+    if track not in (None, PROCEDURAL) and track not in tags():
+        raise ValueError(f'unknown music track {track!r}')
+    use_pad = track is None and ambient and not any(mood in t['moods'] for t in tags().values())
+    slug = None if use_pad else track or choose(mood, tempo_bpm)
+    bpm = tempo_bpm if use_pad or slug == PROCEDURAL else tags()[slug]['bpm']
     if use_pad:
         music = ambient_pad(duration, mood, seed=seed)
+    elif slug == PROCEDURAL:
+        music = procedural.compose(duration, mood, tempo_bpm, seed, sections, marks)
+        level = master.loudness(music, SR)
+        if np.isfinite(level):
+            music *= np.float32(10 ** ((mix.OPEN_LUFS - level) / 20))
+        music *= _fades(n, SR)[:, None]
     elif n:
         music = loop(_track(slug), duration, bpm, tags()[slug]['downbeat'])
         level = master.loudness(music, SR)

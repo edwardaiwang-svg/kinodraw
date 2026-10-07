@@ -518,18 +518,22 @@ def _hybrid(cfg):
 def _hybrid_audio(board, tl, build, cfg):
     from .audio import score, sfx, master
     import numpy as np
+    import zlib
     speech = audio.read_wav(audio.narration(tl, build))[0]
     style = cfg['plan_v3']['style']
-    if style['music_mood'] != 'none' and board.get('music', True):
-        result = score.render(tl['duration'], style['music_mood'], style['tempo_bpm'],
-                              narration=speech, ambient=True)
-        out = speech + result.music
-        _save(build / 'score.json', {'bpm': result.bpm, 'track': result.track,
-                                   'beats': result.beats.tolist()})
-    else:
-        out = np.repeat(speech, 2, axis=1) if speech.shape[1] == 1 else speech.copy()
     cues_path = build / 'cues.json'
     cues = _load(cues_path)['cues'] if cues_path.is_file() else []
+    if style['music_mood'] != 'none' and board.get('music', True):
+        track, _ = score.source(board.get('music'), style['music_mood'], style['tempo_bpm'])
+        sections, marks = score.story_marks(board, tl, cues)
+        result = score.render(tl['duration'], style['music_mood'], style['tempo_bpm'], narration=speech,
+                              ambient=True, seed=zlib.crc32(board['title'][cfg['lang']].encode('utf-8')),
+                              track=track, sections=sections, marks=marks)  # each video its own variation
+        out = speech + result.music
+        _save(build / 'score.json', {'bpm': result.bpm, 'track': result.track, 'beats': result.beats.tolist(),
+                                   'sections': sections, 'marks': marks})
+    else:
+        out = np.repeat(speech, 2, axis=1) if speech.shape[1] == 1 else speech.copy()
     if cues and board.get('sfx', True):
         env = audio.envelope(speech.mean(axis=1))
         out += sfx.render(cues, tl['duration']) * (1 + (10 ** (audio.SFX_DUCK_DB / 20) - 1) * env)[:, None]

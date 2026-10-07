@@ -162,13 +162,11 @@ class HybridProduction:
         # dark palette. Whiteboard scenes keep the whiteboard's own captions.
         palette = {k: ImageColor.getrgb(v)[:3] for k, v in self.style['palette'].items()}
         self.caption_look, self.caption_accent = (palette['ink'], palette['background'], 4), palette['accent']
-        # Same score selection as finish; the decoded recording starts on beat zero.
+        # Same score selection as finish; the procedural score and every recording start on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
         if self.style['music_mood'] != 'none' and episode.get('music', True):
-            mood = self.style['music_mood']
-            bpm = (score.tags()[score.choose(mood, self.style['tempo_bpm'])]['bpm']
-                   if any(mood in tag['moods'] for tag in score.tags().values()) else self.style['tempo_bpm'])
+            _, bpm = score.source(episode.get('music'), self.style['music_mood'], self.style['tempo_bpm'])
             self.score_beats = score.beat_grid(self.duration, bpm)
         self.spans = []
         specs = plan['scenes']
