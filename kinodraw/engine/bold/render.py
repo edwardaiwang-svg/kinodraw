@@ -259,11 +259,17 @@ def _text(element, scene, t, color):
         # Silkscreen glyphs are proportional; lay them on an explicit fixed-advance grid.
         advance = font.getlength('M') * size / font.size + spacing
         shown = m.typewriter(text, t, element.start, cps=TYPE_CPS) if element.preset == 'type_on' else len(text)
+        if element.preset == 'clauses':
+            # Each character belongs to a word; a word shows from its clause's spoken time.
+            starts, visible, k = element.word_starts(text, element.cues), [], -1
+            for i, ch in enumerate(text):
+                k += not ch.isspace() and (i == 0 or text[i - 1].isspace())
+                visible.append(not ch.isspace() and starts[k] <= t)
         out, index = '', 0
         lines = text.split('\n')
         for row, line in enumerate(lines):
             for column, char in enumerate(line):
-                if index < shown:
+                if (visible[index] if element.preset == 'clauses' else index < shown):
                     out += _text_tag(char, size, color, x=(column - (len(line) - 1) / 2) * advance,
                                      y=(row - (len(lines) - 1) / 2) * size * 1.15)
                 index += 1
@@ -278,6 +284,24 @@ def _text(element, scene, t, color):
             out += _text_tag(line[:max(0, shown)], size, color, x=-width / 2,
                              y=(i - (len(lines) - 1) / 2) * size * 1.15, anchor='start')
             shown -= len(line) + 1
+        return out
+    if element.preset == 'clauses' and element.kind == 'text':
+        # Laid out once for the whole text, like word_pop, so a later clause never moves an earlier one; each word
+        # fades and rises a little in place at its clause's spoken time.
+        starts = iter(element.word_starts(text, element.cues))
+        lines = text.split('\n')
+        gap, out = size * .28, ''
+        for row, line in enumerate(lines):
+            pieces = line.split()
+            widths = [font.getlength(piece) * size / font.size for piece in pieces]
+            x = -(sum(widths) + gap * max(0, len(pieces) - 1)) / 2
+            for piece, width in zip(pieces, widths):
+                p = m.expo_out((t - next(starts)) / TEXT_ENTER)
+                if p > 0:
+                    dy = 12 * (1 - p) + (row - (len(lines) - 1) / 2) * size * 1.15
+                    out += (f'<g transform="translate({x + width / 2:.6f} {dy:.6f})" opacity="{p:.6f}">'
+                            f'{_text_tag(piece, size, color)}</g>')
+                x += width + gap
         return out
     if element.preset in {'word_pop', 'cascade'}:
         rows = [line.split() if element.preset == 'word_pop' else list(line) for line in text.split('\n')]
@@ -474,6 +498,8 @@ def _appearance(scene, e, t, geometry):
             state = min(local, TEXT_ENTER + max(0, n - 1) * (.1 if e.preset == 'word_pop' else .035))
         elif e.preset == 'slam':
             state = min(local, TEXT_ENTER)
+        elif e.preset == 'clauses':
+            state = tuple(min(max(0., t - start), TEXT_ENTER) for start in e.word_starts(e.text, e.cues))
     elif e.kind == 'chart':
         state = min(local, (e.duration or .65) + min(.3, max(0, len(e.values) - 1) * .09))
     elif e.kind == 'particle_field':

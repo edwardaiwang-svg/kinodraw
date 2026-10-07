@@ -139,7 +139,6 @@ def test_every_action_sound_plays_at_full_strength_and_puffs_follow_the_exhales(
 
 def test_scenes_cue_chapter_whooshes_beds_shooting_stars_and_typing(tmp_path):
     from kinodraw.audio import sfx
-    from kinodraw.engine.bold.model import TYPE_CPS
     board = script.build(ingest.read('# Night\n\n## The storm\n\nRain fell on the valley all night.\n\nThe wind blew dust '
                                      'over the plain.\n\n## The morning\n\nThick fog held a shooting star.\n\nEvery cub '
                                      'must learn to read the sky.'))
@@ -170,11 +169,13 @@ def test_scenes_cue_chapter_whooshes_beds_shooting_stars_and_typing(tmp_path):
     a, b = (span.start + x for x in next(o['window'] for name, _, o in span.atmos.layers if name == 'shooting_star'))
     assert star['t'] == min(beat for beat in prod.score_beats if a <= beat < b)          # while the star crosses
     i, span = spans['b009']
-    typed = [e for e in span.motion.elements if e.kind == 'text' and e.preset == 'type_on' and e.text.strip()]
-    ticks = [c['t'] for c in cues if c['kind'] == 'type_tick']
-    assert typed and len(ticks) == sum(not ch.isspace() for e in typed for ch in e.text)
-    assert ticks[0] == span.start + typed[0].start + (len(typed[0].text) - len(typed[0].text.lstrip()) + 1) / TYPE_CPS
-    for kind in ('transition_whoosh', 'rain', 'wind', 'fog_drone', 'shooting_star', 'type_tick'):
+    # The kinetic headline is built clause by clause at the narration's own times (Papermorph), not typed at
+    # TYPE_CPS from the scene start, so it has no per-character typing ticks.
+    built = [e for e in span.motion.elements if e.kind == 'text' and e.preset == 'clauses' and e.text.strip()]
+    assert built and built[0].cues[0] == pytest.approx(0, abs=.05)
+    assert not any(e.kind == 'text' and e.preset == 'type_on' for e in span.motion.elements)
+    assert not any(c['kind'] == 'type_tick' for c in cues)
+    for kind in ('transition_whoosh', 'rain', 'wind', 'fog_drone', 'shooting_star'):
         cue = next(c for c in cues if c['kind'] == kind)
         y = sfx.render([cue], prod.duration)
         at = round(cue['t'] * sfx.SAMPLE_RATE)
@@ -251,7 +252,7 @@ def test_kinetic_and_chart_use_source_data(tmp_path):
                  {'label': {'en': 'B'}, 'value': 4, 'display': {'en': '4'}}]}]
     tmp_path.joinpath('project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
     prod = render.make_production(board, tl, 'en', tmp_path)
-    assert prod.spans[1].motion.elements[-1].preset == 'type_on'
+    assert prod.spans[1].motion.elements[-1].preset == 'clauses'
     chart = next(e for e in prod.spans[2].motion.elements if e.kind == 'chart')
     assert chart.values == (2, 4) and chart.labels == ('A', 'B')
     a = prod.frame(prod.spans[2].start + .8)

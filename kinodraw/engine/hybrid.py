@@ -18,6 +18,7 @@ import numpy as np
 from PIL import Image, ImageColor, ImageOps
 
 from .. import library
+from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
 from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
@@ -331,7 +332,8 @@ class HybridProduction:
                     path = library.resolve(e['ref'], Path(project_dir))
                     # Library doodles keep their own colours; recolouring every fill made one-colour blobs.
                     elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450,
-                                                  preserve_svg_palette=True))
+                                                  preserve_svg_palette=True,
+                                                  start=0. if span.actors else self._picture_cue(span, e['ref'])))
                 except (OSError, KeyError, ValueError, AttributeError):
                     self.warnings.append(f"hybrid: missing prop {e['ref']}; unavailable picture omitted")
         text_kind, ref = spec['text']['kind'], spec['text']['ref']
@@ -357,11 +359,15 @@ class HybridProduction:
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
                 if span.source_character:
                     elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
+                else:
+                    self._clause_build(span, elements[-1], e['ref'])
         if not span.diagram and not numeric_chart and text_kind not in ('none', 'caption_only', 'quote'):
             words = source['text'] if source else text
             elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
                 'type_on' if treatment == 'kinetic_type' else 'word_pop', width=1500, size=72,
                 y=.25 if elements and spec['composition'] not in ('grid', 'split') else None))
+            if text_kind != 'counter' and source and not span.source_character:
+                self._clause_build(span, elements[-1], ref)
             if text_kind == 'counter':
                 number = re.search(r'(?<!\w)(-?\d[\d,]*(?:\.\d+)?)(%)?', words)
                 if number:
@@ -420,6 +426,16 @@ class HybridProduction:
                     e.y, e.width = .23, 1400
                 for e in pictures:
                     e.y = .60
+            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split', 'full_bleed'):
+                # A stable frame: one fixed slot per picture, left to right in spoken order, so a picture that
+                # arrives with a later clause never covers or shifts the ones already on the board.
+                pictures.sort(key=lambda e: e.start)
+                step = min(.3, .84 / len(pictures))
+                for k, e in enumerate(pictures):
+                    e.x = .5 + (k - (len(pictures) - 1) / 2) * step
+                    e.width, e.height = min(e.width, 1920 * step * .85), min(e.height, 1080 * .4)
+                order = iter(pictures)
+                elements[:] = [next(order) if e.kind == 'picture' else e for e in elements]
         camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
         transition = spec['transition_in']
         span.motion = MotionScene(elements, duration=max(.01, duration), composition='center' if
@@ -456,6 +472,36 @@ class HybridProduction:
                 element.x, element.y = (i % cols + .5) / cols, (i // cols + .5) / rows
                 element.width = min(element.width, 1920 / cols * .8)
                 element.height = min(element.height, 1080 / rows * .65)
+
+    def _spoken_at(self, bid, char):
+        timing = self.tl['beats'][bid]
+        ct = timing['char_times']
+        return timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0.)
+
+    def _clause_build(self, span, element, bid):
+        """Reveal displayed source text clause by clause, each clause at the time the narration starts it."""
+        display, spoken = self.by_id[bid]['text'], self.by_id[bid]['spoken']
+        cues = []
+        for a, b in arc.clauses(display):
+            first = a + len(display[a:b]) - len(display[a:b].lstrip())
+            cues.append(max(0., self._spoken_at(bid, arc.spoken_offset(display, spoken, first)) - span.start))
+        element.preset, element.cues = 'clauses', tuple(cues) or (0.,)
+        element.start = element.cues[0]
+
+    def _picture_cue(self, span, ref):
+        """Local time the narration names a picture: its source trigger or label, else a word of its own name."""
+        names = [[], []]
+        for bid in span.spec['beat_ids']:
+            for visual in self.by_id[bid]['visuals']:
+                for item in visual.get('items', []) if visual.get('type') == 'cluster' else []:
+                    if item.get('doodle') == ref:
+                        names[0] += [(bid, self._label(item.get('trigger'))), (bid, self._label(item.get('label')))]
+            names[1] += [(bid, word) for word in re.split(r'[_\-\s]+', ref) if len(word) > 2]
+        for bid, word in names[0] + names[1]:
+            hit = word and re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', self.by_id[bid]['spoken'], re.I)
+            if hit:
+                return max(0., min(self._spoken_at(bid, hit.start()) - span.start, span.end - span.start - 1.))
+        return 0.
 
     def _reflow_square(self, span):
         """Reflow logical element boxes before their SVGs are rasterized.

@@ -17,7 +17,9 @@ Treatments:
 - atmosphere: a setting, weather or quiet poetic passage fills the frame with drifting layers.
 - chart: literal data from the script, with stable axes and readable labels; never invented measurements.
 - character: named beings physically act out the text, with idle life between actions.
-Choose per scene, not by keyword icons. Explanations can be whiteboard-led hybrid; stories can combine
+Choose per scene, not by keyword icons. In motion and kinetic_type scenes each picture enters when the
+narration names it and kinetic text builds one clause at a time with the voice, in fixed left-to-right slots
+in spoken order, so nothing reflows; offer the pictures the narration names. Explanations can be whiteboard-led hybrid; stories can combine
 character and atmosphere; launches can use motion and kinetic type. Whiteboard mode requires all treatments
 whiteboard. Motion mode has no whiteboard treatments. Hybrid allows any treatment.
 
