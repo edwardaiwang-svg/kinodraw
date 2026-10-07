@@ -20,6 +20,9 @@ from .engine.render import Production, ease, faded, chip_text, source_line, ui_t
 from .progress import RenderContext, validate_frames, wait_process
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+# The source is read only as a local MP4: a playlist or concat list renamed .mp4 can't make FFmpeg fetch URLs or
+# open other files.
+LOCAL_MP4 = ['-protocol_whitelist', 'file', '-f', 'mp4']
 
 
 def export_video(source, output, *, audio=None, context=None):
@@ -37,9 +40,9 @@ def export_video(source, output, *, audio=None, context=None):
     with tempfile.TemporaryDirectory(prefix='.export-', dir=output.parent) as work:
         temp = Path(work) / output.name
         progress = Path(work) / 'progress'
-        cmd = [FFMPEG, '-y', '-v', 'error', '-i', str(source)]
+        cmd = [FFMPEG, '-y', '-v', 'error', *LOCAL_MP4, '-i', str(source)]
         if audio is not None and output.suffix.lower() == '.webm':
-            cmd += ['-i', str(audio)]
+            cmd += ['-protocol_whitelist', 'file', '-i', str(audio)]
         if output.suffix.lower() == '.gif':
             cmd += ['-filter_complex', '[0:v]split[a][b];[a]palettegen[p];[b][p]paletteuse',
                     '-an', '-loop', '0']
@@ -50,7 +53,7 @@ def export_video(source, output, *, audio=None, context=None):
         from .progress import encoded_frames
         count_progress = Path(work) / 'count-progress'
         count = ctx.token.register(subprocess.Popen([
-            FFMPEG, '-v', 'error', '-i', str(source), '-map', '0:v:0',
+            FFMPEG, '-v', 'error', *LOCAL_MP4, '-i', str(source), '-map', '0:v:0',
             '-progress', str(count_progress), '-f', 'null', '-'], start_new_session=True), group=True)
         try:
             wait_process(count, RenderContext(token=ctx.token))

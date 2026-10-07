@@ -430,3 +430,46 @@ def test_export_video_refuses_paths_and_cancel_reaps_its_encoder(client, tmp_pat
     assert cancelled['state'] == 'cancelled' and cancelled['exit_code'] is not None
     assert not Path(export['path']).exists() and not list(folder.glob('.export-*'))
     assert encoders() == []
+
+
+@pytest.fixture
+def listener():
+    """A local HTTP server that records every request it gets (none may arrive)."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    seen = []
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+        def do_GET(self):
+            seen.append(self.path)
+            self.send_response(404)
+            self.end_headers()
+    http = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    threading.Thread(target=http.serve_forever, daemon=True).start()
+    yield f'http://127.0.0.1:{http.server_port}', seen
+    http.shutdown()
+    http.server_close()
+
+
+def disguised(folder, base, outside):
+    """Playlists and concat lists named .mp4: they point at the listener and at a file outside the project."""
+    lists = {'hls.mp4': f'#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\n{base}/hls.ts\n'
+                        f'#EXTINF:1,\nfile:{outside}\n#EXT-X-ENDLIST\n',
+             'concat.mp4': f"ffconcat version 1.0\nfile '{base}/concat.mp4'\nfile '{outside}'\n",
+             'header.mp4': '\x00\x00\x00\x18ftypisom' + f'\n#EXTM3U\n#EXTINF:1,\n{base}/header.ts\n'}
+    for name, text in lists.items():
+        (folder / name).write_text(text, encoding='utf-8')
+    return list(lists)
+
+
+def test_export_refuses_playlists_and_lists_named_mp4_before_ffmpeg(client, tmp_path, listener):
+    base, seen = listener
+    outside = tmp_path.parent / (tmp_path.name + '-secret.mp4')
+    outside.write_bytes(b'outside the project')
+    client.call('create_project', project='demo', script='# Test\n\nExample text.', lang='en')
+    for name in disguised(tmp_path / 'demo', base, outside):
+        result = client.call('export_video', project='demo', video=name, format='webm')
+        assert result.get('isError') and 'MP4' in result['content'][0]['text'], (name, result)
+    time.sleep(1.5)
+    assert seen == [] and not (tmp_path / 'demo/build/developer').exists()

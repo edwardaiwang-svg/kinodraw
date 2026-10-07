@@ -116,6 +116,31 @@ def _number(value, name, minimum=0, maximum=None):
     return value
 
 
+def _mp4(path, project):
+    """``path`` if it is an MP4 file inside ``project`` (after following links): top-level boxes that start with ftyp,
+    fit the file exactly and include moov. Checked before FFmpeg sees it, so a playlist or list can't pass."""
+    real = Path(path).resolve()
+    if Path(path).suffix.lower() != '.mp4' or not real.is_file() or not real.is_relative_to(Path(project).resolve()):
+        raise ValueError('video must be an existing MP4 file (.mp4) inside the project')
+    size, at, kinds = real.stat().st_size, 0, []
+    with real.open('rb') as stream:
+        while at < size and len(kinds) < 4096:
+            stream.seek(at)
+            head = stream.read(16)
+            length, kind = int.from_bytes(head[:4], 'big'), head[4:8]
+            if length == 1 and len(head) == 16:
+                length = int.from_bytes(head[8:16], 'big')
+            elif length == 0:
+                length = size - at
+            if len(head) < 8 or length < 8 or at + length > size or not all(32 < c < 127 for c in kind):
+                break
+            kinds.append(kind)
+            at += length
+    if at != size or not kinds or kinds[0] != b'ftyp' or b'moov' not in kinds:
+        raise ValueError('video is not an MP4 file: its contents do not follow the MP4 format')
+    return real
+
+
 def _worker_command(root, arguments):
     worker = [sys.executable, '--mcp-worker'] if getattr(sys, 'frozen', False) else \
         [sys.executable, '-m', 'kinodraw.mcp_server']
@@ -673,9 +698,7 @@ class Developer:
         if not path.is_dir():
             raise ValueError(f'project not found: {project}')
         self._tree(path)
-        source = self.path(str(path.relative_to(self.root) / _text(video, 'video')))
-        if source.suffix.lower() != '.mp4' or not source.is_file() or not source.resolve().is_relative_to(path):
-            raise ValueError('video must be an existing .mp4 inside the project')
+        source = _mp4(self.path(str(path.relative_to(self.root) / _text(video, 'video'))), path)
         job = uuid.uuid4().hex
         folder = path / 'build' / 'developer'
         folder.mkdir(parents=True, exist_ok=True)
@@ -994,7 +1017,9 @@ def main(argv=None):
             service = Developer(args.root)
             token = CancellationToken()
             signal.signal(signal.SIGTERM, lambda *_: token._event.set())   # export_video then stops its FFmpeg groups
-            export_video(service.path(args.export_child), service.path(args.output), context=RenderContext(token=token))
+            source = service.path(args.export_child)
+            _mp4(source, service.root)             # checked again here, just before FFmpeg opens it
+            export_video(source, service.path(args.output), context=RenderContext(token=token))
         elif args.render_child:
             from .engine import render
             service = Developer(args.root)

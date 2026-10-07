@@ -159,3 +159,52 @@ def test_short_real_ffmpeg_output_never_replaces_good_output(tmp_path, monkeypat
     assert updates[-1].frames < updates[-1].total
     assert not ctx.token.owned_pids
     assert not list(tmp_path.glob('.encode-*')) and not list(tmp_path.glob('.segments-*'))
+
+
+def test_the_exporter_reads_its_source_only_as_a_local_mp4(tmp_path):
+    """An HLS playlist or concat list named .mp4 must not make FFmpeg fetch URLs or open other files."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    seen = []
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+        def do_GET(self):
+            seen.append(self.path)
+            self.send_response(404)
+            self.end_headers()
+    http = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    threading.Thread(target=http.serve_forever, daemon=True).start()
+    base = f'http://127.0.0.1:{http.server_port}'
+    real = tmp_path / 'real.mp4'
+    render_generated(VectorFrames, (160, 90), 0, 12, real)
+    try:
+        lists = {'hls.mp4': f'#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:1,\n{base}/hls.ts\n'
+                            f'#EXTINF:1,\nfile:{real}\n#EXT-X-ENDLIST\n',
+                 'concat.mp4': f"ffconcat version 1.0\nfile '{base}/concat.mp4'\nfile '{real}'\n"}
+        for name, text in lists.items():
+            (tmp_path / name).write_text(text, encoding='utf-8')
+            with pytest.raises((ValueError, RuntimeError)):
+                export_video(tmp_path / name, tmp_path / (name + '.webm'))
+            assert not (tmp_path / (name + '.webm')).exists()
+    finally:
+        http.shutdown()
+        http.server_close()
+    assert seen == []
+    export_video(real, tmp_path / 'real.gif')
+    assert (tmp_path / 'real.gif').stat().st_size > 0
+
+
+def test_every_ffmpeg_read_of_the_source_forces_local_mp4(tmp_path, monkeypatch):
+    import kinodraw.export as export
+    real = tmp_path / 'real.mp4'
+    render_generated(VectorFrames, (160, 90), 0, 6, real)
+    commands = []
+    popen = export.subprocess.Popen
+    monkeypatch.setattr(export.subprocess, 'Popen', lambda cmd, *a, **k: commands.append(cmd) or popen(cmd, *a, **k))
+    export_video(real, tmp_path / 'out.webm')
+    reads = [cmd for cmd in commands if str(real) in cmd]
+    assert len(reads) == 2
+    for cmd in reads:
+        i = cmd.index(str(real))
+        assert cmd[i - 1] == '-i' and cmd[i - 5:i - 1] == ['-protocol_whitelist', 'file', '-f', 'mp4'], cmd
