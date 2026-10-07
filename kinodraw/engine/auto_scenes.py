@@ -10,9 +10,10 @@ from . import ink
 from .scenes import SOFT_INK, mix, sticky
 
 UI_DEFAULTS = {
-    'es': {'agenda': 'Lo que veremos', 'takeaway': 'IDEA CLAVE', 'sign': '', 'thanks': '¡Gracias por ver!'},
-    'en': {'agenda': "What we'll cover", 'takeaway': 'KEY TAKEAWAY', 'sign': '', 'thanks': 'Thanks for watching'},
-    'zh': {'agenda': '本期内容', 'takeaway': '本节要点', 'sign': '', 'thanks': '感谢收看'},
+    'es': {'agenda': 'Lo que veremos', 'takeaway': 'IDEA CLAVE', 'sign': '', 'thanks': '¡Gracias por ver!', 'the_end': 'Fin'},
+    'en': {'agenda': "What we'll cover", 'takeaway': 'KEY TAKEAWAY', 'sign': '', 'thanks': 'Thanks for watching',
+           'the_end': 'The End'},
+    'zh': {'agenda': '本期内容', 'takeaway': '本节要点', 'sign': '', 'thanks': '感谢收看', 'the_end': '完'},
 }
 MAX_SECTIONS = 8
 CARD_STRIP = .3      # portrait agenda cards keep this share of their width, on the right, for the pinned note
@@ -234,12 +235,17 @@ def build_take_note(ctx, beat, chapter, x0, t, t_label=None, t_head=None):
     return els, (nx, ny, nw, nh + 6)
 
 
+def end_heading(ctx):
+    """A story closes like a picture book ("The End"); other videos repeat their title."""
+    return ui(ctx.ep, ctx.lang)['the_end'] if ctx.ep.get('story') == 'story' else ctx.T(ctx.ep.get('title'))
+
+
 def build_end_card(ctx, x0, t):
     """Closing page, written by the hand: title, subtitle (or thanks), host badge, thumbs-up narrator."""
     ep = ctx.ep
     pose = narrator(ep, 'thumbs')
     shift = 150 if pose else 0
-    lines, size = fit_title(ctx.T(ep.get('title')), ctx.lang, 1150, 120, ctx.fonts)
+    lines, size = fit_title(end_heading(ctx), ctx.lang, 1150, 120, ctx.fonts)
     brand = ink.TextDrawing(lines, ctx.lang, size, pace=1.8, fonts=ctx.fonts)
     els = [ctx.add(brand, x0 + (1920 - brand.size[0]) / 2 - shift, 240, t)]
     dy = int(size * 1.18) * (len(lines) - 1)
@@ -499,7 +505,7 @@ def build_end_card_portrait(ctx, x0, t):
     g, ep = ctx.layout.g, ctx.ep
     left, y, _, _ = g.text_safe[0]
     width, bottom = g.cell_w, g.text_safe[1][3]
-    title = _portrait_title(ctx, ctx.T(ep.get('title')), 100, width, align='center', pace=1.8)
+    title = _portrait_title(ctx, end_heading(ctx), 100, width, align='center', pace=1.8)
     els = [ctx.add(title, x0 + left + (width - title.size[0]) / 2, y, t)]
     y += title.size[1] + 24
     second = ctx.T(ep.get('subtitle')) or ui(ep, ctx.lang)['thanks']

@@ -243,3 +243,13 @@ def test_story_lions_are_full_body_presets_with_kojos_black_mane(tmp_path, monke
     # A lying lion is lower than a standing one at the same character height, not stretched to fill it.
     _, top, _, bottom = storybook._bbox(lie)
     assert storybook._box(lie, .4, stand) * (bottom - top) < .4 * .9
+
+
+def test_a_story_ends_on_the_end_and_other_videos_on_their_title():
+    from types import SimpleNamespace
+    from kinodraw.engine.auto_scenes import end_heading
+    title = {'en': 'Deep in the green heart of the Ombasi Jungle, where the trees grew so tall', 'zh': '奥姆巴西丛林'}
+    card = lambda story, lang: end_heading(SimpleNamespace(ep={'story': story, 'title': title}, lang=lang,
+                                                           T=lambda value: value[lang]))
+    assert (card('story', 'en'), card('story', 'zh')) == ('The End', '完')
+    assert card('explain', 'en') == title['en']
