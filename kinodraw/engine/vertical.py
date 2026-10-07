@@ -51,6 +51,7 @@ class PortraitFrame:
         self.title_h = PORTRAIT.title_band[3] - PORTRAIT.title_band[1] if native else TITLE_H
         self._base = None if native else self._background()
         self.cap_starts = [c['start'] for c in self.tl.get('captions', [])]
+        self.cap_words = getattr(prod, 'cap_words', ())
         self.tops = self._title_spans()
         self.top_starts = [s[0] for s in self.tops]
 
@@ -181,26 +182,37 @@ class PortraitFrame:
             return self._soft()
         return tuple(color) if self.collage else tuple(self.skin.color(color))
 
-    def caption_at(self, t):
+    def cue_at(self, t):
+        """The index of the caption on screen at ``t``, or None."""
         i = bisect.bisect_right(self.cap_starts, t) - 1
         if i < 0:
             return None
         c = self.tl['captions'][i]
-        return c['text'] if c['start'] <= t < c['end'] else None
+        return i if c['start'] <= t < c['end'] else None
 
-    def caption_image(self, text):
+    def caption_at(self, t):
+        i = self.cue_at(t)
+        return None if i is None else self.tl['captions'][i]['text']
+
+    def caption_image(self, text, word=None):
+        """The caption, with its ``word`` being said (captions.word_spans) in the production's accent."""
         color = (18, 18, 18) if self.collage else tuple(self.skin.caption)
         edge = (255, 255, 255) if self.collage else tuple(self.skin.caption_edge)
         if not self.collage and skins.contrast(color, self.skin.base[:3]) < 4.5:
             # light letters that need their outline to show on the paper band (Mosaic) blur together at phone
             # size: the band is plain, so write them in the look's ink instead
             color, edge = tuple(self.skin.ink[:3]), tuple(self.skin.base[:3])
+        options = {}
         if self.native:
             left, top, right, bottom = PORTRAIT.caption_band
             # The band's 696 px includes the outline and padding (2 * stroke + 8, stroke 6 at 60 px).
-            return caption_image(text, self.lang, self.fonts, color, edge,
-                                 width=right - left - 20, start_size=60, height_limit=bottom - top)
-        return caption_image(text, self.lang, self.fonts, color, edge)
+            options = dict(width=right - left - 20, start_size=60, height_limit=bottom - top)
+        base = caption_image(text, self.lang, self.fonts, color, edge, **options)
+        if word is None:
+            return base
+        accent = (getattr(self.prod, 'caption_accent', None)
+                  or (self.skin.caption_accent if self.skin else ink.SECTION_COLORS['blue']))
+        return _caption_word(text, self.lang, self.fonts, color, edge, tuple(options.items()), word, tuple(accent))
 
     def caption_box(self, text):
         """Where a caption goes: (x, y, w, h), centred in its band or below the letterboxed board."""
@@ -233,10 +245,12 @@ class PortraitFrame:
                 ink.paste(out, _faded(img, alpha), (W - img.width) // 2, PORTRAIT.title_band[3] - img.height)
             else:
                 ink.paste(out, _faded(img, alpha), 0, BOARD[1] - TITLE_GAP - img.height)
-        text = self.caption_at(t)
+        i = self.cue_at(t)
+        text = None if i is None else self.tl['captions'][i]['text']
         if text:
+            said = self.cap_words[i] if self.cap_words else self.tl['captions'][i].get('words')
             x, y, _, _ = self.caption_box(text)
-            ink.paste(out, self.caption_image(text), x, y)
+            ink.paste(out, self.caption_image(text, cap.word_at(said, t)), x, y)
         elif not self.native:                       # native credit is already written by the production's hand
             img, alpha = self._credit(t)
             if img is not None:
@@ -432,6 +446,27 @@ def caption_image(text, lang, fonts=ink.FONTS, color=(18, 18, 18), edge=(255, 25
         _draw_text(d, ((w - widths[i]) / 2, stroke + i * lh), line, kind, size, fonts,
                    fill=tuple(color) + (255,), stroke_width=stroke, stroke_fill=tuple(edge) + (255,))
     return img
+
+
+@lru_cache(maxsize=8)
+def _caption_word(text, lang, fonts, color, edge, options, word, accent):
+    options = dict(options)
+    lines, size = caption_lines(text, lang, fonts, options.get('width', TEXT_W), options.get('start_size', CAP_SIZE),
+                                options.get('height_limit'))
+    kind = 'en_caption' if lang != 'zh' else 'zh_caption'
+    stroke, lh, f = max(5, round(size / 10)), int(size * 1.18), ink.font(kind, size, fonts)
+    base = caption_image(text, lang, fonts, color, edge, **options)
+    widths = [_text_width(l, kind, size, fonts) for l in lines]
+    rows = [(stroke + i * lh + f.getbbox(l)[1], stroke + i * lh + f.getbbox(l)[3]) for i, l in enumerate(lines)]
+
+    def offset(line, j):
+        return (skins._run_width(line[:j], kind, size, fonts) if _needs_fallback(line, kind, fonts)
+                else f.getlength(line[:j]))
+    boxes = cap.word_boxes(text, lang, lines, [(base.width - x) / 2 for x in widths], rows, offset, base.size)
+    if not boxes or word >= len(boxes):
+        return base
+    lit = caption_image(text, lang, fonts, cap.highlight_color(accent, color, edge), edge, **options)
+    return cap.paint_word(base, lit, boxes[word])
 
 
 @lru_cache(maxsize=8)

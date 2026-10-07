@@ -2,6 +2,7 @@
 import bisect
 import copy
 from dataclasses import replace
+from functools import lru_cache
 import math
 from pathlib import Path
 import subprocess
@@ -11,6 +12,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw
 
 from .engine import ink, skin as skins
+from .engine.captions import word_at
 from .engine.board import Camera
 from .engine.geometry import LANDSCAPE, SQUARE, geometry_for_size
 from .engine.render import Production, ease, faded, chip_text, source_line, ui_text
@@ -228,13 +230,15 @@ class _NativeHand(ink.Hand):
         ink.paste(frame, self.img, x, y)
 
 
-def _caption_image(text, lang, skin, size, aspect):
-    """Reflow the original cue, keeping its caption face and panel treatment."""
+def _caption_image(text, lang, skin, size, aspect, look=None, word=None, accent=None):
+    """Reflow the original cue, keeping its caption face and panel treatment. ``look`` = (letters, outline, stroke)
+    letters it in an outline of other colours (a hybrid's palette); ``word`` (captions.word_spans) is in ``accent``."""
     from .engine import captions
     s = size[1] / 1080
     max_w, max_h = round(size[0] * (.92 if aspect == '16:9' else .88)), round(size[1] * .18)
     kind = 'en_caption' if lang in ('en', 'es') else 'zh_caption'
-    panel = skin.caption_style != 'outline'
+    panel = skin.caption_style != 'outline' and look is None
+    color, edge, stroke = look or (skin.caption, skin.caption_edge, 7)
     saved_lines, saved_size = (skins.caption_layout(text, lang, skin) if panel else
                               (captions.balanced_lines(text, lang, skin.fonts), 70))
     font_size = round((saved_size if aspect == '16:9' else min(saved_size, 48)) * s)
@@ -264,30 +268,51 @@ def _caption_image(text, lang, skin, size, aspect):
         font_size -= 1
     widths = [measure(line) for line in lines]
     w = math.ceil(max(widths)) + 2 * pad
-    image = Image.new('RGBA', (w, h))
-    d = ImageDraw.Draw(image)
-    if panel:
-        ph = h - tail
-        if tail:
-            # Same stepped bubble silhouette, regenerated in target pixels.
-            skins._stepped(d, (0, 0, w - 1, ph - 1), '#1E1B2E', max(1, round(8 * s)))
-            d.polygon([(40*s, ph-9*s), (80*s, ph-9*s), (80*s, ph+3*s),
-                       (68*s, ph+3*s), (68*s, ph+11*s), (56*s, ph+11*s),
-                       (56*s, ph+19*s), (40*s, ph+19*s)], fill='#1E1B2E')
-            skins._stepped(d, (8*s, 8*s, w-9*s, ph-9*s), '#FFFDF5', max(1, round(4*s)))
-            d.polygon([(48*s, ph-12*s), (72*s, ph-12*s), (72*s, ph-5*s),
-                       (60*s, ph-5*s), (60*s, ph+3*s), (48*s, ph+3*s)], fill='#FFFDF5')
-        else:
-            d.rectangle((0, 0, w-1, ph-1), fill='#3B2418')
-            d.rectangle((8*s, 8*s, w-9*s, ph-9*s), outline='#D9A441', width=max(1, round(3*s)))
-    for i, (line, width) in enumerate(zip(lines, widths)):
+
+    def draw(letters):
+        image = Image.new('RGBA', (w, h))
+        d = ImageDraw.Draw(image)
         if panel:
-            skins._draw_runs(d, line, ((w-width)/2, 20*s+font_size+i*lh), kind,
-                             font_size, skin.fonts, ink.rgba(skin.caption))
-        else:
-            d.text(((w-width)/2, 7*s+i*lh), line, font=font, fill=ink.rgba(skin.caption),
-                   stroke_width=max(1, round(7*s)), stroke_fill=ink.rgba(skin.caption_edge))
-    return image
+            ph = h - tail
+            if tail:
+                # Same stepped bubble silhouette, regenerated in target pixels.
+                skins._stepped(d, (0, 0, w - 1, ph - 1), '#1E1B2E', max(1, round(8 * s)))
+                d.polygon([(40*s, ph-9*s), (80*s, ph-9*s), (80*s, ph+3*s),
+                           (68*s, ph+3*s), (68*s, ph+11*s), (56*s, ph+11*s),
+                           (56*s, ph+19*s), (40*s, ph+19*s)], fill='#1E1B2E')
+                skins._stepped(d, (8*s, 8*s, w-9*s, ph-9*s), '#FFFDF5', max(1, round(4*s)))
+                d.polygon([(48*s, ph-12*s), (72*s, ph-12*s), (72*s, ph-5*s),
+                           (60*s, ph-5*s), (60*s, ph+3*s), (48*s, ph+3*s)], fill='#FFFDF5')
+            else:
+                d.rectangle((0, 0, w-1, ph-1), fill='#3B2418')
+                d.rectangle((8*s, 8*s, w-9*s, ph-9*s), outline='#D9A441', width=max(1, round(3*s)))
+        for i, (line, width) in enumerate(zip(lines, widths)):
+            if panel:
+                skins._draw_runs(d, line, ((w-width)/2, 20*s+font_size+i*lh), kind,
+                                 font_size, skin.fonts, ink.rgba(letters))
+            else:
+                d.text(((w-width)/2, 7*s+i*lh), line, font=font, fill=ink.rgba(letters),
+                       stroke_width=max(1, round(stroke*s)), stroke_fill=ink.rgba(edge))
+        return image
+    image = draw(color)
+    if word is None or accent is None:
+        return image
+    if panel:
+        rows = [(20*s + font_size + i*lh + font.getbbox(line, anchor='ls')[1],
+                 20*s + font_size + i*lh + font.getbbox(line, anchor='ls')[3]) for i, line in enumerate(lines)]
+    else:
+        rows = [(7*s + i*lh + font.getbbox(line)[1], 7*s + i*lh + font.getbbox(line)[3]) for i, line in enumerate(lines)]
+    boxes = captions.word_boxes(text, lang, lines, [(w - x) / 2 for x in widths], rows,
+                                lambda line, j: measure(line[:j]), (w, h))
+    if not boxes or word >= len(boxes):
+        return image
+    lit = draw(captions.highlight_color(tuple(accent[:3]), tuple(color[:3]), tuple(edge[:3])))
+    return captions.paint_word(image, lit, boxes[word])
+
+
+@lru_cache(maxsize=8)
+def _caption_word_image(text, lang, skin, size, aspect, look, word, accent):
+    return _caption_image(text, lang, skin, size, aspect, look, word, accent)
 
 
 class NativeProduction(Production):
@@ -387,13 +412,16 @@ class NativeProduction(Production):
             self._caption_cache[text] = _caption_image(text, self.lang, self.skin, self.size, self.aspect)
         return self._caption_cache[text]
 
-    def _caption(self, frame, t):
+    def _caption(self, frame, t, look=None, accent=None):
         i = bisect.bisect_right(self.cap_starts, t) - 1
         if i < 0:
             return
         cue = self.tl['captions'][i]
         if cue['start'] <= t < cue['end']:
-            image = self._caption_picture(cue['text'])
+            word = word_at(self.cap_words[i] if self.cap_words else cue.get('words'), t)
+            image = (self._caption_picture(cue['text']) if word is None and look is None else
+                     _caption_word_image(cue['text'], self.lang, self.skin, self.size, self.aspect, look, word,
+                                         tuple(accent or self.skin.caption_accent)))
             bottom = self.size[1] * (.94 if self.aspect == '1:1' else 1046/1080)
             ink.paste(frame, image, (self.size[0]-image.width)/2, bottom-image.height)
 
