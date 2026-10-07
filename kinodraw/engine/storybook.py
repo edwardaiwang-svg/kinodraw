@@ -61,7 +61,7 @@ TYPE_CPS = 30
 BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
 # Idle life (J's jungle, 2026-10-07): a resting figure shifts its weight by leaning from its planted feet (a shear,
 # never a tilt that lifts the front or back paws) and blinks for BLINK seconds (3 frames) every 2.4-3.9 s.
-SWAY = .03
+SWAY = .045
 BLINK = .1
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
