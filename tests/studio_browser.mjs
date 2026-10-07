@@ -129,8 +129,29 @@ async function picker() {
   assert.ok((await chips()).includes('★ Favourites (0)'));
 }
 
+async function help() {
+  await page.goto(url);
+  await page.waitForSelector('#btn-help');
+  await page.click('#btn-help');
+  const shown = async (title) => {
+    await page.waitForFunction((t) => document.querySelector('#guide h1')?.textContent === t, title);
+    await settle();
+    const pictures = await page.locator('#guide img').evaluateAll((all) => all.map((i) => i.naturalWidth));
+    assert.ok(pictures.length >= 3 && pictures.every((w) => w > 0), 'a picture in the guide did not load: ' + pictures);
+    return page.locator('#guide h2').count();
+  };
+  const english = await shown('KinoDraw user guide');
+  await shot('help-1-english');
+  await page.click('[data-guide="zh"]');
+  assert.equal(await shown('KinoDraw 使用指南'), english, 'the two languages have different sections');
+  assert.equal(await page.getAttribute('#guide', 'lang'), 'zh');
+  await shot('help-2-chinese');
+  await page.click('#h-keys');
+  assert.ok((await page.locator('#modal-body').innerText()).includes('Ctrl/⌘+S'));
+}
+
 try {
-  await { a11y, picker }[scenario]();
+  await { a11y, picker, help }[scenario]();
   assert.deepEqual(errors, [], 'the page logged errors');
   console.log(JSON.stringify({ scenario, passed: true }));
 } catch (error) {

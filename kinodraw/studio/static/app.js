@@ -245,6 +245,29 @@ function showSample() {          // a finished video that ships with the app: pl
   $('#s-make').onclick = showNew;
 }
 
+// ---------------------------------------------------------------- help
+// The user guide (docs/user-guide.md and .zh.md) as the Studio shows it (GET /api/guide); without it, a link online.
+const GUIDE = 'https://github.com/edwardaiwang-svg/kinodraw/blob/main/docs/user-guide.md';
+async function showHelp(lang = navigator.language?.startsWith('zh') ? 'zh' : 'en') {
+  if (dirty && current) keepDraft();
+  clearTimeout(saveTimer); dirty = false; planError = ''; rawPlan = {}; current = null; loadProjects();
+  if (!$('#guide')) $('#main').replaceChildren($('#tpl-help').content.cloneNode(true));
+  const box = $('#guide');
+  document.querySelectorAll('#main [data-guide]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.guide === lang)));
+  try {
+    box.innerHTML = (await api(`/api/guide?lang=${lang}`)).html;
+    box.lang = lang;
+  } catch (e) {
+    box.innerHTML = `<h1>Help</h1><p>The guide isn’t included in this copy of KinoDraw. <a href="${GUIDE}" target="_blank" rel="noopener">Read it online</a>.</p>`;
+  }
+  box.parentElement.onclick = (e) => {      // English / 中文, and the guide's link to the other language
+    const other = e.target.closest('[data-guide]');
+    if (other) { e.preventDefault(); showHelp(other.dataset.guide); }
+  };
+  $('#h-keys').onclick = showShortcuts;
+  $('#main').scrollTop = 0;
+}
+
 // ---------------------------------------------------------------- new video
 function scriptLang(text) {      // same rule as kinodraw/ingest.py detect_lang: Chinese when over 30% of letters are Chinese
   const letters = text.match(/\p{L}/gu) || [];
@@ -1282,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
   $('#btn-sample').onclick = showSample;
   $('#btn-settings').onclick = showSettings;
+  $('#btn-help').onclick = () => showHelp();
   $('#feedback').onclick = showFeedback;
   $('#modal .close').onclick = closeModal;
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };

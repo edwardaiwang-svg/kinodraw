@@ -16,6 +16,8 @@ for package in ('kokoro_onnx', 'misaki', 'espeakng_loader', 'phonemizer', 'jieba
     hidden += h
 datas += [(str(ROOT / 'kinodraw' / 'assets'), 'kinodraw/assets'),
           (str(ROOT / 'kinodraw' / 'studio' / 'static'), 'kinodraw/studio/static'),
+          (str(ROOT / 'docs' / 'user-guide.md'), 'docs'), (str(ROOT / 'docs' / 'user-guide.zh.md'), 'docs'),
+          (str(ROOT / 'docs' / 'media' / 'guide'), 'docs/media/guide'),          # Help (kinodraw/studio/guide.py)
           (str(ROOT / 'kinodraw' / 'styles' / 'registry.json'), 'kinodraw/styles'),
           (str(ROOT / 'LICENSE'), '.'), (str(ROOT / 'THIRD_PARTY_NOTICES.md'), '.'), (str(ROOT / 'LICENSES'), 'LICENSES')]
 icon = {'darwin': 'icon.icns', 'win32': 'icon.ico'}.get(sys.platform)

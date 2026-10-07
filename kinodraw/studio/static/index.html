@@ -16,6 +16,7 @@
   <button id="btn-trash">Trash</button><button id="btn-sample" class="ghost wide">Watch an example</button>
   <div class="side-label">Your videos</div>
   <nav id="projects"></nav>
+  <button id="btn-help" class="ghost wide">Help</button>
   <button id="btn-settings" class="ghost wide">Settings</button>
   <button id="feedback" type="button">Feedback or a problem? Tell us</button>
 </aside>
@@ -97,6 +98,15 @@
     </div>
     <p id="director-note" class="note"></p>
     <button id="create" class="primary big">Create storyboard</button>
+  </section>
+</template>
+
+<template id="tpl-help">
+  <section class="page">
+    <div class="row guide-bar" role="group" aria-label="Language of the guide">
+      <button data-guide="en" class="chip" aria-pressed="false">English</button><button data-guide="zh" class="chip" aria-pressed="false">中文</button>
+      <button id="h-keys" class="ghost small">Keyboard shortcuts</button></div>
+    <article id="guide" class="guide"></article>
   </section>
 </template>
 

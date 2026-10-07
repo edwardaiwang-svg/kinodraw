@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import PRODUCT, VERSION, director, paths, pipeline, styles, voice, voice_server
 from ..project_store import ProjectStore, RevisionConflict, atomic_save_json
 from ..progress import CancellationToken, Cancelled, RenderContext, wait_process
-from . import integration
+from . import guide, integration
 from ..director import style
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
@@ -1146,7 +1146,7 @@ class Handler(BaseHTTPRequestHandler):
         if host not in ('127.0.0.1', 'localhost'):  # DNS-rebinding guard
             return False
         path = urlparse(self.path).path
-        if path == '/' or path.startswith(('/static/', '/fonts/')):
+        if path == '/' or path.startswith(('/static/', '/fonts/', '/guide/')):   # the page, and the guide's pictures
             return True
         supplied = self.headers.get('X-Studio-Token') or parse_qs(urlparse(self.path).query).get('token', [''])[0]
         return secrets.compare_digest(supplied, self.token)
@@ -1197,6 +1197,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(target) if STATIC in target.parents else self._json({'error': 'no'}, 404)
             if parts[0] == 'fonts' and method == 'GET' and len(parts) == 2:
                 return self._file(FONTS / Path(parts[1]).name)
+            if parts[0] == 'guide' and method == 'GET':
+                picture = guide.picture(parts[-1]) if parts[1:-1] == ['media', 'guide'] else None
+                return self._file(picture) if picture else self._json({'error': 'not found'}, 404)
             if parts[0] == 'doodle' and method == 'GET' and len(parts) >= 2:
                 did = Path(parts[-1]).stem
                 proj = projects_root() / q['project'] if q.get('project') else None
@@ -1246,6 +1249,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(STUDIO_HOOKS['starter'](p[1]))
         if p == ['state'] and method == 'GET':
             return self._json(state())
+        if p == ['guide'] and method == 'GET':                # Help: the user guide, in English or Chinese
+            return self._json(guide.page(q.get('lang', 'en')))
         if p == ['voice-server'] and method == 'POST':
             return self._json(save_voice_server(self._body()))
         if p == ['voice-server', 'test'] and method == 'POST':
