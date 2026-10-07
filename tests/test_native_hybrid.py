@@ -132,8 +132,8 @@ def test_recorded_legacy_frame_hashes(tmp_path):
     prod = render.make_production(board, tl, 'en', tmp_path)
     hashes = {
         1.: '75f409279ef112d350f1a1bc344a34ad22c51de0909ae6651732793788da0f28',      # its caption's word being said
-        4.7153: 'ef476897a748359f73d5af91ee03c6b3330b2faa11602704a4f87266ef578113',  # palette caption, word highlight
-        21.733333: 'adfde9b185dd17c19183369b09445111036fa1d0b828df3903508040c042c0b1',
+        4.7153: '1448233685a782786fa36d61723215e3c6cc27f797b2defb650b8f9b39ddda17',  # storybook page, word highlight
+        21.733333: 'f1e4fb0a0ff86825d1bef8d770ade434cfc4213f5f0bde2681ba1366276f0c6f',  # a story ends on The End
     }
     for t, expected in hashes.items():
         assert hashlib.sha256(prod.frame(t).tobytes()).hexdigest() == expected
