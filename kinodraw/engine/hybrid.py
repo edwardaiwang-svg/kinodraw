@@ -27,6 +27,8 @@ from .creatures.actions import ACTIONS, add, cue_pose, target_response, travel_x
 from .creatures.draw import H as RIG_HEIGHT
 
 TRAVEL_MARGIN = .03  # share of the frame width a walking or running actor keeps clear of the right edge
+# J 2026-10-07: story characters are preset library doodles (engine.storybook), never the procedural rig.
+STORY_DOODLES = True
 NEGATED_ACTION = re.compile(r"\b(?:never|cannot|no\s+longer)\b|\bnot\b(?!\s+only\b)|\b\w+n['’]t\b", re.I)
 
 
@@ -134,6 +136,7 @@ class Span:
     diagram: object | None = None
     diagrams: tuple = ()
     source_proof: bool = False
+    story: list | None = None
 
 
 class HybridProduction:
@@ -170,6 +173,12 @@ class HybridProduction:
             if dropped:
                 self.warnings.append(f"hybrid: cast {c['id']} unsupported marks {sorted(dropped)}")
         self.style = plan['style']
+        self.storybook = None
+        if STORY_DOODLES and plan['storyboard']['genre'] == 'story':
+            from .storybook import Storybook
+            title = episode.get('title', '')
+            title = title.get(lang, next(iter(title.values()), '')) if isinstance(title, dict) else str(title or '')
+            self.storybook = Storybook(plan, self.by_id, tline, self.size, whiteboard.skin.background, title)
         # Same score selection as finish; the decoded recording starts on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
@@ -211,6 +220,11 @@ class HybridProduction:
         spec = span.spec
         duration = span.end - span.start
         treatment = spec['treatment']
+        if (self.storybook is not None and treatment not in ('whiteboard', 'chart')
+                and not any(e['kind'] == 'diagram' for e in spec['elements'])):
+            # A story page: preset doodles on the whiteboard paper, one shot per narrated sentence.
+            span.story = self.storybook.prepare(spec, span.start, span.end)
+            return
         text = ' '.join(self.by_id[b]['spoken'] for b in spec['beat_ids'])
         actors = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
         if not actors and (treatment in ('character', 'atmosphere') or spec['actions']):
@@ -325,8 +339,9 @@ class HybridProduction:
             if e['kind'] == 'picture' and not span.diagram:
                 try:
                     path = library.resolve(e['ref'], Path(project_dir))
+                    # Library doodles keep their own colours; recolouring every fill made one-colour blobs.
                     elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450,
-                                                  preserve_svg_palette=e['ref'].startswith('gen-')))
+                                                  preserve_svg_palette=True))
                 except (OSError, KeyError, ValueError, AttributeError):
                     self.warnings.append(f"hybrid: missing prop {e['ref']}; unavailable picture omitted")
         text_kind, ref = spec['text']['kind'], spec['text']['ref']
@@ -1180,6 +1195,8 @@ class HybridProduction:
 
     def _frame(self, span, t, *, quotes=True):
         spec, local = span.spec, max(0, t - span.start)
+        if span.story is not None:
+            return self.storybook.frame(span.story, local)
         if span.source_proof or spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
             return self.cutaway.frame(t).convert('RGB')
         if span.scientific:
@@ -1341,6 +1358,9 @@ class HybridProduction:
             neutral = span.scientific or (i and self.spans[i - 1].scientific)
             cues.append({'t': span.join if i else span.start, 'kind': 'cut' if span.spec['transition_in'] == 'cut' or neutral else 'whoosh',
                          'strength': .35, 'id': f'hybrid.scene.{i}'})
+            if span.story is not None:
+                for j, at in enumerate(self.storybook.roar_cues(span.story, span.start)):
+                    cues.append({'t': at, 'kind': 'impact', 'strength': 1., 'id': f'hybrid.story.{i}.{j}'})
             for j, (actor, action, target) in enumerate(span.actions):
                 kind = {'roar': 'impact', 'nudge': 'tap', 'swipe': 'whoosh', 'pounce': 'pop'}.get(action.name)
                 if kind:

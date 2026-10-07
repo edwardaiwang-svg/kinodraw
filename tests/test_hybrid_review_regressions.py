@@ -10,6 +10,9 @@ from kinodraw.engine.bold.render import _text_metrics
 from test_hybrid_character_motion import production
 from test_scientific import project
 
+# Story characters are preset doodles now; these checks cover the procedural rig path.
+pytestmark = pytest.mark.usefixtures('procedural_rig')
+
 
 def save(tmp_path, board, plan, tl, size=None, aspect='16:9'):
     (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))

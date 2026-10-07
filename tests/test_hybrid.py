@@ -9,6 +9,9 @@ from kinodraw.director.rules import RulesDirector
 from kinodraw.director.v3.rules import from_rules
 from kinodraw.engine import render, timeline
 
+# Story characters are preset doodles now; these checks cover the procedural rig path.
+pytestmark = pytest.mark.usefixtures('procedural_rig')
+
 
 def fixture(tmp_path):
     board = script.build(ingest.read('# Small story\n\nPendo, a lion cub, watched Mara, a tigress.\n\nMara nudged Pendo.\n\nKojo, a male lion with a massive black mane, roared at the hyenas.\n\nThick fog held a shooting star.'), story='story')

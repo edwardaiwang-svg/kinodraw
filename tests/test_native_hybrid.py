@@ -169,7 +169,7 @@ def test_native_recipes_and_square_round_geometry(tmp_path):
 
 
 @pytest.mark.parametrize('size,aspect', [((3840, 2160), '16:9'), ((1080, 1080), '1:1')])
-def test_actual_native_clips_and_saved_props(tmp_path, monkeypatch, size, aspect):
+def test_actual_native_clips_and_saved_props(tmp_path, monkeypatch, size, aspect, procedural_rig):
     import shutil
     from kinodraw.engine import hybrid
     from kinodraw.export import FFMPEG
