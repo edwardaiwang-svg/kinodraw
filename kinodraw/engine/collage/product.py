@@ -43,7 +43,7 @@ def _bespoke(text, lang, k=1, meaning=True):
     """Line doodles (not emoji) for a phrase, the ones the drawing hand traces well: those named by its words first,
     then (``meaning``) those closest in meaning."""
     from ...director.match import Matcher
-    m = stickers._MATCHERS.get(lang) or stickers._MATCHERS.setdefault(lang, Matcher(lang, include_packs=False))
+    m = stickers._MATCHERS.get(lang) or stickers._MATCHERS.setdefault(lang, Matcher(lang, include_packs=False, include_creatures=False))
     hits = sorted(m.lexical(text), key=lambda h: -h.score)
     if meaning:
         hits += sorted(m.semantic(text, k + 8), key=lambda h: -h.score)

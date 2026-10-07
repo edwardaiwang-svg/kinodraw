@@ -178,7 +178,7 @@ class RulesDirector:
         self.lang = lang
         # The imported ink line icons are for search and hand-picking, not for automatic picks: their one-word
         # names (fall, help, dots) read as verbs as often as nouns, and they sit beside the coloured doodles.
-        self.matcher = Matcher(lang, include_packs=False)
+        self.matcher = Matcher(lang, include_packs=False, include_creatures=False)
         self.ids, self.vecs = self.matcher._catalog_vectors()
         self.pos = {i: k for k, i in enumerate(self.ids)}
         pic_ids, pic_vecs = catalog_vectors(lang, 'picture')   # what each drawing shows, keywords left out

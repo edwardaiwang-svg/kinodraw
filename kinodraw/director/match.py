@@ -151,11 +151,13 @@ def listed(entry: dict, lang: str) -> bool:
 
 class Matcher:
     def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',),
-                 include_packs: bool = True):
+                 include_packs: bool = True, include_creatures: bool = True):
+        # Creature presets are story characters, cast by species and pose (library.creatures), not keyword picks.
         self.lang = lang
         self.entries = {i: e for i, e in searchable().items()
                         if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')
-                        and (include_packs or not imported(e)) and listed(e, lang)}
+                        and (include_packs or not imported(e)) and (include_creatures or e['set'] != 'creatures')
+                        and listed(e, lang)}
         self.index: dict[str, list[tuple[str, float]]] = {}
         for did, e in self.entries.items():
             keywords = e.get('en' if lang == 'es' else lang) or []
