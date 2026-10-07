@@ -18,7 +18,9 @@ import time
 import traceback
 import uuid
 import zipfile
+from collections import Counter
 from copy import deepcopy
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -26,7 +28,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import PRODUCT, VERSION, director, paths, pipeline, styles, voice, voice_server
 from ..project_store import ProjectStore, RevisionConflict, atomic_save_json
 from ..progress import CancellationToken, Cancelled, RenderContext, wait_process
-from . import integration
+from . import guide, integration
 from ..director import style
 from ..director.validate import validate
 from ..library import OWN, PICTURES, PICTURE_MAX, PICTURE_TYPES, missing_pictures, own_path, resolve
@@ -112,7 +114,7 @@ class JobContext:
 
 
 # Main integration registers only exported, implemented seams. Nothing fakes success.
-STUDIO_HOOKS = integration.hooks()  # provider(body), writer(body), starters(), export(path, body, context), projectzip(path, body, context)
+STUDIO_HOOKS = integration.hooks()  # provider(body), writer(body), starters(), starter(name), export(path, body, context), projectzip(path, body, context)
 
 
 class Jobs:
@@ -818,13 +820,126 @@ def save_storyboard(name: str, board: dict, revision=None, plan=None) -> dict:
             'storyboard': saved['storyboard'], 'settings': saved['settings']}
 
 
+# ------------------------------------------------------------------ picture picker
+PACK_NAMES = {'bespoke': 'Doodles', 'fluent': 'Fluent Emoji', 'tabler': 'Tabler Icons', 'healthicons': 'Health Icons',
+              'creatures': 'Characters'}          # the picker's chips, in this order; a set not named here comes last
+MINE = ('favourites', 'recent')                   # the user's own lists, kept in studio.json (newest first)
+PAGE, MEANING, RECENT = 32, 64, 24                # pictures per page, closest-in-meaning after the word hits, recent kept
+
+
 def search_doodles(query: str, lang: str) -> list:
-    """Doodles whose keywords appear in the query first, then the closest in meaning."""
-    m = _matcher(lang)
-    ranked = m.lexical(query)
-    seen = {h.id for h in ranked}
-    ranked += [h for h in m.semantic(query, 32) if h.id not in seen]
-    return [{'id': h.id, 'desc': m.entries[h.id].get('desc', ''), 'set': m.entries[h.id]['set']} for h in ranked[:32]]
+    """The picker's first page for a search."""
+    return browse_doodles(query, lang)['items']
+
+
+def browse_doodles(query: str, lang: str, pack: str | None = None, offset: int = 0) -> dict:
+    """A page of the picture picker: pictures whose keywords appear in the search (English typing slips forgiven),
+    then the closest in meaning; with an empty search, every picture of the set. ``pack`` keeps one set, or the
+    user's ★ favourites or recent pictures."""
+    from ..library import catalog
+    entries, mine = catalog(), picture_lists()
+    order = list(PACK_NAMES)
+    sets = sorted({e['set'] for e in entries.values()}, key=lambda s: (order.index(s) if s in order else len(order), s))
+    if pack and pack not in sets and pack not in MINE:
+        raise ValueError('Choose one of the picture sets shown.')
+    keep = ((lambda i: i in mine[pack]) if pack in MINE else (lambda i: entries[i]['set'] == pack) if pack
+            else (lambda i: True))
+    if query.strip():
+        m = _matcher(lang)
+        hits, meant = _word_hits(m, query)
+        seen = {h.id for h in hits}
+        close = [h.id for h in m.semantic(meant, len(m.entries)) if h.id not in seen and keep(h.id)][:MEANING]
+        ids = [h.id for h in hits if keep(h.id)] + close
+    else:
+        ids = mine[pack] if pack in MINE else sorted(filter(keep, entries), key=lambda i: (sets.index(entries[i]['set']), i))
+    offset = max(0, offset)
+    return {'items': [{'id': i, 'desc': entries[i].get('desc', ''), 'set': entries[i]['set']}
+                      for i in ids[offset:offset + PAGE]],
+            'total': len(ids), 'offset': offset, 'mine': mine,
+            'packs': [{'id': s, 'name': PACK_NAMES.get(s, s.title()), 'count': sum(e['set'] == s for e in entries.values())}
+                      for s in sets]}
+
+
+def _word_hits(m, query: str) -> tuple[list, str]:
+    """The matcher's keyword hits, and the search with its typing slips mended (for the search by meaning). In
+    English, a word that is neither a library keyword nor a real word is read as the closest keyword a slip or two
+    away; its hits rank below an exact hit of the same strength."""
+    from ..director.match import Hit, singular
+    hits = m.lexical(query)
+    if m.lang != 'en':
+        return hits, query
+    seen = {h.id for h in hits}
+    for word in sorted(set(re.findall(r"[a-z']+", query.lower()))):
+        if not (fix := _correction(m, singular(word), word)):
+            continue
+        key, slips = fix
+        query = re.sub(rf"(?<![A-Za-z']){re.escape(word)}(?![A-Za-z'])", key, query, flags=re.I)
+        for h in m.lexical(key):
+            if h.id not in seen:
+                seen.add(h.id)
+                hits.append(Hit(h.id, h.score * .7 ** slips, key))
+    return sorted(hits, key=lambda h: -h.score), query
+
+
+def _correction(m, key: str, typed: str) -> tuple[str, int] | None:
+    """The one-word library keyword one slip from ``key`` (two for 6 letters or more): the fewest slips, then one with
+    the same first letter, then the most letters in common ("bycicle" is "bicycle", not "icicle"). None for a short
+    word, a keyword, or a word in the voice's English dictionary ("shared" is not "scared")."""
+    if len(key) < 5 or key in m.index or key in _english_words() or typed in _english_words():
+        return None
+    limit = 1 if len(key) == 5 else 2
+    letters = Counter(key)
+    found = [(d, k[0] != key[0], -sum((letters & Counter(k)).values()), k) for k in m.index
+             if ' ' not in k and (d := _slips(key, k, limit)) <= limit]
+    return (min(found)[3], min(found)[0]) if found else None
+
+
+def _slips(a: str, b: str, limit: int) -> int:
+    """Typing slips that turn ``a`` into ``b``: a letter added, dropped or changed, or two neighbours swapped
+    (optimal string alignment distance); ``limit + 1`` once it is more than ``limit``."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    before, row = None, list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        now = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            now[j] = min(row[j] + 1, now[j - 1] + 1, row[j - 1] + (a[i - 1] != b[j - 1]))
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                now[j] = min(now[j], before[j - 2] + 1)
+        if min(now) > limit:
+            return limit + 1
+        before, row = row, now
+    return row[-1]
+
+
+@lru_cache(maxsize=1)
+def _english_words() -> frozenset:
+    """Real English words: the voice's pronunciation dictionary (misaki's us_gold.json, shipped with the voice)."""
+    import misaki
+    return frozenset(json.loads((Path(misaki.__file__).parent / 'data' / 'us_gold.json').read_text(encoding='utf-8')))
+
+
+def picture_lists() -> dict:
+    """The picker's ★ favourites and recent pictures, newest first; a picture no longer in the library is left out."""
+    from ..library import catalog
+    kept, known = _config().get('pictures') or {}, catalog()
+    return {k: [i for i in kept.get(k, []) if i in known] for k in MINE}
+
+
+def remember_picture(body: dict) -> dict:
+    """``{"favourite": id, "on": true|false}`` stars or unstars a library picture; ``{"recent": id}`` puts it first in
+    Recent (the last 24). A project's own picture is not kept: it belongs to that project only."""
+    from ..library import catalog
+    kind = 'favourites' if 'favourite' in body else 'recent'
+    did = body.get('favourite' if kind == 'favourites' else 'recent')
+    if not isinstance(did, str) or did not in catalog():
+        raise ValueError('That picture is not in the library.')
+    cfg = _config()
+    lists = cfg.setdefault('pictures', {})
+    rest = [i for i in lists.get(kind, []) if i != did]
+    lists[kind] = ([did] + rest if kind == 'recent' or body.get('on') else rest)[:RECENT if kind == 'recent' else None]
+    _save_config(cfg)
+    return picture_lists()
 
 
 _matchers: dict = {}
@@ -972,6 +1087,7 @@ def state() -> dict:
     return {'projects_root': str(projects_root()), 'cloud_available': bool(cloud.URL), 'cloud_signed_in': signed_in,
             'default_director': 'cloud' if cloud.URL else 'rules',   # signed out, a first video needs no account
             'hooks': {k: k in STUDIO_HOOKS for k in ('writer', 'starters', 'export', 'projectzip')},
+            'starters': STUDIO_HOOKS['starters']() if 'starters' in STUDIO_HOOKS else [],   # New video's examples
             'cloud': None, 'install_id': cloud.kept_install_id(),     # shown in Settings, to ask for its data to be deleted
             'cloud_languages': list(cloud.CloudProvider.languages),   # others are planned offline, never asked
             'keys': {p: p in names for p in ('openai', 'anthropic', 'compat', 'command')},
@@ -1030,7 +1146,7 @@ class Handler(BaseHTTPRequestHandler):
         if host not in ('127.0.0.1', 'localhost'):  # DNS-rebinding guard
             return False
         path = urlparse(self.path).path
-        if path == '/' or path.startswith(('/static/', '/fonts/')):
+        if path == '/' or path.startswith(('/static/', '/fonts/', '/guide/')):   # the page, and the guide's pictures
             return True
         supplied = self.headers.get('X-Studio-Token') or parse_qs(urlparse(self.path).query).get('token', [''])[0]
         return secrets.compare_digest(supplied, self.token)
@@ -1081,6 +1197,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(target) if STATIC in target.parents else self._json({'error': 'no'}, 404)
             if parts[0] == 'fonts' and method == 'GET' and len(parts) == 2:
                 return self._file(FONTS / Path(parts[1]).name)
+            if parts[0] == 'guide' and method == 'GET':
+                picture = guide.picture(parts[-1]) if parts[1:-1] == ['media', 'guide'] else None
+                return self._file(picture) if picture else self._json({'error': 'not found'}, 404)
             if parts[0] == 'doodle' and method == 'GET' and len(parts) >= 2:
                 did = Path(parts[-1]).stem
                 proj = projects_root() / q['project'] if q.get('project') else None
@@ -1124,8 +1243,14 @@ class Handler(BaseHTTPRequestHandler):
                 if error.name != 'kinodraw.starters':
                     raise
                 return self._json({'error': 'Starter projects await the sibling starters module.'}, 503)
+        if len(p) == 2 and p[0] == 'starters' and method == 'GET':
+            if 'starter' not in STUDIO_HOOKS:
+                return self._json({'error': 'Starter projects are not integrated.'}, 503)
+            return self._json(STUDIO_HOOKS['starter'](p[1]))
         if p == ['state'] and method == 'GET':
             return self._json(state())
+        if p == ['guide'] and method == 'GET':                # Help: the user guide, in English or Chinese
+            return self._json(guide.page(q.get('lang', 'en')))
         if p == ['voice-server'] and method == 'POST':
             return self._json(save_voice_server(self._body()))
         if p == ['voice-server', 'test'] and method == 'POST':
@@ -1256,7 +1381,8 @@ class Handler(BaseHTTPRequestHandler):
             b = self._body()
             return self._json({'text': docx_script(str(b.get('name') or ''), base64.b64decode(b.get('data') or ''))})
         if p == ['doodles'] and method == 'GET':
-            return self._json(search_doodles(q.get('q', ''), q.get('lang', 'en')))
+            return self._json(browse_doodles(q.get('q', ''), q.get('lang', 'en'), q.get('pack') or None,
+                                             int(q.get('offset') or 0)))
         if p == ['cloud', 'me'] and method == 'GET':        # read the sign-in token only when KinoDraw Cloud is chosen
             from ..director.llm import cloud
             return self._json(cloud.me())
@@ -1290,6 +1416,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({'ok': True})
         if p == ['settings'] and method == 'POST':
             b = self._body()
+            if 'favourite' in b or 'recent' in b:          # the picture picker's ★ and Recent
+                return self._json({'ok': True, 'pictures': remember_picture(b)})
             cfg = _config()
             if b.get('projects'):
                 Path(b['projects']).expanduser().mkdir(parents=True, exist_ok=True)

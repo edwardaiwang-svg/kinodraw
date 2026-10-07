@@ -69,8 +69,47 @@ function toast(msg, ms = 3500) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
   clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.add('hidden'), ms);
 }
-function modal(html) { $('#modal-body').innerHTML = html; $('#modal').classList.remove('hidden'); return $('#modal-body'); }
-function closeModal() { $('#modal').classList.add('hidden'); }
+// The one dialog: named by its first heading, focus moves in and Tab stays inside; Escape or × closes it and focus
+// goes back to whatever opened it.
+let opener = null;
+const reachable = (box) => [...box.querySelectorAll('button, [href], input, select, textarea, [tabindex]')]
+  .filter((e) => !e.disabled && e.tabIndex >= 0 && e.getClientRects().length);
+function modal(html) {
+  const box = $('#modal'), body = $('#modal-body');
+  if (box.classList.contains('hidden')) opener = document.activeElement;
+  body.innerHTML = html;
+  const heading = body.querySelector('h1, h2, h3, h4');
+  if (heading && !heading.id) heading.id = 'modal-title';
+  $('#modal .modal-box').setAttribute('aria-labelledby', heading?.id || '');
+  box.classList.remove('hidden');
+  (reachable(body)[0] || $('#modal .close')).focus();
+  return body;
+}
+function closeModal() {
+  $('#modal').classList.add('hidden');
+  if (opener?.isConnected) opener.focus();
+  opener = null;
+}
+function showShortcuts() {           // only the keys this page really handles (the keydown listeners below)
+  const keys = [['Ctrl/⌘+S', 'Save the storyboard now (in an open video; it also saves by itself)'],
+    ['Ctrl/⌘+Z', 'Undo a storyboard change (outside text boxes)'], ['Ctrl/⌘+Shift+Z', 'Redo'],
+    ['Esc', 'Close this window or any other'], ['Tab, Shift+Tab', 'Move between controls (they stay inside an open window)'],
+    ['?', 'Show these shortcuts (outside text boxes)']];
+  modal(`<h2>Keyboard shortcuts</h2><dl class="keys">${keys.map(([k, what]) => `<dt><kbd>${esc(k)}</kbd></dt><dd>${esc(what)}</dd>`).join('')}</dl>`);
+}
+document.addEventListener('keydown', (event) => {
+  const box = $('#modal .modal-box'), open = !$('#modal').classList.contains('hidden');
+  if (open && event.key === 'Escape') { event.preventDefault(); closeModal(); return; }
+  if (open && event.key === 'Tab') {
+    const items = reachable(box), first = items[0], last = items[items.length - 1];
+    if (first && (!box.contains(document.activeElement) || document.activeElement === (event.shiftKey ? first : last))) {
+      event.preventDefault(); (event.shiftKey ? last : first).focus();
+    }
+    return;
+  }
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || event.target.isContentEditable;
+  if (event.key === '?' && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); showShortcuts(); }
+});
 
 function voiceName(id) {
   return Object.values(STATE.voices).flat().find((v) => v.id === id)?.name || id;
@@ -189,8 +228,11 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
 // ---------------------------------------------------------------- sidebar
 async function loadProjects() {
   const items = await api('/api/projects');
+  const thumb = (p) => (p.thumbnail      // the finished video's thumbnail; a storyboard keeps an empty frame
+    ? `<img class="thumb" alt="" loading="lazy" src="/files/${encodeURIComponent(p.name)}/${encodeURIComponent(p.thumbnail)}?token=${T}">`
+    : '<span class="thumb"></span>');
   $('#projects').innerHTML = items.map((p) => `<a data-name="${esc(p.name)}" class="${p.name === current ? 'on' : ''}">
-    ${esc(p.title)}<small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
+    ${thumb(p)}<span>${esc(p.title)}</span><small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
     || '<div class="muted">No videos yet.</div>';
   $('#projects').querySelectorAll('a').forEach((a) => (a.onclick = () => openProject(a.dataset.name)));
 }
@@ -201,6 +243,29 @@ function showSample() {          // a finished video that ships with the app: pl
   clearTimeout(saveTimer); dirty = false; planError = ''; rawPlan = {}; current = null; loadProjects();
   $('#main').replaceChildren($('#tpl-sample').content.cloneNode(true));
   $('#s-make').onclick = showNew;
+}
+
+// ---------------------------------------------------------------- help
+// The user guide (docs/user-guide.md and .zh.md) as the Studio shows it (GET /api/guide); without it, a link online.
+const GUIDE = 'https://github.com/edwardaiwang-svg/kinodraw/blob/main/docs/user-guide.md';
+async function showHelp(lang = navigator.language?.startsWith('zh') ? 'zh' : 'en') {
+  if (dirty && current) keepDraft();
+  clearTimeout(saveTimer); dirty = false; planError = ''; rawPlan = {}; current = null; loadProjects();
+  if (!$('#guide')) $('#main').replaceChildren($('#tpl-help').content.cloneNode(true));
+  const box = $('#guide');
+  document.querySelectorAll('#main [data-guide]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.guide === lang)));
+  try {
+    box.innerHTML = (await api(`/api/guide?lang=${lang}`)).html;
+    box.lang = lang;
+  } catch (e) {
+    box.innerHTML = `<h1>Help</h1><p>The guide isn’t included in this copy of KinoDraw. <a href="${GUIDE}" target="_blank" rel="noopener">Read it online</a>.</p>`;
+  }
+  box.parentElement.onclick = (e) => {      // English / 中文, and the guide's link to the other language
+    const other = e.target.closest('[data-guide]');
+    if (other) { e.preventDefault(); showHelp(other.dataset.guide); }
+  };
+  $('#h-keys').onclick = showShortcuts;
+  $('#main').scrollTop = 0;
 }
 
 // ---------------------------------------------------------------- new video
@@ -246,9 +311,28 @@ function showNew() {
     }
   };
   const scriptInput = $('#script');
-  let scriptEdits = 0;
-  langSel.onchange = fillVoices; scriptInput.oninput = () => { scriptEdits++; if (!langSel.value) fillVoices(); };
-  fillVoices();
+  let scriptEdits = 0, example = '';            // example: the starter text as loaded, so swapping it never asks
+  const showStarters = () => {                  // the shipped fictional examples in the chosen language (all on Detect)
+    const list = (STATE.starters || []).filter((s) => !langSel.value || s.lang === langSel.value);
+    $('#starter-wrap').classList.toggle('hidden', !list.length);
+    $('#starters').innerHTML = list.map((s) => `<button type="button" class="starter" data-starter="${esc(s.id)}" lang="${esc(s.lang)}">
+      <b>${esc(s.title)}</b><small>${esc(s.id.slice(0, s.id.lastIndexOf('-')).replace('-', ' '))} · ${esc(LANG_NAMES[s.lang] || s.lang)}</small></button>`).join('');
+  };
+  $('#starters').onclick = async (event) => {
+    const id = event.target.closest?.('[data-starter]')?.dataset.starter;
+    if (!id) return;
+    if (scriptInput.value.trim() && scriptInput.value !== example && !confirm('Replace your script with this example?')) return;
+    try {
+      const s = await api(`/api/starters/${encodeURIComponent(id)}`);
+      if (!scriptInput.isConnected) return;
+      scriptInput.value = example = s.text; langSel.value = s.lang; scriptEdits++;
+      $('#file-name').textContent = '';
+      fillVoices(); showStarters();
+    } catch (e) { toast(e.message, 6000); }
+  };
+  langSel.onchange = () => { fillVoices(); showStarters(); };
+  scriptInput.oninput = () => { scriptEdits++; if (!langSel.value) fillVoices(); };
+  fillVoices(); showStarters();
   $('#speed-wrap').innerHTML = speedRow('speed');
   bindSpeed('speed');
   $('#voice-play').onclick = (e) => (STATE.voice_server?.on ? playServerSample($('#server-voice').value.trim(), e.currentTarget)
@@ -674,7 +758,7 @@ async function pickDoodle(query, onPick) {
     if (board !== opened || $('#main').inert) { toast('Your picture was not placed because the board changed while it uploaded. Choose it again under Your pictures.', 7000); return; }
     closeModal(); onPick(id);
   };
-  const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…"><div class="pick-grid" id="picks"></div>`);
+  const body = modal(`<h3>Choose a doodle</h3><label class="file">Upload a picture<input id="picture-file" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"></label><p class="picture-hint">PNG, JPG or SVG, up to 10 MB. It stays on your computer.</p><div id="own-pictures" class="hidden"><h4>Your pictures</h4><div class="pick-grid" id="own-picks"></div></div><input id="q" type="search" value="${esc(query)}" placeholder="Search: rocket, 地球, idea…" aria-label="Search the pictures"><div id="packs" class="chips" role="group" aria-label="Show"></div><p id="pick-count" class="muted" role="status" aria-live="polite"></p><div class="pick-grid" id="picks"></div><button id="pick-more" type="button" class="hidden">More</button>`);
   $('#picture-file', body).onchange = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -688,14 +772,54 @@ async function pickDoodle(query, onPick) {
   api(`/api/projects/${encodeURIComponent(project)}/pictures`).then((items) => {
     if (!items.length) return;
     $('#own-pictures', body).classList.remove('hidden');
-    $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc(d.name)}</div></div>`).join('');
-    $('#own-picks', body).querySelectorAll('.pick').forEach((p) => (p.onclick = () => pick(p.dataset.id)));
+    $('#own-picks', body).innerHTML = items.map((d) => `<div class="pick"><button type="button" class="pick-it" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}" alt=""><span>${esc(d.name)}</span></button></div>`).join('');
+    $('#own-picks', body).onclick = (e) => { const it = e.target.closest('[data-id]'); if (it) pick(it.dataset.id); };
   }).catch((e) => toast(e.message, 6000));
-  const run = async () => {
-    const items = await api(`/api/doodles?q=${encodeURIComponent($('#q', body).value)}&lang=${board.lang}`);
-    $('#picks', body).innerHTML = items.map((d) => `<div class="pick" data-id="${esc(d.id)}"><img src="${doodleSrc(d.id)}"><div>${esc((d.desc || d.id).slice(0, 40))}</div></div>`).join('');
-    body.querySelectorAll('.pick').forEach((p) => (p.onclick = () => pick(p.dataset.id)));
+  // The library: a search (or a whole set), chips for each set and for the user's ★ favourites and recent pictures
+  // (kept by the Studio, POST /api/settings), a count, and More.
+  let pack = '', shown = 0, asked = 0, packs = [], mine = { favourites: [], recent: [] };
+  const chips = () => {
+    const all = [['', 'All'], ['favourites', `★ Favourites (${mine.favourites.length})`], ['recent', `Recent (${mine.recent.length})`],
+      ...packs.map((p) => [p.id, `${p.name} (${p.count.toLocaleString('en-US')})`])];
+    $('#packs', body).innerHTML = all.map(([id, label]) => `<button type="button" class="chip" data-pack="${esc(id)}" aria-pressed="${id === pack}">${esc(label)}</button>`).join('');
   };
+  const tile = (d) => `<div class="pick"><button type="button" class="pick-it" data-id="${esc(d.id)}" title="${esc(d.desc || d.id)}"><img src="${doodleSrc(d.id)}" alt=""><span>${esc((d.desc || d.id).slice(0, 40))}</span></button>`
+    + `<button type="button" class="star" data-star="${esc(d.id)}" aria-pressed="${mine.favourites.includes(d.id)}" aria-label="Favourite: ${esc(d.desc || d.id)}">★</button></div>`;
+  const run = async (more = false) => {
+    const ask = ++asked, offset = more ? shown : 0, q = $('#q', body).value ?? '';
+    try {
+      const { items = [], total = 0, packs: sets = [], mine: lists = mine } = await api(`/api/doodles?q=${encodeURIComponent(q)}&lang=${board.lang}&pack=${encodeURIComponent(pack)}&offset=${offset}`);
+      if (ask !== asked) return;                     // a newer search is on its way
+      packs = sets; mine = lists; chips();
+      if (more) $('#picks', body).insertAdjacentHTML('beforeend', items.map(tile).join(''));
+      else $('#picks', body).innerHTML = items.map(tile).join('');
+      shown = offset + items.length;
+      const n = (k) => k.toLocaleString('en-US');
+      $('#pick-count', body).textContent = total ? `${shown < total ? `${n(shown)} of ` : ''}${n(total)} picture${total === 1 ? '' : 's'}`
+        : { favourites: 'No favourites yet: press ★ on a picture to keep it here.', recent: 'The pictures you choose appear here.' }[pack]
+          || 'No pictures found. Try another word.';
+      $('#pick-more', body).classList.toggle('hidden', shown >= total);
+    } catch (e) { toast(e.message, 6000); }
+  };
+  const remember = (choice) => api('/api/settings', { method: 'POST', body: JSON.stringify(choice) }).then((r) => { mine = r.pictures; chips(); });
+  $('#packs', body).onclick = (e) => {
+    const chip = e.target.closest('[data-pack]');
+    if (!chip) return;
+    pack = chip.dataset.pack;
+    if (pack === 'favourites' || pack === 'recent') $('#q', body).value = '';     // these show in their own order
+    run();
+  };
+  $('#picks', body).onclick = (e) => {
+    const star = e.target.closest('[data-star]'), it = e.target.closest('[data-id]');
+    if (star) {
+      const on = star.getAttribute('aria-pressed') !== 'true';
+      remember({ favourite: star.dataset.star, on }).then(() => star.setAttribute('aria-pressed', String(on))).catch((err) => toast(err.message, 6000));
+    } else if (it) {
+      remember({ recent: it.dataset.id }).catch((err) => toast(err.message, 6000));
+      pick(it.dataset.id);
+    }
+  };
+  $('#pick-more', body).onclick = () => run(true);
   let timer;
   $('#q', body).oninput = () => { clearTimeout(timer); timer = setTimeout(run, 250); };
   run();
@@ -1181,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
   $('#btn-sample').onclick = showSample;
   $('#btn-settings').onclick = showSettings;
+  $('#btn-help').onclick = () => showHelp();
   $('#feedback').onclick = showFeedback;
   $('#modal .close').onclick = closeModal;
   $('#modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };

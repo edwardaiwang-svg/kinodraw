@@ -16,6 +16,7 @@
   <button id="btn-trash">Trash</button><button id="btn-sample" class="ghost wide">Watch an example</button>
   <div class="side-label">Your videos</div>
   <nav id="projects"></nav>
+  <button id="btn-help" class="ghost wide">Help</button>
   <button id="btn-settings" class="ghost wide">Settings</button>
   <button id="feedback" type="button">Feedback or a problem? Tell us</button>
 </aside>
@@ -39,6 +40,8 @@
     <h1>New video</h1>
     <p class="muted">Paste a script (or choose a .md, .txt or .docx file). Headings become sections;
       numbers, quotes and definitions become charts and notes automatically.</p>
+    <div id="starter-wrap" class="hidden"><div class="side-label">Start from an example</div>
+      <div id="starters" class="starters" role="group" aria-label="Start from an example"></div></div>
     <textarea id="script" placeholder="# My topic&#10;&#10;An opening paragraph…&#10;&#10;## First idea&#10;…"></textarea>
     <div class="row">
       <label class="file">Choose file… <input id="file" type="file" accept=".md,.txt,.docx"></label>
@@ -98,6 +101,15 @@
   </section>
 </template>
 
+<template id="tpl-help">
+  <section class="page">
+    <div class="row guide-bar" role="group" aria-label="Language of the guide">
+      <button data-guide="en" class="chip" aria-pressed="false">English</button><button data-guide="zh" class="chip" aria-pressed="false">中文</button>
+      <button id="h-keys" class="ghost small">Keyboard shortcuts</button></div>
+    <article id="guide" class="guide"></article>
+  </section>
+</template>
+
 <template id="tpl-project">
   <section class="page">
     <header class="project-head">
@@ -131,7 +143,7 @@
   </section>
 </template>
 
-<div id="modal" class="modal hidden"><div class="modal-box"><button class="close">×</button><div id="modal-body"></div></div></div>
+<div id="modal" class="modal hidden"><div class="modal-box" role="dialog" aria-modal="true"><button class="close" aria-label="Close">×</button><div id="modal-body"></div></div></div>
 <div id="progress" class="modal hidden"><div class="modal-box progress-box">
   <button id="prog-cancel" class="small">Cancel</button><div id="prog-title">Working…</div><div class="bar"><div id="prog-fill"></div></div><div id="prog-stage" class="muted"></div>
 </div></div>

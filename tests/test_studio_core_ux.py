@@ -46,7 +46,7 @@ def saved_archive(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('scenario', ['eta', 'writer', 'writer-conflict', 'writer-late-edit',
-                                     'writer-error', 'writer-unavailable', 'import'])
+                                     'writer-error', 'writer-unavailable', 'import', 'starters', 'thumbnails'])
 def test_actual_studio_handlers(scenario, saved_archive):
     node = shutil.which('node'); assert node, 'Node required for actual-handler acceptance'
     result = subprocess.run([node, str(ROOT / 'tests/studio_core_ux_harness.js'), scenario,
