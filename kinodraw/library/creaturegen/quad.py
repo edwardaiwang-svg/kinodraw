@@ -83,6 +83,12 @@ class Quad:
     quill_c: str = '#4E3B2C'
     chin_tuft: float = 0.0      # goat beard
     blaze: str = ''             # face blaze colour
+    leg_c: str = ''             # legs in another colour (fox socks, panda)
+    tail_tip_c: str = ''        # light tail tip (fox)
+    tail_c: str = ''            # tail colour when not the coat (horse hair)
+    tail_hang: bool = False     # tail keeps hanging in standing poses (horse, cow, zebra)
+    ear_c: str = ''             # ears in another colour (panda)
+    eye_patch: str = ''         # dark patch around the eye (panda)
     seed: int = 0
 
 
@@ -181,6 +187,8 @@ class Builder:
             na = deg(q.neck_ang + 30 + self.p.neck)
         elif self.p.mode == 'lie':
             na = deg(q.neck_ang + 8 + self.p.neck)
+            if q.neck_len > .5 and self.p.eyes == 'closed':
+                na = deg(q.neck_ang - 4)
         n1 = n0 + unit(na) * q.neck_len
         self.neck0, self.neck1, self.neck_a = n0, n1, na
         self.neck_shape = Cone(n0, n1, q.neck_r, q.neck_r * .9)
@@ -191,7 +199,7 @@ class Builder:
         q, p = self.q, self.p
         pitch = deg(q.head_pitch + p.head) + (self.a * .35 if p.mode == 'stand' else 0)
         centre = self.neck1 + unit(self.neck_a) * q.head_r * .35 + unit(pitch) * q.head_r * .25
-        if p.mode == 'lie' and p.eyes == 'closed':
+        if p.mode == 'lie' and p.eyes == 'closed' and q.neck_len <= .5:
             centre = V(self.sh[0] + q.chest_r * 1.1 + q.head_r * .6, q.head_r * .95)
             pitch = deg(-8)
         self.H = Frame(centre, pitch, q.head_r)
@@ -265,10 +273,16 @@ class Builder:
             ear, ear_c = self.ear_shape()
             if ear is not None:
                 shapes.append(ear)
+        if q.ear_c and ear is not None:
+            shapes = shapes[:-1]
+            f.fill(ear, q.ear_c, SW, 'ear')
         head = Union(shapes, k=H.r(.06))
         self.head_full = head
         f.fill(head, q.coat, SW, 'head')
-        if q.ears in ('round', 'pointed', 'long') and ear is not None and not q.big_ears:
+        if q.eye_patch:
+            ex, ey = q.eye_at
+            f.patch(Ellipse(H(ex - .02, ey - .02), H.r(.3), H.r(.22), H.a + deg(-25)), q.eye_patch, head, 'eye_patch')
+        if q.ears in ('round', 'pointed', 'long') and ear is not None and not q.big_ears and not q.ear_c:
             inner = {'round': Circle(H(*ear_c), H.r(q.ear_size * .3)),
                      'pointed': Circle(H(*ear_c), H.r(q.ear_size * .22)),
                      'long': Cone(H(*(ear_c - (ear_c - self._ear_base()) * .5)), H(*(ear_c + (ear_c - self._ear_base()) * .7)),
@@ -444,6 +458,8 @@ class Builder:
             return None, None
         base = self.hip + rot(V(-q.hip_r * 1.05, q.hip_r * .4), self.a)
         a0, curl = p.tail if p.tail else (q.tail_rest, q.tail_curl)
+        if q.tail_hang and p.mode == 'stand':
+            a0, curl = q.tail_rest + {'run': -45, 'scared': 14, 'roar': -12}.get(p.name, 0), q.tail_curl
         if q.tail_tip == 'bob':
             a0, curl = 150, -10
         n = q.tail_seg
@@ -454,6 +470,8 @@ class Builder:
         radii = [q.tail_r * (1.25 - .45 * i / n) for i in range(n + 1)]
         if q.tail_tip == 'fluffy':
             radii = [q.tail_r * (1.0 + 1.2 * math.sin(math.pi * min(1, (i + 1) / (n + 1)))) for i in range(n + 1)]
+        elif q.tail_tip == 'flow':
+            radii = [q.tail_r * (.75 + .9 * (i / n) ** .8) for i in range(n + 1)]
         return Tube(pts, radii), pts
 
     # -------------------------------------------------------------- patterns
@@ -470,7 +488,16 @@ class Builder:
                 bot = c + rot(V(-.06, -q.chest_r * (.35 if q.pattern == 'stripes' else .85)), a)
                 w = .045 if q.pattern == 'stripes' else .05
                 strokes.append(Cone(top, bot, w, w * .35))
+            if q.pattern == 'zebra':
+                d = self.neck1 - self.neck0
+                across = unit(self.neck_a + math.pi / 2)
+                for i in range(4):
+                    c = self.neck0 + d * (.15 + .22 * i)
+                    strokes.append(Cone(c + across * q.neck_r * 1.1 - d * .04, c - across * q.neck_r * .6, .045, .016))
             f.patch(Union(strokes), q.mark_c, clip, where + '_stripes')
+        elif q.pattern == 'saddle':
+            f.patch(Ellipse((hip + sh) / 2 + rot(V(-.06, q.chest_r * .7), a), self.Ln * .42, q.chest_r * .5, a),
+                    q.mark_c, clip, where + '_saddle')
         elif q.pattern in ('spots', 'rosettes', 'giraffe', 'patches', 'dalmatian'):
             rnd = _rng(q.seed + 7)
             spots = []
@@ -495,12 +522,14 @@ class Builder:
         legs = {leg: self.leg_shapes(leg) for leg in LEGS}
         tail, tail_pts = self.tail()
         # far side
+        leg_c = q.leg_c or q.coat
         for leg in ('ff', 'fh'):
-            f.fill(legs[leg][0], self.shade, SW, 'leg_' + leg)
-        if q.big_ears and self.p.mode != 'none':
-            pass
+            f.fill(legs[leg][0], C.shade(leg_c, .22), SW, 'leg_' + leg)
         if tail is not None:
-            f.fill(tail, q.coat, SW_DETAIL + 1, 'tail')
+            f.fill(tail, q.tail_c or q.coat, SW_DETAIL + 1, 'tail')
+            if q.tail_tip_c:
+                end, prev = tail_pts[-1], tail_pts[-3]
+                f.patch(Circle(end, q.tail_r * 2.2 + .02), q.tail_tip_c, tail, 'tail_tip')
             if q.tail_tip == 'tuft':
                 end, prev = tail_pts[-1], tail_pts[-2]
                 d = end - prev
@@ -523,9 +552,12 @@ class Builder:
             self.body_marks(body)
         if q.quills:
             self.spines()
+        if q.pattern == 'band':
+            f.patch(Ellipse(self.sh + rot(V(-.02, .02), self.a), q.chest_r * .75, q.chest_r * 1.3, self.a), q.mark_c,
+                    body, 'band')
         for leg in ('nh', 'nf'):
             shape = legs[leg][0]
-            f.fill(shape, q.coat, SW, 'leg_' + leg)
+            f.fill(shape, leg_c, SW, 'leg_' + leg)
             if q.pattern in ('stripes', 'zebra'):
                 self.leg_stripes(shape, legs[leg][1], leg)
             if q.socks:
@@ -554,9 +586,9 @@ class Builder:
     def leg_stripes(self, shape, paw, leg):
         q = self.q
         strokes = []
-        base = paw + V(0, q.sh_h * .2)
-        for k in range(3):
-            c = base + V(0, k * q.sh_h * .14)
+        base = paw + V(0, q.sh_h * (.12 if q.pattern == 'zebra' else .2))
+        for k in range(5 if q.pattern == 'zebra' else 3):
+            c = base + V(0, k * q.sh_h * (.12 if q.pattern == 'zebra' else .14))
             strokes.append(Cone(c + V(-.12, .02), c + V(.04, -.01), .03, .012))
         self.fig.patch(Union(strokes), q.mark_c, shape, 'leg_stripes')
 
@@ -595,7 +627,7 @@ class Builder:
         for i in range(n):
             t = (i + .5) / n
             c = top0 + d * t
-            parts.append(Poly([c - d * .07, c + nrm * q.neck_r * (.75 if q.mane_kind == 'ridge' else .6) - d * .1,
+            parts.append(Poly([c - d * .07, c + nrm * q.neck_r * (.75 if q.mane_kind == 'ridge' else .95) - d * .1,
                                c + d * .07], r=.012))
         self.ridge = Union(parts, k=.02)
         f.fill(self.ridge, q.mane_c, SW_DETAIL, 'mane_ridge')
@@ -610,8 +642,8 @@ class Builder:
         if kind == 'cow':
             for far in (True, False):
                 b = V(-.15 + (-.12 if far else 0), .78)
-                pts = [b, b + V(.1, .3), b + V(.32, .42)]
-                f.fill(Tube([H(*pt) for pt in pts], [H.r(.13), H.r(.09), H.r(.04)]),
+                pts = [b, b + V(.12, .4), b + V(.42, .55)]
+                f.fill(Tube([H(*pt) for pt in pts], [H.r(.16), H.r(.11), H.r(.05)]),
                        C.shade(q.horn_c, .15) if far else q.horn_c, SW_DETAIL, 'horn')
         elif kind in ('goat', 'antelope'):
             b = V(-.05, .82)
@@ -623,13 +655,15 @@ class Builder:
             pts = [c + rot(V(.05, .55), deg(i * 50)) * (1 - i * .08) for i in range(7)]
             f.fill(Tube([H(*pt) for pt in pts], [H.r(.22 - i * .02) for i in range(7)]), q.horn_c, SW_DETAIL, 'horn')
         elif kind == 'antlers':
-            b = V(-.1, .82)
-            main = [b, b + V(-.15, .55), b + V(-.05, 1.1), b + V(.2, 1.5)]
-            tines = [Tube([H(*main[1]), H(*(main[1] + V(.35, .35)))], [H.r(.06), H.r(.04)]),
-                     Tube([H(*main[2]), H(*(main[2] + V(.4, .25)))], [H.r(.06), H.r(.04)]),
-                     Tube([H(*main[2]), H(*(main[2] + V(-.35, .3)))], [H.r(.05), H.r(.035)])]
-            f.fill(Union([Tube([H(*pt) for pt in main], [H.r(.08), H.r(.07), H.r(.06), H.r(.04)])] + tines, k=H.r(.04)),
-                   q.horn_c, SW_DETAIL, 'antlers')
+            for far in (True, False):
+                b = V(-.1 - (.18 if far else 0), .82)
+                main = [b, b + V(-.25, .8), b + V(-.15, 1.6), b + V(.25, 2.25)]
+                tines = [Tube([H(*main[1]), H(*(main[1] + V(.55, .45)))], [H.r(.09), H.r(.06)]),
+                         Tube([H(*main[2]), H(*(main[2] + V(.6, .35)))], [H.r(.08), H.r(.05)]),
+                         Tube([H(*main[2]), H(*(main[2] + V(-.5, .45)))], [H.r(.07), H.r(.05)]),
+                         Tube([H(*(main[0] + V(0, .25))), H(*(main[0] + V(.4, .5)))], [H.r(.08), H.r(.05)])]
+                f.fill(Union([Tube([H(*pt) for pt in main], [H.r(.12), H.r(.1), H.r(.08), H.r(.05)])] + tines,
+                             k=H.r(.05)), C.shade(q.horn_c, .15) if far else q.horn_c, SW_DETAIL, 'antlers')
         elif kind == 'ossicones':
             for far in (True, False):
                 b = V(-.2 + (-.15 if far else 0), .8)

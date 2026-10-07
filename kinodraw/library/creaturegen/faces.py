@@ -218,7 +218,7 @@ def build(fc: Face, expr: str) -> Figure:
         f.patch(Union(spots), fc.mark_c, head, 'spots')
     elif fc.pattern == 'tears':
         for s in (-1, 1):
-            f.patch(Cone(V(s * .38, -.05), V(s * .25, -.5), .06, .04), fc.mark_c, head, 'tear_mark')
+            f.patch(Cone(V(s * .27, .04), V(s * .42, -.44), .04, .025), fc.mark_c, head, 'tear_mark')
     elif fc.pattern == 'zebra':
         strokes = [Cone(V(x, .95), V(x * .7, .35), .08, .03) for x in (-.45, -.15, .15, .45)]
         strokes += [Cone(V(s * .62, -.2), V(s * .4, -.5), .06, .02) for s in (-1, 1)]
