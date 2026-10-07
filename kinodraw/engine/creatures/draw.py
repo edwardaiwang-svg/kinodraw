@@ -1,6 +1,7 @@
 """Readable vector faces and coats, with ink and shaded flat-colour surfaces."""
 from __future__ import annotations
 
+import functools
 import io
 import math
 from html import escape
@@ -507,4 +508,10 @@ def raster(genome: Genome, action: Action | str | Pose | list[Action] = 'idle', 
            style='flat', height=300) -> Image.Image:
     doc = svg(genome, action, t, style)
     width = round(height * W / H)
+    return _rasterize(doc, width, height).copy()
+
+
+@functools.lru_cache(maxsize=16)
+def _rasterize(doc, width, height):
+    # Held and repeated poses produce the same document; callers paste into their own frames.
     return Image.open(io.BytesIO(resvg_py.svg_to_bytes(svg_string=doc, width=width, height=height))).convert('RGBA')

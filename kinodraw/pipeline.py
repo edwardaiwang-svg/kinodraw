@@ -366,7 +366,10 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
         tl = build_audio(project_dir, narrate(project_dir))
     out = build / 'silent.mp4'
     n = round((duration or tl['duration'] - start) * renderer.FPS)
-    workers = workers or cfg.get('workers', 1)
+    if not workers:
+        workers = cfg.get('workers', 1)
+        if workers > 1:   # a saved 2 meant "parallel" when 2 was the cap; use every spare core
+            workers = max(workers, min(renderer.auto_workers(), n))
     if workers > 1:
         warnings = renderer.render_segments(project_dir, project_dir / 'storyboard.json', cfg['lang'],
                                             build / 'timeline.json', start, n, out, workers, aspect=aspect, context=context, **native)
@@ -410,9 +413,7 @@ def finish(project_dir: Path, *, context=None) -> dict:
                     raise RuntimeError(f'finish worker exited {process.returncode}: {detail}') from error
                 qa = _load(stage / 'build/qa.json')
                 qa['video'] = str(project_dir / Path(qa['video']).name)
-                if not qa['ok']:
-                    return qa
-                _save(stage / 'build/qa.json', qa)
+                _save(stage / 'build/qa.json', qa)   # failed checks publish too; the Studio lists them as warnings
                 with store.locked():
                     store._check(store._state(), saved['revision'])
                     with ctx.token._lock:
@@ -646,9 +647,7 @@ def produce(project_dir, progress=None, server=None, *, context=None):
             progress('finish', 0, 1)
         qa = finish(stage, context=ctx)
         qa['video'] = str(project_dir / Path(qa['video']).name)
-        if not qa['ok']:
-            return qa
-        _save(stage / 'build/qa.json', qa)
+        _save(stage / 'build/qa.json', qa)   # failed checks publish too; the Studio lists them as warnings
         with store.locked():
             store._check(store._state(), saved['revision'])
             # Serialize the publication with cancellation: a late cancel after

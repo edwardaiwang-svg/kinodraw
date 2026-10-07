@@ -135,8 +135,8 @@ def compose(background_rgb, layers, t):
         raise ValueError('background must be an RGB frame')
     out = background.astype(np.float32, copy=True)
     if background.dtype == np.uint8:
-        out /= 255
-    if not np.isfinite(out).all() or (out < 0).any() or (out > 1).any():
+        out /= 255   # always within 0..1
+    elif not np.isfinite(out).all() or (out < 0).any() or (out > 1).any():
         raise ValueError('background must be uint8 RGB or floating RGB in 0..1')
     h, w = out.shape[:2]
     if isinstance(layers, Atmosphere):

@@ -1336,14 +1336,32 @@ def encode(prod, start, n, output, crf, context=None):
                 signal.signal(signal.SIGTERM, previous_handler)
 
 
+def auto_workers():
+    """Segments to draw at once: one per performance core (Apple efficiency cores draw at about a third of
+    the speed and finish last), leaving one core free on other machines, at most one per 2 GB of RAM."""
+    import os
+    try:
+        ram_gb = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / 2**30
+    except (ValueError, OSError, AttributeError):
+        ram_gb = 4
+    cores = (os.cpu_count() or 2) - 1
+    if sys.platform == 'darwin':
+        try:
+            cores = int(subprocess.run(['sysctl', '-n', 'hw.perflevel0.physicalcpu'], capture_output=True,
+                                       text=True, timeout=5).stdout)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+    return max(1, min(cores, int(ram_gb // 2), 16))
+
+
 def render_segments(project, episode, lang, timeline, start, n, output, workers, crf=20,
                     aspect='16:9', portrait=None, context=None, *, size=None):
-    """One/two owned process groups, private segments, atomic lossless join."""
+    """Owned process groups, private segments, atomic lossless join."""
     import os
     import tempfile
     from ..progress import RenderContext, encoded_frames, validate_frames, wait_process
-    if workers not in (1, 2) or n < workers:
-        raise ValueError('use one or two workers and at least one frame per worker')
+    if not 1 <= workers <= 16 or n < workers:
+        raise ValueError('use 1-16 workers and at least one frame per worker')
     ctx = context or RenderContext()
     ctx.begin()
     ctx.token.check()
