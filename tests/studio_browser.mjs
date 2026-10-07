@@ -175,8 +175,26 @@ async function problems() {
   await shot('problem-2-clean');
 }
 
+async function options() {
+  await page.goto(url);
+  await page.waitForSelector('#p-paper');
+  const saved = async (select, value, note) => {
+    await page.selectOption(select, value);
+    await page.waitForFunction((n) => document.querySelector('#toast').textContent.startsWith(n), note);
+    await page.waitForFunction(([sel, v]) => document.querySelector(sel).value === v, [select, value]);   // reopened
+  };
+  await saved('#p-paper', 'grid', 'Paper saved.');
+  await saved('#p-hand', 'left', 'Hand saved.');
+  await page.setInputFiles('#p-music-file', process.env.KINODRAW_TEST_MUSIC);
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.startsWith('Your music:'), null, { timeout: 60000 });
+  await page.waitForFunction(() => document.querySelector('#p-music').value === 'own');
+  assert.match(await page.locator('#p-music option[value="own"]').textContent(), /^Music: riff\.wav$/);
+  await shot('options-1-header');
+  await saved('#p-music', 'none', 'No music.');
+}
+
 try {
-  await { a11y, picker, help, problems }[scenario]();
+  await { a11y, picker, help, problems, options }[scenario]();
   assert.deepEqual(errors, [], 'the page logged errors');
   console.log(JSON.stringify({ scenario, passed: true }));
 } catch (error) {

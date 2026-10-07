@@ -64,6 +64,7 @@ label.row { flex-direction: row; }       /* a checkbox beside its words, not ove
 label.speed { flex-direction: row; gap: 6px; }
 .speed-row input[type="range"] { flex: 1; }
 input[type="range"] { padding: 0; accent-color: var(--orange); }
+input[type="color"] { width: 46px; height: 42px; padding: 3px; flex: none; cursor: pointer; }
 label.file { display: inline-block; border: 2px dashed var(--ink); border-radius: 10px; padding: 6px 12px; color: var(--ink); cursor: pointer; }
 label.file input { display: none; }
 .note { background: #fff8d6; border: 2px solid var(--ink); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
