@@ -40,38 +40,39 @@ MOODS = {'bright': 'bright', 'uplifting': 'bright', 'upbeat': 'bright', 'warm': 
          'calm': 'calm', 'playful': 'playful', 'discovery': 'curious', 'curious': 'curious', 'adventure': 'curious',
          'mysterious': 'mysterious', 'tense': 'tense', 'somber': 'somber', 'dramatic': 'dramatic'}
 # keys: tonic pitch classes the seed picks from; progressions: one chord per bar, a section takes the next one;
-# lead: the section timbres in turn; pattern/bass: names below; shaker..kick: part levels (0 = absent);
+# lead: the section timbres in turn; pattern/bass: names below; shaker..kick: part levels (0 = absent); crash:
+# the cymbal on a new section's downbeat (gentle moods mark sections with the run and the new chords alone);
 # energy: the resting level 0..1; room: reverb time in seconds; home: the closing chord.
 STYLES = {
     'bright': dict(keys=(2, 4, 0), progressions=('Iadd9 V vi7 IVmaj7', 'vi7 IVmaj7 Iadd9 V', 'IVmaj7 Iadd9 V vi7'),
                    lead=('marimba', 'celesta'), pattern='arp', bass='walk', shaker=.6, drum=0, tick=0, kick=.5,
-                   energy=.65, room=1.6, home='Iadd9'),
+                   crash=.4, energy=.65, room=1.6, home='Iadd9'),
     'warm': dict(keys=(5, 3, 7), progressions=('I vi IVmaj7 V', 'IVmaj7 I ii7 V', 'vi IV I Vsus4'),
                  lead=('kalimba', 'marimba'), pattern='lullaby', bass='half', shaker=.4, drum=.55, tick=0, kick=.25,
-                 energy=.5, room=2.0, home='I'),
+                 crash=0, energy=.5, room=2.0, home='I'),
     'calm': dict(keys=(0, 2, 5), progressions=('Imaj7 vi7 IVmaj7 Vsus4', 'IVmaj7 iii7 ii7 Imaj7'),
                  lead=('vibes', 'kalimba'), pattern='sparse', bass='whole', shaker=.15, drum=0, tick=0, kick=0,
-                 energy=.3, room=2.6, home='Imaj7'),
+                 crash=0, energy=.3, room=2.6, home='Imaj7'),
     'playful': dict(keys=(7, 5, 9), progressions=('I IV V I', 'I vi ii7 V', 'IV V iii vi'),
                     lead=('marimba', 'kalimba'), pattern='bounce', bass='bounce', shaker=.5, drum=.3, tick=.5,
-                    kick=.4, energy=.65, room=1.4, home='I'),
+                    kick=.4, crash=.35, energy=.65, room=1.4, home='I'),
     'curious': dict(keys=(2, 4, 0), progressions=('Iadd9 II IVmaj7 Iadd9', 'vi7 II IVmaj7 Vsus4'),
                     lead=('celesta', 'marimba'), pattern='rising', bass='half', shaker=.45, drum=.2, tick=.25,
-                    kick=.35, energy=.55, room=2.0, home='Iadd9'),
+                    kick=.35, crash=.3, energy=.55, room=2.0, home='Iadd9'),
     'mysterious': dict(keys=(2, 1, 4), progressions=('iadd9 bVImaj7 iadd9 iv7', 'bVImaj7 bVII iadd9 Vsus4'),
                        lead=('celesta', 'vibes'), pattern='sparse', bass='whole', shaker=0, drum=.2, tick=.35,
-                       kick=0, energy=.35, room=2.8, home='iadd9'),
+                       kick=0, crash=0, energy=.35, room=2.8, home='iadd9'),
     'tense': dict(keys=(9, 11, 8), progressions=('i bII i v', 'iv v i bII', 'i bVI bII v'),
                   lead=('marimba', 'celesta'), pattern='pulse', bass='drive', shaker=.3, drum=.3, tick=.5, kick=.5,
-                  energy=.6, room=1.6, home='i'),
+                  crash=.3, energy=.6, room=1.6, home='i'),
     'somber': dict(keys=(0, 9, 2), progressions=('i bVI bIII bVII', 'iv i bVI v'),
                    lead=('vibes', 'kalimba'), pattern='sparse', bass='whole', shaker=0, drum=0, tick=0, kick=0,
-                   energy=.25, room=2.8, home='i'),
+                   crash=0, energy=.25, room=2.8, home='i'),
     # Picture-book drama: the minor progression (Am F C G) under kalimba and hand drum, resolving to the
     # relative major, so a children's story swells at its big moments and still ends warm.
     'dramatic': dict(keys=(9, 7, 11), progressions=('i bVI bIII bVII', 'bVI bIII bVII i', 'iv bVI bVII i'),
                      lead=('kalimba', 'marimba'), pattern='lullaby', bass='half', shaker=.35, drum=.6, tick=0,
-                     kick=.3, energy=.5, room=2.2, home='bIII'),
+                     kick=.3, crash=0, energy=.5, room=2.2, home='bIII'),
 }
 # Sixteenth-note steps of one bar: (step, chord tone counted up from the root, velocity, lowest energy that plays it).
 PATTERNS = {
@@ -176,7 +177,7 @@ def mallet(kind, midi) -> tuple[np.ndarray, np.ndarray]:
     return body, upper
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=256)                  # n varies with tempo and length: bounded
 def bass_note(midi, n) -> np.ndarray:
     """A round bass: four harmonics, 6 ms attack, decay to a 55% sustain, 80 ms release ending at n samples."""
     f0 = float(midi_hz(midi))
@@ -216,11 +217,11 @@ def hit(kind, variant=0) -> np.ndarray:
         n = round(.15 * SR)
         t = np.arange(n) / SR
         env = np.minimum(1, t / .006) ** 2 * np.exp(-np.maximum(0, t - .006) / .04)
-        x = _band(_noise(n, 21 + variant), 4000, 10000) * env
-    elif kind == 'crash':
-        n = round(2.6 * SR)
+        x = _band(_noise(n, 21 + variant), 3500, 8000) * env
+    elif kind == 'crash':                                 # a soft cymbal, decayed to -63 dB by its end
+        n = round(4 * SR)
         t = np.arange(n) / SR
-        x = _band(_noise(n, 31), 3000, 12000) * np.exp(-t / .7)
+        x = _band(_noise(n, 31), 2500, 9000) * np.exp(-t / .55)
     else:
         raise ValueError(kind)
     x = np.asarray(x, np.float32)
@@ -229,7 +230,7 @@ def hit(kind, variant=0) -> np.ndarray:
     return _taper(x / np.abs(x).max(), 30)
 
 
-@lru_cache(maxsize=None)
+@lru_cache(maxsize=16)
 def riser(n) -> np.ndarray:
     """Filtered noise rising into a mark: darker and quieter first, brightest at the end."""
     u = np.arange(n) / max(n, 1)
@@ -456,11 +457,11 @@ def compose(duration, mood='warm', bpm=96., seed=0, sections=(), marks=()) -> np
                     bus.add(t + jitter(.003), hit(kind, s % 3), style['drum'] * v * _smooth(e, .25, .5),
                             -.3 if kind == 'low' else -.15, 'drum')
 
-    # Sections: a soft crash on the new downbeat (unless a mark lands within a bar of it).
+    # Sections: a soft crash on the new downbeat in the livelier moods (unless a mark lands within a bar of it).
     for s in starts:
         t = s * bar
-        if not any(m[1] > 0 and abs(m[0] - t) < bar for m in marks):
-            bus.add(t, hit('crash'), .4, .2, 'crash')
+        if style['crash'] and not any(m[1] > 0 and abs(m[0] - t) < bar for m in marks):
+            bus.add(t, hit('crash'), style['crash'], .2, 'crash')
     # Marks: a riser and, for strong ones, a hand-drum roll into the mark; a boom, a crash and a chord stab on it.
     for t0, strength, _ in marks:
         if strength < .5 or t0 >= duration:
