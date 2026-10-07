@@ -88,6 +88,13 @@ STORY_PALETTE = {'background': '#ECEBE6', 'ink': '#1B1B1B', 'accent': '#E4AB55',
 STORY_CATEGORIES = {'Animals & Nature', 'nature', 'Travel & Places', 'places', 'Food & Drink', 'food'}
 
 
+def titled(title, first_line) -> bool:
+    """A story shows its title once, and not at all when its first line already is the title."""
+    words = lambda text: re.findall(r'\w+', str(text).lower())
+    own, line = words(title), words(first_line)
+    return bool(own) and line[:len(own)] != own
+
+
 def story_picture(doodle_id) -> bool:
     """A scene doodle a picture book can show: concrete nature, places and food from the library."""
     from ...library import catalog

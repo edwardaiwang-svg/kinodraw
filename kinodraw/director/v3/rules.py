@@ -122,7 +122,7 @@ def from_rules(board: dict, candidates=None) -> dict:
             scene['text'] = {'kind': 'caption_only', 'ref': b['id']}
             scene['camera'] = 'static'
         if story and not diagram:
-            _story_scene(scene, b, reading[b['id']], i == 0 and _titled(title, b['text']))
+            _story_scene(scene, b, reading[b['id']])
         elif treatment == 'character' and not diagram:
             scene['elements'] = [{'kind': 'cast', 'ref': cid} for cid in named]
         if atmo != 'none':
@@ -139,14 +139,7 @@ def from_rules(board: dict, candidates=None) -> dict:
     return validate(plan, board, candidates)[0]
 
 
-def _titled(title, first_line) -> bool:
-    """A story shows its title once, and not at all when its first line already is the title."""
-    words = lambda text: re.findall(r'\w+', text.lower())
-    own, line = words(title), words(first_line)
-    return bool(own) and line[:len(own)] != own
-
-
-def _story_scene(scene, beat, lines, titled):
+def _story_scene(scene, beat, lines):
     """One picture-book page: everyone on stage in the beat's sentences, its setting doodles, captions only."""
     cast = list(dict.fromkeys(cid for line in lines for cid in line.present))
     # Offered doodles that can stand in the story's world; setting nouns (river, moon) are drawn from the text.
@@ -157,7 +150,9 @@ def _story_scene(scene, beat, lines, titled):
                           else 'motion')
     scene['composition'] = 'stage' if cast else 'full_bleed' if scene['treatment'] == 'atmosphere' else 'center'
     scene['camera'] = 'follow' if any(a['verb'] in ('walk', 'run') for a in scene['actions']) else 'slow_push'
-    scene['text'] = {'kind': 'title' if titled else 'caption_only', 'ref': beat['id']}
+    # Captions only: the storybook titles its first page itself (story.titled), so no narration line is ever
+    # handwritten as a heading if a page is switched to the whiteboard treatment.
+    scene['text'] = {'kind': 'caption_only', 'ref': beat['id']}
 
 
 class RulesDirector:

@@ -41,6 +41,14 @@ def shot_of(span, prod, words):
     return next(s for s in reversed(span.story) if s.start <= at + 1e-6), at
 
 
+def pages(project, board):
+    """(span, shot) for every storybook page of a saved project's production."""
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', project)
+    prod.frame(0.)
+    return [(span, shot) for span in prod.spans if span.story for shot in span.story]
+
+
 class Pastes:
     """Record every doodle the storybook pastes (id, screen box) while composing real frames."""
     def __init__(self, monkeypatch):
@@ -69,17 +77,17 @@ def test_story_plan_has_one_title_and_no_agenda_or_part_cards(tmp_path):
     told = re.sub(r'\W+', ' ', ' '.join(b['display']['en'] for b in board['beats']))
     for sentence in re.findall(r'[^.!?"]+', STORY.split('\n\n', 1)[1]):
         assert re.sub(r'\W+', ' ', sentence).strip() in told, sentence      # no source words lost
-    titles = [s for s in plan['scenes'] if s['text']['kind'] == 'title']
-    assert len(titles) == 1 and titles[0] is plan['scenes'][0]
-    assert all(s['text']['kind'] in ('caption_only', 'title') for s in plan['scenes'])
+    assert all(s['text']['kind'] == 'caption_only' for s in plan['scenes'])
+    titles = [(span, shot) for span, shot in pages(tmp_path, board) if shot.title]
+    assert len(titles) == 1 and titles[0][1].title == 'The Quiet Cub'
+    assert titles[0][0].start == 0 and titles[0][1].start == 0          # once, on the first page
 
 
 def test_story_titled_by_its_first_line_shows_no_title_card(tmp_path):
     text = 'Deep in the jungle lived King Kojo. His mane was dark.\n\nAnd then there was Pendo, their only cub.'
     pipeline.new_project(text, tmp_path, director_v3=True)
     pipeline.direct_v3(tmp_path, provider='rules')
-    plan = pipeline.settings(tmp_path)['plan_v3']
-    assert not [s for s in plan['scenes'] if s['text']['kind'] == 'title']
+    assert not [shot for _, shot in pages(tmp_path, pipeline.storyboard(tmp_path)) if shot.title]
 
 
 def test_story_look_is_the_whiteboard_paper(tmp_path):

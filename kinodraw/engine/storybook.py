@@ -23,7 +23,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
-from ..director.v3.story import SKY_IDS, Reader, story_picture
+from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
 ROAR_SECONDS = 2.4
@@ -246,6 +246,7 @@ class Storybook:
         self.by_id, self.tl, self.size = by_id, timeline, size
         self.paper_image = paper
         self.title = title
+        self.first = plan['scenes'][0]['beat_ids'][0] if plan['scenes'] else None
         self.facing = {}
         self._paper = {}
 
@@ -279,8 +280,8 @@ class Storybook:
             shot.end = following.start
         shots[0].start = 0.
         shots[-1].end = end - start
-        if spec['text']['kind'] == 'title' and self.title:
-            shots[0].title = self.title
+        if spec['beat_ids'][0] == self.first and titled(self.title, self.by_id[self.first]['spoken']):
+            shots[0].title = self.title         # the title once, on the first page
         return shots
 
     def _cast_figure(self, cid, **kw):
