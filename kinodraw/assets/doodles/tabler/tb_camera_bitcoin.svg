@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <path d="M160,261.1L55.2,261.1A29.9,29.9 0 0,1 25.2,231.1L25.2,96.4A29.9,29.9 0 0,1 55.2,66.4L70.2,66.4A29.9,29.9 0 0,0 100.1,36.5A15,15 0 0,1 115.1,21.5L204.9,21.5A15,15 0 0,1 219.9,36.5A29.9,29.9 0 0,0 249.8,66.4L264.8,66.4A29.9,29.9 0 0,1 294.8,96.4L294.8,111.3" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M197.1,130.9A44.9,44.9 0 1,0 160,201.2" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M234.9,276L234.9,186.2" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M264.8,186.2L264.8,163.7" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M264.8,298.5L264.8,276" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M234.9,231.1L279.8,231.1" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M264.8,231.1L272.3,231.1A22.5,22.5 0 0,1 272.3,276L219.9,276" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M264.8,231.1L272.3,231.1A22.5,22.5 0 0,0 272.3,186.2L219.9,186.2" fill="none" stroke="#1B1B1B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

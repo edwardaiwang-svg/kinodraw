@@ -1,0 +1,6292 @@
+{
+ "hi_4x4": {
+  "category": "vehicles",
+  "desc": "SUV",
+  "en": [
+   "suv",
+   "4x4",
+   "4×4",
+   "jeep",
+   "off-road",
+   "sport utility vehicle",
+   "truck"
+  ],
+  "zh": []
+ },
+ "hi_agriculture": {
+  "category": "people",
+  "desc": "Agriculture",
+  "en": [
+   "agriculture",
+   "ecology",
+   "environment",
+   "hands",
+   "leaf",
+   "plant",
+   "seed"
+  ],
+  "zh": []
+ },
+ "hi_agriculture_worker": {
+  "category": "people",
+  "desc": "Person Farmer",
+  "en": [
+   "person farmer",
+   "agricultural worker",
+   "farmhand",
+   "pitchfork"
+  ],
+  "zh": []
+ },
+ "hi_agriculture_worker_alt": {
+  "category": "people",
+  "desc": "Person Farmer ALT",
+  "en": [
+   "person farmer alt",
+   "agricultural worker",
+   "farmhand",
+   "pitchfork"
+  ],
+  "zh": []
+ },
+ "hi_alert": {
+  "category": "symbols",
+  "desc": "Warning",
+  "en": [
+   "warning",
+   "alert",
+   "exclamation mark",
+   "exclamation point"
+  ],
+  "zh": []
+ },
+ "hi_alert_circle": {
+  "category": "symbols",
+  "desc": "Alert Circle",
+  "en": [
+   "alert circle",
+   "exclamation point",
+   "warning"
+  ],
+  "zh": []
+ },
+ "hi_alert_triangle": {
+  "category": "symbols",
+  "desc": "Warning Triangle",
+  "en": [
+   "warning triangle",
+   "alert",
+   "exclamation mark",
+   "exclamation point",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_allergies": {
+  "category": "conditions",
+  "desc": "Allergies",
+  "en": [
+   "allergies",
+   "hand",
+   "rash"
+  ],
+  "zh": []
+ },
+ "hi_ambulance": {
+  "category": "vehicles",
+  "desc": "Ambulance",
+  "en": [
+   "ambulance",
+   "cross",
+   "emergency",
+   "red cross",
+   "siren",
+   "truck"
+  ],
+  "zh": []
+ },
+ "hi_ambulatory_clinic": {
+  "category": "places",
+  "desc": "Clinic",
+  "en": [
+   "clinic",
+   "ambulatory clinic",
+   "building",
+   "hospital",
+   "office",
+   "small hospital"
+  ],
+  "zh": []
+ },
+ "hi_american_sign_language": {
+  "category": "symbols",
+  "desc": "American Sign Language",
+  "en": [
+   "american sign language",
+   "asl",
+   "accessibility",
+   "communication",
+   "deaf",
+   "hand gesture",
+   "sign language"
+  ],
+  "zh": []
+ },
+ "hi_angry": {
+  "category": "emotions",
+  "desc": "Angry",
+  "en": [
+   "angry",
+   "anger",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "mad",
+   "upset"
+  ],
+  "zh": []
+ },
+ "hi_animal_bat": {
+  "category": "zoonoses",
+  "desc": "Bat",
+  "en": [
+   "bat",
+   "animal",
+   "mammal",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_animal_chicken": {
+  "category": "zoonoses",
+  "desc": "Chicken",
+  "en": [
+   "chicken",
+   "bird flu",
+   "chicken pox",
+   "farm",
+   "poultry",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_animal_cow": {
+  "category": "zoonoses",
+  "desc": "Cow",
+  "en": [
+   "cow",
+   "animal",
+   "beef",
+   "farm animal",
+   "milk",
+   "zoonoses",
+   "zoonotic diseases"
+  ],
+  "zh": []
+ },
+ "hi_animal_donkey": {
+  "category": "zoonoses",
+  "desc": "Donkey",
+  "en": [
+   "donkey",
+   "animal",
+   "ass",
+   "farm",
+   "mule",
+   "zoonoses",
+   "zoonotic"
+  ],
+  "zh": []
+ },
+ "hi_animal_mosquitos": {
+  "category": "zoonoses",
+  "desc": "Mosquitos",
+  "en": [
+   "mosquitos",
+   "malaria",
+   "mosquito",
+   "outbreak",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_animal_pig": {
+  "category": "zoonoses",
+  "desc": "Pig",
+  "en": [
+   "pig",
+   "animal",
+   "farm",
+   "mammal",
+   "pork",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_animal_rat": {
+  "category": "zoonoses",
+  "desc": "Rat",
+  "en": [
+   "rat",
+   "animal",
+   "mouse",
+   "rodent",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_animal_snake": {
+  "category": "zoonoses",
+  "desc": "Snake",
+  "en": [
+   "snake",
+   "animal",
+   "poison",
+   "poisonous",
+   "python",
+   "venom",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_animal_spider": {
+  "category": "zoonoses",
+  "desc": "Spider",
+  "en": [
+   "spider",
+   "animal",
+   "arachnid",
+   "bite",
+   "disease",
+   "insect",
+   "poison",
+   "zoonoses"
+  ],
+  "zh": []
+ },
+ "hi_animal_tick": {
+  "category": "zoonoses",
+  "desc": "Tick",
+  "en": [
+   "tick",
+   "animal",
+   "disease",
+   "insect",
+   "zoonotic diseases"
+  ],
+  "zh": []
+ },
+ "hi_antibody": {
+  "category": "body",
+  "desc": "Antibody",
+  "en": [
+   "antibody",
+   "antibodies",
+   "antigens",
+   "immune system",
+   "pathogens",
+   "proteins"
+  ],
+  "zh": []
+ },
+ "hi_arm": {
+  "category": "body",
+  "desc": "Arm",
+  "en": [
+   "arm",
+   "hand",
+   "joint"
+  ],
+  "zh": []
+ },
+ "hi_arm_circumference": {
+  "category": "symbols",
+  "desc": "Arm Circumference",
+  "en": [
+   "arm circumference",
+   "arm",
+   "centimeter",
+   "diagnostic",
+   "measure",
+   "patient"
+  ],
+  "zh": []
+ },
+ "hi_artificial_intelligence": {
+  "category": "symbols",
+  "desc": "Artificial intelligence",
+  "en": [
+   "artificial intelligence",
+   "ai",
+   "automation",
+   "bot",
+   "improve",
+   "llm",
+   "magic",
+   "optimize"
+  ],
+  "zh": []
+ },
+ "hi_assembly_point": {
+  "category": "symbols",
+  "desc": "Assembly Point",
+  "en": [
+   "assembly point",
+   "emergency",
+   "navigation",
+   "wayfinding"
+  ],
+  "zh": []
+ },
+ "hi_asthma": {
+  "category": "people",
+  "desc": "Asthma",
+  "en": [
+   "asthma",
+   "inhaler",
+   "lungs",
+   "mouth",
+   "respiratory"
+  ],
+  "zh": []
+ },
+ "hi_asthma_inhaler": {
+  "category": "devices",
+  "desc": "Inhaler",
+  "en": [
+   "inhaler",
+   "allergy",
+   "asthma",
+   "breath",
+   "breathing",
+   "lung",
+   "nebulizer",
+   "puffer"
+  ],
+  "zh": []
+ },
+ "hi_autoimmune_disease": {
+  "category": "conditions",
+  "desc": "Autoimmune disease",
+  "en": [
+   "autoimmune disease",
+   "autoimmune",
+   "body",
+   "condition",
+   "disease",
+   "endocrine",
+   "nervous system",
+   "organs"
+  ],
+  "zh": []
+ },
+ "hi_award_ribbon": {
+  "category": "symbols",
+  "desc": "Award",
+  "en": [
+   "award",
+   "prize",
+   "ribbon",
+   "success",
+   "trophy"
+  ],
+  "zh": []
+ },
+ "hi_award_trophy": {
+  "category": "objects",
+  "desc": "Trophy",
+  "en": [
+   "trophy",
+   "prize",
+   "success"
+  ],
+  "zh": []
+ },
+ "hi_baby_0203_alt": {
+  "category": "people",
+  "desc": "Baby 2-3 Months ALT",
+  "en": [
+   "baby 2-3 months alt",
+   "boy",
+   "diaper",
+   "girl",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_0203m": {
+  "category": "people",
+  "desc": "Baby 2-3 Months",
+  "en": [
+   "baby 2-3 months",
+   "boy",
+   "diaper",
+   "girl",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_0306m": {
+  "category": "people",
+  "desc": "Baby 3-6 months",
+  "en": [
+   "baby 3-6 months",
+   "boy",
+   "crawl",
+   "diaper",
+   "female",
+   "girl",
+   "infant",
+   "male"
+  ],
+  "zh": []
+ },
+ "hi_baby_female_0203m_alt": {
+  "category": "people",
+  "desc": "Baby Female 2-3 Months ALT",
+  "en": [
+   "baby female 2-3 months alt",
+   "diaper",
+   "girl",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_female_0306m": {
+  "category": "people",
+  "desc": "Baby Female 3-6 Months",
+  "en": [
+   "baby female 3-6 months",
+   "crawl",
+   "diaper",
+   "female",
+   "girl",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_female_0609m": {
+  "category": "people",
+  "desc": "Baby Female 2-3 Months",
+  "en": [
+   "baby female 2-3 months",
+   "diaper",
+   "girl",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_formula": {
+  "category": "nutrition",
+  "desc": "Baby Formula",
+  "en": [
+   "baby formula",
+   "baby",
+   "baby food",
+   "dairy",
+   "food",
+   "milk",
+   "milk substitute",
+   "mother"
+  ],
+  "zh": []
+ },
+ "hi_baby_male_0203m_alt": {
+  "category": "people",
+  "desc": "Baby Male 2-3 Months ALT",
+  "en": [
+   "baby male 2-3 months alt",
+   "boy",
+   "diaper",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_male_0306m": {
+  "category": "people",
+  "desc": "Baby Male 3-6 Months",
+  "en": [
+   "baby male 3-6 months",
+   "boy",
+   "crawl",
+   "diaper",
+   "girl",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_baby_male_0609m": {
+  "category": "people",
+  "desc": "Baby Male 2-3 Months",
+  "en": [
+   "baby male 2-3 months",
+   "boy",
+   "diaper",
+   "infant"
+  ],
+  "zh": []
+ },
+ "hi_back_pain": {
+  "category": "conditions",
+  "desc": "Back Pain",
+  "en": [
+   "back pain",
+   "arthritis",
+   "pain",
+   "person",
+   "spine",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_bacteria": {
+  "category": "body",
+  "desc": "Bacteria",
+  "en": [
+   "bacteria",
+   "bacterium",
+   "microbe",
+   "microorganism",
+   "microscopic"
+  ],
+  "zh": []
+ },
+ "hi_bandage_adhesive": {
+  "category": "objects",
+  "desc": "Bandage",
+  "en": [
+   "bandage",
+   "bandaid",
+   "contusion",
+   "cut",
+   "injury"
+  ],
+  "zh": []
+ },
+ "hi_bandaged": {
+  "category": "emotions",
+  "desc": "Bandage",
+  "en": [
+   "bandage",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "head injury",
+   "injury",
+   "sick"
+  ],
+  "zh": []
+ },
+ "hi_basic_motorcycle": {
+  "category": "vehicles",
+  "desc": "Motorcycle",
+  "en": [
+   "motorcycle",
+   "motorbike"
+  ],
+  "zh": []
+ },
+ "hi_bike": {
+  "category": "vehicles",
+  "desc": "Bicycle",
+  "en": [
+   "bicycle",
+   "bike",
+   "city bike",
+   "mountain bike"
+  ],
+  "zh": []
+ },
+ "hi_bills": {
+  "category": "objects",
+  "desc": "Money Bills",
+  "en": [
+   "money bills",
+   "currency",
+   "paper money",
+   "payment"
+  ],
+  "zh": []
+ },
+ "hi_bio_pharma": {
+  "category": "symbols",
+  "desc": "Biopharma",
+  "en": [
+   "biopharma",
+   "biology",
+   "biopharmaceutical",
+   "cancer",
+   "dna",
+   "drug",
+   "medicine",
+   "pharmacology"
+  ],
+  "zh": []
+ },
+ "hi_biomarker": {
+  "category": "symbols",
+  "desc": "Biomarker",
+  "en": [
+   "biomarker",
+   "biology",
+   "dna",
+   "life sciences",
+   "magnifying glass",
+   "zoom"
+  ],
+  "zh": []
+ },
+ "hi_bladder": {
+  "category": "body",
+  "desc": "Bladder",
+  "en": [
+   "bladder",
+   "organ",
+   "urinary tract",
+   "urine"
+  ],
+  "zh": []
+ },
+ "hi_bladder_cancer": {
+  "category": "conditions",
+  "desc": "Colorectal Cancer",
+  "en": [
+   "colorectal cancer",
+   "anus",
+   "bladder",
+   "bladder cancer",
+   "cancer",
+   "growth",
+   "malignant",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_blood_cells": {
+  "category": "body",
+  "desc": "Blood Cells",
+  "en": [
+   "blood cells",
+   "blood",
+   "body",
+   "circulatory system",
+   "human",
+   "platelets"
+  ],
+  "zh": []
+ },
+ "hi_blood_pressure": {
+  "category": "devices",
+  "desc": "Hypertension",
+  "en": [
+   "hypertension",
+   "bp",
+   "blood pressure",
+   "cardiology",
+   "diagnosis",
+   "heart"
+  ],
+  "zh": []
+ },
+ "hi_blood_pressure_2": {
+  "category": "devices",
+  "desc": "Blood Pressure Monitor ALT",
+  "en": [
+   "blood pressure monitor alt",
+   "bp",
+   "cardiology",
+   "device",
+   "heart",
+   "hypertension"
+  ],
+  "zh": []
+ },
+ "hi_blood_pressure_monitor": {
+  "category": "devices",
+  "desc": "Blood Pressure Monitor",
+  "en": [
+   "blood pressure monitor",
+   "bp",
+   "cardiology",
+   "device",
+   "heart",
+   "hypertension"
+  ],
+  "zh": []
+ },
+ "hi_blood_transfusion": {
+  "category": "symbols",
+  "desc": "Blood transfusion",
+  "en": [
+   "blood transfusion",
+   "arm",
+   "bag",
+   "blood",
+   "fist",
+   "hand",
+   "iv",
+   "intravenous"
+  ],
+  "zh": []
+ },
+ "hi_blood_vessel": {
+  "category": "body",
+  "desc": "Blood Vessel",
+  "en": [
+   "blood vessel",
+   "blood",
+   "body",
+   "hematology",
+   "vessel"
+  ],
+  "zh": []
+ },
+ "hi_body": {
+  "category": "body",
+  "desc": "Body",
+  "en": [
+   "body",
+   "human",
+   "limbs"
+  ],
+  "zh": []
+ },
+ "hi_book": {
+  "category": "objects",
+  "desc": "Medical Book",
+  "en": [
+   "medical book",
+   "book",
+   "dictionary",
+   "guide",
+   "records",
+   "textbook"
+  ],
+  "zh": []
+ },
+ "hi_boy_0105y": {
+  "category": "people",
+  "desc": "Child 1-5 Years",
+  "en": [
+   "child 1-5 years",
+   "boy",
+   "child",
+   "male",
+   "toddler"
+  ],
+  "zh": []
+ },
+ "hi_boy_1015y": {
+  "category": "people",
+  "desc": "Child 10-15 Years",
+  "en": [
+   "child 10-15 years",
+   "boy",
+   "child",
+   "male",
+   "teen"
+  ],
+  "zh": []
+ },
+ "hi_breast_pump": {
+  "category": "devices",
+  "desc": "Breast Pump",
+  "en": [
+   "breast pump",
+   "baby",
+   "birth",
+   "birthing",
+   "breastfeed",
+   "chest",
+   "milk",
+   "mother"
+  ],
+  "zh": []
+ },
+ "hi_breeding_sites": {
+  "category": "symbols",
+  "desc": "Breeding Sites",
+  "en": [
+   "breeding sites",
+   "disease",
+   "eggs",
+   "larva"
+  ],
+  "zh": []
+ },
+ "hi_burn": {
+  "category": "conditions",
+  "desc": "Burn",
+  "en": [
+   "burn",
+   "condition",
+   "emergency",
+   "fire",
+   "flame",
+   "hand",
+   "injury"
+  ],
+  "zh": []
+ },
+ "hi_calendar": {
+  "category": "objects",
+  "desc": "Calendar",
+  "en": [
+   "calendar",
+   "appointment",
+   "cal",
+   "event"
+  ],
+  "zh": []
+ },
+ "hi_calendar_quarantine": {
+  "category": "symbols",
+  "desc": "Calendar Quarantine",
+  "en": [
+   "calendar quarantine",
+   "calendar",
+   "covid",
+   "isolation",
+   "quarantine",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_call_centre": {
+  "category": "people",
+  "desc": "Call Center",
+  "en": [
+   "call center",
+   "headset",
+   "help",
+   "phone",
+   "talking"
+  ],
+  "zh": []
+ },
+ "hi_calm": {
+  "category": "emotions",
+  "desc": "Calm",
+  "en": [
+   "calm",
+   "comfort",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "relaxed"
+  ],
+  "zh": []
+ },
+ "hi_cancel": {
+  "category": "symbols",
+  "desc": "Cancel",
+  "en": [
+   "cancel",
+   "cessation",
+   "no entry",
+   "none",
+   "stop",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_cancerous_cell_nuclei": {
+  "category": "conditions",
+  "desc": "Cancerous Cell Nuclei",
+  "en": [
+   "cancerous cell nuclei",
+   "cancer",
+   "cell",
+   "malignant",
+   "nucleus",
+   "tumor"
+  ],
+  "zh": []
+ },
+ "hi_cane": {
+  "category": "devices",
+  "desc": "Cane",
+  "en": [
+   "cane",
+   "assistive",
+   "disability",
+   "elderly",
+   "older",
+   "physiotherapy",
+   "staff",
+   "stick"
+  ],
+  "zh": []
+ },
+ "hi_carbohydrates": {
+  "category": "nutrition",
+  "desc": "Carbohydrates",
+  "en": [
+   "carbohydrates",
+   "bread",
+   "carbs",
+   "diet",
+   "food",
+   "nutrition",
+   "wheat"
+  ],
+  "zh": []
+ },
+ "hi_cardiogram": {
+  "category": "symbols",
+  "desc": "Cardiogram",
+  "en": [
+   "cardiogram",
+   "cardiology",
+   "heart",
+   "heartbeat"
+  ],
+  "zh": []
+ },
+ "hi_cardiogram_e": {
+  "category": "symbols",
+  "desc": "Cardiogram Edit",
+  "en": [
+   "cardiogram edit",
+   "cardiology",
+   "chart",
+   "heart",
+   "heartbeat"
+  ],
+  "zh": []
+ },
+ "hi_cast": {
+  "category": "devices",
+  "desc": "Cast",
+  "en": [
+   "cast",
+   "arm",
+   "broken arm",
+   "limb",
+   "splint"
+  ],
+  "zh": []
+ },
+ "hi_cell_nuclei": {
+  "category": "body",
+  "desc": "Cell Nuclei",
+  "en": [
+   "cell nuclei",
+   "body",
+   "cell",
+   "chromatin",
+   "ribosomes"
+  ],
+  "zh": []
+ },
+ "hi_chart_bar": {
+  "category": "graphs",
+  "desc": "Bar Chart",
+  "en": [
+   "bar chart",
+   "data",
+   "graph",
+   "visualization"
+  ],
+  "zh": []
+ },
+ "hi_chart_bar_stacked": {
+  "category": "graphs",
+  "desc": "Split Bar Chart",
+  "en": [
+   "split bar chart",
+   "bar chart",
+   "data",
+   "graph",
+   "visualization"
+  ],
+  "zh": []
+ },
+ "hi_chart_cured_decreasing": {
+  "category": "graphs",
+  "desc": "Cured Decreasing Line Chart",
+  "en": [
+   "cured decreasing line chart",
+   "chart",
+   "covid",
+   "death",
+   "graph",
+   "metrics",
+   "mortality",
+   "viral"
+  ],
+  "zh": []
+ },
+ "hi_chart_cured_increasing": {
+  "category": "graphs",
+  "desc": "Cured Increasing Line Chart",
+  "en": [
+   "cured increasing line chart",
+   "chart",
+   "covid",
+   "death",
+   "graph",
+   "metrics",
+   "mortality",
+   "viral"
+  ],
+  "zh": []
+ },
+ "hi_chart_infected_decreasing": {
+  "category": "graphs",
+  "desc": "Infected Decreasing Line Chart",
+  "en": [
+   "infected decreasing line chart",
+   "chart",
+   "covid",
+   "graph",
+   "metrics",
+   "viral",
+   "virology",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_chart_infected_increasing": {
+  "category": "graphs",
+  "desc": "Infected Increasing Line Chart",
+  "en": [
+   "infected increasing line chart",
+   "chart",
+   "covid",
+   "graph",
+   "metrics",
+   "viral",
+   "virology",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_chart_infected_stable": {
+  "category": "graphs",
+  "desc": "Infected Stable Line Chart",
+  "en": [
+   "infected stable line chart",
+   "chart",
+   "covid",
+   "flat",
+   "graph",
+   "metrics",
+   "stable",
+   "viral"
+  ],
+  "zh": []
+ },
+ "hi_chart_line": {
+  "category": "graphs",
+  "desc": "Line Chart",
+  "en": [
+   "line chart",
+   "data",
+   "graph",
+   "node",
+   "visualization"
+  ],
+  "zh": []
+ },
+ "hi_chart_line_stacked": {
+  "category": "graphs",
+  "desc": "Double Line Chart",
+  "en": [
+   "double line chart",
+   "data",
+   "graph",
+   "line chart",
+   "node",
+   "visualization"
+  ],
+  "zh": []
+ },
+ "hi_chart_pie": {
+  "category": "graphs",
+  "desc": "Pie Chart",
+  "en": [
+   "pie chart",
+   "data",
+   "graph",
+   "node",
+   "visualization"
+  ],
+  "zh": []
+ },
+ "hi_chemical_burn": {
+  "category": "conditions",
+  "desc": "Chemical Burn",
+  "en": [
+   "chemical burn",
+   "accident",
+   "burn",
+   "chemical",
+   "condition",
+   "flame",
+   "hand",
+   "injury"
+  ],
+  "zh": []
+ },
+ "hi_child_care": {
+  "category": "people",
+  "desc": "Child care",
+  "en": [
+   "child care",
+   "baby",
+   "childcare",
+   "parent"
+  ],
+  "zh": []
+ },
+ "hi_child_cognition": {
+  "category": "people",
+  "desc": "Child Cognition",
+  "en": [
+   "child cognition",
+   "brain",
+   "education",
+   "head",
+   "learning",
+   "mental health",
+   "neurology",
+   "psychiatry"
+  ],
+  "zh": []
+ },
+ "hi_child_program": {
+  "category": "people",
+  "desc": "Children",
+  "en": [
+   "children",
+   "boy",
+   "child",
+   "child program",
+   "family",
+   "female",
+   "girl",
+   "kids"
+  ],
+  "zh": []
+ },
+ "hi_chills": {
+  "category": "conditions",
+  "desc": "Chills",
+  "en": [
+   "chills",
+   "cold",
+   "freezing",
+   "hypothermia",
+   "person",
+   "shake",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_chills_fever": {
+  "category": "conditions",
+  "desc": "Fever",
+  "en": [
+   "fever",
+   "chills",
+   "cold",
+   "hot",
+   "person",
+   "shaking",
+   "sick",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_cholera": {
+  "category": "symbols",
+  "desc": "Cholera",
+  "en": [
+   "cholera",
+   "disease",
+   "tap",
+   "water",
+   "water borne disease"
+  ],
+  "zh": []
+ },
+ "hi_circle_large": {
+  "category": "shapes",
+  "desc": "Circle Large",
+  "en": [
+   "circle large",
+   "circle",
+   "dot",
+   "shape",
+   "sphere"
+  ],
+  "zh": []
+ },
+ "hi_circle_medium": {
+  "category": "shapes",
+  "desc": "Circle Medium",
+  "en": [
+   "circle medium",
+   "circle",
+   "dot",
+   "shape",
+   "sphere"
+  ],
+  "zh": []
+ },
+ "hi_circle_small": {
+  "category": "shapes",
+  "desc": "Circle Small",
+  "en": [
+   "circle small",
+   "circle",
+   "dot",
+   "shape",
+   "sphere"
+  ],
+  "zh": []
+ },
+ "hi_city": {
+  "category": "places",
+  "desc": "City",
+  "en": [
+   "city",
+   "building",
+   "buildings",
+   "downtown",
+   "highrise",
+   "metro",
+   "metropolis",
+   "urban"
+  ],
+  "zh": []
+ },
+ "hi_city_worker": {
+  "category": "people",
+  "desc": "Business Person",
+  "en": [
+   "business person",
+   "business",
+   "official",
+   "suit",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_clean_hands": {
+  "category": "people",
+  "desc": "Clean Hands",
+  "en": [
+   "clean hands",
+   "clean",
+   "fingers",
+   "hand",
+   "hygiene",
+   "sanitation"
+  ],
+  "zh": []
+ },
+ "hi_cleaning": {
+  "category": "objects",
+  "desc": "Cleaning",
+  "en": [
+   "cleaning",
+   "broom",
+   "cache",
+   "sanitation"
+  ],
+  "zh": []
+ },
+ "hi_close_policy_gaps": {
+  "category": "symbols",
+  "desc": "Policy Gaps",
+  "en": [
+   "policy gaps",
+   "government",
+   "health policy",
+   "interoperability",
+   "policy",
+   "puzzle",
+   "system"
+  ],
+  "zh": []
+ },
+ "hi_close_policy_gaps_alt": {
+  "category": "symbols",
+  "desc": "Policy Gaps ALT",
+  "en": [
+   "policy gaps alt",
+   "government",
+   "health policy",
+   "interoperability",
+   "policy",
+   "puzzle",
+   "system"
+  ],
+  "zh": []
+ },
+ "hi_cochlear_implant": {
+  "category": "devices",
+  "desc": "Cochlear Implant",
+  "en": [
+   "cochlear implant",
+   "assistive device",
+   "audio",
+   "ear",
+   "hearing",
+   "hearing aid",
+   "sensory",
+   "sound"
+  ],
+  "zh": []
+ },
+ "hi_coins": {
+  "category": "objects",
+  "desc": "Coins",
+  "en": [
+   "coins",
+   "currency",
+   "money",
+   "payment"
+  ],
+  "zh": []
+ },
+ "hi_cold_chain": {
+  "category": "devices",
+  "desc": "Cold Temperature",
+  "en": [
+   "cold temperature",
+   "cold",
+   "cold chain",
+   "cool",
+   "freezer",
+   "low",
+   "refrigeration",
+   "temperature"
+  ],
+  "zh": []
+ },
+ "hi_colon": {
+  "category": "body",
+  "desc": "Colon",
+  "en": [
+   "colon",
+   "anus",
+   "appendix",
+   "bowel",
+   "digestive system",
+   "intestine",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_colorectal_cancer": {
+  "category": "conditions",
+  "desc": "Colorectal Cancer",
+  "en": [
+   "colorectal cancer",
+   "cancer",
+   "digestive system",
+   "growth",
+   "gut",
+   "intestine",
+   "malignant",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_communication": {
+  "category": "symbols",
+  "desc": "Chat",
+  "en": [
+   "chat",
+   "communication",
+   "message",
+   "speech bubble"
+  ],
+  "zh": []
+ },
+ "hi_community_healthworker": {
+  "category": "people",
+  "desc": "Community Healthcare Worker",
+  "en": [
+   "community healthcare worker",
+   "asha",
+   "chew",
+   "chw",
+   "healthcare worker",
+   "nurse",
+   "village"
+  ],
+  "zh": []
+ },
+ "hi_community_meeting": {
+  "category": "symbols",
+  "desc": "Outdoor Meeting",
+  "en": [
+   "outdoor meeting",
+   "group",
+   "meditation",
+   "tree"
+  ],
+  "zh": []
+ },
+ "hi_confused": {
+  "category": "emotions",
+  "desc": "Confused",
+  "en": [
+   "confused",
+   "concern",
+   "confusion",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face"
+  ],
+  "zh": []
+ },
+ "hi_construction": {
+  "category": "objects",
+  "desc": "Hammer",
+  "en": [
+   "hammer",
+   "build",
+   "construction",
+   "settings",
+   "tool"
+  ],
+  "zh": []
+ },
+ "hi_construction_worker": {
+  "category": "people",
+  "desc": "Person Construction Worker",
+  "en": [
+   "person construction worker",
+   "builder",
+   "construction",
+   "helmet",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_contact_lenses": {
+  "category": "devices",
+  "desc": "Contact Lens",
+  "en": [
+   "contact lens",
+   "corrective lens",
+   "ophthalmology",
+   "sight",
+   "vision"
+  ],
+  "zh": []
+ },
+ "hi_contact_support": {
+  "category": "symbols",
+  "desc": "Support",
+  "en": [
+   "support",
+   "chat",
+   "contact",
+   "faq",
+   "help",
+   "question mark",
+   "speech bubble"
+  ],
+  "zh": []
+ },
+ "hi_coughing": {
+  "category": "emotions",
+  "desc": "Coughing",
+  "en": [
+   "coughing",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "sick",
+   "sneeze",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_coughing_alt": {
+  "category": "conditions",
+  "desc": "Coughing",
+  "en": [
+   "coughing",
+   "aerosol",
+   "cough",
+   "expectorate",
+   "mouth",
+   "sneeze",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_cpap_machine": {
+  "category": "devices",
+  "desc": "CPAP machine",
+  "en": [
+   "cpap machine",
+   "breathing",
+   "continuous positive airway pressure",
+   "device",
+   "mask",
+   "sleep apnea"
+  ],
+  "zh": []
+ },
+ "hi_cpap_masks": {
+  "category": "devices",
+  "desc": "CPAP Mask ALT",
+  "en": [
+   "cpap mask alt",
+   "breathing",
+   "continuous positive airway pressure",
+   "device",
+   "mask",
+   "sleep apnea",
+   "tubes"
+  ],
+  "zh": []
+ },
+ "hi_cpap_tubes": {
+  "category": "devices",
+  "desc": "CPAP Mask",
+  "en": [
+   "cpap mask",
+   "breathing",
+   "continuous positive airway pressure",
+   "device",
+   "mask",
+   "sleep apnea",
+   "tubes"
+  ],
+  "zh": []
+ },
+ "hi_credit_card": {
+  "category": "objects",
+  "desc": "Credit Card",
+  "en": [
+   "credit card",
+   "currency",
+   "mastercard",
+   "money",
+   "payment",
+   "visa"
+  ],
+  "zh": []
+ },
+ "hi_cross_country_motorcycle": {
+  "category": "vehicles",
+  "desc": "Off-road Motorcycle",
+  "en": [
+   "off-road motorcycle",
+   "cross country",
+   "dirt bike",
+   "motorbike",
+   "motorcycle"
+  ],
+  "zh": []
+ },
+ "hi_crutches": {
+  "category": "devices",
+  "desc": "Crutch",
+  "en": [
+   "crutch",
+   "assistive",
+   "break",
+   "physical therapy",
+   "rehab",
+   "rehabilitation"
+  ],
+  "zh": []
+ },
+ "hi_crying": {
+  "category": "emotions",
+  "desc": "Crying",
+  "en": [
+   "crying",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "sad",
+   "tears"
+  ],
+  "zh": []
+ },
+ "hi_dairy": {
+  "category": "nutrition",
+  "desc": "Dairy",
+  "en": [
+   "dairy",
+   "beverage",
+   "cow",
+   "drink",
+   "food",
+   "lactose",
+   "milk",
+   "nutrition"
+  ],
+  "zh": []
+ },
+ "hi_database": {
+  "category": "symbols",
+  "desc": "Database",
+  "en": [
+   "database",
+   "db",
+   "data",
+   "storage"
+  ],
+  "zh": []
+ },
+ "hi_deaf": {
+  "category": "conditions",
+  "desc": "Deaf",
+  "en": [
+   "deaf",
+   "ear",
+   "hearing",
+   "hearing impaired"
+  ],
+  "zh": []
+ },
+ "hi_default": {
+  "category": "symbols",
+  "desc": "Document Edit",
+  "en": [
+   "document edit",
+   "chart",
+   "document",
+   "paper",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_defibrillator": {
+  "category": "devices",
+  "desc": "Defibrillator",
+  "en": [
+   "defibrillator",
+   "cardiology",
+   "er",
+   "electrical",
+   "emergency",
+   "heart"
+  ],
+  "zh": []
+ },
+ "hi_dental_hygiene": {
+  "category": "devices",
+  "desc": "Dental Hygiene",
+  "en": [
+   "dental hygiene",
+   "dental",
+   "dentist",
+   "hygiene",
+   "teeth",
+   "toothbrush",
+   "toothpaste"
+  ],
+  "zh": []
+ },
+ "hi_desktop_app": {
+  "category": "objects",
+  "desc": "Desktop App",
+  "en": [
+   "desktop app",
+   "computer",
+   "desktop",
+   "icons",
+   "macos",
+   "monitor",
+   "operating system",
+   "windows"
+  ],
+  "zh": []
+ },
+ "hi_diabetes_measure": {
+  "category": "devices",
+  "desc": "Glucometer",
+  "en": [
+   "glucometer",
+   "blood sugar",
+   "dm",
+   "diabetes",
+   "glucose",
+   "strip"
+  ],
+  "zh": []
+ },
+ "hi_diabetes_people": {
+  "category": "people",
+  "desc": "Diabetes",
+  "en": [
+   "diabetes",
+   "blood",
+   "blood test hand"
+  ],
+  "zh": []
+ },
+ "hi_diabetes_symbols": {
+  "category": "symbols",
+  "desc": "Diabetes",
+  "en": [
+   "diabetes",
+   "dm",
+   "endocrine",
+   "endocrinology",
+   "glucose",
+   "sugar"
+  ],
+  "zh": []
+ },
+ "hi_diagnostics": {
+  "category": "symbols",
+  "desc": "Diagnostics",
+  "en": [
+   "diagnostics",
+   "analysis",
+   "disease detection",
+   "health check",
+   "lab analysis",
+   "medical test",
+   "report"
+  ],
+  "zh": []
+ },
+ "hi_dialysis": {
+  "category": "devices",
+  "desc": "Dialysis",
+  "en": [
+   "dialysis",
+   "blood filtration",
+   "device",
+   "healthcare",
+   "hemodialysis",
+   "kidney",
+   "medical",
+   "renal care"
+  ],
+  "zh": []
+ },
+ "hi_discharge": {
+  "category": "symbols",
+  "desc": "Discharge",
+  "en": [
+   "discharge",
+   "chair",
+   "department",
+   "exit",
+   "hospital"
+  ],
+  "zh": []
+ },
+ "hi_disinfecting_wipes": {
+  "category": "ppe",
+  "desc": "PPE Disinfecting Wipes",
+  "en": [
+   "ppe disinfecting wipes",
+   "antibacterial",
+   "cleaning",
+   "ppe",
+   "sanitation"
+  ],
+  "zh": []
+ },
+ "hi_dizzy": {
+  "category": "emotions",
+  "desc": "Dizzy",
+  "en": [
+   "dizzy",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "nausea",
+   "nauseous"
+  ],
+  "zh": []
+ },
+ "hi_dna": {
+  "category": "body",
+  "desc": "DNA",
+  "en": [
+   "dna",
+   "chomosome",
+   "deoxyribonucleic acid",
+   "double helix"
+  ],
+  "zh": []
+ },
+ "hi_doctor": {
+  "category": "people",
+  "desc": "Doctor",
+  "en": [
+   "doctor",
+   "healthcare worker",
+   "medical officer",
+   "stethoscope",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_doctor_female": {
+  "category": "people",
+  "desc": "Person Female Doctor",
+  "en": [
+   "person female doctor",
+   "doctor",
+   "md",
+   "stethoscope",
+   "woman"
+  ],
+  "zh": []
+ },
+ "hi_doctor_male": {
+  "category": "people",
+  "desc": "Person Male Doctor",
+  "en": [
+   "person male doctor",
+   "doctor",
+   "md",
+   "man",
+   "stethoscope"
+  ],
+  "zh": []
+ },
+ "hi_domestic_worker": {
+  "category": "people",
+  "desc": "Person Domestic Worker",
+  "en": [
+   "person domestic worker",
+   "cleaner",
+   "labor",
+   "plumber"
+  ],
+  "zh": []
+ },
+ "hi_domestic_worker_alt": {
+  "category": "people",
+  "desc": "Person Domestic Worker ALT",
+  "en": [
+   "person domestic worker alt",
+   "cleaner",
+   "labor",
+   "plumber"
+  ],
+  "zh": []
+ },
+ "hi_drone": {
+  "category": "vehicles",
+  "desc": "Drone",
+  "en": [
+   "drone",
+   "aircraft",
+   "autonomous flying vehicle",
+   "flight"
+  ],
+  "zh": []
+ },
+ "hi_dry_eyes": {
+  "category": "conditions",
+  "desc": "Dry Eyes",
+  "en": [
+   "dry eyes",
+   "dry",
+   "eye",
+   "eyeball",
+   "itchy",
+   "optic",
+   "optical",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_dry_mouth": {
+  "category": "conditions",
+  "desc": "Dry Mouth",
+  "en": [
+   "dry mouth",
+   "cracked",
+   "dry",
+   "itchy",
+   "lips",
+   "mouth",
+   "oral",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_ear": {
+  "category": "body",
+  "desc": "Ear",
+  "en": [
+   "ear",
+   "auditory",
+   "ent",
+   "eardrum",
+   "listen",
+   "organ",
+   "sound"
+  ],
+  "zh": []
+ },
+ "hi_ear_nose_throat": {
+  "category": "symbols",
+  "desc": "Ear Nose and Throat",
+  "en": [
+   "ear nose and throat",
+   "auditory",
+   "breathing",
+   "condition",
+   "ent",
+   "ear",
+   "head",
+   "hearing"
+  ],
+  "zh": []
+ },
+ "hi_ecmo": {
+  "category": "devices",
+  "desc": "ECMO",
+  "en": [
+   "ecmo",
+   "critical care",
+   "device",
+   "extracorporeal membrane oxygenation",
+   "icu",
+   "life support",
+   "lungs",
+   "oxygen"
+  ],
+  "zh": []
+ },
+ "hi_eco_care": {
+  "category": "symbols",
+  "desc": "Ecology",
+  "en": [
+   "ecology",
+   "earth",
+   "environment",
+   "environmentalism",
+   "heart",
+   "plant"
+  ],
+  "zh": []
+ },
+ "hi_elderly": {
+  "category": "people",
+  "desc": "Elderly People",
+  "en": [
+   "elderly people",
+   "cane",
+   "couple",
+   "elder",
+   "geriatric",
+   "man",
+   "old",
+   "people"
+  ],
+  "zh": []
+ },
+ "hi_electricity": {
+  "category": "symbols",
+  "desc": "Electricity",
+  "en": [
+   "electricity",
+   "bulb",
+   "light bulb",
+   "lightning",
+   "zap"
+  ],
+  "zh": []
+ },
+ "hi_emergency_operations_center": {
+  "category": "places",
+  "desc": "Emergency Operations Center",
+  "en": [
+   "emergency operations center",
+   "building",
+   "emergency",
+   "headquarters",
+   "operations",
+   "response",
+   "satellite"
+  ],
+  "zh": []
+ },
+ "hi_emergency_post": {
+  "category": "places",
+  "desc": "Field Hospital",
+  "en": [
+   "field hospital",
+   "building",
+   "cross",
+   "emergency post",
+   "tent",
+   "war hospital"
+  ],
+  "zh": []
+ },
+ "hi_endotracheal_tube": {
+  "category": "devices",
+  "desc": "Endotracheal Tube",
+  "en": [
+   "endotracheal tube",
+   "airway",
+   "breathe",
+   "catheter",
+   "device",
+   "emergency",
+   "oxygen",
+   "throat"
+  ],
+  "zh": []
+ },
+ "hi_entry": {
+  "category": "symbols",
+  "desc": "Entry",
+  "en": [
+   "entry",
+   "doorway",
+   "entrance",
+   "login",
+   "open",
+   "open door",
+   "sign in"
+  ],
+  "zh": []
+ },
+ "hi_enzyme": {
+  "category": "body",
+  "desc": "Enzyme",
+  "en": [
+   "enzyme",
+   "body",
+   "digestive system",
+   "human",
+   "microscopic"
+  ],
+  "zh": []
+ },
+ "hi_exercise": {
+  "category": "exercise",
+  "desc": "Exercise",
+  "en": [
+   "exercise",
+   "fitness",
+   "physio",
+   "physiotherapy",
+   "strong",
+   "weightlifting",
+   "weights",
+   "wellness"
+  ],
+  "zh": []
+ },
+ "hi_exercise_bicycle": {
+  "category": "exercise",
+  "desc": "Exercise Bicycle",
+  "en": [
+   "exercise bicycle",
+   "bicycle",
+   "bike",
+   "exercise",
+   "fitness",
+   "gym",
+   "physio",
+   "physiotherapy"
+  ],
+  "zh": []
+ },
+ "hi_exercise_yoga": {
+  "category": "people",
+  "desc": "Yoga",
+  "en": [
+   "yoga",
+   "calm",
+   "exercise",
+   "fitness",
+   "meditate",
+   "meditation",
+   "physio",
+   "physiotherapy"
+  ],
+  "zh": []
+ },
+ "hi_eye": {
+  "category": "body",
+  "desc": "Eye",
+  "en": [
+   "eye",
+   "ocular",
+   "oculus",
+   "sight",
+   "vision"
+  ],
+  "zh": []
+ },
+ "hi_eyeglasses_devices": {
+  "category": "devices",
+  "desc": "Eyeglasses",
+  "en": [
+   "eyeglasses",
+   "corrective lens",
+   "eyes",
+   "glasses",
+   "optometrist",
+   "optometry"
+  ],
+  "zh": []
+ },
+ "hi_eyeglasses_emotions": {
+  "category": "emotions",
+  "desc": "Glasses",
+  "en": [
+   "glasses",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "eyeglasses",
+   "face",
+   "optometry",
+   "spectacles"
+  ],
+  "zh": []
+ },
+ "hi_factory_worker": {
+  "category": "people",
+  "desc": "Person Factory Worker",
+  "en": [
+   "person factory worker",
+   "factory",
+   "helmet",
+   "plant",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_female": {
+  "category": "symbols",
+  "desc": "Female symbol",
+  "en": [
+   "female symbol",
+   "female",
+   "gender",
+   "sex",
+   "sign",
+   "symbol",
+   "woman"
+  ],
+  "zh": []
+ },
+ "hi_female_and_male": {
+  "category": "people",
+  "desc": "Female and Male",
+  "en": [
+   "female and male",
+   "couple",
+   "man",
+   "people",
+   "woman"
+  ],
+  "zh": []
+ },
+ "hi_fever_devices": {
+  "category": "devices",
+  "desc": "High Temperature",
+  "en": [
+   "high temperature",
+   "fever",
+   "high",
+   "temperature",
+   "thermometer"
+  ],
+  "zh": []
+ },
+ "hi_fever_emotions": {
+  "category": "emotions",
+  "desc": "Fever",
+  "en": [
+   "fever",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "frown",
+   "negative",
+   "sick"
+  ],
+  "zh": []
+ },
+ "hi_fingerprint": {
+  "category": "symbols",
+  "desc": "Fingerprint",
+  "en": [
+   "fingerprint",
+   "body",
+   "finger",
+   "human",
+   "id",
+   "scan",
+   "identification"
+  ],
+  "zh": []
+ },
+ "hi_foot": {
+  "category": "body",
+  "desc": "Foot",
+  "en": [
+   "foot",
+   "ankle",
+   "feet",
+   "podiatrist",
+   "podiatry",
+   "toe"
+  ],
+  "zh": []
+ },
+ "hi_forest": {
+  "category": "places",
+  "desc": "Forest",
+  "en": [
+   "forest",
+   "nature",
+   "park",
+   "trees",
+   "woods"
+  ],
+  "zh": []
+ },
+ "hi_forest_persons": {
+  "category": "places",
+  "desc": "Forest Persons",
+  "en": [
+   "forest persons",
+   "nature",
+   "park",
+   "trees",
+   "woods"
+  ],
+  "zh": []
+ },
+ "hi_forum": {
+  "category": "symbols",
+  "desc": "Chat",
+  "en": [
+   "chat",
+   "discussion",
+   "forum",
+   "meeting",
+   "people",
+   "speech"
+  ],
+  "zh": []
+ },
+ "hi_fruits": {
+  "category": "nutrition",
+  "desc": "Fruits",
+  "en": [
+   "fruits",
+   "apple",
+   "food",
+   "fruit",
+   "grape",
+   "health",
+   "healthy",
+   "nutrition"
+  ],
+  "zh": []
+ },
+ "hi_gallbladder": {
+  "category": "body",
+  "desc": "Gallbladder",
+  "en": [
+   "gallbladder",
+   "gallstone",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_geo_location": {
+  "category": "symbols",
+  "desc": "Location",
+  "en": [
+   "location",
+   "gis",
+   "geo",
+   "map",
+   "pin"
+  ],
+  "zh": []
+ },
+ "hi_girl_0105y": {
+  "category": "people",
+  "desc": "Girl 1-5 Years",
+  "en": [
+   "girl 1-5 years",
+   "child",
+   "female",
+   "girl",
+   "toddler"
+  ],
+  "zh": []
+ },
+ "hi_girl_1015y": {
+  "category": "people",
+  "desc": "Child Female 10-15 Years",
+  "en": [
+   "child female 10-15 years",
+   "child",
+   "female",
+   "girl",
+   "teen"
+  ],
+  "zh": []
+ },
+ "hi_global_pandemic": {
+  "category": "symbols",
+  "desc": "Global Pandemic",
+  "en": [
+   "global pandemic",
+   "covid",
+   "epidemic",
+   "pandemic",
+   "virology",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_globe": {
+  "category": "symbols",
+  "desc": "Globe",
+  "en": [
+   "globe",
+   "earth",
+   "location",
+   "world"
+  ],
+  "zh": []
+ },
+ "hi_gluten": {
+  "category": "nutrition",
+  "desc": "Gluten",
+  "en": [
+   "gluten",
+   "celiac disease",
+   "cereal",
+   "food",
+   "nutrition",
+   "wheat"
+  ],
+  "zh": []
+ },
+ "hi_gluten_free": {
+  "category": "nutrition",
+  "desc": "Gluten Free",
+  "en": [
+   "gluten free",
+   "celiac disease",
+   "cereal",
+   "food",
+   "gluten",
+   "nutrition",
+   "wheat"
+  ],
+  "zh": []
+ },
+ "hi_group_discussion_meeting": {
+  "category": "people",
+  "desc": "Discussion",
+  "en": [
+   "discussion",
+   "chat",
+   "forum",
+   "meeting",
+   "people",
+   "speech"
+  ],
+  "zh": []
+ },
+ "hi_group_discussion_meetingx3": {
+  "category": "people",
+  "desc": "Group Discussion",
+  "en": [
+   "group discussion",
+   "chat",
+   "discussion",
+   "forum",
+   "meeting",
+   "people",
+   "speech"
+  ],
+  "zh": []
+ },
+ "hi_guide_dog": {
+  "category": "symbols",
+  "desc": "Guide Dog",
+  "en": [
+   "guide dog",
+   "animal",
+   "blind",
+   "service animal",
+   "sight"
+  ],
+  "zh": []
+ },
+ "hi_hand_wipe_paper": {
+  "category": "ppe",
+  "desc": "Hand Wipe Paper",
+  "en": [
+   "hand wipe paper",
+   "clean",
+   "cleaning",
+   "hand",
+   "ppe",
+   "paper",
+   "sanitation",
+   "towel"
+  ],
+  "zh": []
+ },
+ "hi_happy": {
+  "category": "emotions",
+  "desc": "Happy",
+  "en": [
+   "happy",
+   "content",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "joy",
+   "laugh"
+  ],
+  "zh": []
+ },
+ "hi_hazardous": {
+  "category": "symbols",
+  "desc": "Hazardous",
+  "en": [
+   "hazardous",
+   "alert",
+   "danger",
+   "radiation",
+   "radioactive",
+   "warning"
+  ],
+  "zh": []
+ },
+ "hi_head": {
+  "category": "body",
+  "desc": "Head",
+  "en": [
+   "head",
+   "body",
+   "centimeter",
+   "diagnostic",
+   "face",
+   "measure",
+   "neck",
+   "nose"
+  ],
+  "zh": []
+ },
+ "hi_head_circumference": {
+  "category": "symbols",
+  "desc": "Head Circumference",
+  "en": [
+   "head circumference",
+   "centimeter",
+   "diagnostic",
+   "head",
+   "measure",
+   "patient",
+   "skull"
+  ],
+  "zh": []
+ },
+ "hi_headache": {
+  "category": "conditions",
+  "desc": "Headache",
+  "en": [
+   "headache",
+   "illness",
+   "person",
+   "sick"
+  ],
+  "zh": []
+ },
+ "hi_health": {
+  "category": "symbols",
+  "desc": "Health Shield",
+  "en": [
+   "health shield",
+   "cross",
+   "hospital",
+   "medicine",
+   "protect",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_health_alt": {
+  "category": "symbols",
+  "desc": "Health ALT",
+  "en": [
+   "health alt",
+   "cross",
+   "hospital",
+   "medicine",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_health_data_security": {
+  "category": "symbols",
+  "desc": "Health Data Security",
+  "en": [
+   "health data security",
+   "locked",
+   "operations",
+   "secops",
+   "secure"
+  ],
+  "zh": []
+ },
+ "hi_health_data_sync": {
+  "category": "symbols",
+  "desc": "Health Data Sync",
+  "en": [
+   "health data sync",
+   "data flow",
+   "flow",
+   "synchronization"
+  ],
+  "zh": []
+ },
+ "hi_health_literacy": {
+  "category": "symbols",
+  "desc": "Health Literacy",
+  "en": [
+   "health literacy",
+   "book",
+   "document",
+   "library",
+   "medicine",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_health_vulnerability_through_social_determinants": {
+  "category": "symbols",
+  "desc": "Social Determinants of Health",
+  "en": [
+   "social determinants of health",
+   "causes",
+   "community",
+   "health vulnerability",
+   "root causes",
+   "social",
+   "welfare"
+  ],
+  "zh": []
+ },
+ "hi_health_worker": {
+  "category": "people",
+  "desc": "Person Health Worker",
+  "en": [
+   "person health worker",
+   "doctor",
+   "health provider",
+   "nurse"
+  ],
+  "zh": []
+ },
+ "hi_health_worker_form": {
+  "category": "objects",
+  "desc": "Health Worker Form",
+  "en": [
+   "health worker form",
+   "doctor",
+   "document",
+   "nurse",
+   "paper",
+   "patient",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_healthcare_it": {
+  "category": "symbols",
+  "desc": "Health IT",
+  "en": [
+   "health it",
+   "computer",
+   "device",
+   "health",
+   "it",
+   "information technology",
+   "laptop",
+   "medicine"
+  ],
+  "zh": []
+ },
+ "hi_hearing_aid": {
+  "category": "devices",
+  "desc": "Hearing Aid",
+  "en": [
+   "hearing aid",
+   "assistive",
+   "audio",
+   "audiology",
+   "device",
+   "ear",
+   "hearing"
+  ],
+  "zh": []
+ },
+ "hi_heart": {
+  "category": "symbols",
+  "desc": "Heart",
+  "en": [
+   "heart",
+   "cardiology",
+   "favorite",
+   "like",
+   "love"
+  ],
+  "zh": []
+ },
+ "hi_heart_cardiogram": {
+  "category": "symbols",
+  "desc": "Cardiogram",
+  "en": [
+   "cardiogram",
+   "cardiology",
+   "ecg",
+   "ekg",
+   "electrocardiogram",
+   "heart",
+   "monitor"
+  ],
+  "zh": []
+ },
+ "hi_heart_organ": {
+  "category": "body",
+  "desc": "Heart",
+  "en": [
+   "heart",
+   "cardiac",
+   "cardiologist",
+   "cardiology",
+   "coronary",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_heartbeat": {
+  "category": "symbols",
+  "desc": "Heartbeat",
+  "en": [
+   "heartbeat",
+   "cardiology",
+   "circulatory system",
+   "device",
+   "electrical",
+   "heart",
+   "heart attack",
+   "stroke"
+  ],
+  "zh": []
+ },
+ "hi_height": {
+  "category": "symbols",
+  "desc": "Height",
+  "en": [
+   "height",
+   "bmi",
+   "centimeter",
+   "diagnostic",
+   "foot",
+   "measure",
+   "patient",
+   "short"
+  ],
+  "zh": []
+ },
+ "hi_helicopter": {
+  "category": "vehicles",
+  "desc": "Helicopter",
+  "en": [
+   "helicopter",
+   "chopper",
+   "medevac",
+   "medivac"
+  ],
+  "zh": []
+ },
+ "hi_high_bars": {
+  "category": "symbols",
+  "desc": "Network High Bars",
+  "en": [
+   "network high bars",
+   "connection",
+   "fast",
+   "network",
+   "phone",
+   "speed"
+  ],
+  "zh": []
+ },
+ "hi_high_level": {
+  "category": "symbols",
+  "desc": "High Level",
+  "en": [
+   "high level",
+   "fast",
+   "full",
+   "gauge",
+   "measure",
+   "meter",
+   "speedometer"
+  ],
+  "zh": []
+ },
+ "hi_home": {
+  "category": "places",
+  "desc": "Home",
+  "en": [
+   "home",
+   "accommodation",
+   "building",
+   "door",
+   "house",
+   "roof"
+  ],
+  "zh": []
+ },
+ "hi_home_alt": {
+  "category": "places",
+  "desc": "Home ALT",
+  "en": [
+   "home alt",
+   "building",
+   "door",
+   "house",
+   "roof"
+  ],
+  "zh": []
+ },
+ "hi_home_quarantine": {
+  "category": "symbols",
+  "desc": "Quarantine Home",
+  "en": [
+   "quarantine home",
+   "covid",
+   "home",
+   "isolation",
+   "quarantine",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_hospice": {
+  "category": "symbols",
+  "desc": "Hospice",
+  "en": [
+   "hospice",
+   "hospice care",
+   "hospital",
+   "palliative care"
+  ],
+  "zh": []
+ },
+ "hi_hospital": {
+  "category": "places",
+  "desc": "Hospital",
+  "en": [
+   "hospital",
+   "building",
+   "clinic",
+   "large hospital",
+   "urban hospital"
+  ],
+  "zh": []
+ },
+ "hi_hospitalized": {
+  "category": "devices",
+  "desc": "Hospital Bed",
+  "en": [
+   "hospital bed",
+   "bed",
+   "hospital",
+   "iv drip",
+   "inpatient",
+   "intravenous drip",
+   "treatment"
+  ],
+  "zh": []
+ },
+ "hi_hot_meal": {
+  "category": "nutrition",
+  "desc": "Hot Meal",
+  "en": [
+   "hot meal",
+   "food",
+   "meal"
+  ],
+  "zh": []
+ },
+ "hi_i_certificate_paper": {
+  "category": "objects",
+  "desc": "Certificate",
+  "en": [
+   "certificate",
+   "document",
+   "paper",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_i_documents_accepted": {
+  "category": "symbols",
+  "desc": "Approved Document",
+  "en": [
+   "approved document",
+   "document",
+   "paper",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_i_documents_denied": {
+  "category": "symbols",
+  "desc": "Denied Document",
+  "en": [
+   "denied document",
+   "document",
+   "paper",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_i_exam_multiple_choice": {
+  "category": "symbols",
+  "desc": "Exam Multiple-Choice",
+  "en": [
+   "exam multiple-choice",
+   "document",
+   "exam",
+   "note",
+   "paper",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_i_groups_perspective_crowd": {
+  "category": "people",
+  "desc": "Group",
+  "en": [
+   "group",
+   "community",
+   "crowd",
+   "person",
+   "three people",
+   "users"
+  ],
+  "zh": []
+ },
+ "hi_i_note_action": {
+  "category": "symbols",
+  "desc": "Notes",
+  "en": [
+   "notes",
+   "class",
+   "paper",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_i_schedule_school_date_time": {
+  "category": "symbols",
+  "desc": "Calendar Schedule",
+  "en": [
+   "calendar schedule",
+   "appointment",
+   "cal",
+   "event",
+   "time"
+  ],
+  "zh": []
+ },
+ "hi_i_training_class": {
+  "category": "people",
+  "desc": "Training",
+  "en": [
+   "training",
+   "class",
+   "person",
+   "presentation",
+   "school",
+   "teacher",
+   "teaching",
+   "train"
+  ],
+  "zh": []
+ },
+ "hi_i_utensils": {
+  "category": "objects",
+  "desc": "Utensils",
+  "en": [
+   "utensils",
+   "office",
+   "pen",
+   "ruler",
+   "tools"
+  ],
+  "zh": []
+ },
+ "hi_info": {
+  "category": "symbols",
+  "desc": "Info",
+  "en": [
+   "info",
+   "about",
+   "circle",
+   "information"
+  ],
+  "zh": []
+ },
+ "hi_infusion_pump": {
+  "category": "devices",
+  "desc": "Infusion pump",
+  "en": [
+   "infusion pump",
+   "bag",
+   "device",
+   "fluids",
+   "iv",
+   "infusion",
+   "liquid",
+   "nutrients"
+  ],
+  "zh": []
+ },
+ "hi_inpatient": {
+  "category": "devices",
+  "desc": "Hospital Bed ALT",
+  "en": [
+   "hospital bed alt",
+   "bed",
+   "hospital",
+   "inpatient",
+   "treatment"
+  ],
+  "zh": []
+ },
+ "hi_insecticide_resistance": {
+  "category": "symbols",
+  "desc": "Insecticide Resistant",
+  "en": [
+   "insecticide resistant",
+   "mosquito"
+  ],
+  "zh": []
+ },
+ "hi_insurance_card": {
+  "category": "objects",
+  "desc": "Insurance Card",
+  "en": [
+   "insurance card",
+   "id",
+   "id card",
+   "identification",
+   "insurance",
+   "license",
+   "patient",
+   "patient id"
+  ],
+  "zh": []
+ },
+ "hi_integrated_data_and_research": {
+  "category": "symbols",
+  "desc": "Integrated Data and Research",
+  "en": [
+   "integrated data and research",
+   "chart",
+   "data",
+   "data science",
+   "graph",
+   "quality improvement",
+   "research",
+   "science"
+  ],
+  "zh": []
+ },
+ "hi_interoperability": {
+  "category": "symbols",
+  "desc": "Interoperability",
+  "en": [
+   "interoperability",
+   "fhir",
+   "it",
+   "informatics",
+   "standards",
+   "tech",
+   "technology",
+   "terminology"
+  ],
+  "zh": []
+ },
+ "hi_intestinal_pain": {
+  "category": "conditions",
+  "desc": "Intestinal Pain",
+  "en": [
+   "intestinal pain",
+   "ache",
+   "digestive system",
+   "intestine",
+   "pain",
+   "stomach",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_intestine": {
+  "category": "body",
+  "desc": "Intestine",
+  "en": [
+   "intestine",
+   "body",
+   "digestive system"
+  ],
+  "zh": []
+ },
+ "hi_intravenous_bag": {
+  "category": "devices",
+  "desc": "Intravenous Bag",
+  "en": [
+   "intravenous bag",
+   "bag",
+   "blood",
+   "drip",
+   "iv",
+   "liquid"
+  ],
+  "zh": []
+ },
+ "hi_intravenous_drip": {
+  "category": "devices",
+  "desc": "Intravenous Drip",
+  "en": [
+   "intravenous drip",
+   "bag",
+   "blood",
+   "drip",
+   "hospitalized",
+   "iv",
+   "inpatient",
+   "patient"
+  ],
+  "zh": []
+ },
+ "hi_job_status_level": {
+  "category": "symbols",
+  "desc": "Job level",
+  "en": [
+   "job level",
+   "career",
+   "group",
+   "hierarchy",
+   "job",
+   "organization",
+   "organogram",
+   "team"
+  ],
+  "zh": []
+ },
+ "hi_joints": {
+  "category": "body",
+  "desc": "Joints",
+  "en": [
+   "joints",
+   "bones",
+   "ortho",
+   "orthopaedics"
+  ],
+  "zh": []
+ },
+ "hi_justice": {
+  "category": "objects",
+  "desc": "Justice",
+  "en": [
+   "justice",
+   "law",
+   "legal",
+   "scales"
+  ],
+  "zh": []
+ },
+ "hi_kidneys": {
+  "category": "body",
+  "desc": "Kidneys",
+  "en": [
+   "kidneys",
+   "organ",
+   "urinary"
+  ],
+  "zh": []
+ },
+ "hi_lab_search": {
+  "category": "symbols",
+  "desc": "Lab Search",
+  "en": [
+   "lab search",
+   "find",
+   "glass",
+   "lab",
+   "magnifying",
+   "medical",
+   "sample",
+   "search"
+  ],
+  "zh": []
+ },
+ "hi_lactation_people": {
+  "category": "people",
+  "desc": "Nursing Mother",
+  "en": [
+   "nursing mother",
+   "baby",
+   "breast",
+   "lactation",
+   "milk",
+   "mother",
+   "nursing",
+   "postnatal"
+  ],
+  "zh": []
+ },
+ "hi_lactation_symbols": {
+  "category": "symbols",
+  "desc": "Lactation",
+  "en": [
+   "lactation",
+   "breastfeeding",
+   "maternal",
+   "motherhood",
+   "nursing"
+  ],
+  "zh": []
+ },
+ "hi_lactose": {
+  "category": "nutrition",
+  "desc": "Sodium",
+  "en": [
+   "sodium",
+   "cardiology",
+   "food",
+   "nutrition",
+   "salt",
+   "unhealthy"
+  ],
+  "zh": []
+ },
+ "hi_lactose_free": {
+  "category": "nutrition",
+  "desc": "Dairy Free",
+  "en": [
+   "dairy free",
+   "allergy",
+   "beverage",
+   "cow",
+   "dairy",
+   "drink",
+   "food",
+   "lactose"
+  ],
+  "zh": []
+ },
+ "hi_laptop": {
+  "category": "objects",
+  "desc": "Laptop",
+  "en": [
+   "laptop",
+   "computer",
+   "device",
+   "health",
+   "it",
+   "information technology",
+   "medicine",
+   "technology"
+  ],
+  "zh": []
+ },
+ "hi_laryngoscope": {
+  "category": "devices",
+  "desc": "Laryngoscope",
+  "en": [
+   "laryngoscope",
+   "airway",
+   "device",
+   "exam",
+   "examination",
+   "larynx",
+   "throat",
+   "video"
+  ],
+  "zh": []
+ },
+ "hi_leg": {
+  "category": "body",
+  "desc": "Leg",
+  "en": [
+   "leg",
+   "foot",
+   "knee"
+  ],
+  "zh": []
+ },
+ "hi_letrina": {
+  "category": "places",
+  "desc": "Latrine",
+  "en": [
+   "latrine",
+   "bathroom",
+   "biffy",
+   "bog",
+   "crapper",
+   "dunny",
+   "honey bucket",
+   "john"
+  ],
+  "zh": []
+ },
+ "hi_letrina_alt": {
+  "category": "places",
+  "desc": "Latrine ALT",
+  "en": [
+   "latrine alt",
+   "bathroom",
+   "biffy",
+   "bog",
+   "crapper",
+   "dunny",
+   "honey bucket",
+   "john"
+  ],
+  "zh": []
+ },
+ "hi_life_science": {
+  "category": "symbols",
+  "desc": "Life Science",
+  "en": [
+   "life science",
+   "biology",
+   "botany",
+   "environment",
+   "green",
+   "grow",
+   "lab",
+   "laboratory"
+  ],
+  "zh": []
+ },
+ "hi_liver": {
+  "category": "body",
+  "desc": "Liver",
+  "en": [
+   "liver",
+   "hepatology",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_liver_alt": {
+  "category": "body",
+  "desc": "Liver ALT",
+  "en": [
+   "liver alt",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_llin": {
+  "category": "devices",
+  "desc": "Bed Net",
+  "en": [
+   "bed net",
+   "device",
+   "insecticide",
+   "long lasting insecticidal nets",
+   "mosquito"
+  ],
+  "zh": []
+ },
+ "hi_loss_smell": {
+  "category": "conditions",
+  "desc": "Loss of Smell",
+  "en": [
+   "loss of smell",
+   "covid",
+   "nose",
+   "smell",
+   "symptom"
+  ],
+  "zh": []
+ },
+ "hi_loudly_crying": {
+  "category": "emotions",
+  "desc": "Loudly Crying",
+  "en": [
+   "loudly crying",
+   "crying",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "sad",
+   "tears"
+  ],
+  "zh": []
+ },
+ "hi_low_bars": {
+  "category": "symbols",
+  "desc": "Network Low Bars",
+  "en": [
+   "network low bars",
+   "connection",
+   "network",
+   "phone",
+   "slow",
+   "speed"
+  ],
+  "zh": []
+ },
+ "hi_low_income_level": {
+  "category": "symbols",
+  "desc": "Low income",
+  "en": [
+   "low income",
+   "arrow",
+   "finance",
+   "financial",
+   "income",
+   "money",
+   "poor",
+   "poverty"
+  ],
+  "zh": []
+ },
+ "hi_low_level": {
+  "category": "symbols",
+  "desc": "Low Level",
+  "en": [
+   "low level",
+   "empty",
+   "gauge",
+   "measure",
+   "meter",
+   "slow",
+   "speedometer"
+  ],
+  "zh": []
+ },
+ "hi_low_vision": {
+  "category": "conditions",
+  "desc": "Low Vision",
+  "en": [
+   "low vision",
+   "eye",
+   "eyes",
+   "opthamology",
+   "optometry",
+   "sight",
+   "vision"
+  ],
+  "zh": []
+ },
+ "hi_lungs": {
+  "category": "body",
+  "desc": "Lungs",
+  "en": [
+   "lungs",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_lymph_nodes": {
+  "category": "body",
+  "desc": "Lymph Node",
+  "en": [
+   "lymph node",
+   "lymphatic system",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_lymphoma": {
+  "category": "conditions",
+  "desc": "Lymphoma",
+  "en": [
+   "lymphoma",
+   "cancer",
+   "growth",
+   "hodgkin lymphoma",
+   "lymphatic system",
+   "malignant",
+   "non-hodgkin lymphoma",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_machinery": {
+  "category": "vehicles",
+  "desc": "Machinery",
+  "en": [
+   "machinery",
+   "digger",
+   "equipment",
+   "front-end loader"
+  ],
+  "zh": []
+ },
+ "hi_magic_wand": {
+  "category": "symbols",
+  "desc": "Magic Wand",
+  "en": [
+   "magic wand",
+   "ai",
+   "artificial intelligence",
+   "automation",
+   "bot",
+   "improve",
+   "llm",
+   "magic"
+  ],
+  "zh": []
+ },
+ "hi_magnifying_glass": {
+  "category": "symbols",
+  "desc": "Magnifying Glass",
+  "en": [
+   "magnifying glass",
+   "detective",
+   "research",
+   "search",
+   "zoom"
+  ],
+  "zh": []
+ },
+ "hi_male": {
+  "category": "symbols",
+  "desc": "Male symbol",
+  "en": [
+   "male symbol",
+   "gender",
+   "male",
+   "man",
+   "sex",
+   "sign",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_male_and_female": {
+  "category": "people",
+  "desc": "Male and Female",
+  "en": [
+   "male and female",
+   "couple",
+   "man",
+   "people",
+   "woman"
+  ],
+  "zh": []
+ },
+ "hi_malnutrition": {
+  "category": "conditions",
+  "desc": "Malnutrition",
+  "en": [
+   "malnutrition",
+   "malnourished",
+   "patient",
+   "people",
+   "thin",
+   "underweight",
+   "vitals"
+  ],
+  "zh": []
+ },
+ "hi_man": {
+  "category": "people",
+  "desc": "Person",
+  "en": [
+   "person",
+   "boy",
+   "gender",
+   "male",
+   "man",
+   "sex",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_market_stall": {
+  "category": "places",
+  "desc": "Market Stall",
+  "en": [
+   "market stall",
+   "awning",
+   "building",
+   "shack",
+   "shop",
+   "stall"
+  ],
+  "zh": []
+ },
+ "hi_masked": {
+  "category": "emotions",
+  "desc": "Masked",
+  "en": [
+   "masked",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "mask",
+   "ppe",
+   "sick"
+  ],
+  "zh": []
+ },
+ "hi_measles": {
+  "category": "emotions",
+  "desc": "Measles",
+  "en": [
+   "measles",
+   "disease",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "fever"
+  ],
+  "zh": []
+ },
+ "hi_medical_advice": {
+  "category": "symbols",
+  "desc": "Medical Advice Hotline",
+  "en": [
+   "medical advice hotline",
+   "advice",
+   "call center",
+   "information",
+   "phone",
+   "phone line"
+  ],
+  "zh": []
+ },
+ "hi_medical_sample": {
+  "category": "devices",
+  "desc": "Medical Sample",
+  "en": [
+   "medical sample",
+   "container",
+   "exam",
+   "fluid",
+   "lab",
+   "laboratory",
+   "sample",
+   "test"
+  ],
+  "zh": []
+ },
+ "hi_medical_search": {
+  "category": "symbols",
+  "desc": "Medical Search",
+  "en": [
+   "medical search",
+   "cross",
+   "find",
+   "glass",
+   "magnifying",
+   "medical",
+   "plus",
+   "search"
+  ],
+  "zh": []
+ },
+ "hi_medicine_bottle": {
+  "category": "devices",
+  "desc": "Medicine Container",
+  "en": [
+   "medicine container",
+   "bottle",
+   "capsule",
+   "drug",
+   "medication",
+   "packaging",
+   "pharmacy",
+   "prescription"
+  ],
+  "zh": []
+ },
+ "hi_medicine_mortar": {
+  "category": "devices",
+  "desc": "Mortar and Pestle",
+  "en": [
+   "mortar and pestle",
+   "compound",
+   "compounding",
+   "medicine",
+   "mix",
+   "mortar",
+   "pestle",
+   "pharmacy"
+  ],
+  "zh": []
+ },
+ "hi_medium_bars": {
+  "category": "symbols",
+  "desc": "Network Medium Bars",
+  "en": [
+   "network medium bars",
+   "connection",
+   "medium",
+   "network",
+   "phone",
+   "speed"
+  ],
+  "zh": []
+ },
+ "hi_medium_level": {
+  "category": "symbols",
+  "desc": "Medium Level",
+  "en": [
+   "medium level",
+   "gauge",
+   "half",
+   "measure",
+   "meter",
+   "mid",
+   "speedometer"
+  ],
+  "zh": []
+ },
+ "hi_megaphone": {
+  "category": "objects",
+  "desc": "Megaphone",
+  "en": [
+   "megaphone",
+   "announcement",
+   "noise",
+   "speaker"
+  ],
+  "zh": []
+ },
+ "hi_mental_disorders": {
+  "category": "people",
+  "desc": "Mental Disorder",
+  "en": [
+   "mental disorder",
+   "brain",
+   "head",
+   "mental health",
+   "neurology",
+   "spine"
+  ],
+  "zh": []
+ },
+ "hi_mental_health": {
+  "category": "symbols",
+  "desc": "Mental health",
+  "en": [
+   "mental health",
+   "emotional health",
+   "mind",
+   "psychology",
+   "wellbeing"
+  ],
+  "zh": []
+ },
+ "hi_microscope": {
+  "category": "devices",
+  "desc": "Microscope",
+  "en": [
+   "microscope",
+   "diagnostic",
+   "lab",
+   "magnify"
+  ],
+  "zh": []
+ },
+ "hi_microscope_with_specimen": {
+  "category": "devices",
+  "desc": "Microscope with Specimen",
+  "en": [
+   "microscope with specimen",
+   "diagnostic",
+   "examination",
+   "lab",
+   "magnify",
+   "microscope",
+   "specimen"
+  ],
+  "zh": []
+ },
+ "hi_military_worker": {
+  "category": "people",
+  "desc": "Person Military",
+  "en": [
+   "person military",
+   "armed services",
+   "army",
+   "gun",
+   "helmet",
+   "soldier",
+   "uniform"
+  ],
+  "zh": []
+ },
+ "hi_miner_worker": {
+  "category": "people",
+  "desc": "Person Miner",
+  "en": [
+   "person miner",
+   "helmet",
+   "miner",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_miner_worker_alt": {
+  "category": "people",
+  "desc": "Person Miner ALT",
+  "en": [
+   "person miner alt",
+   "helmet",
+   "industry",
+   "miner",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_ministry_of_health": {
+  "category": "places",
+  "desc": "Ministry of Health",
+  "en": [
+   "ministry of health",
+   "building",
+   "government",
+   "hospital",
+   "office",
+   "official"
+  ],
+  "zh": []
+ },
+ "hi_mobile": {
+  "category": "devices",
+  "desc": "Mobile App",
+  "en": [
+   "mobile app",
+   "app",
+   "application",
+   "phone",
+   "smartphone",
+   "ehealth"
+  ],
+  "zh": []
+ },
+ "hi_mobile_clinic": {
+  "category": "vehicles",
+  "desc": "Mobile Clinic",
+  "en": [
+   "mobile clinic",
+   "ambulance",
+   "cross",
+   "red cross",
+   "truck"
+  ],
+  "zh": []
+ },
+ "hi_money_bag": {
+  "category": "objects",
+  "desc": "Money Bag",
+  "en": [
+   "money bag",
+   "currency",
+   "money",
+   "payment"
+  ],
+  "zh": []
+ },
+ "hi_mosquito": {
+  "category": "zoonoses",
+  "desc": "Mosquito",
+  "en": [
+   "mosquito",
+   "animal",
+   "disease",
+   "insect",
+   "malaria",
+   "zoonoses",
+   "zoonotic disease"
+  ],
+  "zh": []
+ },
+ "hi_mouth": {
+  "category": "body",
+  "desc": "Mouth",
+  "en": [
+   "mouth",
+   "face",
+   "lips",
+   "oral"
+  ],
+  "zh": []
+ },
+ "hi_nappy_diaper": {
+  "category": "symbols",
+  "desc": "Diaper",
+  "en": [
+   "diaper",
+   "baby",
+   "child",
+   "depends",
+   "incontinence",
+   "napkin",
+   "nappy",
+   "newborn"
+  ],
+  "zh": []
+ },
+ "hi_nausea": {
+  "category": "conditions",
+  "desc": "Nausea",
+  "en": [
+   "nausea",
+   "cold",
+   "hot",
+   "person",
+   "shaking",
+   "sick",
+   "symptom",
+   "temperature"
+  ],
+  "zh": []
+ },
+ "hi_nauseous": {
+  "category": "emotions",
+  "desc": "Nauseous",
+  "en": [
+   "nauseous",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "nausea",
+   "puke",
+   "sick"
+  ],
+  "zh": []
+ },
+ "hi_negative": {
+  "category": "symbols",
+  "desc": "Minus",
+  "en": [
+   "minus",
+   "circle",
+   "delete",
+   "negative",
+   "no entry",
+   "remove",
+   "subtract"
+  ],
+  "zh": []
+ },
+ "hi_nerve": {
+  "category": "body",
+  "desc": "Nerve",
+  "en": [
+   "nerve",
+   "nervous system",
+   "pain"
+  ],
+  "zh": []
+ },
+ "hi_nervous": {
+  "category": "emotions",
+  "desc": "Nervous",
+  "en": [
+   "nervous",
+   "clenched teeth",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "nerves",
+   "teeth"
+  ],
+  "zh": []
+ },
+ "hi_neuro_surgery": {
+  "category": "people",
+  "desc": "Neurosurgery",
+  "en": [
+   "neurosurgery",
+   "brain",
+   "brain surgery",
+   "neurology",
+   "surgery"
+  ],
+  "zh": []
+ },
+ "hi_neurology": {
+  "category": "body",
+  "desc": "Brain",
+  "en": [
+   "brain",
+   "head",
+   "mental health",
+   "neurology",
+   "organ",
+   "spine"
+  ],
+  "zh": []
+ },
+ "hi_neutral": {
+  "category": "emotions",
+  "desc": "Neutral",
+  "en": [
+   "neutral",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "ok",
+   "okay"
+  ],
+  "zh": []
+ },
+ "hi_nose": {
+  "category": "body",
+  "desc": "Nose",
+  "en": [
+   "nose",
+   "nostril",
+   "smell"
+  ],
+  "zh": []
+ },
+ "hi_not_ok": {
+  "category": "emotions",
+  "desc": "Frown",
+  "en": [
+   "frown",
+   "bad",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "negative"
+  ],
+  "zh": []
+ },
+ "hi_nurse": {
+  "category": "people",
+  "desc": "Person Nurse",
+  "en": [
+   "person nurse",
+   "hcw",
+   "healthcare worker",
+   "hospital staff",
+   "nurse",
+   "staff nurse",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_nutrition": {
+  "category": "nutrition",
+  "desc": "Nutrition",
+  "en": [
+   "nutrition",
+   "apple",
+   "carrot",
+   "diet",
+   "food",
+   "fruit",
+   "healthy",
+   "vegetables"
+  ],
+  "zh": []
+ },
+ "hi_observation": {
+  "category": "devices",
+  "desc": "Hospital Bed Timer",
+  "en": [
+   "hospital bed timer",
+   "bed",
+   "hospital",
+   "inpatient",
+   "observation",
+   "treatment"
+  ],
+  "zh": []
+ },
+ "hi_odontology": {
+  "category": "devices",
+  "desc": "Odontology",
+  "en": [
+   "odontology",
+   "dentist",
+   "tooth"
+  ],
+  "zh": []
+ },
+ "hi_odontology_implant": {
+  "category": "devices",
+  "desc": "Odontology Implant",
+  "en": [
+   "odontology implant",
+   "dentist",
+   "tooth"
+  ],
+  "zh": []
+ },
+ "hi_oesophagus_cancer": {
+  "category": "conditions",
+  "desc": "Oesophagus Cancer",
+  "en": [
+   "oesophagus cancer",
+   "cancer",
+   "digestive system",
+   "esophageal",
+   "esophagus",
+   "food pipe",
+   "growth",
+   "gullet"
+  ],
+  "zh": []
+ },
+ "hi_officer": {
+  "category": "people",
+  "desc": "Person Police Officer",
+  "en": [
+   "person police officer",
+   "cop",
+   "detective",
+   "guard",
+   "police",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_ok": {
+  "category": "emotions",
+  "desc": "Smile",
+  "en": [
+   "smile",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "happy",
+   "ok",
+   "okay"
+  ],
+  "zh": []
+ },
+ "hi_old_man": {
+  "category": "people",
+  "desc": "Elderly Man",
+  "en": [
+   "elderly man",
+   "geriatric",
+   "male",
+   "man",
+   "old",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_old_woman": {
+  "category": "people",
+  "desc": "Elderly Woman",
+  "en": [
+   "elderly woman",
+   "female",
+   "geriatric",
+   "old",
+   "symbol",
+   "woman"
+  ],
+  "zh": []
+ },
+ "hi_orthotics": {
+  "category": "devices",
+  "desc": "Orthotics",
+  "en": [
+   "orthotics",
+   "braces",
+   "calipers",
+   "foot",
+   "footwear",
+   "insole",
+   "support"
+  ],
+  "zh": []
+ },
+ "hi_outbreak": {
+  "category": "symbols",
+  "desc": "Outbreak",
+  "en": [
+   "outbreak",
+   "disease",
+   "infectious",
+   "toxic"
+  ],
+  "zh": []
+ },
+ "hi_outpatient": {
+  "category": "people",
+  "desc": "Outpatient",
+  "en": [
+   "outpatient",
+   "checkup",
+   "diagnosis",
+   "doctor",
+   "exam",
+   "examination",
+   "hospital",
+   "opd"
+  ],
+  "zh": []
+ },
+ "hi_overweight": {
+  "category": "conditions",
+  "desc": "Overweight",
+  "en": [
+   "overweight",
+   "obese",
+   "patient",
+   "people",
+   "vitals"
+  ],
+  "zh": []
+ },
+ "hi_pain": {
+  "category": "conditions",
+  "desc": "Pain",
+  "en": [
+   "pain",
+   "ache",
+   "agony",
+   "back",
+   "cramp",
+   "hurt",
+   "sore",
+   "trauma"
+  ],
+  "zh": []
+ },
+ "hi_palliative_care": {
+  "category": "symbols",
+  "desc": "Palliative Care",
+  "en": [
+   "palliative care",
+   "heart",
+   "hearts"
+  ],
+  "zh": []
+ },
+ "hi_palm_branches_roof": {
+  "category": "places",
+  "desc": "Home with Roof Made of Palm Branches",
+  "en": [
+   "home with roof made of palm branches",
+   "building",
+   "house",
+   "hut"
+  ],
+  "zh": []
+ },
+ "hi_pancreas": {
+  "category": "body",
+  "desc": "Pancreas",
+  "en": [
+   "pancreas",
+   "digestive",
+   "gland",
+   "insulin",
+   "organ",
+   "pancreatic"
+  ],
+  "zh": []
+ },
+ "hi_pancreatic_cancer": {
+  "category": "conditions",
+  "desc": "Pancreatic Cancer",
+  "en": [
+   "pancreatic cancer",
+   "cancer",
+   "digestive",
+   "gland",
+   "growth",
+   "insulin",
+   "malignant",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_patient_band": {
+  "category": "devices",
+  "desc": "Patient Band",
+  "en": [
+   "patient band",
+   "hospital",
+   "id",
+   "identification",
+   "patient"
+  ],
+  "zh": []
+ },
+ "hi_patient_band_alt": {
+  "category": "devices",
+  "desc": "Patient Band ALT",
+  "en": [
+   "patient band alt",
+   "hospital",
+   "id",
+   "identification",
+   "patient"
+  ],
+  "zh": []
+ },
+ "hi_paved_road": {
+  "category": "symbols",
+  "desc": "Paved Road",
+  "en": [
+   "paved road",
+   "curve",
+   "road"
+  ],
+  "zh": []
+ },
+ "hi_paved_road_alt": {
+  "category": "symbols",
+  "desc": "Paved Road Alt",
+  "en": [
+   "paved road alt",
+   "curve",
+   "road"
+  ],
+  "zh": []
+ },
+ "hi_peace": {
+  "category": "symbols",
+  "desc": "Peace",
+  "en": [
+   "peace",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_pediatric_surgery": {
+  "category": "people",
+  "desc": "Pediatric Surgery",
+  "en": [
+   "pediatric surgery",
+   "antenatal care",
+   "baby",
+   "child",
+   "pediatrics",
+   "surgery"
+  ],
+  "zh": []
+ },
+ "hi_people": {
+  "category": "people",
+  "desc": "People",
+  "en": [
+   "people",
+   "avatars",
+   "group",
+   "parent",
+   "person",
+   "two people",
+   "users"
+  ],
+  "zh": []
+ },
+ "hi_person": {
+  "category": "people",
+  "desc": "Person",
+  "en": [
+   "person",
+   "adult",
+   "avatar",
+   "man",
+   "parent",
+   "user",
+   "woman"
+  ],
+  "zh": []
+ },
+ "hi_pharmacy_alt": {
+  "category": "symbols",
+  "desc": "Pharmacy",
+  "en": [
+   "pharmacy",
+   "department",
+   "drugs",
+   "medications",
+   "pharmacist",
+   "pills"
+  ],
+  "zh": []
+ },
+ "hi_pharmacy_symbols": {
+  "category": "symbols",
+  "desc": "Pharmacy",
+  "en": [
+   "pharmacy",
+   "department",
+   "drugs",
+   "medications",
+   "pharmacist",
+   "pills"
+  ],
+  "zh": []
+ },
+ "hi_phone": {
+  "category": "objects",
+  "desc": "Phone",
+  "en": [
+   "phone",
+   "call",
+   "communication",
+   "telephone"
+  ],
+  "zh": []
+ },
+ "hi_plantation_worker": {
+  "category": "people",
+  "desc": "Person Plantation Worker",
+  "en": [
+   "person plantation worker",
+   "agriculture",
+   "farmer",
+   "pitchfork",
+   "plantation",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_plantation_worker_alt": {
+  "category": "people",
+  "desc": "Person Plantation Worker ALT",
+  "en": [
+   "person plantation worker alt",
+   "agriculture",
+   "farmer",
+   "pitchfork",
+   "plantation",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_pneumonia": {
+  "category": "conditions",
+  "desc": "Pneumonia",
+  "en": [
+   "pneumonia",
+   "lung",
+   "lungs",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_polygon": {
+  "category": "symbols",
+  "desc": "Polygon",
+  "en": [
+   "polygon",
+   "design",
+   "nodes",
+   "pentagon",
+   "shape"
+  ],
+  "zh": []
+ },
+ "hi_positive": {
+  "category": "symbols",
+  "desc": "Plus",
+  "en": [
+   "plus",
+   "add",
+   "circle",
+   "create",
+   "positive"
+  ],
+  "zh": []
+ },
+ "hi_ppe_apron": {
+  "category": "ppe",
+  "desc": "PPE Apron",
+  "en": [
+   "ppe apron",
+   "apron",
+   "clothing",
+   "ppe",
+   "protection",
+   "safety"
+  ],
+  "zh": []
+ },
+ "hi_ppe_face_mask": {
+  "category": "ppe",
+  "desc": "PPE Face Mask",
+  "en": [
+   "ppe face mask",
+   "infection control",
+   "ppe"
+  ],
+  "zh": []
+ },
+ "hi_ppe_face_shield": {
+  "category": "ppe",
+  "desc": "PPE Face Shield",
+  "en": [
+   "ppe face shield",
+   "hazardous materials",
+   "ppe",
+   "protection",
+   "safety"
+  ],
+  "zh": []
+ },
+ "hi_ppe_face_shield_alt": {
+  "category": "ppe",
+  "desc": "PPE Face Shield ALT",
+  "en": [
+   "ppe face shield alt",
+   "hazardous materials",
+   "ppe",
+   "protection",
+   "safety"
+  ],
+  "zh": []
+ },
+ "hi_ppe_gloves": {
+  "category": "ppe",
+  "desc": "PPE Gloves",
+  "en": [
+   "ppe gloves",
+   "glove",
+   "hands",
+   "infection control",
+   "ppe"
+  ],
+  "zh": []
+ },
+ "hi_ppe_goggles": {
+  "category": "ppe",
+  "desc": "PPE Goggles",
+  "en": [
+   "ppe goggles",
+   "eye",
+   "eye protection",
+   "hazardous materials",
+   "ppe",
+   "protection",
+   "safety"
+  ],
+  "zh": []
+ },
+ "hi_ppe_gown": {
+  "category": "ppe",
+  "desc": "PPE Gown",
+  "en": [
+   "ppe gown",
+   "clothes",
+   "infection control"
+  ],
+  "zh": []
+ },
+ "hi_ppe_mask": {
+  "category": "ppe",
+  "desc": "PPE Surgical Mask",
+  "en": [
+   "ppe surgical mask",
+   "infection control",
+   "ppe"
+  ],
+  "zh": []
+ },
+ "hi_ppe_mask_n95": {
+  "category": "ppe",
+  "desc": "PPE Mask N95",
+  "en": [
+   "ppe mask n95",
+   "infection control",
+   "ppe"
+  ],
+  "zh": []
+ },
+ "hi_ppe_sanitizer": {
+  "category": "ppe",
+  "desc": "PPE Sanitizer",
+  "en": [
+   "ppe sanitizer",
+   "infection control",
+   "ppe"
+  ],
+  "zh": []
+ },
+ "hi_ppe_santizer_alt": {
+  "category": "devices",
+  "desc": "PPE Sanitizer ALT",
+  "en": [
+   "ppe sanitizer alt",
+   "infection control",
+   "ppe"
+  ],
+  "zh": []
+ },
+ "hi_ppe_suit": {
+  "category": "ppe",
+  "desc": "PPE Suit",
+  "en": [
+   "ppe suit",
+   "hazardous materials",
+   "hazmat",
+   "protection",
+   "safety"
+  ],
+  "zh": []
+ },
+ "hi_pregnant": {
+  "category": "people",
+  "desc": "Pregnant",
+  "en": [
+   "pregnant",
+   "anc",
+   "mother",
+   "person",
+   "pregnancy",
+   "woman",
+   "antenatal"
+  ],
+  "zh": []
+ },
+ "hi_prisoner": {
+  "category": "people",
+  "desc": "Person Prisoner",
+  "en": [
+   "person prisoner",
+   "detainee",
+   "incarceration",
+   "inmate",
+   "prison"
+  ],
+  "zh": []
+ },
+ "hi_proper_roof": {
+  "category": "places",
+  "desc": "Home with Proper Roof",
+  "en": [
+   "home with proper roof",
+   "building",
+   "house",
+   "hut"
+  ],
+  "zh": []
+ },
+ "hi_pulse_oximeter": {
+  "category": "devices",
+  "desc": "Pulse Oximeter",
+  "en": [
+   "pulse oximeter",
+   "device",
+   "finger",
+   "measure",
+   "oximeter",
+   "oxygen",
+   "pulse"
+  ],
+  "zh": []
+ },
+ "hi_question": {
+  "category": "symbols",
+  "desc": "Question",
+  "en": [
+   "question",
+   "faq",
+   "help",
+   "question mark"
+  ],
+  "zh": []
+ },
+ "hi_question_circle": {
+  "category": "symbols",
+  "desc": "Question Circle",
+  "en": [
+   "question circle",
+   "alert",
+   "ask",
+   "faq",
+   "help",
+   "question"
+  ],
+  "zh": []
+ },
+ "hi_question_triangle": {
+  "category": "symbols",
+  "desc": "Question Triangle",
+  "en": [
+   "question triangle",
+   "alert",
+   "faq",
+   "question mark",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_rdt_result_out_stock": {
+  "category": "objects",
+  "desc": "Stock Out RDT",
+  "en": [
+   "stock out rdt",
+   "empty box",
+   "retroviral"
+  ],
+  "zh": []
+ },
+ "hi_referral": {
+  "category": "symbols",
+  "desc": "Referral",
+  "en": [
+   "referral",
+   "admission",
+   "entrance",
+   "hospital",
+   "transfer"
+  ],
+  "zh": []
+ },
+ "hi_refused": {
+  "category": "people",
+  "desc": "Hand",
+  "en": [
+   "hand",
+   "fingers",
+   "five",
+   "palm",
+   "refused",
+   "stop"
+  ],
+  "zh": []
+ },
+ "hi_register_book": {
+  "category": "objects",
+  "desc": "Health Register Book",
+  "en": [
+   "health register book",
+   "book",
+   "chart",
+   "document",
+   "documentation",
+   "health record",
+   "library",
+   "medicine"
+  ],
+  "zh": []
+ },
+ "hi_regular_patient": {
+  "category": "people",
+  "desc": "Regular patient",
+  "en": [
+   "regular patient",
+   "ongoing",
+   "patient",
+   "person",
+   "regular",
+   "repeat"
+  ],
+  "zh": []
+ },
+ "hi_resilient_and_migration_sensitive_health_system": {
+  "category": "symbols",
+  "desc": "Resilient and Migration Sensitive Health System",
+  "en": [
+   "resilient and migration sensitive health system",
+   "adaptable",
+   "environment",
+   "hands",
+   "health system",
+   "heart",
+   "plant",
+   "resilience"
+  ],
+  "zh": []
+ },
+ "hi_respirator": {
+  "category": "ppe",
+  "desc": "PPE Respirator",
+  "en": [
+   "ppe respirator",
+   "breathing",
+   "mask",
+   "outbreak",
+   "ppe",
+   "safety",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_ribbon": {
+  "category": "conditions",
+  "desc": "HIV",
+  "en": [
+   "hiv",
+   "aids",
+   "campaign",
+   "cancer",
+   "ribbon"
+  ],
+  "zh": []
+ },
+ "hi_risk_analysis": {
+  "category": "symbols",
+  "desc": "Risk Analysis",
+  "en": [
+   "risk analysis",
+   "alert",
+   "cdss",
+   "clinical",
+   "clinical decision support",
+   "risk",
+   "warning"
+  ],
+  "zh": []
+ },
+ "hi_running": {
+  "category": "exercise",
+  "desc": "Activity Run",
+  "en": [
+   "activity run",
+   "exercise",
+   "fitness",
+   "jog",
+   "lifestyle",
+   "patient",
+   "people",
+   "physio"
+  ],
+  "zh": []
+ },
+ "hi_running_water": {
+  "category": "objects",
+  "desc": "Water Tap",
+  "en": [
+   "water tap",
+   "clean water",
+   "drinking water",
+   "running water",
+   "sanitation"
+  ],
+  "zh": []
+ },
+ "hi_running_water_alt": {
+  "category": "symbols",
+  "desc": "Water Tap",
+  "en": [
+   "water tap",
+   "appliance",
+   "plumbing",
+   "running water",
+   "water"
+  ],
+  "zh": []
+ },
+ "hi_rural_post": {
+  "category": "places",
+  "desc": "Rural Clinic",
+  "en": [
+   "rural clinic",
+   "building",
+   "hospital",
+   "rural post",
+   "small hospital"
+  ],
+  "zh": []
+ },
+ "hi_rural_post_alt": {
+  "category": "places",
+  "desc": "Rural Post ALT",
+  "en": [
+   "rural post alt",
+   "building",
+   "clinic",
+   "hospital",
+   "local",
+   "phc",
+   "primary care",
+   "village"
+  ],
+  "zh": []
+ },
+ "hi_sad": {
+  "category": "emotions",
+  "desc": "Sad",
+  "en": [
+   "sad",
+   "bad",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "frown",
+   "negative"
+  ],
+  "zh": []
+ },
+ "hi_secure_communication": {
+  "category": "symbols",
+  "desc": "Chat Secure",
+  "en": [
+   "chat secure",
+   "bubble",
+   "chat",
+   "communication",
+   "encrypted",
+   "lock",
+   "message",
+   "sms"
+  ],
+  "zh": []
+ },
+ "hi_security_worker": {
+  "category": "people",
+  "desc": "Person Security Worker",
+  "en": [
+   "person security worker",
+   "guard",
+   "officer",
+   "prison",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_skeleton": {
+  "category": "body",
+  "desc": "Skeleton",
+  "en": [
+   "skeleton",
+   "body",
+   "death",
+   "head",
+   "human",
+   "skeletal system"
+  ],
+  "zh": []
+ },
+ "hi_skin_cancer": {
+  "category": "conditions",
+  "desc": "Skin Cancer",
+  "en": [
+   "skin cancer",
+   "cancer",
+   "carcinoma",
+   "growth",
+   "integumentary system",
+   "malignant",
+   "melanoma",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_sleepy": {
+  "category": "emotions",
+  "desc": "Sleepy",
+  "en": [
+   "sleepy",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "exhausted",
+   "face",
+   "sleeping",
+   "tired"
+  ],
+  "zh": []
+ },
+ "hi_sling": {
+  "category": "devices",
+  "desc": "Sling",
+  "en": [
+   "sling",
+   "arm",
+   "broken arm",
+   "cast",
+   "injury",
+   "sprain",
+   "trauma"
+  ],
+  "zh": []
+ },
+ "hi_small_plane": {
+  "category": "vehicles",
+  "desc": "Small Airplane",
+  "en": [
+   "small airplane",
+   "airplane",
+   "airport",
+   "plane",
+   "prop plane",
+   "propeller",
+   "small plane",
+   "wings"
+  ],
+  "zh": []
+ },
+ "hi_social_distancing": {
+  "category": "symbols",
+  "desc": "Social Distancing",
+  "en": [
+   "social distancing",
+   "apart",
+   "arrows",
+   "between",
+   "social distance",
+   "space"
+  ],
+  "zh": []
+ },
+ "hi_social_distancing_alt": {
+  "category": "symbols",
+  "desc": "Social Distancing ALT",
+  "en": [
+   "social distancing alt",
+   "apart",
+   "arrows",
+   "between",
+   "social distance",
+   "space"
+  ],
+  "zh": []
+ },
+ "hi_sodium_free": {
+  "category": "nutrition",
+  "desc": "Low Sodium",
+  "en": [
+   "low sodium",
+   "food",
+   "no",
+   "none",
+   "nutrition",
+   "salt",
+   "sodium"
+  ],
+  "zh": []
+ },
+ "hi_sonogram": {
+  "category": "devices",
+  "desc": "Sonogram",
+  "en": [
+   "sonogram",
+   "antenatal",
+   "baby",
+   "birth",
+   "device",
+   "fetus",
+   "prenatal",
+   "scan"
+  ],
+  "zh": []
+ },
+ "hi_speech_language_therapy_people": {
+  "category": "people",
+  "desc": "Speech Language Therapy",
+  "en": [
+   "speech language therapy",
+   "face",
+   "language",
+   "slp",
+   "speaking",
+   "speech pathology",
+   "therapy"
+  ],
+  "zh": []
+ },
+ "hi_spine": {
+  "category": "body",
+  "desc": "Spine",
+  "en": [
+   "spine",
+   "back",
+   "organ",
+   "spinal cord",
+   "vertebrae"
+  ],
+  "zh": []
+ },
+ "hi_spleen": {
+  "category": "body",
+  "desc": "Spleen",
+  "en": [
+   "spleen",
+   "body",
+   "human",
+   "immune system",
+   "lymphatic system",
+   "organs"
+  ],
+  "zh": []
+ },
+ "hi_spraying": {
+  "category": "people",
+  "desc": "Spraying",
+  "en": [
+   "spraying",
+   "crop spray",
+   "herbicide",
+   "insecticide",
+   "person",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_spreadsheets": {
+  "category": "objects",
+  "desc": "Spreadsheet",
+  "en": [
+   "spreadsheet",
+   "calculation",
+   "data",
+   "excel",
+   "sheets"
+  ],
+  "zh": []
+ },
+ "hi_square_large": {
+  "category": "shapes",
+  "desc": "Square Large",
+  "en": [
+   "square large",
+   "bullet",
+   "cube",
+   "rectangle",
+   "shape"
+  ],
+  "zh": []
+ },
+ "hi_square_medium": {
+  "category": "shapes",
+  "desc": "Square Medium",
+  "en": [
+   "square medium",
+   "bullet",
+   "cube",
+   "rectangle",
+   "shape"
+  ],
+  "zh": []
+ },
+ "hi_square_small": {
+  "category": "shapes",
+  "desc": "Square Small",
+  "en": [
+   "square small",
+   "bullet",
+   "cube",
+   "rectangle",
+   "shape"
+  ],
+  "zh": []
+ },
+ "hi_staples": {
+  "category": "devices",
+  "desc": "Staples",
+  "en": [
+   "staples",
+   "emergency",
+   "incision",
+   "stitch",
+   "suture",
+   "wound"
+  ],
+  "zh": []
+ },
+ "hi_star_large": {
+  "category": "shapes",
+  "desc": "Star Large",
+  "en": [
+   "star large",
+   "bullet",
+   "shape",
+   "star"
+  ],
+  "zh": []
+ },
+ "hi_star_medium": {
+  "category": "shapes",
+  "desc": "Star Medium",
+  "en": [
+   "star medium",
+   "bullet",
+   "shape",
+   "star"
+  ],
+  "zh": []
+ },
+ "hi_star_small": {
+  "category": "shapes",
+  "desc": "Star Small",
+  "en": [
+   "star small",
+   "bullet",
+   "shape",
+   "star"
+  ],
+  "zh": []
+ },
+ "hi_stent": {
+  "category": "devices",
+  "desc": "Stent",
+  "en": [
+   "stent",
+   "artery",
+   "blood vessel",
+   "device",
+   "heart",
+   "heart attack",
+   "stroke",
+   "surgery"
+  ],
+  "zh": []
+ },
+ "hi_stethoscope": {
+  "category": "devices",
+  "desc": "Stethoscope",
+  "en": [
+   "stethoscope",
+   "device",
+   "diagnosis",
+   "doctor",
+   "medical officer",
+   "vitals"
+  ],
+  "zh": []
+ },
+ "hi_stitches": {
+  "category": "devices",
+  "desc": "Stitches",
+  "en": [
+   "stitches",
+   "emergency",
+   "incision",
+   "staples",
+   "stitch",
+   "suture",
+   "wound"
+  ],
+  "zh": []
+ },
+ "hi_stock_out": {
+  "category": "objects",
+  "desc": "Stock Out",
+  "en": [
+   "stock out",
+   "empty box",
+   "medicines"
+  ],
+  "zh": []
+ },
+ "hi_stomach": {
+  "category": "body",
+  "desc": "Stomach",
+  "en": [
+   "stomach",
+   "digestive system",
+   "gut",
+   "intestine",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_stomach_cancer": {
+  "category": "conditions",
+  "desc": "Stomach Cancer",
+  "en": [
+   "stomach cancer",
+   "cancer",
+   "digestive system",
+   "growth",
+   "gut",
+   "intestine",
+   "malignant",
+   "organ"
+  ],
+  "zh": []
+ },
+ "hi_stop": {
+  "category": "symbols",
+  "desc": "Stop",
+  "en": [
+   "stop",
+   "fingers",
+   "halt",
+   "hand",
+   "warning"
+  ],
+  "zh": []
+ },
+ "hi_sugar": {
+  "category": "nutrition",
+  "desc": "Sugar",
+  "en": [
+   "sugar",
+   "cube",
+   "food",
+   "nutrition",
+   "sucrose",
+   "sweetener"
+  ],
+  "zh": []
+ },
+ "hi_sugar_alt": {
+  "category": "nutrition",
+  "desc": "Sugar",
+  "en": [
+   "sugar",
+   "food",
+   "nutrition",
+   "salt",
+   "sodium",
+   "spoon",
+   "sucrose",
+   "sweetener"
+  ],
+  "zh": []
+ },
+ "hi_sugar_free": {
+  "category": "nutrition",
+  "desc": "Sugar Free",
+  "en": [
+   "sugar free",
+   "diet",
+   "food",
+   "healthy",
+   "nutrition",
+   "sugar",
+   "sweet"
+  ],
+  "zh": []
+ },
+ "hi_surgical_sterilization": {
+  "category": "devices",
+  "desc": "Surgical Tools",
+  "en": [
+   "surgical tools",
+   "scalpel",
+   "sterilized surgical tools",
+   "surgeon",
+   "surgery",
+   "tweezers"
+  ],
+  "zh": []
+ },
+ "hi_surveilance_officer": {
+  "category": "people",
+  "desc": "Person Surveillance Officer",
+  "en": [
+   "person surveillance officer",
+   "doctor",
+   "epidemiologist",
+   "offiical",
+   "quality improvement",
+   "surveillance"
+  ],
+  "zh": []
+ },
+ "hi_sweating_conditions": {
+  "category": "conditions",
+  "desc": "Sweating",
+  "en": [
+   "sweating",
+   "fever",
+   "illness",
+   "person",
+   "sick",
+   "temperature"
+  ],
+  "zh": []
+ },
+ "hi_sweating_emotions": {
+  "category": "emotions",
+  "desc": "Sweating",
+  "en": [
+   "sweating",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "fever",
+   "perspiration",
+   "sweat"
+  ],
+  "zh": []
+ },
+ "hi_swim": {
+  "category": "exercise",
+  "desc": "Swimming",
+  "en": [
+   "swimming",
+   "aqua",
+   "aquatics",
+   "exercise",
+   "fitness",
+   "physio",
+   "physiotherapy",
+   "pool"
+  ],
+  "zh": []
+ },
+ "hi_symptom": {
+  "category": "people",
+  "desc": "Symptoms",
+  "en": [
+   "symptoms",
+   "body",
+   "diagnosis",
+   "exam",
+   "triage"
+  ],
+  "zh": []
+ },
+ "hi_tally": {
+  "category": "symbols",
+  "desc": "Tally",
+  "en": [
+   "tally",
+   "add",
+   "addition",
+   "count",
+   "math",
+   "register"
+  ],
+  "zh": []
+ },
+ "hi_telemedicine": {
+  "category": "symbols",
+  "desc": "Telemedicine",
+  "en": [
+   "telemedicine",
+   "computer",
+   "consult",
+   "doctor",
+   "meeting",
+   "virtual"
+  ],
+  "zh": []
+ },
+ "hi_test_tubes": {
+  "category": "devices",
+  "desc": "Test tubes",
+  "en": [
+   "test tubes",
+   "research",
+   "sample",
+   "test tube",
+   "vial"
+  ],
+  "zh": []
+ },
+ "hi_thermometer": {
+  "category": "devices",
+  "desc": "Temperature",
+  "en": [
+   "temperature",
+   "cold chain",
+   "freezer",
+   "refrigeration",
+   "thermometer"
+  ],
+  "zh": []
+ },
+ "hi_thermometer_digital": {
+  "category": "devices",
+  "desc": "Thermometer Digital",
+  "en": [
+   "thermometer digital",
+   "fever",
+   "temperature",
+   "thermometer"
+  ],
+  "zh": []
+ },
+ "hi_thyroid": {
+  "category": "body",
+  "desc": "Thyroid",
+  "en": [
+   "thyroid",
+   "gland",
+   "hormones",
+   "metabolism",
+   "neck"
+  ],
+  "zh": []
+ },
+ "hi_thyroid_cancer": {
+  "category": "conditions",
+  "desc": "Thyroid Cancer",
+  "en": [
+   "thyroid cancer",
+   "cancer",
+   "growth",
+   "hormones",
+   "malignant",
+   "organ",
+   "thyroid",
+   "tumor"
+  ],
+  "zh": []
+ },
+ "hi_tissue": {
+  "category": "body",
+  "desc": "Tissue",
+  "en": [
+   "tissue",
+   "body",
+   "cell",
+   "connective"
+  ],
+  "zh": []
+ },
+ "hi_toilet_paper": {
+  "category": "devices",
+  "desc": "Toilet Paper",
+  "en": [
+   "toilet paper",
+   "clean",
+   "fecal",
+   "feces",
+   "paper",
+   "poop",
+   "sanitation",
+   "toilet"
+  ],
+  "zh": []
+ },
+ "hi_tooth": {
+  "category": "body",
+  "desc": "Tooth",
+  "en": [
+   "tooth",
+   "cavity",
+   "dental",
+   "mouth",
+   "oral",
+   "teeth"
+  ],
+  "zh": []
+ },
+ "hi_transgender": {
+  "category": "symbols",
+  "desc": "Transgender",
+  "en": [
+   "transgender",
+   "gender",
+   "sex",
+   "symbol",
+   "trans"
+  ],
+  "zh": []
+ },
+ "hi_traumatism": {
+  "category": "people",
+  "desc": "Trauma",
+  "en": [
+   "trauma",
+   "er",
+   "emergency",
+   "injury",
+   "patient",
+   "people"
+  ],
+  "zh": []
+ },
+ "hi_travel": {
+  "category": "people",
+  "desc": "Person Traveller",
+  "en": [
+   "person traveller",
+   "flight",
+   "person",
+   "suitcase",
+   "travel"
+  ],
+  "zh": []
+ },
+ "hi_travel_alt": {
+  "category": "people",
+  "desc": "Person Traveller ALT",
+  "en": [
+   "person traveller alt",
+   "flight",
+   "person",
+   "suitcase",
+   "travel"
+  ],
+  "zh": []
+ },
+ "hi_treated_water": {
+  "category": "devices",
+  "desc": "Treated Water",
+  "en": [
+   "treated water",
+   "clean water",
+   "drinking water",
+   "hygeine"
+  ],
+  "zh": []
+ },
+ "hi_triangle_inverted_large": {
+  "category": "shapes",
+  "desc": "Triangle Large Inverted",
+  "en": [
+   "triangle large inverted",
+   "bullet",
+   "medication monitoring",
+   "shape",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_triangle_inverted_medium": {
+  "category": "shapes",
+  "desc": "Triangle Medium Inverted",
+  "en": [
+   "triangle medium inverted",
+   "bullet",
+   "medication monitoring",
+   "shape",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_triangle_inverted_small": {
+  "category": "shapes",
+  "desc": "Triangle Small Inverted",
+  "en": [
+   "triangle small inverted",
+   "bullet",
+   "medication monitoring",
+   "shape",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_triangle_large": {
+  "category": "shapes",
+  "desc": "Triangle Large",
+  "en": [
+   "triangle large",
+   "bullet",
+   "shape",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_triangle_medium": {
+  "category": "shapes",
+  "desc": "Triangle Medium",
+  "en": [
+   "triangle medium",
+   "bullet",
+   "shape",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_triangle_small": {
+  "category": "shapes",
+  "desc": "Triangle Small",
+  "en": [
+   "triangle small",
+   "bullet",
+   "shape",
+   "triangle"
+  ],
+  "zh": []
+ },
+ "hi_truck_driver": {
+  "category": "people",
+  "desc": "Person Truck Driver",
+  "en": [
+   "person truck driver",
+   "driver",
+   "lorry",
+   "road",
+   "truck",
+   "vehicle",
+   "wheel",
+   "worker"
+  ],
+  "zh": []
+ },
+ "hi_tumour": {
+  "category": "body",
+  "desc": "Tumor",
+  "en": [
+   "tumor",
+   "abnormal mass",
+   "cancer",
+   "tissue",
+   "tumour"
+  ],
+  "zh": []
+ },
+ "hi_ui_folder": {
+  "category": "symbols",
+  "desc": "UI Folder",
+  "en": [
+   "ui folder",
+   "data",
+   "folder",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_folder_family": {
+  "category": "symbols",
+  "desc": "UI Family Folder",
+  "en": [
+   "ui family folder",
+   "data",
+   "folder",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_menu": {
+  "category": "symbols",
+  "desc": "UI Menu",
+  "en": [
+   "ui menu",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_menu_grid": {
+  "category": "symbols",
+  "desc": "UI Menu Grid",
+  "en": [
+   "ui menu grid",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_preferences": {
+  "category": "symbols",
+  "desc": "Preferences",
+  "en": [
+   "preferences",
+   "navigation",
+   "settings",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_secure": {
+  "category": "symbols",
+  "desc": "Secure",
+  "en": [
+   "secure",
+   "lock",
+   "navigation",
+   "security",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_settings": {
+  "category": "symbols",
+  "desc": "Settings",
+  "en": [
+   "settings",
+   "navigation",
+   "preferences",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_user_profile": {
+  "category": "symbols",
+  "desc": "UI User Profile",
+  "en": [
+   "ui user profile",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_zoom": {
+  "category": "symbols",
+  "desc": "UI Zoom",
+  "en": [
+   "ui zoom",
+   "find",
+   "magnifying glass",
+   "navigation",
+   "search",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_zoom_in": {
+  "category": "symbols",
+  "desc": "UI Zoom In",
+  "en": [
+   "ui zoom in",
+   "magnifying glass",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ui_zoom_out": {
+  "category": "symbols",
+  "desc": "UI Zoom Out",
+  "en": [
+   "ui zoom out",
+   "magnifying glass",
+   "navigation",
+   "user interface"
+  ],
+  "zh": []
+ },
+ "hi_ultrasound_scanner": {
+  "category": "devices",
+  "desc": "Ultrasound Device",
+  "en": [
+   "ultrasound device",
+   "baby",
+   "childbirth",
+   "device",
+   "fetus",
+   "maternity",
+   "neonatal",
+   "obgyn"
+  ],
+  "zh": []
+ },
+ "hi_umbrella": {
+  "category": "objects",
+  "desc": "Umbrella",
+  "en": [
+   "umbrella",
+   "transgender"
+  ],
+  "zh": []
+ },
+ "hi_un_paved_road": {
+  "category": "symbols",
+  "desc": "Unpaved Road",
+  "en": [
+   "unpaved road",
+   "curve",
+   "dirt",
+   "road"
+  ],
+  "zh": []
+ },
+ "hi_underweight": {
+  "category": "conditions",
+  "desc": "Underweight",
+  "en": [
+   "underweight",
+   "malnutrition",
+   "patient",
+   "people",
+   "thin",
+   "vitals"
+  ],
+  "zh": []
+ },
+ "hi_unhealthy_food": {
+  "category": "nutrition",
+  "desc": "Unhealthy Food",
+  "en": [
+   "unhealthy food",
+   "fast food",
+   "food",
+   "french fries",
+   "fried food",
+   "nutrition"
+  ],
+  "zh": []
+ },
+ "hi_urine_sample": {
+  "category": "devices",
+  "desc": "Urine Sample",
+  "en": [
+   "urine sample",
+   "container",
+   "cup",
+   "kidney",
+   "lab",
+   "laboratory",
+   "liquid",
+   "sample"
+  ],
+  "zh": []
+ },
+ "hi_varicose_vein": {
+  "category": "conditions",
+  "desc": "Varicose Vein",
+  "en": [
+   "varicose vein",
+   "aging",
+   "blood",
+   "body",
+   "elderly",
+   "leg",
+   "varicose",
+   "vein"
+  ],
+  "zh": []
+ },
+ "hi_vegetables": {
+  "category": "nutrition",
+  "desc": "Vegetables",
+  "en": [
+   "vegetables",
+   "apple",
+   "carrot",
+   "diet",
+   "food",
+   "fruit",
+   "green",
+   "healthy"
+  ],
+  "zh": []
+ },
+ "hi_ventilator": {
+  "category": "devices",
+  "desc": "Ventilator",
+  "en": [
+   "ventilator",
+   "breathing",
+   "device",
+   "lungs"
+  ],
+  "zh": []
+ },
+ "hi_ventilator_alt": {
+  "category": "devices",
+  "desc": "Ventilator ALT",
+  "en": [
+   "ventilator alt",
+   "breathing",
+   "device",
+   "lungs"
+  ],
+  "zh": []
+ },
+ "hi_vespa_motorcycle": {
+  "category": "vehicles",
+  "desc": "Motor Scooter",
+  "en": [
+   "motor scooter",
+   "motorbike",
+   "motorcycle"
+  ],
+  "zh": []
+ },
+ "hi_video": {
+  "category": "symbols",
+  "desc": "Video",
+  "en": [
+   "video",
+   "camera",
+   "film",
+   "media",
+   "movie",
+   "multimedia",
+   "play"
+  ],
+  "zh": []
+ },
+ "hi_village": {
+  "category": "places",
+  "desc": "Village",
+  "en": [
+   "village",
+   "building",
+   "camp",
+   "houses",
+   "huts",
+   "tents",
+   "town"
+  ],
+  "zh": []
+ },
+ "hi_viral_lung_infection": {
+  "category": "conditions",
+  "desc": "Viral Lung Infection",
+  "en": [
+   "viral lung infection",
+   "covid",
+   "epidemic",
+   "flu",
+   "influenza",
+   "pandemic",
+   "symptom",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_virus": {
+  "category": "symbols",
+  "desc": "Virus",
+  "en": [
+   "virus",
+   "infection",
+   "infectious disease"
+  ],
+  "zh": []
+ },
+ "hi_virus_alt": {
+  "category": "symbols",
+  "desc": "Virus ALT",
+  "en": [
+   "virus alt",
+   "covid",
+   "epidemic",
+   "infection",
+   "infectious",
+   "pandemic",
+   "virology",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_virus_lab_research_test_tube": {
+  "category": "devices",
+  "desc": "Virus Lab Research ALT",
+  "en": [
+   "virus lab research alt",
+   "research",
+   "test tube",
+   "viral",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_virus_mutation": {
+  "category": "symbols",
+  "desc": "Virus Mutation",
+  "en": [
+   "virus mutation",
+   "adaptation",
+   "change",
+   "covid",
+   "evolution",
+   "mutation",
+   "viral",
+   "virology"
+  ],
+  "zh": []
+ },
+ "hi_virus_patient": {
+  "category": "symbols",
+  "desc": "Patient Virus",
+  "en": [
+   "patient virus",
+   "covid",
+   "epidemic",
+   "human",
+   "pandemic",
+   "patient",
+   "person",
+   "virology"
+  ],
+  "zh": []
+ },
+ "hi_virus_research": {
+  "category": "symbols",
+  "desc": "Virus Research ALT",
+  "en": [
+   "virus research alt",
+   "covid",
+   "diagnostic",
+   "lab",
+   "magnify",
+   "viral",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_virus_research_alt": {
+  "category": "symbols",
+  "desc": "Virus Research",
+  "en": [
+   "virus research",
+   "covid",
+   "diagnostic",
+   "lab",
+   "magnify",
+   "microscope",
+   "viral",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_virus_sanitizer_spray": {
+  "category": "devices",
+  "desc": "PPE Virus Sanitizer Spray",
+  "en": [
+   "ppe virus sanitizer spray",
+   "antibacterial",
+   "cleaner",
+   "ppe",
+   "protection",
+   "safety",
+   "sanitizer"
+  ],
+  "zh": []
+ },
+ "hi_virus_shield": {
+  "category": "symbols",
+  "desc": "Shield Virus",
+  "en": [
+   "shield virus",
+   "covid",
+   "protection",
+   "vaccine",
+   "virus"
+  ],
+  "zh": []
+ },
+ "hi_waist_circumference": {
+  "category": "symbols",
+  "desc": "Waist Circumference",
+  "en": [
+   "waist circumference",
+   "bmi",
+   "centimeter",
+   "diagnostic",
+   "mass",
+   "measure",
+   "obese",
+   "patient"
+  ],
+  "zh": []
+ },
+ "hi_walk_supported": {
+  "category": "exercise",
+  "desc": "Supported Walk",
+  "en": [
+   "supported walk",
+   "exercise",
+   "fitness",
+   "lifestyle",
+   "patient",
+   "people",
+   "physio",
+   "physiotherapy"
+  ],
+  "zh": []
+ },
+ "hi_walking": {
+  "category": "exercise",
+  "desc": "Activity Walk",
+  "en": [
+   "activity walk",
+   "exercise",
+   "fitness",
+   "lifestyle",
+   "patient",
+   "people",
+   "physio",
+   "physiotherapy"
+  ],
+  "zh": []
+ },
+ "hi_wash_hands": {
+  "category": "people",
+  "desc": "Wash Hands",
+  "en": [
+   "wash hands",
+   "clean",
+   "fingers",
+   "hand",
+   "hygiene",
+   "sanitation"
+  ],
+  "zh": []
+ },
+ "hi_water_sanitation": {
+  "category": "people",
+  "desc": "Water Sanitation",
+  "en": [
+   "water sanitation",
+   "clean",
+   "fingers",
+   "hand",
+   "hygiene",
+   "sanitation"
+  ],
+  "zh": []
+ },
+ "hi_water_treatment": {
+  "category": "symbols",
+  "desc": "Water Treatment",
+  "en": [
+   "water treatment",
+   "arrows",
+   "drop",
+   "water"
+  ],
+  "zh": []
+ },
+ "hi_weight": {
+  "category": "devices",
+  "desc": "Weight Scale",
+  "en": [
+   "weight scale",
+   "diagnostic",
+   "lab",
+   "obese",
+   "overweight",
+   "science",
+   "vitals"
+  ],
+  "zh": []
+ },
+ "hi_weights": {
+  "category": "exercise",
+  "desc": "Activity Weights",
+  "en": [
+   "activity weights",
+   "exercise",
+   "fitness",
+   "lifestyle",
+   "patient",
+   "people",
+   "physio",
+   "physiotherapy"
+  ],
+  "zh": []
+ },
+ "hi_wheelchair": {
+  "category": "devices",
+  "desc": "Wheelchair",
+  "en": [
+   "wheelchair",
+   "accessibility",
+   "disability",
+   "disabled"
+  ],
+  "zh": []
+ },
+ "hi_wheelchair_alt": {
+  "category": "devices",
+  "desc": "Wheelchair ALT",
+  "en": [
+   "wheelchair alt",
+   "transport"
+  ],
+  "zh": []
+ },
+ "hi_woman": {
+  "category": "people",
+  "desc": "Woman",
+  "en": [
+   "woman",
+   "female",
+   "gender",
+   "girl",
+   "sex",
+   "symbol"
+  ],
+  "zh": []
+ },
+ "hi_woozy": {
+  "category": "emotions",
+  "desc": "Woozy",
+  "en": [
+   "woozy",
+   "emoji",
+   "emoticon",
+   "emotion",
+   "face",
+   "nausea",
+   "nauseous",
+   "sick"
+  ],
+  "zh": []
+ },
+ "hi_world_care": {
+  "category": "people",
+  "desc": "Environmental",
+  "en": [
+   "environmental",
+   "activism",
+   "environment",
+   "globe",
+   "hands"
+  ],
+  "zh": []
+ },
+ "hi_xray": {
+  "category": "devices",
+  "desc": "X-ray",
+  "en": [
+   "x-ray",
+   "chest",
+   "exam",
+   "radiology",
+   "xray"
+  ],
+  "zh": []
+ },
+ "hi_young_people": {
+  "category": "people",
+  "desc": "Youth",
+  "en": [
+   "youth",
+   "boy",
+   "child",
+   "female",
+   "girl",
+   "kids",
+   "male",
+   "teen"
+  ],
+  "zh": []
+ }
+}

@@ -4,6 +4,9 @@ Generated from `tags/*.json` (do not edit by hand). Use these ids in `storyboard
 
 - 288 bespoke doodles (`bespoke/`, CC BY 4.0, original to this project)
 - 1460 Microsoft Fluent Emoji in the same outlined style (`fluent/`, ids start with `fl_`, MIT; see `fluent/NOTICE.md`)
+- 3177 Tabler Icons ink line pictures (`tabler/`, ids start with `tb_`, MIT; see `tabler/NOTICE.md`)
+- 489 Health Icons ink line pictures (`healthicons/`, ids start with `hi_`, MIT; see `healthicons/NOTICE.md`)
+- 5414 pictures in all
 
 Search from the command line: `kinodraw doodles "rocket launch"`.
 
