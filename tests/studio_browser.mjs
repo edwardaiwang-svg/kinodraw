@@ -150,8 +150,33 @@ async function help() {
   assert.ok((await page.locator('#modal-body').innerText()).includes('Ctrl/⌘+S'));
 }
 
+async function problems() {
+  await page.goto(url);
+  await page.waitForSelector('#p-redirect');
+  await page.click('#p-redirect');                  // the server's director fails with a refused key
+  await page.waitForFunction(() => !document.querySelector('#modal').classList.contains('hidden'));
+  const card = await page.locator('#modal-body').innerText();
+  assert.match(card, /^Anthropic did not accept your API key/);
+  assert.ok((await page.locator('#modal-body ol.steps li').count()) >= 2, 'the card lists no steps');
+  assert.ok(!(await page.locator('body').innerText()).includes('sk-ant'), 'the key is shown on the page');
+  assert.ok((await active()).inside, 'focus stayed outside the problem card');
+  await shot('problem-1-card');
+  await page.click('[data-act="settings"]');
+  assert.equal(await page.evaluate(() => document.getElementById(document.querySelector('#modal .modal-box')
+    .getAttribute('aria-labelledby'))?.textContent), 'Settings', 'Open Settings did not open Settings');
+  await page.keyboard.press('Escape');
+
+  await page.click('.tabs button[data-tab="narrator"]');
+  await page.locator('input[name="n-pick"][value="own"]').check();
+  await page.waitForSelector('#n-clean');
+  assert.equal(await page.isChecked('#n-clean'), true, 'noise clean-up is not on by default');
+  await page.uncheck('#n-clean');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.startsWith('Noise clean-up off'));
+  await shot('problem-2-clean');
+}
+
 try {
-  await { a11y, picker, help }[scenario]();
+  await { a11y, picker, help, problems }[scenario]();
   assert.deepEqual(errors, [], 'the page logged errors');
   console.log(JSON.stringify({ scenario, passed: true }));
 } catch (error) {

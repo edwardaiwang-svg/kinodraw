@@ -2,7 +2,7 @@
 import re
 
 from kinodraw.studio import server
-from studio_browser import studio_page  # noqa: F401 - the fixture
+from studio_browser import make_project, studio_page  # noqa: F401 - the fixture
 
 
 def test_the_dialog_is_marked_up_for_screen_readers():
@@ -16,3 +16,19 @@ def test_keyboard_dialogs_and_the_shortcut_list_in_a_real_browser(studio_page):
     """Settings opens from the keyboard with focus inside; Tab wraps; Escape closes and returns focus; ? lists the
     real shortcuts, but typing ? in a text box does not open it."""
     assert '"passed":true' in studio_page('a11y')
+
+
+def test_an_ai_failure_shows_a_plain_card_and_the_noise_clean_up_is_a_checkbox(studio_page, monkeypatch):
+    """A refused key: the card names the service and what to try, opens Settings, and never shows the key. The
+    Narrator's own-voice view turns the recording's noise clean-up off, and the project keeps that."""
+    from kinodraw import starters
+    from kinodraw.director.llm.providers import ProviderError
+    name = make_project(starters.read('explainer-en'), 'en')
+
+    def refused(*args, **kwargs):
+        error = ProviderError('Error code: 401 - invalid x-api-key sk-ant-api03-abcdefghijklmnop')
+        error.kind, error.provider = 'key', 'anthropic'
+        raise error
+    monkeypatch.setattr(server.director, 'direct', refused)
+    assert '"passed":true' in studio_page('problems')
+    assert server.narrator(name)['clean'] is False

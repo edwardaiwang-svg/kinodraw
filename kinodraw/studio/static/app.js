@@ -59,7 +59,7 @@ async function api(path, opts = {}) {
   const type = opts.body instanceof Blob ? {} : { 'Content-Type': 'application/json' };   // a file goes up as it is
   const r = await fetch(path, { ...opts, headers: { 'X-Studio-Token': T, ...type, ...(opts.headers || {}) } });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code, status: r.status, usage: data.usage });
+  if (!r.ok) throw Object.assign(new Error(data.errors?.[0] || data.error || r.statusText), { code: data.code, status: r.status, usage: data.usage, help: data.error_help });
   return data;
 }
 const doodleSrc = (id) => `/doodle/${encodeURIComponent(id)}.svg?token=${T}${current ? `&project=${encodeURIComponent(current)}` : ''}`;
@@ -68,6 +68,18 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 function toast(msg, ms = 3500) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
   clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.add('hidden'), ms);
+}
+// An AI service's failure gets a card (what happened, what to try, Settings, Copy details); anything else a toast.
+function problem(e, ms = 6000) {
+  if (!e.help) { toast(e.message, ms); return; }
+  const h = e.help, body = modal(`<h2>${esc(h.title)}</h2><ol class="steps">${h.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+    <div class="row">${h.setting ? '<button type="button" class="primary" data-act="settings">Open Settings</button>' : ''}
+    <button type="button" class="ghost" data-act="copy">Copy details</button></div>`);
+  body.querySelector('[data-act="settings"]')?.addEventListener('click', () => { closeModal(); $('#btn-settings').click(); });
+  body.querySelector('[data-act="copy"]').addEventListener('click', async (event) => {
+    try { await navigator.clipboard.writeText(h.detail); event.target.textContent = 'Copied'; }
+    catch { toast(h.detail, 10000); }
+  });
 }
 // The one dialog: named by its first heading, focus moves in and Tab stays inside; Escape or × closes it and focus
 // goes back to whatever opened it.
@@ -219,7 +231,7 @@ async function watch(job, title, order = MAKE, own = false) {     // own: narrat
     $('#prog-stage').textContent = cancelling || j.state === 'cancelling' ? 'Cancellation requested; waiting for the current step to stop…' : `${STAGES[j.stage] || 'Starting'}${count}${eta}`;
     if (['done', 'failed', 'cancelled'].includes(j.state)) {
       $('#progress').classList.add('hidden');
-      if (j.state !== 'done') throw new Error(j.error);
+      if (j.state !== 'done') throw Object.assign(new Error(j.error), { help: j.error_help });
       return j.result;
     }
   }
@@ -398,7 +410,7 @@ function showNew() {
       const result = await api('/api/writer', { method: 'POST', body: JSON.stringify({ director: dirSel.value,
         model: $('#model').value, base_url: dirSel.value === 'compat' ? $('#base-url').value : '', topic, notes, voice: $('#writer-voice').value }) });
       if (!scriptInput.isConnected) return;
-      if (!result.ok) throw Object.assign(new Error(result.error || 'The provider could not draft from these notes.'), { usage: result.usage });
+      if (!result.ok) throw Object.assign(new Error(result.error || 'The provider could not draft from these notes.'), { usage: result.usage, help: result.error_help });
       if (typeof result.text !== 'string' || !result.text.trim()) throw new Error('The writer returned an empty draft.');
       draftStatus.usage = usageText(result.usage);
       if (before.trim() || scriptEdits !== edits || scriptInput.value !== before) {
@@ -409,7 +421,8 @@ function showNew() {
         draftStatus.textContent = 'Draft inserted. Edit and check it before creating a storyboard.' + draftStatus.usage;
       }
     } catch (error) {
-      if (scriptInput.isConnected) draftStatus.textContent = error.message + usageText(error.usage);
+      if (scriptInput.isConnected) draftStatus.textContent = (error.help?.title || error.message) + usageText(error.usage);
+      if (scriptInput.isConnected && error.help) problem(error);
     } finally { drafting = false; if (scriptInput.isConnected) writerNote(); }
   };
   note();
@@ -459,7 +472,7 @@ function showNew() {
       else if (res?.style) toast(pickLine(res.style), 9000);
       else if (res?.notes?.length) toast(`${res.notes.length} AI suggestions were replaced by the offline plan`);
       await openProject(project, ownVoice() ? 'narrator' : null);
-    } catch (e) { $('#progress').classList.add('hidden'); toast(e.message, 6000); }
+    } catch (e) { $('#progress').classList.add('hidden'); problem(e); }
   };
 }
 
@@ -553,7 +566,7 @@ async function openProject(name, tab = null) {
       if (whole) toast(whole, 8000);
       else toast(res?.cost ? `Done · AI cost $${res.cost.toFixed(4)}` : 'Visuals re-planned');
       openProject(name);
-    } catch (e) { toast(e.message, 6000); }
+    } catch (e) { problem(e); }
   };
   $('#p-reveal').onclick = () => api(`/api/projects/${encodeURIComponent(name)}/reveal`, { method: 'POST' });
   for (const kind of ['export', 'projectzip']) {
@@ -911,7 +924,7 @@ async function makeVideo(name, anyway = false) {   // anyway: the user saw which
     document.querySelector('.tabs button[data-tab="video"]').click();
     feedbackCard($('#tab-video'));
   } catch (e) {
-    $('#progress').classList.add('hidden'); toast(e.message, 10000);
+    $('#progress').classList.add('hidden'); problem(e, 10000);
     if (own) { showTab('narrator'); loadNarrator(name, undefined, e.message); }
   }
 }
@@ -1020,6 +1033,8 @@ function renderNarrator(name, info, choice = info.narrator) {
         <span id="n-take" class="muted">${info.take ? `Your recording: ${esc(info.take)}` : 'No recording yet'}</span>
       </div>
       ${info.take ? `<audio controls disableremoteplayback preload="none" src="${fileSrc(info.take)}"></audio>` : ''}
+      <label class="row"><input id="n-clean" type="checkbox" style="width:auto"${info.clean === false ? '' : ' checked'}>
+        <span>Clean up background noise (hum, hiss, a fan) in my recording</span></label>
       <button id="n-use" class="${check?.ok ? 'ghost' : 'primary'}"${info.take ? '' : ' disabled'}>Use it for this video</button>
       <div id="n-result">${narratorResult(info)}</div>
       <p class="tip"><b>Read it naturally</b>, at your usual pace, and pause for a moment between sentences. Record it in
@@ -1068,6 +1083,13 @@ function renderNarrator(name, info, choice = info.narrator) {
     };
     return;
   }
+  $('#n-clean', box).onchange = async (e) => {
+    try {
+      info.clean = (await api(`/api/projects/${encodeURIComponent(name)}/narrator`, { method: 'POST',
+        body: JSON.stringify({ clean: e.target.checked }) })).clean;
+      toast(`Noise clean-up ${info.clean ? 'on' : 'off'}${info.take ? '. Press Use it for this video to hear the change' : ''}`);
+    } catch (err) { e.target.checked = !e.target.checked; toast(err.message, 6000); }
+  };
   const showProblem = (msg) => { $('#n-result', box).innerHTML = `<div class="result bad"><p>${esc(msg)}</p></div>`; };
   $('#n-file', box).onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
