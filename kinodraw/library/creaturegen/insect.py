@@ -65,13 +65,14 @@ def _eye(f, c, r, pose, scared_scale=1.4, white=False):
         f.spot(c + V(r * .35, r * .35), r * .38)
 
 
-def _antenna(f, base, up, pose, colour, length=.22):
+def _antenna(f, base, up, pose, colour, length=.22, scale=1.0):
+    k = scale
     if pose == 'scared':
-        pts = [base, base + V(-.06, .1), base + V(-.18, .14)]
+        pts = [base, base + V(-.06, .1) * k, base + V(-.18, .14) * k]
     elif pose == 'look_up':
-        pts = [base, base + V(.02, .14), base + V(.08, .26)]
+        pts = [base, base + V(.02, .14) * k, base + V(.08, .26) * k]
     else:
-        pts = [base, base + rot(V(.03, .11), up), base + rot(V(.15, .15), up)]
+        pts = [base, base + rot(V(.03, .11), up) * k, base + rot(V(.15, .15), up) * k]
     f.fill(Tube(pts, [.014, .012, .011]), colour, SW_FINE, 'antenna')
     f.fill(Circle(pts[-1], .02), colour, SW_FINE, 'antenna_tip')
 
@@ -138,7 +139,7 @@ def _bee(g, pose):
     f.fill(body, g.accent, SW_DETAIL + 1, 'body')
     f.patch(Union([Cone(V(x, y + .2), V(x - .02, y - .2), .035, .035) for x in (-.13, -.25, -.36)] +
                   [Circle(V(.04, y + .02), .1)]), '#2E2A27', body, 'stripes')
-    _antenna(f, head_c + V(.0, .07), 0, pose, '#2E2A27', .16)
+    _antenna(f, head_c + V(.0, .07), 0, pose, '#2E2A27', scale=.8)
     if flying:
         f.fill(Union([Cone(a, a + V(-.04 + i * .02, -.1), .014, .011) for i, a in enumerate(anchors)]), '#2E2A27',
                SW_FINE, 'legs')
@@ -161,7 +162,7 @@ def _beetle(g, pose):
     y = .17 if not flying else .3
     if pose == 'sleep':
         y = .12
-    head_c = V(.24, y - .02) + (V(0, .05) if pose == 'look_up' else V(0, 0))
+    head_c = V(.31, y - .03) + (V(0, .05) if pose == 'look_up' else V(0, 0))
     shell = Union([Ellipse(V(-.02, y + .02), .26, .2), Poly([V(-.28, y - .02), V(.24, y - .02), V(.24, y - .1),
                                                              V(-.28, y - .1)])], k=.02)
     anchors = [V(.12, y - .06), V(.0, y - .07), V(-.12, y - .06)]
@@ -171,14 +172,17 @@ def _beetle(g, pose):
     if flying:
         f.fill(Ellipse(V(-.12, y + .2), .16, .07, deg(130)), g.wing, SW_FINE, 'wing')
     f.fill(Circle(head_c, .085), '#2E2A27', SW_DETAIL, 'head')
-    _antenna(f, head_c + V(.03, .05), 0, pose, '#2E2A27', .12)
+    _antenna(f, head_c + V(.03, .05), 0, pose, '#2E2A27', scale=.6)
     f.fill(shell, g.coat, SW_DETAIL + 1, 'shell')
-    f.patch(Union([Circle(V(x, y + yy), .045) for x, yy in ((-.12, .08), (.04, .12), (-.05, -.02), (.13, .0))]),
+    f.patch(Union([Circle(V(x, y + yy), .045) for x, yy in ((-.14, .08), (.0, .13), (-.07, -.02), (.08, .02))]),
             g.spots, shell, 'spots')
-    f.line([V(.2, y + .19), V(.17, y - .06)], SW_FINE, name='shell_line')
+    f.patch(Ellipse(V(.25, y + .02), .1, .2), '#2E2A27', shell, 'pronotum')
+    f.patch(Union([Circle(V(.2, y + .08), .022), Circle(V(.2, y - .03), .018)]), '#F4F1EA',
+            Ellipse(V(.25, y + .02), .1, .2), 'pronotum_spots')
+    f.line([V(.05, y + .21), V(.0, y - .08)], SW_FINE, name='shell_line')
     if not flying and pose != 'sleep':
         f.fill(_legs(f, anchors, y - .08, pose, C.INK, False, .018), '#2E2A27', SW_FINE, 'legs')
-    _eye(f, head_c + V(.035, .01), .022, pose)
+    _eye(f, head_c + V(.03, .015), .024, pose, white=True)
     f.anchors['head'] = head_c
     f.anchors['ground'] = V(0, 0)
     return f
@@ -188,15 +192,20 @@ def _butterfly(g, pose):
     f = Figure()
     y = .4
     if pose in ('stand', 'sleep', 'look_up'):   # resting, wings closed upright (side view)
-        body = Union([Ellipse(V(0, .14), .16, .035, deg(5)), Circle(V(.17, .16), .04)], k=.02)
-        wing = Union([Ellipse(V(-.02, .36), .14, .2, deg(-8)), Ellipse(V(-.08, .22), .1, .1)], k=.03)
+        body = Union([Ellipse(V(-.02, .13), .15, .04, deg(5)), Circle(V(.15, .16), .045)], k=.02)
+        fore = Union([Poly([V(.05, .16), V(.15, .55), V(-.15, .47)], r=.04), Ellipse(V(0, .45), .14, .11, deg(-20))],
+                     k=.04)
+        hind = Ellipse(V(-.12, .25), .13, .11, deg(-20))
         f.fill(Union([Cone(V(a, .12), V(a + .03, .02), .01, .008) for a in (.08, .02, -.04)]), '#2E2A27', SW_FINE, 'legs')
-        f.fill(wing, g.coat, SW_DETAIL, 'wing')
-        f.patch(Union([Circle(V(-.02, .42), .05), Circle(V(-.1, .26), .035)]), g.accent, wing, 'wing_spots')
-        f.patch(Ellipse(V(-.02, .52), .12, .06), g.spots, wing, 'wing_edge')
+        f.fill(hind, C.shade(g.coat, .12), SW_DETAIL, 'wing_hind')
+        f.patch(Union([Circle(V(-.16, .24), .035), Circle(V(-.06, .2), .025)]), g.accent, hind, 'hind_spots')
+        f.fill(fore, g.coat, SW_DETAIL, 'wing')
+        f.patch(Union([Ellipse(V(.0, .6), .2, .08, deg(-18))]), g.spots, fore, 'wing_edge')
+        f.patch(Union([Circle(V(.08, .45), .035), Circle(V(-.04, .47), .03), Circle(V(-.06, .36), .025)]), g.accent,
+                fore, 'wing_spots')
         f.fill(body, '#3A3430', SW_DETAIL, 'body')
-        _antenna(f, V(.18, .19), 0, pose, '#3A3430', .12)
-        _eye(f, V(.19, .165), .015, 'sleep' if pose == 'sleep' else 'stand')
+        _antenna(f, V(.17, .2), 0, pose, '#3A3430', scale=.6)
+        _eye(f, V(.175, .17), .016, 'sleep' if pose == 'sleep' else 'stand')
         f.anchors['ground'] = V(0, 0)
         return f
     # flying: front view with spread wings

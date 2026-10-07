@@ -69,12 +69,34 @@ SPECIES_WORDS = {
     'chimp': ('chimpanzee', None, None), 'ape': ('gorilla', None, None), 'silverback': ('gorilla', None, None),
     'pony': ('horse', None, None), 'stallion': ('horse', 'male', None), 'mare': ('horse', 'female', None),
     'doe': ('deer', 'female', None), 'stag': ('deer', 'male', None), 'buck': ('deer', 'male', None),
+    'fawn': ('deer', None, 'young'), 'duckling': ('duck', None, 'young'), 'cockerel': ('chicken', 'male', None),
+    'drake': ('duck', 'male', None), 'piglet': ('pig', None, 'young'), 'joey': ('rabbit', None, 'young'),
     'man': ('human', 'male', 'adult'), 'woman': ('human', 'female', 'adult'), 'boy': ('human', 'male', 'child'),
     'girl': ('human', 'female', 'child'), 'child': ('human', None, 'child'), 'kid': ('human', None, 'child'),
     'person': ('human', None, 'adult'), 'king': ('human', 'male', 'adult'), 'queen': ('human', 'female', 'adult'),
     'grandma': ('human', 'female', 'elder'), 'grandpa': ('human', 'male', 'elder'),
     'grandmother': ('human', 'female', 'elder'), 'grandfather': ('human', 'male', 'elder'),
     'teacher': ('human', None, 'adult'), 'villager': ('human', None, 'adult'), 'explorer': ('human', None, 'adult'),
+}
+# words that name one drawn look of a species
+VARIANT_WORDS = {
+    'panther': ('leopard', 'black'), 'black panther': ('leopard', 'black'), 'black leopard': ('leopard', 'black'),
+    'white tiger': ('tiger', 'white'), 'panda': ('bear', 'panda'), 'giant panda': ('bear', 'panda'),
+    'panda bear': ('bear', 'panda'), 'polar bear': ('bear', 'polar'), 'black bear': ('bear', 'black'),
+    'grizzly': ('bear', ''), 'brown bear': ('bear', ''), 'dalmatian': ('dog', 'dalmatian'), 'husky': ('dog', 'husky'),
+    'beagle': ('dog', 'beagle'), 'golden retriever': ('dog', 'retriever'), 'retriever': ('dog', 'retriever'),
+    'labrador': ('dog', 'black'), 'black dog': ('dog', 'black'), 'black cat': ('cat', 'black'),
+    'white cat': ('cat', 'white'), 'grey cat': ('cat', 'grey'), 'gray cat': ('cat', 'grey'),
+    'tabby': ('cat', 'grey'), 'ginger cat': ('cat', ''), 'black horse': ('horse', 'black'),
+    'white horse': ('horse', 'white'), 'chestnut horse': ('horse', 'chestnut'), 'brown cow': ('cow', 'brown'),
+    'white rabbit': ('rabbit', 'white'), 'brown rabbit': ('rabbit', 'brown'), 'red ant': ('ant', 'red'),
+    'fire ant': ('ant', 'red'), 'black ant': ('ant', 'black'), 'tree frog': ('frog', 'tree'),
+    'robin': ('songbird', 'robin'), 'sparrow': ('songbird', 'sparrow'), 'bluebird': ('songbird', 'blue'),
+    'cardinal': ('songbird', 'cardinal'), 'snowy owl': ('owl', 'snowy'), 'white owl': ('owl', 'snowy'),
+    'macaw': ('parrot', 'macaw'), 'green parrot': ('parrot', 'green'), 'parakeet': ('parrot', 'green'),
+    'white duck': ('duck', 'white'), 'white hen': ('chicken', 'white'), 'ladybug': ('beetle', 'ladybug'),
+    'ladybird': ('beetle', 'ladybug'), 'monarch': ('butterfly', 'monarch'), 'blue butterfly': ('butterfly', 'blue'),
+    'honey bee': ('bee', 'honey'), 'bumblebee': ('bee', 'honey'),
 }
 HUMAN_ROLES = {'king': 'king', 'queen': 'queen', 'teacher': 'teacher', 'villager': 'villager', 'explorer': 'explorer'}
 # animals we may not have, mapped to their closest drawn relative (same family, never a person)
@@ -90,8 +112,8 @@ RELATED = {
     'macaw': 'parrot', 'stork': 'flamingo', 'heron': 'flamingo', 'alligator': 'crocodile', 'lizard': 'crocodile',
     'tortoise': 'turtle', 'python': 'snake', 'cobra': 'snake', 'serpent': 'snake', 'wasp': 'bee', 'hornet': 'bee',
     'ladybug': 'beetle', 'ladybird': 'beetle', 'moth': 'butterfly', 'termite': 'ant', 'goldfish': 'fish',
-    'clownfish': 'fish', 'tuna': 'fish', 'salmon': 'fish', 'trout': 'fish', 'polar bear': 'bear', 'panda': 'bear',
-    'grizzly': 'bear', 'pup': 'dog', 'kitty': 'cat', 'goat kid': 'goat', 'puppy': 'dog', 'kitten': 'cat',
+    'clownfish': 'fish', 'tuna': 'fish', 'salmon': 'fish', 'trout': 'fish', 'pup': 'dog', 'kitty': 'cat',
+    'goat kid': 'goat', 'puppy': 'dog', 'kitten': 'cat',
 }
 
 # family of every species the generator knows, so a species without pictures still finds a relative
@@ -150,6 +172,9 @@ def _resolve_species(species, sex, age):
     word = _norm(species)
     by_species, families = _index()
     role = None
+    if word in VARIANT_WORDS:
+        sp, look = VARIANT_WORDS[word]
+        return sp, sex, age, look
     if word in SPECIES_WORDS:
         sp, s, a = SPECIES_WORDS[word]
         role = HUMAN_ROLES.get(word)
@@ -162,7 +187,12 @@ def _resolve_species(species, sex, age):
         return RELATED[word], sex, age, role
     if word in families:                       # a family name ("big_cat", "bird") -> its first species
         return sorted(families[word])[0], sex, age, role
-    last = word.split(' ')[-1]
+    words = word.split(' ')
+    if len(words) > 1 and words[0] == 'baby':                 # "baby elephant"
+        return _resolve_species(' '.join(words[1:]), sex, age or 'young')
+    if len(words) > 1 and words[-1] in ('cub', 'calf', 'baby', 'pup', 'kit'):   # "bear cub"
+        return _resolve_species(' '.join(words[:-1]), sex, age or 'young')
+    last = words[-1]
     if last != word:
         return _resolve_species(last, sex, age)
     return None, sex, age, role
@@ -180,6 +210,8 @@ def best_preset(species: str, age: str | None = None, sex: str | None = None, po
     sp, sex, age, role = _resolve_species(species, sex, age)
     if sp is None:
         return None
+    if sp != 'human' and role is not None:      # the word named one look of the species ("panda")
+        variant, role = (variant if variant is not None else role), None
     by_species, families = _index()
     want_pose = _canonical_pose(pose if not expression else f'face_{expression}')
     want_face = want_pose.startswith('face_')

@@ -40,6 +40,11 @@ class Face:
     quills: bool = False
     quill_c: str = '#4E3B2C'
     face_c: str = ''            # primate face skin
+    beak: str = ''              # birds: cone hook flat
+    beak_c: str = '#F2B33D'
+    comb: str = ''              # chicken comb + wattle colour
+    crest: str = ''             # head crest colour
+    disc: str = ''              # owl face disc colour
 
 
 def _ears(fc: Face):
@@ -218,7 +223,7 @@ def build(fc: Face, expr: str) -> Figure:
         f.patch(Union(spots), fc.mark_c, head, 'spots')
     elif fc.pattern == 'tears':
         for s in (-1, 1):
-            f.patch(Cone(V(s * .38, -.05), V(s * .25, -.5), .06, .04), fc.mark_c, head, 'tear_mark')
+            f.patch(Cone(V(s * .27, .04), V(s * .42, -.44), .04, .025), fc.mark_c, head, 'tear_mark')
     elif fc.pattern == 'zebra':
         strokes = [Cone(V(x, .95), V(x * .7, .35), .08, .03) for x in (-.45, -.15, .15, .45)]
         strokes += [Cone(V(s * .62, -.2), V(s * .4, -.5), .06, .02) for s in (-1, 1)]
@@ -377,4 +382,42 @@ def _bug(fc: Face, expr: str) -> Figure:
     return f
 
 
-SPECIAL = {'frog': _frog, 'ant': _bug, 'bee': _bug, 'beetle': _bug}
+def _bird(fc: Face, expr: str) -> Figure:
+    """Bird front face: round head, beak pointing at the viewer, comb / crest / ear tufts by kind."""
+    f = Figure()
+    if fc.crest:
+        f.fill(Poly([V(-.2, .78), V(.05, 1.55), V(.28, .72)], r=.06), fc.crest, SW_DETAIL, 'crest')
+    if fc.comb:
+        f.fill(Union([Circle(V(x, .98 + (.08 if x == 0 else 0)), .24) for x in (-.3, 0, .3)], k=.06), fc.comb,
+               SW_DETAIL, 'comb')
+    if fc.ears == 'tufts':
+        for s in (-1, 1):
+            f.fill(Poly([V(s * .45, .72), V(s * .85, 1.32), V(s * .82, .5)], r=.05), C.shade(fc.coat, .2), SW_DETAIL,
+                   'ear_tuft')
+    head = Ellipse(V(0, 0), 1.0, .95)
+    f.fill(head, fc.coat, SW, 'head')
+    if fc.disc:
+        f.patch(Union([Circle(V(s * .4, .08), .5) for s in (-1, 1)], k=.1), fc.disc, head, 'face_disc')
+    if fc.under:
+        f.patch(Ellipse(V(0, -.9), .85, .42), fc.under, head, 'chest')
+    owl = fc.ears == 'tufts' or bool(fc.disc)
+    eyes(f, expr, (.4, .15) if owl else (.4, .2), 1.55 if owl else 1.05, fc.iris)
+    open_ = {'happy': 1.0, 'scared': .6}.get(expr, 0)
+    if fc.beak == 'flat':
+        if open_:
+            f.fill(Ellipse(V(0, -.42), .3, .16 * open_ + .06), C.MOUTH, SW_DETAIL, 'mouth')
+        f.fill(Ellipse(V(0, -.6 - .1 * open_), .4, .12), C.shade(fc.beak_c, .12), SW_DETAIL, 'beak_lower')
+        f.fill(Ellipse(V(0, -.3), .44, .18), fc.beak_c, SW_DETAIL, 'beak')
+    else:
+        tip = -.62 if fc.beak == 'hook' else -.5
+        if open_:
+            f.fill(Ellipse(V(0, -.45), .16, .14 * open_), C.MOUTH, SW_DETAIL, 'mouth')
+            f.fill(Poly([V(-.14, -.5 - .12 * open_), V(.14, -.5 - .12 * open_), V(0, -.68 - .14 * open_)], r=.03),
+                   C.shade(fc.beak_c, .12), SW_DETAIL, 'beak_lower')
+        f.fill(Poly([V(-.22, -.08), V(.22, -.08), V(0, tip)], r=.05), fc.beak_c, SW_DETAIL, 'beak')
+    if fc.comb:
+        f.fill(Ellipse(V(0, -.82 - .1 * open_), .1, .17), fc.comb, SW_FINE, 'wattle')
+    return f
+
+
+SPECIAL = {'frog': _frog, 'ant': _bug, 'bee': _bug, 'beetle': _bug, 'bird': _bird}
