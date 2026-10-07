@@ -9,6 +9,9 @@ from kinodraw.engine.creatures.actions import action_pose
 from test_hybrid_character_motion import Canvas
 from test_hybrid_source_interactions import saved_scene
 
+# Story characters are preset doodles now; these checks cover the procedural rig path.
+pytestmark = pytest.mark.usefixtures('procedural_rig')
+
 
 @pytest.mark.parametrize('text', [
     'Not once did the two hyenas laugh at Nia.',

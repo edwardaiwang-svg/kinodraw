@@ -8,6 +8,7 @@ from ..rules import RulesDirector as PictureDirector
 from ..validate import _doodles
 from .schema import SCENE, SKINS
 from .semantics import actions, atmosphere, beats, candidate_ids, detect_cast, mentions
+from .story import STORY_PALETTE, read_beats, story_picture
 from .validate import _default, validate
 from ...engine.source_diagrams import resolve as resolve_diagram
 
@@ -40,12 +41,17 @@ def from_rules(board: dict, candidates=None) -> dict:
     text = '\n'.join(b['text'] for b in script)
     genre = detect_genre(title + '\n' + text)
     cast = detect_cast(script)
+    story = genre == 'story'
+    reading = read_beats(script, cast) if story else {}
     if candidates is None:
         candidates = {b['id']: list(_doodles(b['visuals'])) for b in script}
     mode = {'story': 'hybrid', 'explainer': 'hybrid', 'lesson': 'whiteboard'}.get(genre, 'motion')
-    dark = mode == 'motion' or genre == 'story'
+    dark = mode == 'motion'
     palette = ({'background': '#0C0C0C', 'ink': '#E7E5D8', 'accent': '#E4AB55', 'accent2': '#8B9BC9'} if dark else
                {'background': '#FFFFFF', 'ink': '#1B1B1B', 'accent': '#287FA3', 'accent2': '#D39B36'})
+    if story:
+        # Children's and narrative stories are picture books on the whiteboard paper, never a dark night sky.
+        palette = dict(STORY_PALETTE)
     if genre == 'lesson':
         palette = {'background': '#24342C', 'ink': '#F3F1E8', 'accent': '#77B5CF', 'accent2': '#AC894C'}
     energetic = genre == 'launch/promo'
@@ -59,7 +65,7 @@ def from_rules(board: dict, candidates=None) -> dict:
                       'recurring_motif': cast[0]['name'] if cast else title or 'the central idea',
                       'sections': [{'section_id': sid,
                                     'intent': next(b['text'] for b in script if b['section'] == sid)} for sid in sections]},
-        'style': {'mode': mode, 'whiteboard_skin': board['look'] if genre == 'explainer' and board.get('look') in SKINS else
+        'style': {'mode': mode, 'whiteboard_skin': board['look'] if genre in ('explainer', 'story') and board.get('look') in SKINS else
                   'chalkboard' if genre == 'lesson' else 'whiteboard',
                   'palette': palette, 'type': 'hand' if genre in ('lesson', 'explainer') else
                   'serif' if genre == 'poem' else 'display' if energetic else 'rounded',
@@ -115,7 +121,9 @@ def from_rules(board: dict, candidates=None) -> dict:
             scene['treatment'] = 'whiteboard' if diagram.kind == 'dots' else 'motion'
             scene['text'] = {'kind': 'caption_only', 'ref': b['id']}
             scene['camera'] = 'static'
-        if treatment == 'character' and not diagram:
+        if story and not diagram:
+            _story_scene(scene, b, reading[b['id']])
+        elif treatment == 'character' and not diagram:
             scene['elements'] = [{'kind': 'cast', 'ref': cid} for cid in named]
         if atmo != 'none':
             scene['elements'].append({'kind': 'atmosphere', 'ref': atmo})
@@ -129,6 +137,22 @@ def from_rules(board: dict, candidates=None) -> dict:
                              atmosphere={'kind': 'none', 'density': 0}, transition_in='cut',
                              text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
     return validate(plan, board, candidates)[0]
+
+
+def _story_scene(scene, beat, lines):
+    """One picture-book page: everyone on stage in the beat's sentences, its setting doodles, captions only."""
+    cast = list(dict.fromkeys(cid for line in lines for cid in line.present))
+    # Offered doodles that can stand in the story's world; setting nouns (river, moon) are drawn from the text.
+    pictures = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture' and story_picture(e['ref'])]
+    scene['elements'] = ([{'kind': 'cast', 'ref': cid} for cid in cast] +
+                         [{'kind': 'picture', 'ref': ref} for ref in dict.fromkeys(pictures)])
+    scene['treatment'] = ('character' if cast else 'atmosphere' if scene['atmosphere']['kind'] != 'none'
+                          else 'motion')
+    scene['composition'] = 'stage' if cast else 'full_bleed' if scene['treatment'] == 'atmosphere' else 'center'
+    scene['camera'] = 'follow' if any(a['verb'] in ('walk', 'run') for a in scene['actions']) else 'slow_push'
+    # Captions only: the storybook titles its first page itself (story.titled), so no narration line is ever
+    # handwritten as a heading if a page is switched to the whiteboard treatment.
+    scene['text'] = {'kind': 'caption_only', 'ref': beat['id']}
 
 
 class RulesDirector:

@@ -2,7 +2,8 @@
 """Validate doodle SVGs against doodles/STYLE.md and render review sheets.
 
 Usage: python -m kinodraw.library.check [ids...] [--set bespoke|fluent] [--sheet NAME]
---set fluent (converted emoji): same rules minus the palette and the 5-element minimum.
+--set fluent (converted emoji) and --set creatures (generated presets): same rules minus the palette and the
+5-element minimum.
 Writes PNG contact sheets to <user cache>/KinoDraw/review/doodles/.
 Prints one JSON report; exit code 1 when any file fails.
 """
@@ -168,12 +169,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('ids', nargs='*')
     parser.add_argument('--sheet', default='sheet')
-    parser.add_argument('--set', default='bespoke', choices=['bespoke', 'fluent'])
+    parser.add_argument('--set', default='bespoke', choices=['bespoke', 'fluent', 'creatures'])
     args = parser.parse_args()
     root = LIBRARY / args.set
     paths = [root / f'{i}.svg' for i in args.ids] if args.ids else sorted(root.glob('*.svg'))
     missing = [str(p) for p in paths if not p.exists()]
-    reports = [check(p, args.set == 'fluent') for p in paths if p.exists()]
+    reports = [check(p, args.set != 'bespoke') for p in paths if p.exists()]
     out = sheet([p for p in paths if p.exists()], args.sheet) if paths else None
     failed = [r for r in reports if not r['ok']]
     print(json.dumps({'checked': len(reports), 'failed': len(failed), 'missing': missing, 'review_dir': str(REVIEW),

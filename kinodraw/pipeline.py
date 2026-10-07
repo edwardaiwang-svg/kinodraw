@@ -128,6 +128,7 @@ def direct_v3(project_dir: Path, provider=None, *, prop_llm=None, prop_candidate
     cfg, board = saved['settings'], saved['storyboard']
     if cfg.get('plan_v3') is not None:
         return cfg.get('plan_v3_report', {})
+    board = _story_told_straight(board)
     original = deepcopy(board)
     selected = provider if provider is not None else cfg.get('director', 'rules')
     if isinstance(provider, str):
@@ -140,7 +141,8 @@ def direct_v3(project_dir: Path, provider=None, *, prop_llm=None, prop_candidate
     import copy
     bible = cfg.get('series_bible') or {'cast': copy.deepcopy(plan['cast'])}
     overrides = {c['id']: c for c in bible.get('cast', [])}
-    plan['cast'] = [{**c, **overrides.get(c['id'], {})} for c in plan['cast']]
+    plan['cast'] = [c if _stale_human(overrides.get(c['id']), c) else {**c, **overrides.get(c['id'], {})}
+                    for c in plan['cast']]
     from .engine.hybrid import prepare_props
     if prop_llm is None and selected != 'rules' and not isinstance(selected, str):
         try:
@@ -183,6 +185,39 @@ def direct_v3(project_dir: Path, provider=None, *, prop_llm=None, prop_candidate
     cfg.update(director_v3=True, plan_v3=plan, plan_v3_report=report, scene_treatments=treatments, series_bible={'cast': plan['cast']})
     store.save(board, cfg, saved['revision'], 'Before v3 direction')
     return report
+
+
+def _story_told_straight(board: dict) -> dict:
+    """A story made with the explainer skeleton (the Studio's look menu defaults to it) is told straight:
+    no spoken title, agenda, "Part N" or takeaway cards. Explainers and chosen story types are unchanged."""
+    from .director.v3.rules import detect_genre
+    from .director.v3.semantics import beats, detect_cast
+    if board.get('story', 'explain') != 'explain' or not any(b.get('kind') in script.SCAFFOLD for b in board['beats']):
+        return board
+    lang = board.get('lang', 'en')
+    told = [b for b in beats(board) if b['kind'] not in script.SCAFFOLD]
+    title = board.get('title', {})
+    title = title.get(lang, '') if isinstance(title, dict) else title
+    text = '\n'.join(b['text'] for b in told)
+    if detect_genre(title + '\n' + text) != 'story':
+        return board
+    # A narrative, not an explainer that quotes someone once: animal characters, a fairy-tale opening, or
+    # several named characters in dialogue.
+    cast = detect_cast(told)
+    if not (re.search(r'\bonce upon a time\b', text, re.I) or any(c['kind'] != 'human' for c in cast)
+            or (len(cast) >= 2 and len(re.findall(r'["“][^"“”]+["”]', text)) >= 2)):
+        return board
+    return script.tell_straight(board)
+
+
+def _stale_human(saved: dict | None, fresh: dict) -> bool:
+    """A series-bible entry saved when an animal was miscast as a person must not turn it back into one.
+
+    Genuine edits (a lioness made a tigress, new marks or colours) still override the fresh cast."""
+    from .director.v3.semantics import HUMAN_SPECIES
+    if not saved or fresh.get('kind') == 'human':
+        return False
+    return saved.get('kind') == 'human' or saved.get('family') == 'human' or saved.get('species') in HUMAN_SPECIES
 
 
 def set_aspect(project_dir: Path, aspect: str) -> dict:

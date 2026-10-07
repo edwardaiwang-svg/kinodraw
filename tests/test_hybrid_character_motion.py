@@ -13,6 +13,9 @@ from kinodraw.director.v3.rules import from_rules
 from kinodraw.engine import render, timeline
 from kinodraw.engine.bold.render import _text_metrics
 
+# Story characters are preset doodles now; these checks cover the procedural rig path.
+pytestmark = pytest.mark.usefixtures('procedural_rig')
+
 
 def production(tmp_path, paragraphs, names=('Nia', 'Sora', 'Taro'), floor='drifting', size=None):
     child, mother, father = names

@@ -15,6 +15,9 @@ from kinodraw.engine.creatures.actions import Pose, action_pose, cue_pose
 from kinodraw.engine.creatures.life import pose_at
 from kinodraw.engine.creatures.rig import build
 
+# Story characters are preset doodles now; these checks cover the procedural rig path.
+pytestmark = pytest.mark.usefixtures('procedural_rig')
+
 
 @pytest.mark.parametrize('hint', ['baby lion cub', 'adult tigress', 'adult wolf', 'adult person'])
 def test_sleep_raster_has_closed_eyes_resting_body_and_visible_breathing(hint):

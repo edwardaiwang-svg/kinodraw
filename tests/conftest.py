@@ -41,3 +41,11 @@ def _keep_the_developers_own_keychain(monkeypatch):
     from kinodraw.director.llm import cloud
     monkeypatch.setattr(keyring.core, '_keyring_backend', _Keychain())   # tests that stub keyring's functions still win
     monkeypatch.setattr(cloud, '_anon_token', None)                    # the process fallback belongs to this test too
+
+
+@pytest.fixture
+def procedural_rig(monkeypatch):
+    """Draw story characters with the procedural creature rig. Story plans draw preset library doodles instead
+    (J, 2026-10-07); the rig stays in the repository and these suites keep checking it."""
+    from kinodraw.engine import hybrid
+    monkeypatch.setattr(hybrid, 'STORY_DOODLES', False)

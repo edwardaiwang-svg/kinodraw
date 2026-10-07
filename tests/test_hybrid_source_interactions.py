@@ -9,6 +9,9 @@ from kinodraw.engine.creatures import Action
 from kinodraw.engine.creatures.actions import action_pose
 from test_hybrid_character_motion import Canvas, production
 
+# Story characters are preset doodles now; these checks cover the procedural rig path.
+pytestmark = pytest.mark.usefixtures('procedural_rig')
+
 
 def saved_scene(tmp_path, text, verbs, names=('Nia', 'Sora', 'Taro')):
     prod, board, plan, tl = production(tmp_path, [text], names, floor='still')

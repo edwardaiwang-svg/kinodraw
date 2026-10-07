@@ -1,7 +1,8 @@
 """Doodle library: resolve a doodle id to its SVG file, and the tagged catalog.
 
 Search order: the project's own ``doodles/`` folder (user or private presets),
-then the bundled bespoke set, the converted Fluent Emoji set, then the imported open packs (PACKS).
+then the bundled bespoke set, the converted Fluent Emoji set, the generated creature presets (animals and
+people in poses; ``creatures.py`` picks one by species, pose and facing), then the imported open packs (PACKS).
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from pathlib import Path
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets' / 'doodles'
 PACKS = ('tabler', 'healthicons')        # imported ink line pictures (library/packs.py); listed below the rest
-SETS = ('bespoke', 'fluent') + PACKS
+SETS = ('bespoke', 'fluent', 'creatures') + PACKS
 MISSING = ASSETS / 'missing.svg'
 OWN = 'own:'
 PICTURE_TYPES = ('.png', '.jpg', '.jpeg', '.svg')
@@ -106,7 +107,7 @@ def catalog() -> dict:
     A picture from an imported pack is listed only when its pack manifest gives it an allowed licence."""
     out, skip = {}, banned()['doodles']
     for path in sorted((ASSETS / 'tags').glob('*.json')):
-        doodle_set = path.stem if path.stem in PACKS else 'fluent' if path.stem == 'fluent' else 'bespoke'
+        doodle_set = path.stem if path.stem in PACKS + ('fluent', 'creatures') else 'bespoke'
         licensed = _licensed(doodle_set) if doodle_set in PACKS else None
         for did, entry in json.loads(path.read_text(encoding='utf-8')).items():
             if did not in skip and (licensed is None or did in licensed) \

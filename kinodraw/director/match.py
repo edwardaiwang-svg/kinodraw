@@ -153,7 +153,7 @@ class Matcher:
     def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',),
                  include_packs: bool = True):
         self.lang = lang
-        self.entries = {i: e for i, e in catalog().items()
+        self.entries = {i: e for i, e in searchable().items()
                         if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')
                         and (include_packs or not imported(e)) and listed(e, lang)}
         self.index: dict[str, list[tuple[str, float]]] = {}
@@ -256,9 +256,15 @@ def _picture_text(e: dict, lang: str) -> str:
 TEXTS = {'embed': _entry_text, 'picture': _picture_text}
 
 
+def searchable() -> dict:
+    """Catalog entries that search may return: every pose of a creature preset stays resolvable by id, but
+    only its canonical picture (standing, facing right) competes in search."""
+    return {i: e for i, e in catalog().items() if e.get('search', True)}
+
+
 def _table(lang: str, kind: str = 'embed'):
     lang = 'en' if lang == 'es' else lang
-    entries = catalog()
+    entries = searchable()
     ids = sorted(i for i, e in entries.items() if listed(e, lang))
     texts = [TEXTS[kind](entries[i], lang) for i in ids]
     digest = hashlib.sha256(('\n'.join(texts) + EMBED_MODELS[lang]).encode()).hexdigest()[:16]
