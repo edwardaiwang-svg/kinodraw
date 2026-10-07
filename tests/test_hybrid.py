@@ -267,9 +267,10 @@ def test_score_joins_and_cues_preserve_source_timing(tmp_path):
     board, plan, tl = fixture(tmp_path)
     original = copy.deepcopy(tl)
     plan['style'].update(music_mood='warm', tempo_bpm=96)
+    board['music'] = {'primary': 'natural_vibes'}
     prod = save_production(tmp_path, board, plan, tl)
     assert tl == original and prod.duration == original['duration']
-    # warm selects the measured 100 BPM recording, not the requested 96 BPM.
+    # The saved recording plays at its measured 100 BPM, not the requested 96 BPM.
     assert prod.score_beats[1] == pytest.approx(.6)
     for span in prod.spans[1:]:
         assert span.start <= span.join <= span.end - span.join_length
@@ -278,6 +279,20 @@ def test_score_joins_and_cues_preserve_source_timing(tmp_path):
         assert min(abs(prod.score_beats - cue['t'])) < 1e-8
     span = prod.spans[1]
     assert prod.frame(span.join + .1).tobytes() == save_production(tmp_path, board, plan, tl).frame(span.join + .1).tobytes()
+
+
+@pytest.mark.parametrize('music, bpm', [(True, 96.), ({'primary': 'natural_vibes'}, 100.)],
+                         ids=['procedural', 'saved-recording'])
+def test_joins_follow_the_procedural_tempo_or_a_saved_recording(tmp_path, music, bpm):
+    board, plan, tl = fixture(tmp_path)
+    plan['style'].update(music_mood='bright', tempo_bpm=96)   # bright alone once chose the 103.5 BPM recording
+    board['music'] = music
+    prod = save_production(tmp_path, board, plan, tl)
+    assert prod.score_beats[0] == 0 and np.allclose(np.diff(prod.score_beats), 60 / bpm)
+    for span in prod.spans[1:]:
+        assert min(abs(prod.score_beats - span.join)) < 1e-8
+    for cue in prod.cues():
+        assert min(abs(prod.score_beats - cue['t'])) < 1e-8
 
 
 @pytest.mark.parametrize('family', ['hand', 'rounded', 'serif', 'mono', 'display'])

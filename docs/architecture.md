@@ -12,6 +12,8 @@ kinodraw/
     llm/           schema + system prompt (shared with the server), providers (KinoDraw Cloud, OpenAI, Anthropic, compatible), checker
   voice.py         Kokoro via kokoro-onnx; per-beat clips cached by hash; character timing from phoneme durations
   audio/mix.py     narration master at -18 LUFS, SRT/VTT captions, CC0 music bed ducked under speech
+  audio/score.py   the v3 hybrid score: the procedural score (audio/procedural.py) or a saved CC0 recording,
+                   its beat grid, the sidechain duck and the -14 LUFS master
   engine/          the renderer: a camera over an endless paper strip
     ink.py           drawing primitives: SVG outline tracing, glyph-skeleton handwriting, the hand, fonts
     board.py         layout (3 columns × 2 rows per screen), one-hand scheduler with bounded catch-up, camera

@@ -171,13 +171,11 @@ class HybridProduction:
             title = episode.get('title', '')
             title = title.get(lang, next(iter(title.values()), '')) if isinstance(title, dict) else str(title or '')
             self.storybook = Storybook(plan, self.by_id, tline, self.size, whiteboard.skin.background, title)
-        # Same score selection as finish; the decoded recording starts on beat zero.
+        # Same score selection as finish; the procedural score and every recording start on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
         if self.style['music_mood'] != 'none' and episode.get('music', True):
-            mood = self.style['music_mood']
-            bpm = (score.tags()[score.choose(mood, self.style['tempo_bpm'])]['bpm']
-                   if any(mood in tag['moods'] for tag in score.tags().values()) else self.style['tempo_bpm'])
+            _, bpm = score.source(episode.get('music'), self.style['music_mood'], self.style['tempo_bpm'])
             self.score_beats = score.beat_grid(self.duration, bpm)
         self.spans = []
         specs = plan['scenes']
