@@ -98,36 +98,20 @@ def preset(species, age='adult', sex=None, pose='stand', facing='r', marks=()):
 
 
 def _choose(species, age, sex, pose, facing, marks):
-    """The creature preset for this pose: the closest variant (sex, age, marks) of the species in the library."""
-    poses = ('walk1',) if pose == 'walk' else (pose,)
-    variants = {}
-    for did, entry in library.catalog().items():
-        info = entry.get('creature')
-        if not info or info.get('species') != species:
-            continue
-        key = info.get('variant') or did
-        score = ((2 if sex and info.get('sex') == sex else -2 if sex and info.get('sex') not in (sex, None, 'unknown') else 0)
-                 + (3 if info.get('age') == age else 1 if {age, info.get('age')} <= {'baby', 'young'} else
-                    -3 if 'baby' in (age, info.get('age')) else 0)
-                 + len(set(marks) & set(info.get('marks') or ())))
-        variants.setdefault(key, (score, []))[1].append((did, info))
-    for _, (score, entries) in sorted(variants.items(), key=lambda kv: -kv[1][0]):
-        for did, info in entries:
-            if pose == 'face' and str(info.get('pose', '')).startswith('face_'):
-                return min((d for d, i in entries if str(i.get('pose', '')).startswith('face_')),
-                           key=lambda d: (not d.endswith('_face_determined_f'), not d.endswith('_face_neutral_f'), d))
-            if info.get('pose') in poses and info.get('facing') == facing and library.resolve(did):
-                return did
-        break                          # only the best variant: one character keeps one doodle family
+    """The creature preset for this pose (kinodraw.library.creatures), or None when the library has no picture
+    of this species: a sibling species (a lion for a tiger) is not this character."""
     mod = _creatures()
-    if mod is not None and pose != 'face':
-        try:
-            did = mod.best_preset(species, age=age, sex=sex, pose=pose, facing='right' if facing == 'r' else 'left')
-        except Exception:  # noqa: BLE001 - an unknown species falls back to the library's own doodle
-            did = None
-        if did and library.resolve(did):
-            return did
-    return None
+    if mod is None:
+        return None
+    try:
+        did = mod.best_preset(species, age=age, sex=sex, pose=pose, facing={'r': 'right', 'l': 'left'}.get(facing, 'front'),
+                              marks=marks, expression='determined' if pose == 'face' else None)
+    except Exception:  # noqa: BLE001 - an unknown species falls back to the library's own doodle
+        return None
+    info = mod.presets().get(did) or {}
+    if not did or info.get('species') not in (species, mod.RELATED.get(species)) or library.resolve(did) is None:
+        return None
+    return did
 
 
 @lru_cache(maxsize=64)
@@ -135,7 +119,7 @@ def face(species, age='adult', sex=None, marks=()):
     """A head close-up doodle for an eye shot, or None."""
     base, implied = SPECIES_BASE.get(species, (species, None))
     did = _choose(base, age, implied or sex, 'face', 'f', marks)
-    if did:
+    if did and meta(did).get('pose', '').startswith('face_'):
         return did
     did = FACE_FALLBACK.get(base)
     return did if did and library.resolve(did) else None
@@ -173,6 +157,26 @@ def _bbox(doodle_id, mirror=False):
     image = sprite(doodle_id, 240, mirror)
     box = image.getchannel('A').point(lambda a: 255 if a > 24 else 0).getbbox() or (0, 0, *image.size)
     return box[0] / image.width, box[1] / image.height, box[2] / image.width, box[3] / image.height
+
+
+def _units(doodle_id):
+    """(drawn height, whole box height) in the preset generator's world units, or None for other doodles.
+    Every pose of one character shares a scale, so a lying lion stays lion-sized instead of filling the frame."""
+    info = meta(doodle_id)
+    if not info.get('px_per_unit'):
+        return None
+    _, _, h = _svg(doodle_id)
+    _, top, _, bottom = _bbox(doodle_id)
+    return (bottom - top) * h / info['px_per_unit'], h / info['px_per_unit']
+
+
+def _box(doodle_id, height, reference=None):
+    """The doodle's whole box height, as a share of the frame height, when its character is ``height`` tall."""
+    own, ref = _units(doodle_id), _units(reference) if reference else None
+    if own and ref:
+        return height * own[1] / max(.05, ref[0])
+    _, top, _, bottom = _bbox(doodle_id)
+    return height / max(.05, bottom - top)
 
 
 def anchor(doodle_id, name, mirror=False):
@@ -299,15 +303,14 @@ class Storybook:
         layout = self._layout_lesson if shot.lesson else self._layout
         layout(figures, line)
         shot.figures = figures
-        self._crowd(shot, line, figures)
         if line.eyes and line.eyes in self.cast:
             target = next((f for f in figures if f.key == line.eyes), None)
             if target:
                 shot.eyes, shot.eyes_at = target, at(line.eyes_at)
-        props = list(dict.fromkeys([p for p in line.props if p not in SKY_IDS] +
-                                   [p for p in pictures if p not in SKY_IDS and p not in line.props
+        props = list(dict.fromkeys([p for p in line.props if not _sky(p)] +
+                                   [p for p in pictures if not _sky(p) and p not in line.props
                                     and not _animal(p)]))[:2]
-        sky = list(dict.fromkeys(line.sky + [p for p in pictures if p in SKY_IDS]))[:2]
+        sky = list(dict.fromkeys(line.sky + [p for p in pictures if _sky(p)]))[:2]
         atmosphere = spec['atmosphere']['kind']
         if atmosphere in ('night_stars', 'shooting_star', 'fog_with_shooting_star') and 'fl_crescent_moon' not in sky:
             sky.append('fl_crescent_moon')
@@ -315,7 +318,7 @@ class Storybook:
             sky.append('fl_cloud_with_rain')
         if atmosphere in ('dawn', 'rays') and 'fl_sun' not in sky:
             sky.append('fl_sun')
-        if not (figures or shot.figures or props):
+        if not (figures or line.crowd or props):
             props = ['fl_palm_tree', 'fl_deciduous_tree']      # never an empty page
         sides = [.12, .88]
         for i, doodle in enumerate(props):
@@ -324,6 +327,7 @@ class Storybook:
         for i, doodle in enumerate(sky[:2]):
             shot.sky.append((doodle, (.83, .2)[i], .15, .16))
         shot.atmosphere = atmosphere
+        self._crowd(shot, line, figures)
         return shot
 
     def _remember(self, f):
@@ -336,7 +340,7 @@ class Storybook:
         if any(f.pose == 'carry' for f in figures) and n == 1:
             f = figures[0]
             f.x, f.facing, f.travel = .42, 'r', .1
-            f.carried = Figure('carried', f.species, 'baby', None, (), pose='stand',
+            f.carried = Figure('carried', f.species, 'baby', None, (), pose='scared',
                                height=f.height * .42, phase=f.phase + 1.)
             self._remember(f)
             return
@@ -380,39 +384,73 @@ class Storybook:
                 f.x, f.ground, f.height, f.facing, f.depth = .62, .86, .66, 'l', 1
                 f.pose = 'roar'
 
+    def _half_width(self, f):
+        """Half the figure's drawn width, as a share of the frame width."""
+        doodle = preset(f.species, f.age, f.sex, 'stand', f.facing, f.marks)[0]
+        left, top, right, bottom = _bbox(doodle)
+        _, sw, sh = _svg(doodle)
+        w, h = self.size
+        return f.height / max(.05, bottom - top) * (right - left) * sw / sh * h / w / 2
+
     def _crowd(self, shot, line, figures):
         crowd = list(line.crowd)
         if not crowd:
             return
-        trees = [p for p in line.props if p in ('fl_deciduous_tree', 'fl_palm_tree')]
-        taken = [f.x for f in figures]
+        trees = [x for doodle, x, *_ in shot.props if doodle in ('fl_deciduous_tree', 'fl_palm_tree')]
         species = []
         for name, count in crowd:
             names = JUNGLE if name == 'animal' else (name,)
             for i in range(count):
                 species.append(names[i % len(names)])
-        species = species[:7]
         leader = next((f for f in figures if f.pose in ('walk', 'run')), None)
+        species = species[:6 if leader else 7]
         pose = {'walk': 'walk', 'run': 'run', 'scared': 'scared', 'bow': 'bow', 'look': 'stand'}.get(line.crowd_pose, 'stand')
-        free = [x for x in (.08, .2, .32, .44, .56, .68, .8, .92) if all(abs(x - t) > .13 for t in taken)]
+        members = [Figure(f'crowd-{name}-{i}', name, 'adult', None, (), pose=pose, height=SMALL.get(name, .16),
+                          depth=0, crowd=True, phase=_seed(name + str(i))) for i, name in enumerate(species)]
+        climbers = [m for m in members if m.species in ARBOREAL and trees and leader is None]
+        walkers = [m for m in members if m not in climbers]
+        for i, m in enumerate(climbers):
+            m.x, m.ground = trees[0] - .04 + .05 * (i % 3), .44 + .05 * (i % 2)
         if leader is not None:
-            # A procession follows its leader up the path.
-            free = [x for x in (.62, .5, .38, .26, .14, .04) if abs(x - leader.x) > .1]
-            pose = leader.pose
-        for i, name in enumerate(species):
-            height = SMALL.get(name, .16)
-            if name in ARBOREAL and trees and leader is None:
-                x, ground = (.1 + .06 * (i % 3), .44 + .05 * (i % 2))
-            elif free:
-                x, ground = free[i % len(free)], GROUND - .06 + .03 * (i % 2)
-            else:
-                x, ground = .1 + .8 * i / max(1, len(species) - 1), GROUND - .06
+            # A procession: the leader in front, everyone else in a line behind on the path.
+            leader.x = .6
+            x = leader.x - self._half_width(leader)
+            for m in walkers:
+                half = self._half_width(m)
+                x -= half + .015
+                m.x, m.ground, m.facing, m.travel, m.pose = x, GROUND - .03, leader.facing, leader.travel, leader.pose
+                x -= half
+            behind = [m for m in walkers if m.x - self._half_width(m) < .02][:3]
+            walkers[:] = [m for m in walkers if m.x - self._half_width(m) >= .02] + behind
+            for i, m in enumerate(behind):            # the tail of the line walks on the path further back
+                m.height *= .75
+                m.x, m.ground = .56 + .09 * i, GROUND - .17
+        else:
+            blocked = [(f.x, self._half_width(f) + .03) for f in figures] + \
+                      [(x, .07) for _, x, *_ in shot.props]
+            slots = [x for x in (.08, .2, .32, .44, .56, .68, .8, .92)]
+            free = [x for x in slots if all(abs(x - c) > r + .04 for c, r in blocked)]
+            back = []
+            if len(walkers) > len(free):
+                back, walkers = walkers[len(free):], walkers[:len(free)]
+            if walkers and len(walkers) < len(free):
+                free = [free[round(j * (len(free) - 1) / max(1, len(walkers) - 1))] for j in range(len(walkers))] \
+                    if len(walkers) > 1 else [free[len(free) // 2]]
+            for m, x in zip(walkers, free):
+                m.x, m.ground = x, GROUND - .04
+            for i, m in enumerate(back):               # those who do not fit stand further back, smaller
+                m.height *= .7
+                m.x, m.ground = .14 + .72 * (i + .5) / len(back), GROUND - .17
             subject = next(iter(figures), None)
-            facing = (leader.facing if leader else
-                      ('r' if subject and subject.x > x else 'l') if subject else ('r' if i % 2 else 'l'))
-            shot.figures.append(Figure(f'crowd-{name}-{i}', name, 'adult', None, (), pose=pose, x=x,
-                                       ground=ground, height=height, facing=facing, depth=0, crowd=True,
-                                       travel=leader.travel if leader else 0., phase=_seed(name + str(i))))
+            for i, m in enumerate(members):
+                m.facing = ('r' if subject.x > m.x else 'l') if subject else ('r' if i % 2 else 'l')
+        members = climbers + walkers + [m for m in members if m not in climbers and m not in walkers]
+        if leader is not None:
+            members = climbers + walkers
+        for m in members:
+            half = self._half_width(m)
+            m.x = min(1 - half - .01 - m.travel, max(half + .01, m.x)) if half < .45 else .5
+        shot.figures.extend(members)
 
     # ---------------- drawing
     def paper(self, w, h):
@@ -492,12 +530,15 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1.):
-        """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box."""
+               anchor_y=1., pin=None, reference=None):
+        """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
+
+        ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
+        character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground)."""
         w, h = self.size
         sx, sy, zoom = self._to_screen(x, ground, cam, parallax)
         left, top, right, bottom = _bbox(doodle, mirror)
-        px = max(8, round(height * h * zoom / max(.05, bottom - top)))
+        px = max(8, round(_box(doodle, height, reference) * h * zoom))
         if px > 6 * h:
             return None
         step = max(2, int(px * .015))
@@ -508,6 +549,8 @@ class Storybook:
                                  Image.Resampling.BICUBIC)
         iw, ih = image.size
         foot_x, foot_y = (left + right) / 2 * iw, (top + (bottom - top) * anchor_y) * ih
+        if pin is not None:
+            foot_x, foot_y = pin[0] * iw, pin[1] * ih
         if rotate:
             pad = round(max(iw, ih) * .25)
             padded = Image.new('RGBA', (iw + 2 * pad, ih + 2 * pad), (0, 0, 0, 0))
@@ -550,20 +593,19 @@ class Storybook:
             rotate += direction * -roar.lean * .35
             squash += roar.squash
             x += direction * roar.dx * .0006
-        self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash)
+        reference = self._reference(f)
+        self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash,
+                    reference=reference)
         effects = []
         if f.carried is not None:
-            carried, cm = preset(f.carried.species, 'baby', None, 'stand', f.facing, ())
-            ax, ay = anchor(doodle, 'carry', mirror)
-            left, top, right, bottom = _bbox(doodle, mirror)
-            box_h = f.height / max(.05, bottom - top)
-            cx = x + (ax - (left + right) / 2) * box_h * h / w
-            cy = ground + dy - (bottom - ay) * box_h
+            c = f.carried
+            carried, cm = preset(c.species, c.age, c.sex, c.pose, f.facing, c.marks)
+            cx, cy = self._point(doodle, mirror, 'carry', x, ground + dy, f.height, reference)
             swing = 6 * math.sin(local * 4.4 + f.phase)
-            hang = f.carried.height
+            scruff = anchor(carried, 'scruff', cm) if meta(carried).get('anchors', {}).get('scruff') else None
             # The carried doodle hangs from the carrier's mouth by its scruff (top of its back).
-            effects.append(lambda o, d=carried, m=cm, x0=cx, y0=cy, s=swing, ht=hang: self._paste(
-                o, d, m, x0, y0, ht, cam, rotate=s, anchor_y=.1))
+            effects.append(lambda o, d=carried, m=cm, x0=cx, y0=cy, s=swing, fig=c, pin=scruff: self._paste(
+                o, d, m, x0, y0, fig.height, cam, rotate=s, anchor_y=.1, pin=pin, reference=self._reference(fig)))
         if roar is not None and roar.sound > .02:
             effects.append(lambda o, fig=f, d=doodle, m=mirror, p=roar, x0=x, g=ground + dy: self._roar_effects(
                 o, fig, d, m, p, x0, g, cam, local))
@@ -573,14 +615,23 @@ class Storybook:
                 fig.ground - fig.height * .75 + .01 * math.sin(local * 2), fig.height * .3, cam))
         return effects
 
+    def _reference(self, f):
+        """The character's standing preset: the scale every one of its poses is drawn at."""
+        return preset(f.species, f.age, f.sex, 'stand', f.facing, f.marks)[0]
+
+    def _point(self, doodle, mirror, name, x, ground, height, reference=None):
+        """Frame position (x, y shares) of a doodle's named anchor when its feet stand at (x, ground)."""
+        w, h = self.size
+        ax, ay = anchor(doodle, name, mirror)
+        left, _, right, bottom = _bbox(doodle, mirror)
+        box = _box(doodle, height, reference)
+        _, sw, sh = _svg(doodle)
+        return x + (ax - (left + right) / 2) * box * sw / sh * h / w, ground - (bottom - ay) * box
+
     def _roar_effects(self, overlay, f, doodle, mirror, p, x, ground, cam, local):
         """Sound arcs spreading from the open mouth, and a puff of breath (the rig's roar, on the doodle)."""
         w, h = self.size
-        mx, my = anchor(doodle, 'mouth', mirror)
-        left, top, right, bottom = _bbox(doodle, mirror)
-        box = f.height / max(.05, bottom - top)
-        ax = x + (mx - (left + right) / 2) * box * h / w
-        ay = ground - (bottom - my) * box
+        ax, ay = self._point(doodle, mirror, 'mouth', x, ground, f.height, self._reference(f))
         sx, sy, zoom = self._to_screen(ax, ay, cam)
         scale = f.height * h * zoom / 330
         direction = 1 if f.facing == 'r' else -1
@@ -638,16 +689,11 @@ class Storybook:
         """Push into the eyes of the character the line is about."""
         f = shot.eyes
         doodle, mirror, _ = self._pose_doodle(f, local)
-        ex, ey = anchor(doodle, 'eye', mirror)
-        left, top, right, bottom = _bbox(doodle, mirror)
-        box = f.height / max(.05, bottom - top)
-        w, h = self.size
-        hx = f.x + (ex - (left + right) / 2) * box * h / w
-        hy = f.ground - (bottom - ey) * box
+        hx, hy = self._point(doodle, mirror, 'eye', f.x, f.ground, f.height, self._reference(f))
         start = max(shot.start, shot.eyes_at - .3)
         v = min(1., max(0., (local - start) / 1.3))
         e = v * v * (3 - 2 * v)
-        target_zoom = min(3.2, .5 / max(.08, f.height))
+        target_zoom = min(4.5, .9 / max(.08, f.height))       # the head nearly fills the page
         return [cam[0] + (hx - cam[0]) * e, cam[1] + (hy - cam[1]) * e, cam[2] + (target_zoom - cam[2]) * e]
 
     def _face_overlay(self, shot, local):
@@ -656,10 +702,10 @@ class Storybook:
             return None
         f = shot.eyes
         doodle = face(f.species, f.age, f.sex, f.marks)
-        start = max(shot.start, shot.eyes_at - .3) + 1.1
+        start = max(shot.start, shot.eyes_at - .3) + 1.3          # once the push has landed on the eyes
         if doodle is None or local < start:
             return None
-        alpha = min(1., (local - start) / .35)
+        alpha = min(1., (local - start) / .25)
         w, h = self.size
         page = self.paper(w, h).copy().convert('RGBA')
         push = 1 + .05 * min(1., (local - start) / 3)
@@ -702,7 +748,15 @@ def _wrap(text, font, width, draw):
     return lines + ([line] if line else [])
 
 
+def _sky(doodle_id) -> bool:
+    """Clouds, sun, moon and stars hang in the sky; they never stand on the ground."""
+    return doodle_id in SKY_IDS or bool(re.search(r'cloud|moon|(?<![a-z])sun(?!flower)|star(?!fish)|rainbow|lightning|comet',
+                                                  doodle_id))
+
+
 def _animal(doodle_id) -> bool:
     entry = library.catalog().get(doodle_id) or {}
-    return entry.get('category') == 'Animals & Nature' and not re.search(
+    if entry.get('creature'):
+        return True
+    return entry.get('category') in ('Animals & Nature', 'animals') and not re.search(
         r'tree|plant|flower|leaf|herb|seedling|cactus|blossom|rose|tulip|mushroom|shamrock|clover', doodle_id)

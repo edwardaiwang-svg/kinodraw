@@ -211,3 +211,27 @@ def test_animals_never_resolve_to_a_human_figure():
                     assert doodle not in people, (species, age, pose, doodle)
                     assert storybook.meta(doodle).get('species') not in HUMAN_SPECIES
     assert storybook.preset('girl', 'young', 'female', 'stand', 'r')[0] in people
+
+
+def test_story_lions_are_full_body_presets_with_kojos_black_mane(tmp_path, monkeypatch):
+    """J: "King Kojo is not a lion at all". Every lion pose is a full-body creature preset (never the face-only
+    library lion); the king keeps his black mane, the cub is the young lion, and all of a character's poses are
+    drawn at one scale."""
+    from kinodraw.engine import storybook
+    pastes = Pastes(monkeypatch)
+    prod, board, plan, tl = production(tmp_path)
+    span = span_of(prod, 'Roar louder')
+    shot, at = shot_of(span, prod, 'Roar louder')
+    figures = {f.key: f for f in shot.figures}
+    pastes.calls.clear()
+    prod.frame(span.start + figures['kojo'].cue + .9)
+    drawn = {h: d for d, box, h in pastes.calls if box}
+    kojo, pendo = storybook.meta(drawn[figures['kojo'].height]), storybook.meta(drawn[figures['pendo'].height])
+    assert kojo['species'] == 'lion' and kojo['age'] == 'adult' and 'mane_black' in kojo['marks']
+    assert kojo['pose'] == 'roar' and kojo['facing'] == 'l'
+    assert pendo['species'] == 'lion' and pendo['age'] == 'young' and pendo['pose'] == 'look_up'
+    stand = storybook.preset('lion', 'adult', 'male', 'stand', 'r', ('mane_black',))[0]
+    lie = storybook.preset('lion', 'adult', 'male', 'lie', 'r', ('mane_black',))[0]
+    # A lying lion is lower than a standing one at the same character height, not stretched to fill it.
+    _, top, _, bottom = storybook._bbox(lie)
+    assert storybook._box(lie, .4, stand) * (bottom - top) < .4 * .9
