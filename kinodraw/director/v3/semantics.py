@@ -16,8 +16,28 @@ SPECIES = {
     'monkey': ('quadruped', 'primate'), 'human': ('human', 'human'), 'boy': ('human', 'human'),
     'girl': ('human', 'human'), 'man': ('human', 'human'), 'woman': ('human', 'human'),
     'robot': ('object', 'other'), 'blob': ('blob', 'other'),
+    'leopard': ('quadruped', 'feline'), 'cheetah': ('quadruped', 'feline'), 'panther': ('quadruped', 'feline'),
+    'kitten': ('quadruped', 'feline'), 'puppy': ('quadruped', 'canine'), 'jackal': ('quadruped', 'canine'),
+    'elephant': ('quadruped', 'other'), 'giraffe': ('quadruped', 'other'), 'rhino': ('quadruped', 'other'),
+    'hippo': ('quadruped', 'other'), 'zebra': ('quadruped', 'equine'), 'antelope': ('quadruped', 'bovine'),
+    'gazelle': ('quadruped', 'bovine'), 'deer': ('quadruped', 'bovine'), 'goat': ('quadruped', 'bovine'),
+    'sheep': ('quadruped', 'bovine'), 'warthog': ('quadruped', 'other'), 'pig': ('quadruped', 'other'),
+    'gorilla': ('quadruped', 'primate'), 'chimpanzee': ('quadruped', 'primate'),
+    'squirrel': ('quadruped', 'rodent'), 'crocodile': ('quadruped', 'reptile'), 'turtle': ('quadruped', 'reptile'),
+    'frog': ('quadruped', 'other'), 'parrot': ('bird', 'bird'), 'penguin': ('bird', 'bird'),
 }
 SPECIES_RE = re.compile(r'\b(' + '|'.join(SPECIES) + r')\b', re.I)
+HUMAN_SPECIES = {'human', 'boy', 'girl', 'man', 'woman'}
+# Young-animal nouns: "Pendo, their only cub" names an animal without saying which one.
+YOUNG = r'cub|kitten|puppy|pup|foal|calf|chick|hatchling'
+YOUNG_RE = re.compile(r'\b(?:' + YOUNG + r')s?\b', re.I)
+# Body parts only animals own; a possessive owner of one is an animal ("Mara laid her paw").
+PARTS = r'manes?(?!\s+of\s+(?:\w+\s+)?hair)|paws?|fur(?!\s+(?:coat|collar|hat|hood|trim|boots|scarf))|snout|hooves|hoof|claws|fangs|tusks|beak'
+# A specific cue picks the species; any other animal cue joins the story's own animals.
+CUE_SPECIES = (('hooves|hoof|foal', 'horse'), ('tusks', 'elephant'), ('beak|chick|hatchling', 'bird'),
+               ('kitten', 'cat'), ('puppy|pup', 'dog'), ('manes?', 'lion'))
+ANIMAL_WORDS = re.compile(r'\b(?:' + '|'.join(SPECIES) + '|' + YOUNG + r'|animal|creature|beast|other)(?:s|es)?\b|'
+                          r'\b(?:they|them|their)\b', re.I)
 NAME_RE = re.compile(r'\b[A-Z][a-z]+(?:[ -][A-Z][a-z]+)*\b')
 STOP_NAMES = set('''A An The Once Upon At In On By From To And But As Then When Whenever While First Next Finally
 Today Tomorrow Yesterday This That These Those Here There It Its He His Him She Her They Their We Our You
@@ -32,8 +52,8 @@ ACTION_CUES = {
     'breathe_heavy': r'breath(?:es?|ing)\s+heavily', 'hide': r'hid(?:e|es|ing)?|hid',
     'pounce': r'pounc\w*', 'hug': r'hug\w*', 'point': r'point\w*', 'talk': r'said|says?|talk\w*',
 }
-BEFORE_NAME = re.compile(r'\b(?:' + '|'.join(SPECIES) +
-                         r')(?:\s+(?:cub|puppy|kitten))?(?:\s+(?:named|called))?\s*$', re.I)
+BEFORE_NAME = re.compile(r'\b(?:(?:' + '|'.join(SPECIES) + r')(?:\s+(?:cub|puppy|kitten))?|(?<=his |her )(?:' + YOUNG +
+                         r')(?:,)?)(?:\s+(?:named|called))?\s*$', re.I)
 
 
 def _text(value, lang):
@@ -78,7 +98,7 @@ def mentions(name, text) -> bool:
 
 
 MARK_CUES = (
-    ('mane_black', r'\bblack\s+mane\b'), ('mane_gold', r'\bgold(?:en)?\s+mane\b'),
+    ('mane_black', r'\b(?:black|dark)\s+mane\b'), ('mane_gold', r'\bgold(?:en)?\s+mane\b'),
     ('mane_none', r'\b(?:no|without)\s+(?:a\s+)?mane\b|\bcub\b'),
     ('stripes', r'\b(?:tigress|tiger|stripes?|striped)\b'), ('spots', r'\b(?:spots?|spotted)\b'),
     ('scar_nose', r'\bscar(?:red)?\s+nose\b|\bscars?\s+(?:on|across|over)\s+(?:(?:his|her|the|a)\s+)?nose\b'),
@@ -168,6 +188,55 @@ def _owned_possessives(text, found):
     return owned
 
 
+def _animal_parts(text, found, characters, sexes):
+    """Animal body parts with one clear named owner.
+
+    "Mara laid her paw", "Pendo was small, with oversized paws", "Kojo's mane", and a
+    pronoun-led sentence continuing the previous sentence's only character ("lived King
+    Kojo. His mane was dark"). Another animal or a plural between owner and part blocks it.
+    """
+    owned, previous = {}, []
+    mods = r"(?:(?!(?:into|in|on|of|with|to|from|by|for|at|and|or)\b)[\w-]+,?\s+){0,3}"
+    for sentence in re.finditer(r'[^.!?\n]+', text):
+        body = sentence.group()
+        lead = re.match(r'\s*["“]?\s*(he|she|his|her)\b', body, re.I)
+        local = [(n, start, end) for n, start, end in found
+                 if n in characters and sentence.start() <= start < sentence.end()]
+        for hit in re.finditer(r"\b(his|her)\s+" + mods + r"(" + PARTS + r")\b|"
+                               r"\bwith\s+" + mods + r"(" + PARTS + r")\b|"
+                               r"['’]s\s+" + mods + r"(" + PARTS + r")\b", body, re.I):
+            at = sentence.start() + hit.start()
+            pronoun = (hit[1] or '').lower()
+            owner = None
+            if hit.group().startswith(("'", '’')):
+                owner = next((n for n, _, end in local if end == at), None)
+            elif lead and len(previous) == 1 and pronoun:
+                owner = previous[0]
+            else:
+                before = [(n, end) for n, _, end in local if end <= at]
+                if before and not ANIMAL_WORDS.search(text[before[-1][1]:at]):
+                    owner = before[-1][0]
+                    # "with ... paws" describes its subject only after a copula ("Pendo was small, with").
+                    if not pronoun and not re.match(r'\s+(?:is|was|has|had)\b', text[before[-1][1]:at], re.I):
+                        owner = None
+            if owner and pronoun and sexes.get(owner) not in (None, 'unknown', 'male' if pronoun == 'his' else 'female'):
+                owner = None
+            if owner:
+                part = (hit[2] or hit[3] or hit[4]).lower()
+                colour = re.match(r'\s+(?:was|is)\s+(?:as\s+)?(black|dark|gold(?:en)?)\b', text[at + len(hit.group()):], re.I)
+                owned.setdefault(owner, []).append((colour[1].lower() + ' ' if colour else '') + part)
+        if local:
+            previous = list(dict.fromkeys(n for n, _, _ in local))
+        elif not lead:
+            previous = []
+    return owned
+
+
+def _sex_cue(cue):
+    return ('female' if re.search(r'\b(she|her|female|mother|queen|lioness|tigress)\b', cue) else
+            'male' if re.search(r'\b(he|his|male|father|king)\b', cue) else 'unknown')
+
+
 def _detect_cast(script_beats):
     text = '\n'.join(b['spoken'] for b in script_beats)
     found = []
@@ -184,6 +253,7 @@ def _detect_cast(script_beats):
     possessives = _owned_possessives(text, found)
     cast = []
     evidence = {}
+    named_contexts = []
     for name in names:
         contexts = []
         named = False
@@ -198,6 +268,9 @@ def _detect_cast(script_beats):
             # describe another animal. "lion cub Pendo watched the tigress Mara" has two genomes.
             noun = BEFORE_NAME.search(before)
             introduced = re.match(r',\s+(?:a|an)\s+[^,]+', after, re.I)
+            # "Pendo, their only cub" introduces an animal through a young-animal noun.
+            kin = re.match(r',\s+(?:the|his|her|their|our|my)\s+[^,.]+', after, re.I)
+            kin = kin if kin and YOUNG_RE.search(kin.group()) else None
             location = re.search(r'\b(?:in|at|across|from|near|of)\s+(?:the\s+)?(?:[a-z]+\s+){0,2}$', before, re.I)
             subject = re.match(r"\s+(?:(?:was|is|did|would|had)\s+)?(?:" + '|'.join(ACTION_CUES.values()) +
                                r"|watch\w*|lived|loved|returned|guarded)\b", after, re.I)
@@ -205,7 +278,7 @@ def _detect_cast(script_beats):
             # Explicit introductions still admit a character actually named Each.
             determiner_subject = name == 'Each' and re.match(r'\s+point\b', after, re.I)
             # Capitalization alone (places, headings, plural common nouns) is not a name cue.
-            named |= bool(noun or (introduced and not location and SPECIES_RE.search(introduced.group())) or
+            named |= bool(noun or kin or (introduced and not location and SPECIES_RE.search(introduced.group())) or
                           any(w in TITLES for w in text[start:end].split()) or
                           (subject and not determiner_subject and not name.endswith('s') and not SPECIES_RE.fullmatch(name)) or
                           re.search(r'\b(?:mother|father|sister|brother),\s*$', before, re.I) or
@@ -215,6 +288,8 @@ def _detect_cast(script_beats):
             local = before[noun.start():] if noun else ''
             if introduced and not location and SPECIES_RE.search(introduced.group()):
                 local += '; ' + introduced.group()
+            if kin:
+                local += '; ' + kin.group()
             group = re.match(r'\s+and the other (lionesses|tigresses|lions|tigers)\b', after, re.I)
             if group:
                 local += '; ' + {'lionesses': 'lioness', 'tigresses': 'tigress',
@@ -228,13 +303,38 @@ def _detect_cast(script_beats):
                 local += '; ' + owned
             title = next((w for w in text[start:end].split() if w in TITLES), '')
             contexts.append(title + '; ' + local)
-        if not named:
-            continue
+        if named:
+            named_contexts.append((name, contexts))
+    sexes = {name: _sex_cue(_positive_cue('; '.join(contexts + possessives.get(name, [])).lower()))
+             for name, contexts in named_contexts}
+    parts = _animal_parts(text, found, set(sexes), sexes)
+    # A species noun names the animal; otherwise an owned animal cue (mane, paw, cub) picks a
+    # specific species or joins the story's own animals. Only cue-free names default to human.
+    chosen = {}
+    for name, contexts in named_contexts:
         description = next((_positive_cue(s.lower()) for s in contexts if SPECIES_RE.search(_positive_cue(s.lower()))), '')
-        raw_cue = '; '.join(contexts + possessives.get(name, [])).lower()
+        cue = _positive_cue('; '.join(contexts + possessives.get(name, []) + parts.get(name, [])).lower())
+        hit = SPECIES_RE.search(description)
+        if hit:
+            chosen[name] = hit.group().lower()
+        elif YOUNG_RE.search(cue) or name in parts or re.search(r'\b(?:' + PARTS + r')\b', cue):
+            chosen[name] = next((sp for cue_re, sp in CUE_SPECIES if re.search(r'\b(?:' + cue_re + r')\b', cue)), None)
+    base = {'lioness': 'lion', 'tigress': 'tiger'}
+    kinds = [base.get(sp, sp) for sp in chosen.values() if sp and sp not in HUMAN_SPECIES]
+    story_animal = max(kinds, key=kinds.count) if kinds else 'lion'
+    for name in [n for n, sp in chosen.items() if sp is None]:
+        # A cub or pawed character belongs with the animal named just before it.
+        first = next(start for n, start, _ in found if n == name)
+        nearest = [chosen[n] for n, start, _ in found if start < first and chosen.get(n) and chosen[n] not in HUMAN_SPECIES]
+        chosen[name] = base.get(nearest[-1], nearest[-1]) if nearest else story_animal
+    for name, contexts in named_contexts:
+        description = next((_positive_cue(s.lower()) for s in contexts if SPECIES_RE.search(_positive_cue(s.lower()))), '')
+        raw_cue = '; '.join(contexts + possessives.get(name, []) + parts.get(name, [])).lower()
         cue = _positive_cue(raw_cue)
         species_hit = SPECIES_RE.search(description)
-        species = species_hit.group().lower() if species_hit else 'lion' if re.search(r'\bmane\b', cue) else 'human'
+        species = chosen.get(name, 'human')
+        if not species_hit and sexes[name] == 'female':
+            species = {'lion': 'lioness', 'tiger': 'tigress'}.get(species, species)
         kind, family = SPECIES[species]
         age = ('baby' if re.search(r'\b(cub|baby|puppy|kitten|hatchling)\b', cue) else
                'young' if species in ('boy', 'girl') or re.search(r'\b(young|child|teen)\b', cue) else
