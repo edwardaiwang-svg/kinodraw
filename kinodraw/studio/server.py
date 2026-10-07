@@ -837,7 +837,7 @@ def _matcher(lang):
     from ..director.match import Matcher
     with _matcher_lock:
         if lang not in _matchers:
-            _matchers[lang] = Matcher(lang, exclude_categories=())
+            _matchers[lang] = Matcher(lang, exclude_categories=(), include_creatures=True)
         return _matchers[lang]
 
 

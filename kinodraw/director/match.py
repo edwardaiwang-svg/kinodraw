@@ -151,8 +151,9 @@ def listed(entry: dict, lang: str) -> bool:
 
 class Matcher:
     def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',),
-                 include_packs: bool = True, include_creatures: bool = True):
-        # Creature presets are story characters, cast by species and pose (library.creatures), not keyword picks.
+                 include_packs: bool = True, include_creatures: bool = False):
+        """``include_creatures``: also index the generated creature presets (doodle search does; the automatic
+        directors do not, so their picture choices stay as reviewed — story casting uses ``library.creatures``)."""
         self.lang = lang
         self.entries = {i: e for i, e in searchable().items()
                         if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')
@@ -168,8 +169,8 @@ class Matcher:
                 if not key or (lang in ('en', 'es') and (key in EN_STOP or len(key) < 3 or key.isdigit())) or \
                         (lang == 'zh' and (len(key) < 2 or key in ZH_STOP)):
                     continue
-                weight = (1.0 - .04 * min(rank, 5)) * (1.08 if e['set'] == 'bespoke' else
-                                                       PACK_WEIGHT if imported(e) else .8)
+                weight = (1.0 - .04 * min(rank, 5)) * {'bespoke': 1.08, 'fluent': .8}.get(
+                    e['set'], PACK_WEIGHT if imported(e) else .76)
                 self.index.setdefault(key, []).append((did, weight))
         # keywords shared by many doodles say little about any one of them (counting the doodles, not the icons
         # that share a doodle's word, so the icons never weaken a doodle's hit)

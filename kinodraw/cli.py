@@ -265,7 +265,7 @@ def cmd_setup(args):
 
 def cmd_doodles(args):
     from .director.match import Matcher
-    m = Matcher(args.lang)
+    m = Matcher(args.lang, include_creatures=True)
     hits = {h.id: h for h in m.lexical(args.query)}   # pictures named by the words first, as the Studio lists them
     for h in m.semantic(args.query, 12):              # (the two scores are on different scales)
         hits.setdefault(h.id, h)

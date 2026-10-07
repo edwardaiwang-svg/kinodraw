@@ -398,6 +398,7 @@ class Builder:
         if q.stance == 'plant':
             l1 = l2 = ((q.sh_h if front else q.hip_h) - .06 - q.paw_r * 1.05) * .505
             joint, end = two_bone(root, paw + V(0, q.paw_r * .3), l1, l2, -1 if front else 1)
+            paw = end - V(0, q.paw_r * .3)          # out of reach (a long stride): the paw stays on the leg
             parts = [Cone(root, joint, top_r * (1.0 if front else q.thigh_r / q.leg_r), q.knee_r),
                      Cone(joint, end, q.knee_r, q.foot_r),
                      Ellipse(paw + V(.02, 0), q.paw_r * 1.15, q.paw_r * .75)]

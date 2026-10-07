@@ -77,6 +77,7 @@ SPECIES_WORDS = {
     'grandma': ('human', 'female', 'elder'), 'grandpa': ('human', 'male', 'elder'),
     'grandmother': ('human', 'female', 'elder'), 'grandfather': ('human', 'male', 'elder'),
     'teacher': ('human', None, 'adult'), 'villager': ('human', None, 'adult'), 'explorer': ('human', None, 'adult'),
+    'princess': ('human', 'female', 'child'), 'farmer': ('human', None, 'adult'),
 }
 # words that name one drawn look of a species
 VARIANT_WORDS = {
@@ -96,9 +97,16 @@ VARIANT_WORDS = {
     'macaw': ('parrot', 'macaw'), 'green parrot': ('parrot', 'green'), 'parakeet': ('parrot', 'green'),
     'white duck': ('duck', 'white'), 'white hen': ('chicken', 'white'), 'ladybug': ('beetle', 'ladybug'),
     'ladybird': ('beetle', 'ladybug'), 'monarch': ('butterfly', 'monarch'), 'blue butterfly': ('butterfly', 'blue'),
-    'honey bee': ('bee', 'honey'), 'bumblebee': ('bee', 'honey'),
+    'honey bee': ('bee', 'honey'), 'bumblebee': ('bee', 'honey'), 'goldfish': ('fish', 'goldfish'),
+    'clownfish': ('fish', 'clown'), 'clown fish': ('fish', 'clown'), 'blue tang': ('fish', 'tang'),
+    'python': ('snake', 'python'), 'green snake': ('snake', 'green'),
 }
-HUMAN_ROLES = {'king': 'king', 'queen': 'queen', 'teacher': 'teacher', 'villager': 'villager', 'explorer': 'explorer'}
+HUMAN_ROLES = {'king': 'king', 'queen': 'queen', 'teacher': 'teacher', 'villager': 'villager', 'explorer': 'explorer',
+               'princess': 'princess', 'farmer': 'villager'}
+# skin-tone words a caller may pass in ``marks`` -> the tone suffix of a person's variant
+TONE_WORDS = {'light': 'light', 'fair': 'light', 'light_skin': 'light', 'tan': 'tan', 'medium': 'tan',
+              'tan_skin': 'tan', 'medium_skin': 'tan', 'brown': 'brown', 'dark': 'brown', 'brown_skin': 'brown',
+              'dark_skin': 'brown'}
 # animals we may not have, mapped to their closest drawn relative (same family, never a person)
 RELATED = {
     'panther': 'leopard', 'jaguar': 'leopard', 'puma': 'lion', 'cougar': 'lion', 'lynx': 'cat', 'bobcat': 'cat',
@@ -254,6 +262,10 @@ def best_preset(species: str, age: str | None = None, sex: str | None = None, po
             score += 9 if role in (m.get('marks') or ()) or role in (m.get('variant') or '') else 0
         elif m.get('variant') in ('', None):
             score += .5
+        elif human and got & {'casual', 'villager'}:
+            score += 1                      # an unnamed person is an everyday one, not royalty
+        if human and (m.get('variant') or '').rsplit('_', 1)[-1] in {TONE_WORDS.get(k) for k in marks}:
+            score += 5
         return score
 
     pose_order = NEAREST.get(want_pose, (want_pose, 'stand')) if not want_face else \
@@ -266,8 +278,10 @@ def best_preset(species: str, age: str | None = None, sex: str | None = None, po
             return None                     # never cross between animals and people
         try:
             p_rank = pose_order.index(m['pose'])
-        except ValueError:
-            return None
+        except ValueError:                  # nothing near: the species' resting picture (a fish has no "stand")
+            if m['pose'].startswith('face_') != want_face:
+                return None
+            p_rank = len(pose_order) + (0 if m['pose'] in ('stand', 'swim1') else 2)
         f_rank = facing_order.index(m['facing']) if m['facing'] in facing_order else 9
         return character_score(m) - 30 * p_rank - 4 * f_rank
 

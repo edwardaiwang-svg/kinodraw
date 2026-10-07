@@ -33,17 +33,23 @@ def test_tags_and_files_agree_and_only_canonical_pictures_are_searchable():
     for pid, entry in TAGS.items():
         c = entry['creature']
         assert pid.startswith('cr_') and pid.endswith('_' + c['facing'])
-        assert entry.get('search', True) == (c['pose'] == 'stand' and c['facing'] == 'r'), pid
+        resting = 'swim1' if c['family'] == 'fish' else 'stand'
+        assert entry.get('search', True) == (c['pose'] == resting and c['facing'] == 'r'), pid
         assert entry['category'] in ('animals', 'characters')
     shipped = {i for i, e in catalog().items() if e['set'] == 'creatures'}
     assert shipped == files
 
 
 def test_matcher_indexes_only_searchable_creatures():
-    from kinodraw.director.match import searchable
+    from kinodraw.director.match import Matcher, searchable
     found = {i for i, e in searchable().items() if e['set'] == 'creatures'}
     assert found and all(TAGS[i].get('search', True) for i in found)
     assert 'cr_lion_male_adult_roar_r' not in found
+    search = Matcher('en', exclude_categories=(), include_creatures=True)     # doodle search sees them
+    assert 'cr_lion_female_adult_stand_r' in {h.id for h in search.lexical('a lioness')}
+    assert 'cr_lion_male_adult_stand_r' in {h.id for h in Matcher('es', include_creatures=True).lexical('un león')}
+    director = Matcher('en')                                                  # automatic directors do not
+    assert not any(e['set'] == 'creatures' for e in director.entries.values())
 
 
 def test_story_cast_resolves_exactly():
@@ -100,3 +106,27 @@ def test_carry_presets_record_an_anchor_inside_the_picture():
         assert point is not None, pid
         w, h = m['size']
         assert 0 <= point[0] <= w and 0 <= point[1] <= h, (pid, point)
+
+
+def test_people_resolve_by_role_age_and_skin_tone():
+    best, meta = creatures.best_preset, creatures.presets()
+    king = best('king', pose='wave')
+    assert meta[king]['family'] == 'human' and 'king' in meta[king]['marks'] and king.endswith('_wave_r')
+    assert 'queen' in meta[best('queen')]['marks']
+    assert meta[best('princess')]['age'] == 'child' and 'princess' in meta[best('princess')]['marks']
+    boy = best('boy', pose='run', facing='left')
+    assert meta[boy]['age'] == 'child' and meta[boy]['sex'] == 'male' and 'casual' in meta[boy]['marks']
+    assert boy.endswith('_run_l')
+    assert best('grandma', pose='walk').startswith('cr_human_female_elder_')
+    assert best('teacher', pose='shout', marks=('dark',)) .endswith('_brown_shout_r')
+    assert best('king', marks=('light',)).startswith('cr_human_male_adult_king_light_')
+    assert best('person', pose='roar').endswith('_shout_r')            # a person "roars" by shouting
+
+
+def test_a_person_never_resolves_to_an_animal():
+    meta = creatures.presets()
+    for word in ('man', 'woman', 'boy', 'girl', 'child', 'king', 'queen', 'teacher', 'explorer', 'grandpa'):
+        for pose in ('stand', 'walk', 'run', 'fly', 'swim', 'roar', 'sleep', 'carry', 'face_sad'):
+            got = creatures.best_preset(word, pose=pose)
+            assert got is not None and meta[got]['family'] == 'human', (word, pose, got)
+    assert creatures.anchor(creatures.best_preset('explorer', pose='carry')) is not None

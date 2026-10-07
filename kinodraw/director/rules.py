@@ -49,7 +49,7 @@ from .match import EN_STOP, ES_STOP, Hit, Matcher, _model, _normalize, catalog_v
 # Hand-tagged bespoke keywords are reliable; emoji keywords are noisy, so they must agree more.
 AGREE = {'en': {'bespoke': (.40, .60), 'fluent': (.48, .63)}, 'zh': {'bespoke': (.38, .56), 'fluent': (.45, .60)}}
 for _ramps in AGREE.values():                          # generated creature presets are hand-tagged like bespoke
-    _ramps['creatures'] = _ramps['bespoke']
+    _ramps['creatures'] = _ramps['fluent']
 MEANING_ONLY = {'en': .58, 'zh': .55}                 # a doodle with no literal hit must match this well,
 MEANING_STRONG = {'en': .65, 'zh': .62}               # ... and below this, share a word with its sentence
 NAMED_EASE = .06                                       # a drawing whose description names the words may agree less
