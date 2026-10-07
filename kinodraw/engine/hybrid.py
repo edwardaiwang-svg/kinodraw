@@ -15,9 +15,11 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageColor, ImageOps
+from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageOps
 
 from .. import library
+from . import motion
+from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
 from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
@@ -26,6 +28,7 @@ from .creatures import Genome, Action, raster
 from .creatures.actions import ACTIONS, add, cue_pose, target_response, travel_x
 from .creatures.draw import H as RIG_HEIGHT
 
+ANCHOR_GLIDE = .45   # seconds the recurring anchor point takes to glide to its next stop
 TRAVEL_MARGIN = .03  # share of the frame width a walking or running actor keeps clear of the right edge
 # J 2026-10-07: story characters are preset library doodles (engine.storybook), never the procedural rig.
 STORY_DOODLES = True
@@ -124,6 +127,7 @@ class Span:
     diagrams: tuple = ()
     source_proof: bool = False
     story: list | None = None
+    stacked: bool = False       # a proof counter or a call to action owns the frame's centre column
 
 
 class HybridProduction:
@@ -205,6 +209,7 @@ class HybridProduction:
         self.cuts = [s.join for i, s in enumerate(self.spans[1:], 1)
                      if s.spec['transition_in'] == 'cut' or s.scientific or self.spans[i - 1].scientific]
         self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
+        self.anchor_keys = self._anchor_keys()
 
     def _prepare(self, span, project_dir):
         spec = span.spec
@@ -331,7 +336,8 @@ class HybridProduction:
                     path = library.resolve(e['ref'], Path(project_dir))
                     # Library doodles keep their own colours; recolouring every fill made one-colour blobs.
                     elements.append(MotionElement(kind='picture', svg=path.read_text(encoding='utf-8'), width=600, height=450,
-                                                  preserve_svg_palette=True))
+                                                  preserve_svg_palette=True,
+                                                  start=0. if span.actors else self._picture_cue(span, e['ref'])))
                 except (OSError, KeyError, ValueError, AttributeError):
                     self.warnings.append(f"hybrid: missing prop {e['ref']}; unavailable picture omitted")
         text_kind, ref = spec['text']['kind'], spec['text']['ref']
@@ -357,21 +363,29 @@ class HybridProduction:
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
                 if span.source_character:
                     elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
+                else:
+                    self._clause_build(span, elements[-1], e['ref'])
         if not span.diagram and not numeric_chart and text_kind not in ('none', 'caption_only', 'quote'):
             words = source['text'] if source else text
             elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
                 'type_on' if treatment == 'kinetic_type' else 'word_pop', width=1500, size=72,
                 y=.25 if elements and spec['composition'] not in ('grid', 'split') else None))
+            if text_kind != 'counter' and source and not span.source_character:
+                self._clause_build(span, elements[-1], ref)
             if text_kind == 'counter':
-                number = re.search(r'(?<!\w)(-?\d[\d,]*(?:\.\d+)?)(%)?', words)
-                if number:
-                    elements[-1].value_to = float(number[1].replace(',', ''))
-                    elements[-1].suffix = number[2] or ''
-                    elements[-1].decimals = len(number[1].split('.')[1]) if '.' in number[1] else 0
-                    elements[-1].duration = min(1.8, max(.1, duration - .4))
+                proof = arc.proof_number(words)
+                if proof:
+                    counter = elements[-1]
+                    counter.value_from, counter.value_to = proof['from'], proof['to']
+                    counter.prefix, counter.suffix, counter.decimals = proof['prefix'], proof['suffix'], proof['decimals']
+                    counter.duration = min(1.8, max(.1, duration - .4))
+                    if source and not span.source_character:
+                        self._proof_counter(span, elements, source, proof)
                 else:
                     self.warnings.append('hybrid: counter without numeric data uses readable source text')
                     elements[-1].preset = 'type_on'
+            elif text_kind == 'cta' and source and not span.source_character:
+                self._call_to_action(span, elements, source)
         if treatment == 'chart':
             from ..scientific import ScientificPlot
             span.scientific = tuple(ScientificPlot(v['plot']) for bid in spec['beat_ids']
@@ -415,11 +429,21 @@ class HybridProduction:
             for e in copy_elements:
                 e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
                 e.size = 96
-            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed'):
+            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
                 for e in copy_elements:
                     e.y, e.width = .23, 1400
                 for e in pictures:
                     e.y = .60
+            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
+                # A stable frame: one fixed slot per picture, left to right in spoken order, so a picture that
+                # arrives with a later clause never covers or shifts the ones already on the board.
+                pictures.sort(key=lambda e: e.start)
+                step = min(.3, .84 / len(pictures))
+                for k, e in enumerate(pictures):
+                    e.x = .5 + (k - (len(pictures) - 1) / 2) * step
+                    e.width, e.height = min(e.width, 1920 * step * .85), min(e.height, 1080 * .4)
+                order = iter(pictures)
+                elements[:] = [next(order) if e.kind == 'picture' else e for e in elements]
         camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
         transition = spec['transition_in']
         span.motion = MotionScene(elements, duration=max(.01, duration), composition='center' if
@@ -449,6 +473,11 @@ class HybridProduction:
                     element.x, element.y = .64, .42
                     element.width = min(element.width, 1050)
                     element.height = min(element.height, 430)
+        elif span.stacked:
+            # Headline over the number or the button, as in the reference launch; pictures keep to the sides.
+            for k, element in enumerate(e for e in elements if e.kind == 'picture'):
+                element.x, element.y = (.13, .62) if k % 2 == 0 else (.87, .62)
+                element.width, element.height = min(element.width, 330), min(element.height, 300)
         elif spec['composition'] in ('grid', 'split'):
             cols = 2 if spec['composition'] == 'split' else math.ceil(math.sqrt(max(1, len(elements) + len(self._cast_groups(span)))))
             rows = math.ceil(max(1, len(elements) + len(self._cast_groups(span))) / cols)
@@ -456,6 +485,78 @@ class HybridProduction:
                 element.x, element.y = (i % cols + .5) / cols, (i // cols + .5) / rows
                 element.width = min(element.width, 1920 / cols * .8)
                 element.height = min(element.height, 1080 / rows * .65)
+
+    def _spoken_at(self, bid, char):
+        timing = self.tl['beats'][bid]
+        ct = timing['char_times']
+        return timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0.)
+
+    def _clause_build(self, span, element, bid):
+        """Reveal displayed source text clause by clause, each clause at the time the narration starts it."""
+        display, spoken = self.by_id[bid]['text'], self.by_id[bid]['spoken']
+        cues = []
+        for a, b in arc.clauses(display):
+            first = a + len(display[a:b]) - len(display[a:b].lstrip())
+            cues.append(max(0., self._spoken_at(bid, arc.spoken_offset(display, spoken, first)) - span.start))
+        element.preset, element.cues = 'clauses', tuple(cues) or (0.,)
+        element.start = element.cues[0]
+
+    def _on_beat(self, at, low, high, latest):
+        """The first music beat between ``at + low`` and ``at + high`` (absolute seconds, never after ``latest``),
+        else a fixed delay inside that window: state changes land on the music where the narration allows."""
+        late = min(at + high, latest)
+        hits = [float(b) for b in self.score_beats if at + low <= b <= late]
+        return hits[0] if hits else max(at + min(low, .3), min(at + (low + high) / 2, latest))
+
+    def _proof_counter(self, span, elements, source, proof):
+        """Hovercast's proof beat: the source sentence over its number, which rolls up with an ease-out from the
+        moment the number is spoken and lands on a music beat with a pulse and a burst of ticks."""
+        counter = elements[-1]
+        display, spoken = source['text'], source['spoken']
+        at = max(0., self._spoken_at(source['id'], arc.spoken_offset(display, spoken, proof['start'])) - span.start)
+        landing = self._on_beat(span.start + at, .8, 1.5, span.end - .4)
+        counter.start, counter.duration = at, max(.3, landing - span.start - at)
+        counter.ease, counter.hit = 'cubic_out', True
+        counter.x, counter.y, counter.size, counter.width = .5, .62, 200, 1500
+        headline = MotionElement(text='\n'.join(textwrap.wrap(display, 40, break_long_words=False)), width=1500,
+                                 size=80, x=.5, y=.27)
+        self._clause_build(span, headline, source['id'])
+        elements.insert(len(elements) - 1, headline)
+        span.stacked = True
+
+    def _call_to_action(self, span, elements, source):
+        """Hovercast's ask: the words before it as the headline, its imperative as a button pressed on a beat."""
+        display, spoken = source['text'], source['spoken']
+        hit = arc.cta_phrase(display)
+        if hit is None:
+            return
+        a, b = hit
+        at = max(0., self._spoken_at(source['id'], arc.spoken_offset(display, spoken, a)) - span.start)
+        press = self._on_beat(span.start + at, .45, 1.3, span.end - .5) - span.start
+        headline = elements[-1]
+        if display[:a].strip():
+            headline.text = display[:a].strip()
+            headline.x, headline.y = .5, .32
+        else:
+            elements.remove(headline)
+        elements.append(MotionElement(kind='button', text=display[a:b], size=60, x=.5, y=.64, start=at,
+                                      cues=(press,)))
+        span.stacked = True
+
+    def _picture_cue(self, span, ref):
+        """Local time the narration names a picture: its source trigger or label, else a word of its own name."""
+        names = [[], []]
+        for bid in span.spec['beat_ids']:
+            for visual in self.by_id[bid]['visuals']:
+                for item in visual.get('items', []) if visual.get('type') == 'cluster' else []:
+                    if item.get('doodle') == ref:
+                        names[0] += [(bid, self._label(item.get('trigger'))), (bid, self._label(item.get('label')))]
+            names[1] += [(bid, word) for word in re.split(r'[_\-\s]+', ref) if len(word) > 2]
+        for bid, word in names[0] + names[1]:
+            hit = word and re.search(r'(?<!\w)' + re.escape(word) + r'(?!\w)', self.by_id[bid]['spoken'], re.I)
+            if hit:
+                return max(0., min(self._spoken_at(bid, hit.start()) - span.start, span.end - span.start - 1.))
+        return 0.
 
     def _reflow_square(self, span):
         """Reflow logical element boxes before their SVGs are rasterized.
@@ -1213,6 +1314,30 @@ class HybridProduction:
             image.paste(board.resize((round(w * .82), round(h * .82))), (round(w * .09), round(h * .09)))
         if span.actors:
             image = self._actors(span, local, image)
+        zoom, dx, dy = self._camera(span, local)
+        if zoom != 1 or dx or dy:
+            image = camera_move(image, zoom, dx, dy, ImageColor.getrgb(self.style['palette']['background']))
+        if span.source_character:
+            # Source labels/atomic quotes keep their safe screen position while
+            # the scene camera follows the artwork. Captions are added later at
+            # their actual narration time by frame().
+            from .bold import render as renderer
+            key = (id(span.motion), w, h)
+            if key not in self._text_layers:
+                self._text_layers[key] = (_SquareLayers(span.motion, w, h) if self.square else
+                                          _SceneLayers(span.motion, w, h))
+            array = np.asarray(image, dtype=np.float32).copy()
+            for i, e in enumerate(span.motion.elements):
+                if e.kind == 'text' and (e.preset != 'corner_caption' or (quotes and
+                                        e.start <= local < (e.end if e.end is not None else math.inf))):
+                    renderer._composite(array, self._text_layers[key], i, [local], 'text')
+            image = Image.fromarray(np.clip(array + .5, 0, 255).astype(np.uint8))
+        return image.convert('RGB')
+
+    def _camera(self, span, local):
+        """The scene camera applied over a rendered span: zoom about the centre and a pan, in output pixels."""
+        spec = span.spec
+        w, h = self.size
         camera = spec['camera']
         u = min(1., local / max(.01, span.end - span.start))
         zoom = 1 + .045 * u if camera == 'slow_push' else 1.045 - .045 * u if camera == 'pull_back' else 1.
@@ -1243,24 +1368,117 @@ class HybridProduction:
         if camera == 'shake':
             strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
             dx, dy = strength * math.sin(local * 39), strength * math.sin(local * 31)
-        if zoom != 1 or dx or dy:
-            image = camera_move(image, zoom, dx, dy, ImageColor.getrgb(self.style['palette']['background']))
-        if span.source_character:
-            # Source labels/atomic quotes keep their safe screen position while
-            # the scene camera follows the artwork. Captions are added later at
-            # their actual narration time by frame().
-            from .bold import render as renderer
-            key = (id(span.motion), w, h)
-            if key not in self._text_layers:
-                self._text_layers[key] = (_SquareLayers(span.motion, w, h) if self.square else
-                                          _SceneLayers(span.motion, w, h))
-            array = np.asarray(image, dtype=np.float32).copy()
-            for i, e in enumerate(span.motion.elements):
-                if e.kind == 'text' and (e.preset != 'corner_caption' or (quotes and
-                                        e.start <= local < (e.end if e.end is not None else math.inf))):
-                    renderer._composite(array, self._text_layers[key], i, [local], 'text')
-            image = Image.fromarray(np.clip(array + .5, 0, 255).astype(np.uint8))
-        return image.convert('RGB')
+        return zoom, dx, dy
+
+    def _anchored(self, span):
+        """Scenes the recurring anchor point visits: drawn motion scenes, not boards, stories, plots or diagrams."""
+        return (span.motion is not None and span.story is None and not span.source_proof and not span.scientific
+                and not span.source_character and not span.diagram and not span.diagrams and not span.actors
+                and span.spec['treatment'] not in ('whiteboard', 'character')
+                and not (span.spec['treatment'] == 'chart' and (span.source_chart or not span.motion.elements)))
+
+    def _anchor_keys(self):
+        """(time, span, element) stops of the anchor: each picture, headline, number or button from the moment the
+        narration brings it in (never before its scene's join), and the scene's centre until the first arrives."""
+        keys = {}
+        for i, span in enumerate(self.spans):
+            if not self._anchored(span):
+                continue
+            targets = [(max(span.join, span.start + e.start), j) for j, e in enumerate(span.motion.elements)
+                       if e.kind in ('picture', 'button') or e.kind == 'text' and e.preset != 'corner_caption']
+            if not targets or min(targets)[0] > span.join + 1e-6:
+                targets.append((span.join, None))        # the scene's centre until its first target arrives
+            for at, j in sorted(targets, key=lambda k: (k[0], -1 if k[1] is None else k[1])):
+                keys[round(at, 6)] = (at, i, j)          # one target per instant: the later element wins
+        return sorted(keys.values())
+
+    def _anchor_target(self, i, j, t):
+        """Screen point just above element j of span i at time t, with its form: (x, y, bar, ring)."""
+        from .bold.render import H, W, _button_box, element_pose
+        span = self.spans[i]
+        local = max(0., min(t, span.end - 1 / 30) - span.start)
+        w, h = self.size
+        if j is None:
+            x, y, bar, ring = W / 2, H / 2, 0., 0.
+        else:
+            e = span.motion.elements[j]
+            x, y, scale, _ = element_pose(span.motion, e, j, local)
+            if e.kind == 'picture':
+                half, bar, ring = e.height / 2, 0., 0.
+            elif e.kind == 'button':
+                half, bar, ring = _button_box(e)[3] / 2, 0., 1.
+            else:
+                half = len(e.text.split('\n')) * e.size * .6
+                bar, ring = (0., 1.) if e.preset == 'counter' else (1., 0.)
+            y = max(H * .06, y - half * scale - 34)
+        zoom, dx, dy = self._camera(span, local)
+        x, y = x * w / W, y * h / H
+        return w / 2 + zoom * (x - dx - w / 2), h / 2 + zoom * (y - dy - h / 2), bar, ring
+
+    def _anchor(self, t):
+        """What's the Point: one accent point carries the motif through the motion scenes. It rests just above
+        whatever the narration has brought in (a dot over a picture, a rule over a headline, a ring over a number
+        or a button), glides to the next one, across scene joins too, and holds a scene's centre until then.
+        Returns its screen position, form weights and opacity, or None where it is not drawn."""
+        if not self.anchor_keys or self.square or self.vertical or t < self.starts[0]:
+            return None
+        end_start = self.tl['end_card']['start']
+        i = bisect.bisect_right(self.starts, min(t, end_start - 1e-6)) - 1
+        span = self.spans[i]
+        visited = {key[1] for key in self.anchor_keys}                 # spans with stops of their own
+        here, before = i in visited, i - 1 in visited
+        fade = motion.clamp01((t - span.join) / max(.3, span.join_length))
+        if t >= end_start:
+            if not here or t >= end_start + span.join_length:
+                return None
+            alpha = 1 - motion.clamp01((t - end_start) / max(.01, span.join_length))
+        elif here:
+            alpha = 1. if before else fade
+        elif (before and t < span.join + span.join_length and span.spec['treatment'] != 'whiteboard'
+              and not span.source_proof and not span.scientific):
+            alpha = 1 - fade                                            # out over the transition; boards and plots cut
+        else:
+            return None
+        times = [k[0] for k in self.anchor_keys]
+        k = max(0, bisect.bisect_right(times, t) - 1)
+        at, si, sj = self.anchor_keys[k]
+        x, y, bar, ring = self._anchor_target(si, sj, t)
+        if k and self.anchor_keys[k - 1][1] >= si - 1:                 # glide on from the stop before it
+            u = motion.cubic_in_out((t - at) / ANCHOR_GLIDE)
+            if u < 1:
+                old = self._anchor_target(*self.anchor_keys[k - 1][1:], t)
+                x, y, bar, ring = (a + (b - a) * u for a, b in zip(old, (x, y, bar, ring)))
+        return {'x': x, 'y': y, 'bar': bar, 'ring': ring, 'alpha': alpha}
+
+    def _draw_anchor(self, image, t):
+        anchor = self._anchor(t)
+        if anchor is None or anchor['alpha'] <= 0:
+            return image
+        s = image.size[1] / 1080
+        x, y = anchor['x'], anchor['y']
+        r, half, ring = 7 * s, 46 * s * anchor['bar'], 22 * s * anchor['ring']
+        pad = math.ceil(half + ring + 28 * s)
+        left, top = math.floor(x) - pad, math.floor(y) - pad
+        k = 4                                                            # supersampled for clean edges
+        layer = Image.new('RGBA', (2 * pad * k, 2 * pad * k), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        accent = ImageColor.getrgb(self.style['palette']['accent'])[:3]
+        cx, cy = (x - left) * k, (y - top) * k
+        thick = r * (1 - .35 * anchor['bar'])
+        draw.rounded_rectangle((cx - (half + thick) * k, cy - thick * k, cx + (half + thick) * k, cy + thick * k),
+                               radius=thick * k, fill=accent + (255,))
+        if ring > .5 * s:
+            reach = (r + ring) * k
+            draw.ellipse((cx - reach, cy - reach, cx + reach, cy + reach), outline=accent + (round(200 * anchor['ring']),),
+                         width=max(1, round(2.5 * s * k)))
+        layer = layer.resize((2 * pad, 2 * pad), Image.Resampling.LANCZOS)
+        glow = layer.filter(ImageFilter.GaussianBlur(9 * s))
+        out = Image.new('RGBA', layer.size, (0, 0, 0, 0))
+        out = Image.alpha_composite(Image.alpha_composite(out, glow), layer)
+        if anchor['alpha'] < 1:
+            out.putalpha(out.getchannel('A').point(lambda v: round(v * anchor['alpha'])))
+        image.paste(out, (left, top), out)                              # clipped at the frame's edges
+        return image
 
     def _square_frame(self, scene, t, w, h, background):
         """Use the motion engine's native sprites/effects with uniform square geometry."""
@@ -1309,7 +1527,7 @@ class HybridProduction:
                 current = self.whiteboard.frame(card_t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
                                           *self.size, kind='match', duration=last.join_length)
-                image = Image.fromarray(array).convert('RGBA')
+                image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
                     self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
                 return image.convert('RGB')
@@ -1338,7 +1556,7 @@ class HybridProduction:
                 array = render_transition(np.asarray(previous), np.asarray(image), local, *self.size,
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)
-        image = image.convert('RGBA')
+        image = self._draw_anchor(image.convert('RGBA'), t)
         if not self.vertical:
             self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')
@@ -1379,6 +1597,16 @@ class HybridProduction:
                         cues += [{'t': span.start + e.start + (k + 1) / TYPE_CPS, 'kind': 'type_tick', 'strength': .7,
                                   'id': f'hybrid.type.{i}.{j}.{k}'} for k, char in enumerate(e.text)
                                  if not char.isspace() and span.start + e.start + (k + 1) / TYPE_CPS < until]
+            if span.motion and not span.source_character:   # soft state-change hits, already on music beats
+                for j, e in enumerate(span.motion.elements):
+                    if e.kind == 'text' and e.preset == 'counter' and e.hit:
+                        at, kind, strength = span.start + e.start + e.duration, 'pop', .6
+                    elif e.kind == 'button':
+                        at, kind, strength = span.start + e.cues[0], 'tap', .8
+                    else:
+                        continue
+                    if start <= at < until:
+                        cues.append({'t': at, 'kind': kind, 'strength': strength, 'id': f'hybrid.hit.{i}.{j}'})
             if span.story is not None:                       # the storybook's roars, timed to its drawn jaw
                 for j, at in enumerate(self.storybook.roar_cues(span.story, span.start)):
                     cues.append({'t': at, 'kind': 'roar', 'id': f'hybrid.story.{i}.{j}'})

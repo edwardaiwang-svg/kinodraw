@@ -5,6 +5,7 @@ import copy
 import math
 import re
 
+from .arc import cta_phrase, proof_number
 from .schema import PLAN_SCHEMA, SCENE
 from ...engine.source_diagrams import resolve as resolve_diagram
 from .semantics import beats, candidate_ids, cast_evidence, detect_cast, mentions, name_key
@@ -268,6 +269,15 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
         elif text['kind'] != 'none' and text['ref'] not in bids:
             repairs.append(f'{path}.text: dropped unknown or out-of-scene ref {text["ref"]!r}')
             scene['text'] = {'kind': 'none', 'ref': ''}
+        kind, ref = scene['text']['kind'], scene['text']['ref']
+        if kind == 'counter' and not proof_number(by_id[ref]['text']):
+            scene['text']['kind'] = 'kinetic'
+            repairs.append(f'{path}.text: a counter needs a spoken quantity in {ref} (not a part number or year); '
+                           'showing kinetic text')
+        elif kind == 'cta' and not cta_phrase(by_id[ref]['text']):
+            scene['text']['kind'] = 'kinetic'
+            repairs.append(f'{path}.text: a call to action needs an imperative such as "Sign up" in {ref}; '
+                           'showing kinetic text')
         refs = {e['ref'] for e in elements if e['kind'] == 'text'}
         if scene['text']['kind'] != 'none':
             refs.update(bids if scene['text']['kind'] == 'caption_only' else [scene['text']['ref']])

@@ -14,8 +14,10 @@ PARTICLE_STAGGER = .25
 COMPOSITIONS = {'center', 'left_third', 'right_third', 'split', 'grid', 'full_bleed'}
 CAMERAS = {'static', 'slow_push', 'pull_back', 'pan', 'shake'}
 TRANSITIONS = {'cut', 'wipe', 'iris', 'match', 'zoom_through', 'morph', 'page'}
-PRESETS = {'type_on', 'word_pop', 'slam', 'cascade', 'counter', 'corner_caption'}
-KINDS = {'text', 'picture', 'dot', 'line', 'ring', 'particle_field', 'chart'}
+PRESETS = {'type_on', 'word_pop', 'slam', 'cascade', 'counter', 'corner_caption', 'clauses'}
+CLAUSE_STAGGER = .05                # seconds between the words of one clause
+KINDS = {'text', 'picture', 'dot', 'line', 'ring', 'particle_field', 'chart', 'button'}
+HIT = .45                           # seconds of a counter's landing burst or a button's press ripple
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,21 @@ class MotionElement:
     font: str = 'rounded'
     kick: float = 0.                  # initial px/frame, with .7 decay at 30 fps
     preserve_svg_palette: bool = False  # generated artwork already follows the authored palette
+    cues: tuple[float, ...] = ()      # clauses: each clause's local start (its spoken time); button: its press
+    prefix: str = ''                  # counter: currency or other sign before the number
+    ease: str = 'linear'              # counter: easing of the roll (a name in motion.EASING)
+    hit: bool = False                 # counter: pulse and a burst of ticks as it lands
+
+    @staticmethod
+    def word_starts(text, cues):
+        """Start of each word: its clause's cue, a short stagger inside the clause. A clause ends at , ; : . ! ? or …."""
+        out, clause, within = [], 0, 0
+        for word in text.split():
+            out.append(cues[min(clause, len(cues) - 1)] + min(.4, within * CLAUSE_STAGGER))
+            within += 1
+            if word[-1] in ',;:.!?…':
+                clause, within = clause + 1, 0
+        return out
 
     def __post_init__(self):
         if self.kind not in KINDS or self.preset not in PRESETS:
@@ -68,6 +85,11 @@ class MotionElement:
             raise ValueError('Counter decimals must be 0..6')
         if self.kind == 'picture' and not (self.svg_id or self.svg):
             raise ValueError('A picture needs a library SVG id or raw SVG')
+        self.cues = tuple(float(c) for c in self.cues)
+        if self.preset == 'clauses' and self.kind == 'text' and not self.cues:
+            raise ValueError('A clauses reveal needs the start of each clause')
+        if self.kind == 'button' and not (self.text.strip() and len(self.cues) == 1):
+            raise ValueError('A button needs a label and one press time')
 
     @property
     def entrance(self):
@@ -105,11 +127,15 @@ class MotionScene:
                     animation = e.duration or 1.8
                 elif e.kind == 'text' and e.preset == 'type_on':
                     animation = max(TEXT_ENTER, len(e.text) / TYPE_CPS)
+                elif e.kind == 'text' and e.preset == 'clauses':
+                    animation = max(e.word_starts(e.text, e.cues), default=e.start) - e.start + TEXT_ENTER
                 elif e.kind == 'text' and e.preset in {'word_pop', 'cascade'}:
                     n = len(e.text.split()) if e.preset == 'word_pop' else len(e.text)
                     animation = TEXT_ENTER + max(0, n - 1) * (.1 if e.preset == 'word_pop' else .035)
                 elif e.kind == 'chart':
                     animation += min(.3, max(0, len(e.values) - 1) * .09)
+                elif e.kind == 'button':
+                    animation = e.cues[0] - e.start + HIT
                 elif e.kind == 'particle_field' and e.count:
                     animation += PARTICLE_STAGGER
                 finishes.append(e.start + animation)

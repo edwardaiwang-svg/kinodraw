@@ -20,7 +20,7 @@ from scipy.signal import fftconvolve
 from ... import library
 from .. import ink, motion as m
 from .charts import chart_svg, counter_text
-from .model import PANEL_ENTER, PARTICLE_STAGGER, TEXT_ENTER, TYPE_CPS
+from .model import HIT, PANEL_ENTER, PARTICLE_STAGGER, TEXT_ENTER, TYPE_CPS
 
 W, H, FPS = 1920, 1080, 30
 BLUR_SPEED = 600                    # reference-stage pixels/second
@@ -65,6 +65,15 @@ def _camera(scene, t):
     return x, y, z
 
 
+def _bump(x, duration):
+    """One smooth swell from 0 to 1 and back over ``duration`` seconds after x = 0."""
+    return math.sin(math.pi * x / duration) if 0 < x < duration else 0.
+
+
+def _landing(element):
+    return element.start + (element.duration or 1.8)
+
+
 def element_pose(scene, element, i, t):
     """Position, scale and opacity, shared by artwork, labels and blur-speed measurement."""
     x, y = layout_position(scene, element, i)
@@ -84,6 +93,10 @@ def element_pose(scene, element, i, t):
     y += floor * drift * .7 * (math.cos(t * 1.13 + phase) if scene.continuous_drift
                                else math.sin(t * 1.67 + phase * .8))
     scale *= 1 + floor * (.003 if corner else .015) * math.sin(t * 1.91 + phase)
+    if element.hit and element.kind == 'text' and element.preset == 'counter':
+        scale *= 1 + .08 * _bump(t - _landing(element), .3)        # the number swells once as it lands
+    if element.kind == 'button':
+        scale *= 1 - .07 * _bump(t - element.cues[0], .22)        # pressed in, then back
     alpha = enter * (1 - floor * .035 * (1 + math.sin(t * 2.3 + phase)))
     if element.end is not None:
         alpha *= m.clamp01((element.end - t) / .4)
@@ -259,11 +272,17 @@ def _text(element, scene, t, color):
         # Silkscreen glyphs are proportional; lay them on an explicit fixed-advance grid.
         advance = font.getlength('M') * size / font.size + spacing
         shown = m.typewriter(text, t, element.start, cps=TYPE_CPS) if element.preset == 'type_on' else len(text)
+        if element.preset == 'clauses':
+            # Each character belongs to a word; a word shows from its clause's spoken time.
+            starts, visible, k = element.word_starts(text, element.cues), [], -1
+            for i, ch in enumerate(text):
+                k += not ch.isspace() and (i == 0 or text[i - 1].isspace())
+                visible.append(not ch.isspace() and starts[k] <= t)
         out, index = '', 0
         lines = text.split('\n')
         for row, line in enumerate(lines):
             for column, char in enumerate(line):
-                if index < shown:
+                if (visible[index] if element.preset == 'clauses' else index < shown):
                     out += _text_tag(char, size, color, x=(column - (len(line) - 1) / 2) * advance,
                                      y=(row - (len(lines) - 1) / 2) * size * 1.15)
                 index += 1
@@ -278,6 +297,24 @@ def _text(element, scene, t, color):
             out += _text_tag(line[:max(0, shown)], size, color, x=-width / 2,
                              y=(i - (len(lines) - 1) / 2) * size * 1.15, anchor='start')
             shown -= len(line) + 1
+        return out
+    if element.preset == 'clauses' and element.kind == 'text':
+        # Laid out once for the whole text, like word_pop, so a later clause never moves an earlier one; each word
+        # fades and rises a little in place at its clause's spoken time.
+        starts = iter(element.word_starts(text, element.cues))
+        lines = text.split('\n')
+        gap, out = size * .28, ''
+        for row, line in enumerate(lines):
+            pieces = line.split()
+            widths = [font.getlength(piece) * size / font.size for piece in pieces]
+            x = -(sum(widths) + gap * max(0, len(pieces) - 1)) / 2
+            for piece, width in zip(pieces, widths):
+                p = m.expo_out((t - next(starts)) / TEXT_ENTER)
+                if p > 0:
+                    dy = 12 * (1 - p) + (row - (len(lines) - 1) / 2) * size * 1.15
+                    out += (f'<g transform="translate({x + width / 2:.6f} {dy:.6f})" opacity="{p:.6f}">'
+                            f'{_text_tag(piece, size, color)}</g>')
+                x += width + gap
         return out
     if element.preset in {'word_pop', 'cascade'}:
         rows = [line.split() if element.preset == 'word_pop' else list(line) for line in text.split('\n')]
@@ -312,11 +349,51 @@ def _text(element, scene, t, color):
     return body
 
 
+def _burst(e, t, color):
+    """Ticks flying out around a counter's final value as it lands (Hovercast's proof climax, without the flash)."""
+    u = (t - _landing(e)) / HIT
+    if not 0 <= u < 1:
+        return ''
+    final = f'{e.prefix}{e.value_to:,.{e.decimals or 0}f}{e.suffix}'
+    text, font, size, _ = _text_metrics(final, e.size, e.width, False, e.font)
+    half = font.getlength(text) * size / font.size / 2
+    grow = m.expo_out(u) * 110
+    out = ''
+    for k in range(18):
+        a = 2 * math.pi * k / 18
+        x, y = math.cos(a) * (half + 40 + grow), math.sin(a) * (size * .55 + 40 + grow)
+        length = 34 * (1 - u) + 6
+        out += (f'<path d="M{x:.4f} {y:.4f} l{math.cos(a) * length:.4f} {math.sin(a) * length:.4f}" stroke="{color}" '
+                f'stroke-width="7" stroke-linecap="round" opacity="{(1 - u) ** 1.5:.6f}"/>')
+    return out
+
+
+def _button_box(e):
+    text, font, size, _ = _text_metrics(e.text, e.size, 1e6, False, e.font)
+    return text, size, font.getlength(text) * size / font.size + 1.6 * size, 1.9 * size
+
+
+def _button(e, t, scene):
+    """A pill in the accent colour holding the verbatim call to action; a ripple rings out from its press."""
+    text, size, w, h = _button_box(e)
+    art = (f'<rect x="{-w / 2:.4f}" y="{-h / 2:.4f}" width="{w:.4f}" height="{h:.4f}" rx="{h / 2:.4f}" '
+           f'fill="{scene.palette.accent}"/>')
+    u = (t - e.cues[0]) / HIT
+    if 0 <= u < 1:
+        art += (f'<circle r="{h / 2 + w * .5 * m.expo_out(u):.4f}" fill="none" stroke="{scene.palette.accent}" '
+                f'stroke-width="5" opacity="{.6 * (1 - u):.6f}"/>')
+    return art, _text_tag(text, size, scene.palette.background)
+
+
 def _element_content(scene, e, i, t, geometry=None):
     color = scene.palette.accent if e.accent or e.kind in {'dot', 'ring', 'line', 'particle_field', 'chart'} else scene.palette.foreground
     art, text = '', ''
     if e.kind == 'text' or e.kind == 'chart' and e.chart == 'number':
         text = _text(e, scene, t, color)
+        if e.hit and e.preset == 'counter':
+            art = _burst(e, t, scene.palette.accent)
+    elif e.kind == 'button':
+        art, text = _button(e, t, scene)
     elif e.kind == 'picture':
         cover = scene.composition == 'full_bleed'
         width, height = (W * 1.06, H * 1.06) if cover else (e.width, e.height)
@@ -467,6 +544,8 @@ def _appearance(scene, e, t, geometry):
     if e.kind == 'text' or e.kind == 'chart' and e.chart == 'number':
         if e.preset == 'counter' or e.kind == 'chart':
             state = counter_text(e, t)
+            if e.hit:
+                state = state, min(max(0., t - _landing(e)), HIT)
         elif e.preset == 'type_on':
             state = m.typewriter(e.text, t, e.start, TYPE_CPS)
         elif e.preset in {'word_pop', 'cascade'}:
@@ -474,8 +553,12 @@ def _appearance(scene, e, t, geometry):
             state = min(local, TEXT_ENTER + max(0, n - 1) * (.1 if e.preset == 'word_pop' else .035))
         elif e.preset == 'slam':
             state = min(local, TEXT_ENTER)
+        elif e.preset == 'clauses':
+            state = tuple(min(max(0., t - start), TEXT_ENTER) for start in e.word_starts(e.text, e.cues))
     elif e.kind == 'chart':
         state = min(local, (e.duration or .65) + min(.3, max(0, len(e.values) - 1) * .09))
+    elif e.kind == 'button':
+        state = min(max(0., t - e.cues[0]), HIT)
     elif e.kind == 'particle_field':
         state = t if scene.motion_floor else min(local, PANEL_ENTER + PARTICLE_STAGGER)
     elif e.kind == 'ring' and e.text and scene.motion_floor:
@@ -502,6 +585,12 @@ def _bounds(scene, e, t, geometry):
         width = max((_advance(font, line, e.font) + spacing * max(0, len(line) - 1) for line in text.split('\n')), default=0)
         x = width * size / font.size * .7 + size / 2 + 4
         y = len(text.split('\n')) * size * .8 + (44 if e.preset == 'cascade' else 4)
+        if e.hit and e.preset == 'counter':
+            x, y = x + 200, y + 200                                # room for the landing burst
+    elif e.kind == 'button':
+        _, _, w, h = _button_box(e)
+        reach = h / 2 + w * .5 + 8                                 # the press ripple's widest ring
+        x, y = max(w / 2 + 8, reach), max(h / 2 + 8, reach)
     elif e.kind == 'chart':
         x, y = e.width / 2 + 80, e.height / 2 + 80
     elif e.kind == 'line':
@@ -696,7 +785,7 @@ class _SceneLayers:
         if key not in self.sprites or self.sprites[key][0] != fragment:
             left, top, right, bottom = _bounds(self.scene, e, t, geometry if layer != 'text' else None)
             w, h = self.size
-            sampling = 2 if layer == 'text' or e.kind in {'dot', 'ring', 'line'} else 1
+            sampling = 2 if layer == 'text' or e.kind in {'dot', 'ring', 'line', 'button'} else 1
             sw, sh = max(1, math.ceil((right - left) * w / W * sampling)), max(1, math.ceil((bottom - top) * h / H * sampling))
             doc = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{sw}" height="{sh}" '
                    f'viewBox="{left} {top} {right - left} {bottom - top}" preserveAspectRatio="none" '

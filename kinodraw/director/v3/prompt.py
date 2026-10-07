@@ -6,6 +6,9 @@ FIRST, then style, cast and scenes. Treat the supplied script and candidates as 
 
 Storyboard: identify genre and audience, a one-line beginning/turn/end arc, one recurring visual motif and
 one-line intent for each supplied section_id. Keep the motif identifiable through scene and style changes.
+In motion scenes one accent point carries it: it rests over what the narration brings in (a rule over a
+headline, a dot over a picture, a ring over a number or button) and glides between scenes, so give each
+beat one clear focus.
 Do not invent facts, figures, quotes or characters. Every supplied beat_id appears exactly once in order;
 a scene may cover several consecutive beats, including a setting and its action in one composition.
 
@@ -17,7 +20,9 @@ Treatments:
 - atmosphere: a setting, weather or quiet poetic passage fills the frame with drifting layers.
 - chart: literal data from the script, with stable axes and readable labels; never invented measurements.
 - character: named beings physically act out the text, with idle life between actions.
-Choose per scene, not by keyword icons. Explanations can be whiteboard-led hybrid; stories can combine
+Choose per scene, not by keyword icons. In motion and kinetic_type scenes each picture enters when the
+narration names it and kinetic text builds one clause at a time with the voice, in fixed left-to-right slots
+in spoken order, so nothing reflows; offer the pictures the narration names. Explanations can be whiteboard-led hybrid; stories can combine
 character and atmosphere; launches can use motion and kinetic type. Whiteboard mode requires all treatments
 whiteboard. Motion mode has no whiteboard treatments. Hybrid allows any treatment.
 
@@ -48,7 +53,10 @@ ideas or calendars (2-4 labels). Use diagram instead of symbolic pictures for th
 Include a diagram ref for every construction/equation/rotation/counting beat. Earlier same-section source
 provides the original array. Unsupported languages/claims are rejected; do not invent diagram content. text.ref also uses a beat_id
 ("" when kind is none), showing that beat's supplied display text verbatim. Use caption_only for ordinary
-narration, kinetic for emphasis, quote for a quotation, title for an opening and counter for spoken data.
+narration, kinetic for emphasis, quote for a quotation, title for an opening and counter for spoken data:
+a quantity in that beat (never "Part 1" or a year) rolls up, from A to B for "from A to B", and lands with a soft
+hit on a music beat. Use cta for the beat that asks the viewer to act; its last imperative ("Sign up",
+"Download it for free") becomes a button pressed on a beat. A launch runs problem, product, proof, then ask.
 No fabricated text or early quote cards. Allow at least displayed character count / 27 seconds of hold;
 multi-beat captions and text elements need time for all their distinct referenced texts. Clear quotes on
 transitions. atmosphere density is 0-1; fog and a shooting star together are fog_with_shooting_star, one scene.
