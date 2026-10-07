@@ -49,7 +49,7 @@ SCENE = _obj(
     atmosphere=_obj(kind=_enum(*ATMOSPHERES), density=N),
     camera=_enum('static', 'slow_push', 'pull_back', 'pan_left', 'pan_right', 'shake', 'follow'),
     transition_in=_enum(*TRANSITIONS), hold_s=N,
-    text=_obj(kind=_enum('none', 'caption_only', 'quote', 'title', 'counter', 'kinetic'), ref=S),
+    text=_obj(kind=_enum('none', 'caption_only', 'quote', 'title', 'counter', 'kinetic', 'cta'), ref=S),
 )
 PLAN_SCHEMA = _obj(
     storyboard=_obj(

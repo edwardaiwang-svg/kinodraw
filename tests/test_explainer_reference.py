@@ -6,6 +6,7 @@ renderer, on the synthetic narration clock, and reads the plan, the motion scene
 from pathlib import Path
 
 import numpy as np
+from PIL import ImageColor
 import pytest
 
 from kinodraw import pipeline
@@ -88,3 +89,101 @@ def test_clause_preset_reveals_in_place_without_reflow():
     assert len(first) and len(full)
     assert full[-1] - first[-1] > 150                     # the second clause appears only at its cue
     assert abs(full[0] - first[0]) <= 1                   # the first clause keeps its place: no reflow
+
+
+# ------------------------------------------------------------ 2. Hovercast: problem, product, proof, call to action
+@pytest.fixture(scope='module')
+def news(tmp_path_factory):
+    return project(tmp_path_factory.mktemp('news'), GENRE / 'news.md')
+
+
+def scene_for(plan, board, prefix):
+    bid = next(b['id'] for b in beats(board) if b['text'].startswith(prefix))
+    return bid, next(s for s in plan['scenes'] if bid in s['beat_ids'])
+
+
+def test_launch_arc_reads_a_real_promo_proof_and_ask():
+    from kinodraw.director.v3.arc import cta_phrase, proof_number
+    from kinodraw.director.v3.rules import detect_genre
+    # "Meet KinoDraw." reveals a product and "Download it for free." asks: a launch, though it mentions lessons.
+    assert detect_genre((Path(__file__).parent / 'fixtures' / 'promo_kinodraw.md').read_text()) == 'launch/promo'
+    assert proof_number('Part 2: These figures describe the measured trips.') is None
+    proof = proof_number('Bus trips rose from 20 percent to 25 percent this quarter.')
+    assert (proof['from'], proof['to'], proof['suffix']) == (20, 25, '%')
+    text = 'Start your next project today. Sign up and try it with your team.'
+    a, b = cta_phrase(text)
+    assert text[a:b] == 'Sign up'
+
+
+def test_rules_give_spoken_quantities_counters_and_the_ask_a_button(news, launch):
+    from kinodraw.director.v3.arc import proof_number
+    board, plan, tl, prod = news
+    texts = {b['id']: b['text'] for b in beats(board)}
+    counters = [s for s in plan['scenes'] if s['text']['kind'] == 'counter']
+    assert counters and all(proof_number(texts[s['text']['ref']]) for s in counters)
+    _, part = scene_for(plan, board, 'Part 2: These figures')
+    assert part['treatment'] != 'chart' and part['text']['kind'] != 'counter'      # "Part 2" is not a quantity
+    board, plan, tl, prod = launch
+    _, ask = scene_for(plan, board, 'Start your next project today. Sign up')
+    assert ask['text']['kind'] == 'cta'
+
+
+def test_validation_turns_unsupported_counters_and_buttons_into_kinetic_text(launch):
+    import copy
+    from kinodraw.director.v3.validate import validate
+    from kinodraw.director.validate import _doodles
+    board, plan, tl, prod = launch
+    plan = copy.deepcopy(plan)
+    _, plain = scene_for(plan, board, 'Introducing our new app')
+    _, ask = scene_for(plan, board, 'Start your next project today. Sign up')
+    plain['text'] = {'kind': 'counter', 'ref': plain['beat_ids'][0]}
+    ask['text']['kind'] = 'cta'
+    title = plan['scenes'][0]
+    title['text'] = {'kind': 'cta', 'ref': title['beat_ids'][0]}
+    candidates = {b['id']: list(_doodles(b['visuals'])) for b in board['beats']}
+    fixed, repairs = validate(plan, board, candidates)
+    by = {s['beat_ids'][0]: s for s in fixed['scenes']}
+    assert by[plain['beat_ids'][0]]['text']['kind'] == 'kinetic'
+    assert by[title['beat_ids'][0]]['text']['kind'] == 'kinetic'
+    assert by[ask['beat_ids'][0]]['text']['kind'] == 'cta'
+    assert sum('counter needs a spoken quantity' in r for r in repairs) == 1
+    assert sum('call to action needs' in r for r in repairs) == 1
+
+
+def test_proof_counter_rolls_ease_out_from_a_to_b_and_lands_on_a_beat_with_a_hit(news):
+    board, plan, tl, prod = news
+    bid, _ = scene_for(plan, board, 'Key takeaway: The report shows')
+    span = span_of(prod, bid)
+    counter = next(e for e in span.motion.elements if e.preset == 'counter')
+    assert (counter.value_from, counter.value_to, counter.suffix) == (20, 25, '%')
+    landing = span.start + counter.start + counter.duration
+    assert len(prod.score_beats) and np.min(np.abs(prod.score_beats - landing)) < 1e-6
+    from kinodraw.engine.bold.charts import counter_value
+    third = counter.start + counter.duration / 3
+    assert counter_value(counter, third) > 20 + 5 * .5                       # ease-out: most of the roll early
+    assert counter.start == pytest.approx(spoken_time(tl, board, bid, 'twenty') - span.start, abs=.15)
+    hit = next(c for c in prod.cues() if c['kind'] == 'pop' and abs(c['t'] - landing) < 1e-6)
+    assert 0 < hit['strength'] < 1
+    # The landing draws a burst around the number that is not there just before it.
+    w, h = prod.size
+    box = (slice(round(h * .35), round(h * .8)), slice(round(w * .2), round(w * .8)))
+    before = np.asarray(prod.frame(landing - .05))[box].astype(int)
+    after = np.asarray(prod.frame(landing + .12))[box].astype(int)
+    assert np.abs(after - before).mean() > 2
+
+
+def test_call_to_action_button_is_pressed_on_a_beat(launch):
+    board, plan, tl, prod = launch
+    bid, _ = scene_for(plan, board, 'Start your next project today. Sign up')
+    span = span_of(prod, bid)
+    button = next(e for e in span.motion.elements if e.kind == 'button')
+    assert button.text == 'Sign up'
+    assert button.start == pytest.approx(spoken_time(tl, board, bid, 'Sign up') - span.start, abs=.05)
+    press = span.start + button.cues[0]
+    assert button.cues[0] > button.start and np.min(np.abs(prod.score_beats - press)) < 1e-6
+    assert any(c['kind'] == 'tap' and abs(c['t'] - press) < 1e-6 for c in prod.cues())
+    accent = np.array(ImageColor.getrgb(plan['style']['palette']['accent']))
+    frame = np.asarray(prod.frame(press + .3)).astype(int)
+    w, h = prod.size
+    pill = frame[round(h * .5):round(h * .82), round(w * .35):round(w * .65)]
+    assert (np.abs(pill - accent).sum(axis=2) < 60).mean() > .08          # an accent pill holds the label

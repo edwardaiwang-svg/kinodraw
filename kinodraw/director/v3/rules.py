@@ -6,6 +6,8 @@ import re
 
 from ..rules import RulesDirector as PictureDirector
 from ..validate import _doodles
+from ...script import SCAFFOLD
+from .arc import cta_phrase, is_launch, proof_number
 from .schema import SCENE, SKINS
 from .semantics import actions, atmosphere, beats, candidate_ids, detect_cast, mentions
 from .story import STORY_PALETTE, read_beats, story_picture
@@ -14,8 +16,12 @@ from ...engine.source_diagrams import resolve as resolve_diagram
 
 
 def detect_genre(text: str) -> str:
+    launch = is_launch(text)
     text = text.lower()
     if re.search(r'\b(introducing|product launch|launching|sign up|try it|saas|our new app)\b', text):
+        return 'launch/promo'
+    if launch:
+        # A product reveal and a call to action make a launch arc, even when it names lessons it can make.
         return 'launch/promo'
     if re.search(r'\b(lesson|exercise|solve|equation|learning objective|practice problem|quiz)\b', text):
         return 'lesson'
@@ -97,11 +103,17 @@ def from_rules(board: dict, candidates=None) -> dict:
         elif genre == 'explainer':
             treatment = 'kinetic_type' if key else 'whiteboard'
         elif genre == 'news/data':
-            treatment = 'chart' if re.search(r'\d|percent|out of', b['text'], re.I) else 'motion'
+            # "Part 2" and years are not data; a spoken quantity is.
+            treatment = 'chart' if proof_number(b['text']) or re.search(r'percent|out of', b['text'], re.I) else 'motion'
         elif genre == 'poem':
             treatment = 'atmosphere' if atmo != 'none' else 'kinetic_type'
         else:
             treatment = 'kinetic_type' if i == 0 or key or re.search(r'\b(try|start|join|sign up)\b', b['text'], re.I) else 'motion'
+        # Launch arc (Hovercast): a spoken quantity is proof that rolls up; the ask becomes a pressed button.
+        proof = proof_number(b['text']) if genre in ('launch/promo', 'news/data') else None
+        ask = genre == 'launch/promo' and b['kind'] not in SCAFFOLD and cta_phrase(b['text'])
+        if genre == 'launch/promo' and (proof or ask):
+            treatment = 'kinetic_type'
         picked = list(dict.fromkeys(_doodles(b['visuals'])))
         offered = candidate_ids(candidates, b['id'])
         scene.update(beat_ids=[b['id']], treatment=treatment,
@@ -113,8 +125,10 @@ def from_rules(board: dict, candidates=None) -> dict:
                      'slow_push' if genre in ('story', 'poem') else 'static',
                      transition_in='cut' if i == 0 else plan['style']['transition_family'],
                      hold_s=max(1.5, len(b['text']) / 27),
-                     text={'kind': 'kinetic' if treatment == 'kinetic_type' else 'counter' if treatment == 'chart' else
-                           'title' if b['kind'] in ('title', 'opener') else 'caption_only', 'ref': b['id']})
+                     text={'kind': 'cta' if ask else 'counter' if proof and treatment in ('chart', 'kinetic_type') else
+                           'kinetic' if treatment == 'kinetic_type' else
+                           'title' if b['kind'] in ('title', 'opener') and treatment != 'chart' else 'caption_only',
+                           'ref': b['id']})
         diagram = resolve_diagram(board, b['id'])
         if diagram:
             scene['elements'] = [{'kind': 'diagram', 'ref': b['id']}]

@@ -10,7 +10,7 @@ from .. import motion
 def counter_value(element, t):
     duration = element.duration or 1.8
     return motion.Track([(element.start, element.value_from),
-                         (element.start + duration, element.value_to)]).value(t)
+                         (element.start + duration, element.value_to, element.ease)]).value(t)
 
 
 def counter_text(element, t):
@@ -18,7 +18,7 @@ def counter_text(element, t):
     if decimals is None:
         step = abs(element.value_to - element.value_from) / ((element.duration or 1.8) * 30)
         decimals = min(6, max(0, math.ceil(-math.log10(step)))) if step else 0
-    return f'{counter_value(element, t):,.{decimals}f}{element.suffix}'
+    return f'{element.prefix}{counter_value(element, t):,.{decimals}f}{element.suffix}'
 
 
 def chart_svg(element, t, color, foreground):

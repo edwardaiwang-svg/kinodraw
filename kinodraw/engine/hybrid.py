@@ -125,6 +125,7 @@ class Span:
     diagrams: tuple = ()
     source_proof: bool = False
     story: list | None = None
+    stacked: bool = False       # a proof counter or a call to action owns the frame's centre column
 
 
 class HybridProduction:
@@ -369,15 +370,19 @@ class HybridProduction:
             if text_kind != 'counter' and source and not span.source_character:
                 self._clause_build(span, elements[-1], ref)
             if text_kind == 'counter':
-                number = re.search(r'(?<!\w)(-?\d[\d,]*(?:\.\d+)?)(%)?', words)
-                if number:
-                    elements[-1].value_to = float(number[1].replace(',', ''))
-                    elements[-1].suffix = number[2] or ''
-                    elements[-1].decimals = len(number[1].split('.')[1]) if '.' in number[1] else 0
-                    elements[-1].duration = min(1.8, max(.1, duration - .4))
+                proof = arc.proof_number(words)
+                if proof:
+                    counter = elements[-1]
+                    counter.value_from, counter.value_to = proof['from'], proof['to']
+                    counter.prefix, counter.suffix, counter.decimals = proof['prefix'], proof['suffix'], proof['decimals']
+                    counter.duration = min(1.8, max(.1, duration - .4))
+                    if source and not span.source_character:
+                        self._proof_counter(span, elements, source, proof)
                 else:
                     self.warnings.append('hybrid: counter without numeric data uses readable source text')
                     elements[-1].preset = 'type_on'
+            elif text_kind == 'cta' and source and not span.source_character:
+                self._call_to_action(span, elements, source)
         if treatment == 'chart':
             from ..scientific import ScientificPlot
             span.scientific = tuple(ScientificPlot(v['plot']) for bid in spec['beat_ids']
@@ -421,12 +426,12 @@ class HybridProduction:
             for e in copy_elements:
                 e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
                 e.size = 96
-            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed'):
+            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
                 for e in copy_elements:
                     e.y, e.width = .23, 1400
                 for e in pictures:
                     e.y = .60
-            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split', 'full_bleed'):
+            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
                 # A stable frame: one fixed slot per picture, left to right in spoken order, so a picture that
                 # arrives with a later clause never covers or shifts the ones already on the board.
                 pictures.sort(key=lambda e: e.start)
@@ -465,6 +470,11 @@ class HybridProduction:
                     element.x, element.y = .64, .42
                     element.width = min(element.width, 1050)
                     element.height = min(element.height, 430)
+        elif span.stacked:
+            # Headline over the number or the button, as in the reference launch; pictures keep to the sides.
+            for k, element in enumerate(e for e in elements if e.kind == 'picture'):
+                element.x, element.y = (.13, .62) if k % 2 == 0 else (.87, .62)
+                element.width, element.height = min(element.width, 330), min(element.height, 300)
         elif spec['composition'] in ('grid', 'split'):
             cols = 2 if spec['composition'] == 'split' else math.ceil(math.sqrt(max(1, len(elements) + len(self._cast_groups(span)))))
             rows = math.ceil(max(1, len(elements) + len(self._cast_groups(span))) / cols)
@@ -487,6 +497,48 @@ class HybridProduction:
             cues.append(max(0., self._spoken_at(bid, arc.spoken_offset(display, spoken, first)) - span.start))
         element.preset, element.cues = 'clauses', tuple(cues) or (0.,)
         element.start = element.cues[0]
+
+    def _on_beat(self, at, low, high, latest):
+        """The first music beat between ``at + low`` and ``at + high`` (absolute seconds, never after ``latest``),
+        else a fixed delay inside that window: state changes land on the music where the narration allows."""
+        late = min(at + high, latest)
+        hits = [float(b) for b in self.score_beats if at + low <= b <= late]
+        return hits[0] if hits else max(at + min(low, .3), min(at + (low + high) / 2, latest))
+
+    def _proof_counter(self, span, elements, source, proof):
+        """Hovercast's proof beat: the source sentence over its number, which rolls up with an ease-out from the
+        moment the number is spoken and lands on a music beat with a pulse and a burst of ticks."""
+        counter = elements[-1]
+        display, spoken = source['text'], source['spoken']
+        at = max(0., self._spoken_at(source['id'], arc.spoken_offset(display, spoken, proof['start'])) - span.start)
+        landing = self._on_beat(span.start + at, .8, 1.5, span.end - .4)
+        counter.start, counter.duration = at, max(.3, landing - span.start - at)
+        counter.ease, counter.hit = 'cubic_out', True
+        counter.x, counter.y, counter.size, counter.width = .5, .62, 200, 1500
+        headline = MotionElement(text='\n'.join(textwrap.wrap(display, 40, break_long_words=False)), width=1500,
+                                 size=80, x=.5, y=.27)
+        self._clause_build(span, headline, source['id'])
+        elements.insert(len(elements) - 1, headline)
+        span.stacked = True
+
+    def _call_to_action(self, span, elements, source):
+        """Hovercast's ask: the words before it as the headline, its imperative as a button pressed on a beat."""
+        display, spoken = source['text'], source['spoken']
+        hit = arc.cta_phrase(display)
+        if hit is None:
+            return
+        a, b = hit
+        at = max(0., self._spoken_at(source['id'], arc.spoken_offset(display, spoken, a)) - span.start)
+        press = self._on_beat(span.start + at, .45, 1.3, span.end - .5) - span.start
+        headline = elements[-1]
+        if display[:a].strip():
+            headline.text = display[:a].strip()
+            headline.x, headline.y = .5, .32
+        else:
+            elements.remove(headline)
+        elements.append(MotionElement(kind='button', text=display[a:b], size=60, x=.5, y=.64, start=at,
+                                      cues=(press,)))
+        span.stacked = True
 
     def _picture_cue(self, span, ref):
         """Local time the narration names a picture: its source trigger or label, else a word of its own name."""
@@ -1425,6 +1477,16 @@ class HybridProduction:
                         cues += [{'t': span.start + e.start + (k + 1) / TYPE_CPS, 'kind': 'type_tick', 'strength': .7,
                                   'id': f'hybrid.type.{i}.{j}.{k}'} for k, char in enumerate(e.text)
                                  if not char.isspace() and span.start + e.start + (k + 1) / TYPE_CPS < until]
+            if span.motion and not span.source_character:   # soft state-change hits, already on music beats
+                for j, e in enumerate(span.motion.elements):
+                    if e.kind == 'text' and e.preset == 'counter' and e.hit:
+                        at, kind, strength = span.start + e.start + e.duration, 'pop', .6
+                    elif e.kind == 'button':
+                        at, kind, strength = span.start + e.cues[0], 'tap', .8
+                    else:
+                        continue
+                    if start <= at < until:
+                        cues.append({'t': at, 'kind': kind, 'strength': strength, 'id': f'hybrid.hit.{i}.{j}'})
             if span.story is not None:                       # the storybook's roars, timed to its drawn jaw
                 for j, at in enumerate(self.storybook.roar_cues(span.story, span.start)):
                     cues.append({'t': at, 'kind': 'roar', 'id': f'hybrid.story.{i}.{j}'})

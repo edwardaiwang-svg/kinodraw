@@ -52,6 +52,11 @@ def spoken_offset(display: str, spoken: str, index: int) -> int:
         return min(len(spoken) - 1, round(index / max(1, len(display)) * len(spoken)))
     k = next((k for k, (a, b) in enumerate(shown) if a <= index < b), len(shown) - 1)
     (a, b), (c, d) = shown[k], said[k]
+    words, spoken_words = list(re.finditer(r'\S+', display[a:b])), list(re.finditer(r'\S+', spoken[c:d]))
+    if len(words) == len(spoken_words):
+        # Same words, some spelled out ("20" / "twenty"): the word itself carries the time.
+        w = next((w for w, hit in enumerate(words) if a + hit.end() > index), len(words) - 1)
+        return c + spoken_words[w].start()
     return min(d - 1, c + round((index - a) / max(1, b - a) * (d - c)))
 
 

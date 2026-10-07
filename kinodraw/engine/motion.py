@@ -74,6 +74,11 @@ def expo_in(u):
     return (2 ** (10 * clamp01(u)) - 1) / (2 ** 10 - 1)
 
 
+def cubic_out(u):
+    """Fast start, settling into the end (CSS power3.out), as counters roll in the reference launch videos."""
+    return 1 - (1 - clamp01(u)) ** 3
+
+
 def cubic_in_out(u):
     u = clamp01(u)
     return 4 * u ** 3 if u < .5 else 1 - (2 - 2 * u) ** 3 / 2
@@ -90,7 +95,7 @@ def spring(u, damping=.55, freq=2.2):
 
 
 EASING = {'linear': clamp01, 'emphasized': EMPHASIZED, 'back_out': back_out, 'expo_out': expo_out,
-          'expo_in': expo_in, 'cubic_in_out': cubic_in_out, 'spring': spring}
+          'expo_in': expo_in, 'cubic_in_out': cubic_in_out, 'cubic_out': cubic_out, 'spring': spring}
 
 
 def stagger(n, gap=.07, cap=.5):

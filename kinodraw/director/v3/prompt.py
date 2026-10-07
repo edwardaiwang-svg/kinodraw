@@ -50,7 +50,10 @@ ideas or calendars (2-4 labels). Use diagram instead of symbolic pictures for th
 Include a diagram ref for every construction/equation/rotation/counting beat. Earlier same-section source
 provides the original array. Unsupported languages/claims are rejected; do not invent diagram content. text.ref also uses a beat_id
 ("" when kind is none), showing that beat's supplied display text verbatim. Use caption_only for ordinary
-narration, kinetic for emphasis, quote for a quotation, title for an opening and counter for spoken data.
+narration, kinetic for emphasis, quote for a quotation, title for an opening and counter for spoken data:
+a quantity in that beat (never "Part 1" or a year) rolls up, from A to B for "from A to B", and lands with a soft
+hit on a music beat. Use cta for the beat that asks the viewer to act; its last imperative ("Sign up",
+"Download it for free") becomes a button pressed on a beat. A launch runs problem, product, proof, then ask.
 No fabricated text or early quote cards. Allow at least displayed character count / 27 seconds of hold;
 multi-beat captions and text elements need time for all their distinct referenced texts. Clear quotes on
 transitions. atmosphere density is 0-1; fog and a shooting star together are fog_with_shooting_star, one scene.
