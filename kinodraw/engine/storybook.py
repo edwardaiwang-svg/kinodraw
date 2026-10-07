@@ -62,6 +62,7 @@ BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
 # Idle life (J's jungle, 2026-10-07): a resting figure shifts its weight by leaning from its planted feet (a shear,
 # never a tilt that lifts the front or back paws) and blinks for BLINK seconds (3 frames) every 2.4-3.9 s.
 SWAY = .045
+LONE_PUSH = .10                  # the camera's push over a shot of one resting figure (any other shot: .035)
 BLINK = .1
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
@@ -738,6 +739,11 @@ class Storybook:
         """[x, y, zoom] of the camera over the page: a gentle push in, a push into the eyes, a roar's shake."""
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
         cam = [.5, .5, 1. + .035 * u]
+        lone = shot.figures[0] if len(shot.figures) == 1 and not shot.figures[0].travel else None
+        if lone is not None and shot.eyes is None:       # a figure alone on the page: push in on it, inside the page
+            zoom = 1. + LONE_PUSH * u
+            cam = [min(1 - .5 / zoom, max(.5 / zoom, .5 + (c - .5) * u))
+                   for c in (lone.x, lone.ground - lone.height / 2)] + [zoom]
         shake = 0.
         roaring = [f for f in shot.figures if f.pose == 'roar' and f.cue is not None]
         for f in roaring:
@@ -857,7 +863,9 @@ class Storybook:
         breath = math.sin(local * 2.6 + f.phase)
         squash = .012 * breath
         if pose in ('stand', 'look', 'sit', 'lie', 'sleep', 'look_up'):   # a resting figure shifts its weight
-            shear = direction * SWAY * (.4 if pose == 'sleep' else 1.) * math.sin(local * 1.4 + f.phase)
+            # as far on screen as an adult's lean (a small cub's would be too slight to see); the young fidget faster
+            amp = SWAY * min(1.6, ADULT_HEIGHT / f.height) * (.4 if pose == 'sleep' else 1.)
+            shear = direction * amp * math.sin(local * (2. if f.age in ('baby', 'young') else 1.4) + f.phase)
         if pose in ('walk', 'run', 'carry') or (f.travel and pose != 'stand'):
             rate = 2.2 if pose == 'run' else 1.4
             step = abs(math.sin(math.pi * rate * (local + f.phase)))
