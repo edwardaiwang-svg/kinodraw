@@ -81,6 +81,30 @@ def test_actions_word_times_group_and_receiver(tmp_path):
     assert not np.array_equal(a, np.asarray(other.frame(t)))
 
 
+def test_actions_cue_their_synthesized_sounds(tmp_path):
+    from kinodraw.audio import sfx
+    board = script.build(ingest.read('# Night\n\nPendo, a lion cub, watched Mara, a tigress.\n\nPendo whimpered in the dark.'
+                                     '\n\nThe hyenas laughed at Pendo.\n\nKojo, a male lion with a massive black mane, '
+                                     'roared at the hyenas.\n\nMara swiped at the hyenas.\n\nMara nudged Pendo.'), story='story')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    for scene in plan['scenes']:
+        scene['treatment'] = 'character'
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = save_production(tmp_path, board, plan, tl)
+    acted = {action.name: (i, j) for i, span in enumerate(prod.spans) for j, (_, action, _) in enumerate(span.actions)}
+    assert {'whimper', 'laugh', 'roar', 'swipe', 'nudge'} <= set(acted)
+    cues = {c['id']: c for c in prod.cues()}
+    for name, kind in {'whimper': 'whimper', 'laugh': 'hyena_cackle', 'roar': 'roar', 'swipe': 'swipe',
+                       'nudge': 'nudge'}.items():
+        cue = cues['hybrid.action.%d.%d' % acted[name]]
+        assert cue['kind'] == kind
+        y = sfx.render([cue], prod.duration)
+        at = round(cue['t'] * sfx.SAMPLE_RATE)
+        assert np.abs(y[at:at + sfx.SAMPLE_RATE // 10]).max() > 1e-3                 # it sounds on the action's cue
+
+
 def test_saved_plan_no_provider_and_series_override(tmp_path):
     source = '# Cast\n\nMara, a lioness, nudged Pendo, a lion cub.'
     pipeline.new_project(source, tmp_path, director_v3=True,

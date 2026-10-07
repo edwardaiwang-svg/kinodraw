@@ -1342,7 +1342,11 @@ class HybridProduction:
             cues.append({'t': span.join if i else span.start, 'kind': 'cut' if span.spec['transition_in'] == 'cut' or neutral else 'whoosh',
                          'strength': .35, 'id': f'hybrid.scene.{i}'})
             for j, (actor, action, target) in enumerate(span.actions):
-                kind = {'roar': 'impact', 'nudge': 'tap', 'swipe': 'whoosh', 'pounce': 'pop'}.get(action.name)
+                # An action with its own synthesized sound (audio.synth_sfx) plays it; a pounce keeps its pop.
+                kind = {'roar': 'roar', 'whimper': 'whimper', 'nudge': 'nudge', 'swipe': 'swipe',
+                        'breathe_heavy': 'breath_puff', 'pounce': 'pop'}.get(action.name)
+                if action.name == 'laugh' and self.cast[actor].species == 'hyena':
+                    kind = 'hyena_cackle'
                 if kind:
                     at = span.start + action.start
                     available = self.score_beats[(self.score_beats >= span.start) & (self.score_beats < span.end)]
