@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import paths
-from ..library import ASSETS, catalog
+from ..library import ASSETS, catalog, imported
 
 EMBED_MODELS = {'en': 'BAAI/bge-small-en-v1.5', 'zh': 'BAAI/bge-small-zh-v1.5', 'es': 'BAAI/bge-small-en-v1.5'}
 CACHE = (Path(paths.getenv('KINODRAW_MODELS')).expanduser() / 'embed' if paths.getenv('KINODRAW_MODELS')
@@ -56,6 +56,10 @@ están fue fueron ha han hay había muy más menos mucho mucha muchos muchas poc
 todas cada algún alguna algunos algunas otro otra otros otras también ya aún ahora entonces porque hacer hace
 hacen hizo tener tiene tienen puede pueden uno dos tres'''.split())
 ES_FOLD = str.maketrans('áéíóúü', 'aeiouu')
+# Imported ink line icons (library.PACKS) come after the coloured doodles for the same words: a keyword weighs
+# less than any of a doodle's first six (.6 < .8 x .8), and by meaning they need this much more similarity.
+PACK_WEIGHT = .6
+PACK_PENALTY = .04
 
 
 @lru_cache(maxsize=1)
@@ -140,25 +144,35 @@ def _en_key(text: str) -> str:
     return ' '.join(singular(w) for w in re.findall(r"[a-z0-9']+", text.lower()))
 
 
+def listed(entry: dict, lang: str) -> bool:
+    """Is a picture searched in this language? Imported icons have no Chinese words, so Chinese leaves them out."""
+    return lang != 'zh' or not imported(entry) or bool(entry.get('zh'))
+
+
 class Matcher:
-    def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',)):
+    def __init__(self, lang: str, include_fluent: bool = True, exclude_categories=('narrator',),
+                 include_packs: bool = True):
         self.lang = lang
         self.entries = {i: e for i, e in catalog().items()
-                        if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')}
+                        if e.get('category') not in exclude_categories and (include_fluent or e['set'] != 'fluent')
+                        and (include_packs or not imported(e)) and listed(e, lang)}
         self.index: dict[str, list[tuple[str, float]]] = {}
         for did, e in self.entries.items():
             keywords = e.get('en' if lang == 'es' else lang) or []
-            if e['set'] == 'fluent':
+            if e['set'] != 'bespoke':
                 keywords = keywords[:6]
             for rank, kw in enumerate(keywords):
                 key = _en_key(kw) if lang in ('en', 'es') else kw.strip()
                 if not key or (lang in ('en', 'es') and (key in EN_STOP or len(key) < 3 or key.isdigit())) or \
                         (lang == 'zh' and (len(key) < 2 or key in ZH_STOP)):
                     continue
-                weight = (1.0 - .04 * min(rank, 5)) * (1.08 if e['set'] == 'bespoke' else .8)
+                weight = (1.0 - .04 * min(rank, 5)) * (1.08 if e['set'] == 'bespoke' else
+                                                       PACK_WEIGHT if imported(e) else .8)
                 self.index.setdefault(key, []).append((did, weight))
-        # keywords shared by many doodles say little about any one of them
-        self.rarity = {k: 1 / (1 + math.log(len(v))) for k, v in self.index.items()}
+        # keywords shared by many doodles say little about any one of them (counting the doodles, not the icons
+        # that share a doodle's word, so the icons never weaken a doodle's hit)
+        self.rarity = {k: 1 / (1 + math.log(sum(not imported(self.entries[d]) for d, _ in v) or len(v)))
+                       for k, v in self.index.items()}
         self._ids, self._vecs = None, None
 
     # ------------------------------------------------------------ literal hits
@@ -212,6 +226,7 @@ class Matcher:
             ids, vecs = catalog_vectors(self.lang)
             keep = [k for k, i in enumerate(ids) if i in self.entries]
             self._ids, self._vecs = [ids[k] for k in keep], vecs[keep]
+            self._packs = np.array([imported(self.entries[i]) for i in self._ids], bool)
         return self._ids, self._vecs
 
     def semantic(self, text: str, k: int = 5) -> list[Hit]:
@@ -221,7 +236,7 @@ class Matcher:
                 return []
         ids, vecs = self._catalog_vectors()
         query = _normalize(np.array(list(_model(self.lang).embed([text])), np.float32))[0]
-        sims = vecs @ query
+        sims = vecs @ query - PACK_PENALTY * self._packs
         top = np.argsort(-sims)[:k]
         return [Hit(ids[i], float(sims[i]) + (.02 if self.entries[ids[i]]['set'] == 'bespoke' else 0)) for i in top]
 
@@ -244,7 +259,7 @@ TEXTS = {'embed': _entry_text, 'picture': _picture_text}
 def _table(lang: str, kind: str = 'embed'):
     lang = 'en' if lang == 'es' else lang
     entries = catalog()
-    ids = sorted(entries)
+    ids = sorted(i for i, e in entries.items() if listed(e, lang))
     texts = [TEXTS[kind](entries[i], lang) for i in ids]
     digest = hashlib.sha256(('\n'.join(texts) + EMBED_MODELS[lang]).encode()).hexdigest()[:16]
     return ids, texts, digest
