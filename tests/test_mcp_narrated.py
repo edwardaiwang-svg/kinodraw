@@ -94,7 +94,8 @@ def source_bytes(project):
 
 def test_render_advertises_opt_in_modes_without_new_tools():
     assert {t['name'] for t in mcp_server.TOOLS} == {
-        'create_project', 'validate_project', 'chart_add', 'preview_png', 'render', 'status', 'cancel'}
+        'create_project', 'validate_project', 'chart_add', 'preview_png', 'render', 'status', 'cancel',
+        'list_projects', 'get_project', 'list_voices', 'export_video'}
     render = next(t for t in mcp_server.TOOLS if t['name'] == 'render')
     assert render['inputSchema']['properties']['mode']['enum'] == ['synthetic', 'make', 'cached']
     assert 'Kokoro' in render['description'] and 'cost' in render['description']
@@ -150,7 +151,7 @@ def test_actual_python_launcher_mcp_worker_dispatch(tmp_path):
             child.wait(timeout=5)
     assert child.returncode == 0, errors
     replies = [json.loads(line) for line in output.splitlines()]
-    assert replies[-1]['id'] == 2 and len(replies[-1]['result']['tools']) == 7
+    assert replies[-1]['id'] == 2 and len(replies[-1]['result']['tools']) == 11
 
 
 def test_skeleton_default_does_not_call_voice_or_provider(tmp_path, monkeypatch):

@@ -81,7 +81,8 @@ def client(tmp_path):
 def test_real_stdio_pipeline_and_every_advertised_tool(client, tmp_path):
     listed = client.request('tools/list')['result']['tools']
     assert {t['name'] for t in listed} == {
-        'create_project', 'validate_project', 'chart_add', 'preview_png', 'render', 'status', 'cancel'}
+        'create_project', 'validate_project', 'chart_add', 'preview_png', 'render', 'status', 'cancel',
+        'list_projects', 'get_project', 'list_voices', 'export_video'}
     assert all(t['inputSchema']['additionalProperties'] is False for t in listed)
     made = client.call('create_project', project='demo', script='# Test\n\nMeasured sample counts are shown below.', lang='en')
     assert made['beats'] > 0
@@ -132,6 +133,9 @@ def test_real_stdio_pipeline_and_every_advertised_tool(client, tmp_path):
     ('render', {'project': '../escape'}),
     ('status', {'job': '1'}),
     ('cancel', {'job': '1'}),
+    ('get_project', {'project': '../escape'}),
+    ('get_project', {'project': 'missing'}),
+    ('export_video', {'project': '../escape', 'video': 'a.mp4'}),
 ])
 def test_path_and_unowned_job_refusals(client, name, args):
     assert client.call(name, **args)['isError']
@@ -340,3 +344,89 @@ def test_supported_chart_numbers_and_source_hash_are_preserved(client, tmp_path)
     assert saved['source_sha256'] == digest
     assert [row['value'] for row in saved['rows']] == [row['value'] for row in json.loads(raw)['rows']]
     assert (tmp_path / 'exact.json').read_bytes() == raw
+
+
+def _seconds(path):
+    """Decoded video length: the last frame's timestamp plus one frame, from the bundled FFmpeg."""
+    import imageio_ffmpeg
+    from kinodraw.progress import encoded_frames
+    progress = Path(str(path) + '.count')
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-i', str(path), '-map', '0:v:0',
+                    '-progress', str(progress), '-f', 'null', '-'], check=True, timeout=60)
+    return encoded_frames(progress) / 30
+
+
+def wait(client, job, seconds=60):
+    deadline = time.monotonic() + seconds
+    while (status := client.call('status', job=job))['state'] == 'running':
+        assert time.monotonic() < deadline, status
+        time.sleep(.1)
+    return status
+
+
+def test_list_get_voices_and_export_over_stdio(client, tmp_path):
+    client.call('create_project', project='demo', script='# Test\n\nMeasured sample counts are shown below.', lang='en')
+    client.call('create_project', project='lessons/zh', starter='explainer-zh')
+    (tmp_path / 'notes').mkdir()
+    listed = client.call('list_projects')
+    assert [p['project'] for p in listed['projects']] == ['demo', 'lessons/zh']
+    demo = listed['projects'][0]
+    assert demo['lang'] == 'en' and demo['look'] == 'whiteboard' and demo['aspect'] == '16:9'
+    assert demo['title'] == 'Test' and demo['has_video'] is False and len(demo['revision']) == 64
+    assert listed['projects'][1]['lang'] == 'zh'
+
+    got = client.call('get_project', project='demo')
+    board = json.loads((tmp_path / 'demo/storyboard.json').read_text(encoding='utf-8'))
+    assert len(got['beats']) == len(board['beats']) and len(got['chapters']) == len(board['chapters'])
+    beat = next(b for b in got['beats'] if b['kind'] == 'narration')
+    assert beat['text'] == 'Measured sample counts are shown below.' and beat['visuals'] == []
+    assert got['settings']['voice'] == 'af_heart' and got['revision'] == demo['revision']
+    assert set(got['settings']) <= {'lang', 'voice', 'speed', 'aspect', 'size', 'director', 'director_v3', 'credit',
+                                    'look', 'recording', 'plan_v3'}
+    assert got['outputs'] == [] and got['qa'] is None
+
+    voices = client.call('list_voices')
+    assert voices['count'] >= 24 == sum(len(v['voices']) for v in voices['languages'].values())
+    assert {lang: v['default'] for lang, v in voices['languages'].items()} == {
+        'en': 'af_heart', 'zh': 'zf_001', 'es': 'ef_dora'}
+
+    render = client.call('render', project='demo', duration=1)
+    assert wait(client, render['job'])['state'] == 'succeeded'
+    video = Path(render['path']).relative_to(tmp_path / 'demo').as_posix()
+    export = client.call('export_video', project='demo', video=video, format='webm')
+    status = wait(client, export['job'])
+    assert status['state'] == 'succeeded' and status['exit_code'] == 0 and 'synthetic_timing' not in status
+    webm = Path(status['path'])
+    assert webm.suffix == '.webm' and webm.read_bytes()[:4] == b'\x1a\x45\xdf\xa3'
+    assert abs(_seconds(webm) - _seconds(render['path'])) <= 1 / 30
+    assert any(o.endswith('.webm') for o in client.call('get_project', project='demo')['outputs'])
+
+
+def test_export_video_refuses_paths_and_cancel_reaps_its_encoder(client, tmp_path):
+    import imageio_ffmpeg
+    client.call('create_project', project='demo', script='# Test\n\nExample text.', lang='en')
+    outside = tmp_path.parent / (tmp_path.name + '-outside.mp4')
+    outside.write_bytes(b'not a video')
+    (tmp_path / 'demo/link.mp4').symlink_to(outside)
+    for video, format in [('../../' + outside.name, 'webm'), ('link.mp4', 'webm'), ('script.md', 'gif'),
+                          ('missing.mp4', 'gif')]:
+        assert client.call('export_video', project='demo', video=video, format=format)['isError']
+    (tmp_path / 'demo/link.mp4').unlink()
+    assert client.call('export_video', project='demo', video='x.mp4', format='mov')['isError']
+    source = tmp_path / 'demo/long.mp4'
+    subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-f', 'lavfi', '-i',
+                    'testsrc2=size=1280x720:rate=30:duration=20', '-c:v', 'libx264', '-preset', 'ultrafast',
+                    '-pix_fmt', 'yuv420p', str(source)], check=True, timeout=120)
+    export = client.call('export_video', project='demo', video='long.mp4', format='webm')
+    folder = tmp_path / 'demo/build/developer'
+    def encoders():                                  # the worker's FFmpeg children, seen by their staging folder
+        lines = subprocess.run(['ps', '-axo', 'pid=,command='], capture_output=True, text=True, check=True).stdout
+        return [int(line.split()[0]) for line in lines.splitlines() if str(folder / '.export-') in line]
+    deadline = time.monotonic() + 60
+    while not encoders():                            # cancel while FFmpeg runs, not during start-up
+        assert time.monotonic() < deadline and client.call('status', job=export['job'])['state'] == 'running'
+        time.sleep(.05)
+    cancelled = client.call('cancel', job=export['job'])
+    assert cancelled['state'] == 'cancelled' and cancelled['exit_code'] is not None
+    assert not Path(export['path']).exists() and not list(folder.glob('.export-*'))
+    assert encoders() == []
