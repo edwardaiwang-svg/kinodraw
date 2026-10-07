@@ -27,7 +27,13 @@ from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
 ROAR_SECONDS = 2.4
-SHOT_DISSOLVE = .3
+# Page changes never ghost two pictures (J's jungle, 2026-10-07): a new set arrives behind a short slanted wipe
+# (Claude Fables' style change: eight frames, cubic out); a dissolve is kept only where the same set continues,
+# and lasts two frames. The face close-up cuts in on the eyes the camera pushed into.
+WIPE = .27
+BLEND = .07
+WIPE_ANGLE = 20                 # the edge leans like '/', revealing the new page from the left
+FACE_CUT = .07
 GROUND = .8                      # feet line as a share of the frame height, clear of the caption band
 ADULT_HEIGHT = .42               # an adult cast member's height as a share of the frame height
 SMALL = {'ant': .06, 'frog': .11, 'bird': .1, 'mouse': .08, 'snake': .12, 'porcupine': .13, 'rabbit': .12,
@@ -462,11 +468,37 @@ class Storybook:
     def frame(self, shots, local):
         i = max(0, next((k for k in range(len(shots) - 1, -1, -1) if local >= shots[k].start), 0))
         image = self._draw(shots[i], local)
-        if i and local - shots[i].start < SHOT_DISSOLVE:
-            before = self._draw(shots[i - 1], local)
-            u = (local - shots[i].start) / SHOT_DISSOLVE
-            image = Image.blend(before, image, u * u * (3 - 2 * u))
+        if i:
+            kind = self.turn_kind(shots[i - 1], shots[i])
+            since = local - shots[i].start
+            if since < (BLEND if kind == 'blend' else WIPE):
+                image = self._turn(self._draw(shots[i - 1], local), image, kind, since)
         return image
+
+    def turn(self, before_shots, before_local, after_shots, after_local, since):
+        """A scene join between two story spans, ``since`` seconds after it: the page turns like any shot change."""
+        after = self.frame(after_shots, after_local)
+        i = max(0, next((k for k in range(len(after_shots) - 1, -1, -1) if after_local >= after_shots[k].start), 0))
+        kind = self.turn_kind(before_shots[-1], after_shots[i])
+        if since >= (BLEND if kind == 'blend' else WIPE):
+            return after
+        return self._turn(self.frame(before_shots, before_local), after, kind, max(0., since))
+
+    @staticmethod
+    def _set(shot):
+        """What a page shows besides its cast and crowd: its setting, sky, weather and framing."""
+        return (tuple(shot.props), tuple(d for d, *_ in shot.sky), shot.atmosphere, shot.lesson, bool(shot.title))
+
+    def turn_kind(self, before, after):
+        """'blend' where the same set continues, 'wipe' for a new set or after a close-up."""
+        return 'blend' if before.eyes is None and self._set(before) == self._set(after) else 'wipe'
+
+    def _turn(self, before, after, kind, since):
+        if kind == 'blend':
+            return Image.blend(before, after, min(1., since / BLEND))
+        from .motion import wipe_mask
+        p = 1 - (1 - min(1., since / WIPE)) ** 3
+        return Image.composite(after, before, wipe_mask(self.size, p, WIPE_ANGLE, soft=4))
 
     def _pose_doodle(self, f, local):
         """(doodle, mirror) for the figure's pose at this time."""
@@ -720,7 +752,7 @@ class Storybook:
         start = max(shot.start, shot.eyes_at - .3) + 1.3          # once the push has landed on the eyes
         if doodle is None or local < start:
             return None
-        alpha = min(1., (local - start) / .25)
+        alpha = min(1., (local - start) / FACE_CUT)
         w, h = self.size
         page = self.paper(w, h).copy().convert('RGBA')
         push = 1 + .05 * min(1., (local - start) / 3)

@@ -267,3 +267,41 @@ def test_a_lone_resting_figure_never_freezes_the_picture(tmp_path):
     frames = [np.asarray(prod.storybook.frame([shot], shot.start + 2 + k / 4), np.float32) / 255 for k in range(5)]
     # freezedetect keeps its reference frame until the picture moves away from it by more than -50 dB MAFD
     assert np.abs(frames[4] - frames[0]).mean() > 10 ** (-50 / 20)
+
+
+def _overlaid(frame, before, after, times):
+    """Frames (at these times) that show two pictures on top of each other: where the two pictures differ, the frame
+    matches neither of them. A cut or a wipe shows one picture or the other at every pixel."""
+    count = 0
+    for t in times:
+        a, b, f = (np.asarray(make(t), np.int16) for make in (before, after, frame))
+        differ = np.abs(a - b).max(axis=2) > 60
+        mixed = differ & (np.abs(f - a).max(axis=2) > 24) & (np.abs(f - b).max(axis=2) > 24)
+        count += bool(differ.sum()) and mixed.sum() / differ.sum() > .2
+    return count
+
+
+def test_page_changes_never_overlay_two_pictures(tmp_path, monkeypatch):
+    """J's jungle: shot dissolves, scene morphs and the face fade ghosted two crowded pictures for 10-20 frames. A
+    page change is a cut, a wipe or a page turn; a dissolve lasts at most two frames, where the same set continues."""
+    prod, board, plan, tl = production(tmp_path)
+    monkeypatch.setattr(prod.whiteboard, '_caption', lambda *a, **k: None)
+    book = prod.storybook
+    prod.frame(0.)
+    frames = lambda a, b: [a + k / 30 for k in range(int((b - a) * 30) + 1)]
+    first = prod.spans[0]
+    for k in (1, 2):                          # a new set (the palm tree goes) and the same set (Mara joins)
+        shot, previous = first.story[k], first.story[k - 1]
+        assert _overlaid(lambda t: book.frame(first.story, t), lambda t: book._draw(previous, t),
+                         lambda t: book._draw(shot, t), frames(shot.start - .04, shot.start + .3)) <= 2
+    for words in ('Roar louder', 'carrying the slowest'):     # a scene join into the lesson, and out of a face
+        span = span_of(prod, words)
+        before = prod.spans[prod.spans.index(span) - 1]
+        assert _overlaid(prod.frame, lambda t: prod._frame(before, t), lambda t: prod._frame(span, t),
+                         frames(span.join - .04, span.join + .3)) <= 2, words
+    span = span_of(prod, "Pendo's eyes")
+    shot = next(s for s in span.story if s.eyes)
+    shot.end = shot.eyes_at + 3                         # long enough for the push to land on the eyes
+    landed = max(shot.start, shot.eyes_at - .3) + 1.3
+    alphas = [(book._face_overlay(shot, t) or (None, 0.))[1] for t in frames(landed - .1, landed + .4)]
+    assert max(alphas) == 1 and sum(.1 < a < .9 for a in alphas) <= 2      # the face close-up cuts in on the eyes

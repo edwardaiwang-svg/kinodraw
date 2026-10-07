@@ -1307,8 +1307,9 @@ class HybridProduction:
                 # legacy pages (labelled icons, people) during the join, which never belong in a story.
                 card_t = max(t, end_start + last.join_length) if last.story is not None else t
                 current = self.whiteboard.frame(card_t).convert('RGB')
-                array = render_transition(np.asarray(previous), np.asarray(current), t - end_start,
-                                          *self.size, kind='match', duration=last.join_length)
+                array = render_transition(np.asarray(previous), np.asarray(current), t - end_start, *self.size,
+                                          kind='page' if last.story is not None else 'match',
+                                          duration=last.join_length)      # a picture book turns to its last page
                 image = Image.fromarray(array).convert('RGBA')
                 if not self.vertical:
                     self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
@@ -1325,6 +1326,16 @@ class HybridProduction:
             # Scientific panels follow the source clock and retain their exact
             # canvas/axis transform through both sides of every scene boundary.
             image = self._frame(span, t)
+        elif span.story is not None and i and self.spans[i - 1].story is not None:
+            # Two story pages: the old page keeps living until the join, then turns like any shot change (a wipe, or
+            # a two-frame dissolve where the same set continues), never a long dissolve of two crowded pictures.
+            previous = self.spans[i - 1]
+            if local < 0:
+                image = self._frame(previous, t)
+            elif kind == 'cut':
+                image = self._frame(span, t)
+            else:
+                image = self.storybook.turn(previous.story, t - previous.start, span.story, t - span.start, local)
         elif span.diagram and t >= span.diagram.window[0]:
             # The spoken glide cue owns these panels. A score-delayed join must
             # not hide their labels or substitute the previous scene.
