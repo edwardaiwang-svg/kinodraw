@@ -310,6 +310,19 @@ def _sex_cue(cue):
             'male' if re.search(r'\b(he|his|male|father|king)\b', cue) else 'unknown')
 
 
+# Kin words and endearments a character is called to their face ("Mom, ...", "Thanks, Nana"): only inside quotes,
+# such a word is the person spoken to, never a new character.
+VOCATIVES = set('''mom mum mommy mummy mama ma momma dad daddy papa pa pop nana grandma grandpa granny gran grandad
+gramps grammy auntie aunty aunt uncle sis bro son sonny honey sweetie sweetheart darling dear buddy kiddo boss sir
+madam ma'am doc coach'''.split())
+
+
+def _quoted(text, at):
+    """Whether ``at`` lies inside a quotation in ``text`` (straight or curly quotes, within its paragraph)."""
+    para = text[text.rfind('\n\n', 0, at) + 1:at]
+    return para.count('"') % 2 == 1 or para.rfind('“') > para.rfind('”')
+
+
 def _detect_cast(script_beats):
     text = '\n'.join(b['spoken'] for b in script_beats)
     found = []
@@ -328,6 +341,8 @@ def _detect_cast(script_beats):
     evidence = {}
     named_contexts = []
     for name in names:
+        if name.lower() in VOCATIVES and all(_quoted(text, start) for n, start, _ in found if n == name):
+            continue      # "Mom, what's that turtle?": said to someone already in the story, not a new person
         contexts = []
         named = False
         for i, (n, start, end) in enumerate(found):

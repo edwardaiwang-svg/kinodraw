@@ -677,6 +677,10 @@ class Shots:
             f = book._cast_figure(c['id'])
             if book._human(c['id']):
                 band = AGE_BAND.get(c.get('age'))
+                if book.reader.told(c['id']):
+                    # Text-stated ages beat the plan's ("At sixteen, Lena ...", "Uncle Dev turns 50").
+                    band = next((s.looks[c['id']] for s in self.read.get(bid, ()) if c['id'] in s.looks), None) \
+                        or book.reader.look_age(c['id'])
                 if band:
                     f.age, f.height = band, ADULT_HEIGHT * PERSON_HEIGHT.get(band, 1.)
                 f.pose = POSE.get(c.get('pose'), 'stand')

@@ -25,7 +25,7 @@ from .. import library
 from ..speakers import attribute
 from ..speech import person_sex
 from ..speech import drawn
-from . import acting, ink, sets, shots as planned
+from . import acting, ink, people, sets, shots as planned
 from ..director.v3.staging import tie
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
@@ -100,15 +100,32 @@ HUMAN_FIGURE = {'boy': 'fl_boy', 'girl': 'fl_girl', 'man': 'fl_man_standing', 'w
 # adult's. A person keeps one look (outfit, skin tone) for the whole video: the outfit where their age has it, else
 # the first their age has (a child's casual clothes).
 PERSON_AGE = {'baby': 'child', 'young': 'child', 'child': 'child', 'teen': 'adult', 'adult': 'adult', 'old': 'elder',
-              'elder': 'elder'}
-PERSON_HEIGHT = {'baby': .5, 'child': .72, 'teen': .93, 'adult': 1., 'elder': .96}
+              'elder': 'elder', 'middle': 'adult'}
+PERSON_HEIGHT = {'baby': .5, 'child': .72, 'teen': .93, 'adult': 1., 'middle': 1., 'elder': .96}
+# The age a cast member is drawn at (engine.people draws each in their own look): every band has its own build.
+DRAWN_AGE = {'baby': 'child', 'young': 'child', 'child': 'child', 'teen': 'teen', 'adult': 'adult',
+             'middle': 'middle', 'old': 'elder', 'elder': 'elder'}
 PERSON_SEX = {'boy': 'male', 'man': 'male', 'girl': 'female', 'woman': 'female'}
 PERSON_BAND = {'boy': 'child', 'girl': 'child'}
 OUTFITS = {'adult': ('villager', 'teacher', 'explorer'), 'child': ('casual', 'explorer'), 'elder': ('villager',)}
-ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|doctor|nurse)\b', 'teacher'),
+ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|librarian|counsel+or)\b', 'teacher'),
                 (r'\b(?:explorer|hiker|ranger|scout|adventurer)\b', 'explorer'),
-                (r'\b(?:farmer|villager|baker|shopkeeper)\b', 'villager'), (r'\bking\b', 'king'),
-                (r'\bqueen\b', 'queen'), (r'\bprincess\b', 'princess'))
+                (r'\b(?:farmer|villager|shepherd)\b', 'villager'), (r'\bking\b', 'king'),
+                (r'\bqueen\b', 'queen'), (r'\bprincess\b', 'princess'),
+                # Work clothes from role words (engine.people draws them).
+                (r'\b(?:cook|chef|baker|butcher|barista|waiter|waitress|grocer|shopkeeper|cashier|bartender|'
+                 r'(?:cafe|café|diner|bakery|restaurant|shop|store)\s+owner)s?\b', 'apron'),
+                (r'\b(?:anchor|anchorman|anchorwoman|newsreader|reporter|correspondent|host|presenter|manager|boss|'
+                 r'ceo|executive|banker|lawyer|attorney|mayor|senator|president|businessman|businesswoman|'
+                 r'salesman|saleswoman|realtor|agent|director|principal)s?\b', 'suit'),
+                (r'\b(?:scientist|chemist|researcher|doctor|physician|surgeon|dentist|pharmacist|vet|veterinarian|'
+                 r'lab\s+tech\w*|technician)s?\b', 'labcoat'),
+                (r'\b(?:police(?:man|woman)?|officer|cop|sheriff|guard|security|firefighter|fireman|soldier|pilot|'
+                 r'nurse|paramedic|conductor|mail\s+carrier|mailman|postman|postwoman|courier|bus\s+driver|'
+                 r'driver|captain|sailor|crossing\s+guard)s?\b', 'uniform'),
+                (r'\b(?:plumber|mechanic|electrician|builder|carpenter|construction\s+worker|contractor|engineer|'
+                 r'janitor|handyman|gardener|landscaper|painter|welder|worker|crew)s?\b', 'worker'))
+EVERYDAY = ('villager', 'teacher')     # a grown-up with no role word: a tunic or a dress, or a shirt
 TONES = ('light', 'tan', 'brown')
 TONE_MARKS = {'light': 'light', 'fair': 'light', 'pale': 'light', 'tan': 'tan', 'olive': 'tan', 'medium': 'tan',
               'brown': 'brown', 'dark': 'brown', 'black': 'brown'}
@@ -146,6 +163,8 @@ def _creatures():
 
 def meta(doodle_id) -> dict:
     """Preset metadata (pose, facing, size, ground_y, anchors) recorded with a creature doodle; {} otherwise."""
+    if people.is_person(doodle_id):
+        return people.meta(doodle_id)
     entry = library.catalog().get(doodle_id) or {}
     return entry.get('creature') or {}
 
@@ -216,6 +235,25 @@ def _person(age, sex, pose, facing, marks):
                               expression='neutral' if pose == 'face' else None)
     except Exception:  # noqa: BLE001 - no people presets: the caller's plain figure
         return None
+    if did and 'top' in look:
+        # A cast member's own look, drawn at their age (engine.people): the preset only picks the pose.
+        info = mod.presets().get(did) or {}
+        drawn = DRAWN_AGE.get(age, 'adult')
+        role = look.get('role')
+        outfit = 'casual' if drawn == 'child' else role or ('casual' if drawn == 'teen' else look.get('everyday', 'villager'))
+        flags = ''.join(f for f, on in (('g', look.get('glasses') == '1' or drawn == 'elder'),
+                                        ('b', look.get('beard') == '1' and sex == 'male' and drawn not in ('child', 'teen')),
+                                        ('c', drawn == 'elder' and sex == 'male' and look.get('cane') == '1'),
+                                        ('d', sex == 'female' and look.get('dress') == '1' and outfit not in (
+                                            'suit', 'labcoat', 'uniform', 'worker'))) if on)
+        hair = look['elder_hair'] if drawn == 'elder' else people.greying(look['hair']) if drawn == 'middle' else \
+            look['hair']
+        style = 'bald' if drawn == 'elder' and sex == 'male' and look.get('style') == 'short' else look['style']
+        key = people.look_key(sex, drawn, outfit, tone if tone in people.SKIN else 'tan', look['top'],
+                              look['bottom'], hair, style, look.get('accent', '#C62828'), flags or 'x')
+        pid = f"{key}_{info.get('pose', 'stand')}_{info.get('facing', 'r')}"
+        if people.entry(pid) is not None:
+            return pid
     return did if did and library.resolve(did) is not None else None
 
 
@@ -252,7 +290,7 @@ def face(species, age='adult', sex=None, marks=()):
 
 @lru_cache(maxsize=256)
 def _svg(doodle_id):
-    raw = sets.svg(doodle_id) or library.resolve(doodle_id).read_text(encoding='utf-8')
+    raw = sets.svg(doodle_id) or people.svg(doodle_id) or library.resolve(doodle_id).read_text(encoding='utf-8')
     root = fromstring(raw)
     box = root.get('viewBox')
     if box:
@@ -570,8 +608,10 @@ class Storybook:
         c = self.cast[cid]
         if self._human(cid):
             look = self._look(cid)
-            age = (line.ages.get(cid) if line else None) or self.reader.age_band(cid)
-            marks = tuple(m for m in c.get('marks') or () if m in MARKS) + tuple(f'{k}:{v}' for k, v in look.items())
+            age = (getattr(line, 'looks', {}).get(cid) or line.ages.get(cid) if line else None) or \
+                self.reader.look_age(cid)
+            marks = tuple(m for m in c.get('marks') or () if m in MARKS) + tuple(f'{k}:{v}' for k, v in look.items()
+                                                                                 if v)
             return Figure(cid, 'human', age, look['sex'], marks, height=ADULT_HEIGHT * PERSON_HEIGHT.get(age, 1.),
                           phase=_seed(cid), **kw)
         species, age, size = self._species(cid), c['age'], c.get('size', 1.)
@@ -596,10 +636,10 @@ class Storybook:
         return c.get('kind') == 'human' or species_base(c['species'])[0] in HUMAN
 
     def _look(self, cid):
-        """A person's look for the whole video, chosen from their name, marks and id alone: sex (the plan's, the
-        story's pronouns, else from the id), an outfit (a role in the name, a crown, else one of the everyday ones)
-        and a skin tone (a tone mark, else from the id), never the same as another person of the same sex on the
-        cast when the library allows."""
+        """A person's look for the whole video, chosen from their name, marks, the role words the story ties to them
+        and their id alone: sex (the plan's, the story's pronouns, else from the id), work clothes from a role word
+        ("Anchor", "Tom, the plumber": a suit, a cap and overalls), a skin tone (a tone mark, else from the id), and
+        clothes and hair colours no other person on the cast wears (engine.people draws them at every age)."""
         if cid in self.looks:
             return self.looks[cid]
         c = self.cast[cid]
@@ -607,17 +647,57 @@ class Storybook:
         sex = person_sex(c, cid, self.reader, self.texts)       # the same as their voice's (speech.voice_parts)
         words = f"{c.get('name', '')} {cid} {c['species']}".lower().replace('_', ' ')
         marks = {str(m).lower() for m in c.get('marks') or ()}
-        outfit = next((o for cue, o in ROLE_OUTFITS if re.search(cue, words)), None)
-        if outfit is None and 'crown' in marks:
-            outfit = 'king' if sex == 'male' else 'queen'
+        role = next((o for cue, o in ROLE_OUTFITS if re.search(cue, words)), None) or self._story_role(c)
+        if role is None and 'crown' in marks:
+            role = 'king' if sex == 'male' else 'queen'
         tone = next((TONE_MARKS[m] for m in marks if m in TONE_MARKS), None)
-        outfits = [outfit] if outfit else list(OUTFITS['adult'])
+        outfits = [role] if role in OUTFITS['adult'] + ('king', 'queen', 'princess') else list(OUTFITS['adult'])
         tones = [tone] if tone else [TONES[(seed + i) % 3] for i in range(3)]
         taken = {(l['outfit'], l['tone']) for l in self.looks.values() if l['sex'] == sex}
         options = [(o, t) for t in tones for o in outfits]
         chosen = next((o for o in options if o not in taken), options[0])
-        self.looks[cid] = {'sex': sex, 'outfit': chosen[0], 'tone': chosen[1]}
+        # Colours: the role's own (a suit's dark cloth) else the everyday list, never a top another person wears.
+        used_tops = {l['top'] for l in self.looks.values()}
+        used_hair = {(l['hair'], l['style']) for l in self.looks.values() if l['sex'] == sex}
+        prefer = people.ROLE_TOPS.get(role or '', ())
+        tops = [t for t in prefer if t not in used_tops] or \
+            [people.TOPS[(seed + i) % len(people.TOPS)] for i in range(len(people.TOPS))]
+        top = next((t for t in tops if t not in used_tops), tops[0])
+        styles = ('long', 'bun', 'ponytail', 'curly') if sex == 'female' else ('short', 'curly')
+        hairs = [(people.HAIRS[(seed + i) % len(people.HAIRS)], styles[(seed // 7 + j) % len(styles)])
+                 for j in range(len(styles)) for i in range(len(people.HAIRS))]
+        hair, style = next((h for h in hairs if h not in used_hair), hairs[0])
+        everyday = EVERYDAY[seed % len(EVERYDAY)] if role not in EVERYDAY else role
+        self.looks[cid] = {
+            'sex': sex, 'outfit': chosen[0], 'tone': chosen[1], 'role': role if role and role not in EVERYDAY else '',
+            'everyday': everyday, 'top': top, 'bottom': people.BOTTOMS[seed % len(people.BOTTOMS)],
+            'hair': hair, 'elder_hair': people.ELDER_HAIRS[seed % len(people.ELDER_HAIRS)], 'style': style,
+            'accent': people.TOPS[(seed + 5) % len(people.TOPS)] if role != 'apron' else '#FAFAF7',
+            'glasses': '1' if 'glasses' in marks else '', 'beard': '1' if 'beard' in marks or 'moustache' in marks
+            else '', 'cane': '1', 'dress': '1' if sex == 'female' and seed % 2 else ''}
         return self.looks[cid]
+
+    def _story_role(self, c):
+        """The work clothes a role word the story ties to this person names: "Tom from Pipewise Plumbing, a
+        plumber", "the chef, Ana", "Anchor Lee"; None without one."""
+        name = str(c.get('name') or '').strip()
+        if not name:
+            return None
+        key = re.escape(name.split()[-1] if len(name.split()) > 1 else name)
+        text = ' '.join(self.texts)
+        near = []
+        for m in re.finditer(r'\b' + key + r'\b', text):
+            after = text[m.end():m.end() + 60]
+            told = re.match(r",?\s+(?:is\s+|was\s+)?(?:the|a|an|our|my|your|his|her|their)\s+(?:[\w-]+\s+){0,2}[\w-]+|"
+                            r"\s*[-–—:]\s*(?:[\w'’-]+\s+){0,2}[\w-]+", after)      # a lower third: "Sam - Engineer"
+            near.append(told.group() if told else '')
+            before = re.search(r'([\w-]+)\s+$', text[max(0, m.start() - 30):m.start()])
+            near.append(before[1] if before else '')
+        for chunk in near:
+            for cue, outfit in ROLE_OUTFITS:
+                if outfit not in ('king', 'queen', 'princess') and re.search(cue, chunk.lower()):
+                    return outfit
+        return None
 
     def _shot(self, line, begin, at, staged, pictures, spec, scene=None, bid=None):
         shot = Shot(begin, begin)

@@ -104,28 +104,55 @@ _UNITS = ('zero one two three four five six seven eight nine ten eleven twelve t
 _TENS = 'twenty thirty forty fifty sixty seventy eighty ninety'.split()
 NUM = (r'(?:\d{1,3}|(?:' + '|'.join(_TENS) + r')(?:[\s-](?:' + '|'.join(_UNITS[1:10]) + r'))?|' +
        '|'.join(sorted(_UNITS[1:], key=len, reverse=True)) + r'|a\s+hundred)')
+# Nouns that only name a grown-up: "a young mother" is a young adult, never a child.
+ADULT_NOUNS = (r'man|woman|men|women|adult|lady|gentleman|mother|father|mom|mum|dad|parent|wife|husband|couple|'
+               r'bride|groom|teacher|doctor|nurse|lawyer|professional|manager|chef|officer|soldier|married|newlyweds?')
 AGE_CUES = (
     re.compile(r'\b(?:at|aged)\s+(?:the\s+age\s+of\s+)?(?P<n>' + NUM + r')(?=\s*[,.;!?]|\s+years?\b|\s+(?:he|she|they|I|we|you)\b|$)', re.I),
     re.compile(r'\b(?P<n>' + NUM + r')[\s-]+years?[\s-]+old\b', re.I),
-    re.compile(r'\b(?P<who>[\w’\']+)\s+(?:was|were|is|turned|had\s+turned)\s+(?:almost\s+|nearly\s+|only\s+|just\s+)?'
-               r'(?P<n>' + NUM + r')(?=\s*[,.;!?]|\s+(?:when|and|now|then|that)\b|$)', re.I),
+    re.compile(r'\b(?P<who>[\w’\']+)\s+(?:was|were|is|turns|turned|is\s+turning|had\s+turned)\s+'
+               r'(?:almost\s+|nearly\s+|only\s+|just\s+)?'
+               r'(?P<n>' + NUM + r')(?=\s*[,.;!?]|\s+(?:when|and|now|then|that|today|this)\b|$)', re.I),
+    # "her daughter Rosie, six, fed the ducks": a number set off by commas right after a name.
+    re.compile(r'\b(?P<who>[A-Z][\w’\']*),\s+(?:aged\s+|age\s+)?(?P<n>' + NUM + r')\s*(?:,|\.|;|$)'),
 )
 BAND_CUES = (
     ('elder', r'\b(?:he|she|they)\s+(?:was|were|grew|got|had\s+grown|became)\s+(?:very\s+|quite\s+|so\s+|too\s+)?old\b|'
               r'\bin\s+(?:his|her|their)\s+(?:old\s+age|sixties|seventies|eighties|nineties)\b|\bas\s+an\s+old\s+(?:man|woman|lady)\b'),
-    ('child', r'\b(?:he|she|they)\s+(?:was|were)\s+(?:very\s+|still\s+|so\s+|only\s+)?(?:little|small|young|'
+    ('child', r'\b(?:he|she|they)\s+(?:was|were)\s+(?:very\s+|still\s+|so\s+|only\s+)?(?:little|small|young(?!\s+(?:and\s+)?'
+              r'(?:' + ADULT_NOUNS + r'))|'
               r'a\s+(?:little\s+|small\s+)?(?:boy|girl|child|kid|toddler))\b|\bas\s+an?\s+(?:little\s+)?(?:child|kid|boy|girl|toddler)\b|'
               r'\bin\s+(?:his|her|their)\s+childhood\b'),
     ('baby', r'\b(?:he|she)\s+was\s+(?:just\s+|only\s+)?a\s+baby\b|\bas\s+a\s+baby\b'),
     ('teen', r'\b(?:he|she|they)\s+(?:was|were)\s+a\s+teen(?:ager)?\b|\bas\s+a\s+teen(?:ager)?\b|\bin\s+(?:his|her|their)\s+teens\b'),
-    ('adult', r'\b(?:he|she|they)\s+(?:grew\s+up|(?:was|were|had)\s+(?:all\s+)?grown(?:\s+up)?)\b|\bas\s+an?\s+(?:adult|grown[\s-]?up)\b'),
+    ('adult', r'\b(?:he|she|they)\s+(?:grew\s+up|(?:was|were|had)\s+(?:all\s+)?grown(?:\s+up)?)\b(?!\s+(?:in|on|at|near)\b)|'
+              r'\bas\s+an?\s+(?:adult|grown[\s-]?up)\b'),
+    ('middle', r'\bmiddle[\s-]aged\b|\bin\s+(?:his|her|their)\s+(?:forties|fifties|late\s+thirties)\b'),
 )
 BAND_CUES = [(band, re.compile(cue, re.I)) for band, cue in BAND_CUES]
 # Time passing: "N years later" moves everyone on from here; "for N years" by the end of the sentence.
 LATER = re.compile(r'\b(?:(?P<n>' + NUM + r')|many|several|(?P<d>decades))\s+years?\s+(?:later|passed|went\s+by)\b|'
                    r'\bdecades\s+later\b', re.I)
+# Years a couple has been together: both partners are grown-ups at least that long ("twenty-five years and you're
+# still stealing my fries", "our 40th anniversary", "married for thirty years").
+TOGETHER = re.compile(r'\b(?:(?P<n>' + NUM + r')\s+years?\s+(?:and\s+(?:you|we)(?:[’\']re|\s+are)\s+still|'
+                      r'(?:of\s+)?(?:marriage|married|together|wedded)|since\s+(?:our|the)\s+wedding)|'
+                      r'married\s+(?:for\s+)?(?P<m>' + NUM + r')\s+years|(?P<o>\d{1,2})(?:st|nd|rd|th)\s+'
+                      r'(?:wedding\s+)?anniversary|our\s+(?P<w>' + NUM + r')(?:st|nd|rd|th|ieth|th)?\s+anniversary)\b', re.I)
+ADULT_FROM = 22       # the age a couple's years together are counted from
+# A look back at someone's childhood, for this line only: "grew up in Kestrel Falls".
+LOOK_BACK = re.compile(r'\bgrew\s+up\s+(?:in|on|at|near|around|by|outside)\b', re.I)
 SPELL = re.compile(r'\bfor\s+(?P<n>' + NUM + r')\s+years\b', re.I)
-BAND_YEARS = {'baby': 1, 'child': 8, 'teen': 16, 'adult': 35, 'elder': 75}
+BAND_YEARS = {'baby': 1, 'child': 8, 'teen': 16, 'adult': 35, 'middle': 48, 'elder': 75}
+# How a person is drawn at an age band: a grown-up of forty or more is middle-aged (grey temples, a fuller build).
+MIDDLE_YEARS = 40
+# Words in a person's name that make them a grown-up whatever the plan says ("Uncle Dev", "Mrs Patel").
+ADULT_TITLES = re.compile(r'\b(?:uncle|aunt|auntie|aunty|mr|mrs|ms|miss|dr|doctor|professor|coach|officer|captain|'
+                          r'chef|cook|mom|mum|dad|mother|father|parent|husband|wife|sir|madam|judge|mayor|pastor|'
+                          r'reverend|teacher|manager|boss|driver|anchor|reporter|nurse|pilot|farmer|plumber|engineer|'
+                          r'owner|grown[\s-]?up)\b\.?', re.I)
+ELDER_TITLES = re.compile(r'\b(?:grand(?:ma|pa|mother|father|mom|dad)|granny|gran|nana|grampa|gramps|abuela|abuelo|'
+                          r'nainai|yeye|oma|opa)\b', re.I)
 PLAN_BAND = {'baby': 'baby', 'young': 'child', 'adult': 'adult', 'old': 'elder'}
 
 
@@ -378,6 +405,7 @@ class Sentence:
     things: list = field(default_factory=list)         # everyday things it names, see Reader._things
     extras: list = field(default_factory=list)         # people the story mentions who are not in the cast
     ages: dict = field(default_factory=dict)           # person id -> age band (baby/child/teen/adult/elder) now
+    looks: dict = field(default_factory=dict)          # person id -> the age they are drawn at (ages, and middle)
     refs: list = field(default_factory=list)           # (offset in text, cast id, how, end): who it points at
 
 
@@ -480,6 +508,7 @@ class Reader:
         self.sexes = {}           # sex the story's pronouns showed for a cast member the plan left unknown
         self.years = {}           # cast id -> age in years the story has reached
         self.first_years = {}     # cast id -> the first age the story states (their age before it, too)
+        self.aged = []            # cast ids in the order the story last stated their ages
         self.people_story = any(c.get('kind') == 'human' for c in self.cast) or not any(
             c.get('kind') not in ('human', 'object') for c in self.cast)
 
@@ -505,7 +534,29 @@ class Reader:
         if years is not None:
             return band(years)
         c = self.by_id[cid]
-        return c.get('band') or PLAN_BAND.get(c.get('age'), 'adult')
+        have = c.get('band') or PLAN_BAND.get(c.get('age'), 'adult')
+        name = str(c.get('name') or '')
+        if ELDER_TITLES.search(name) and have != 'elder':
+            return 'elder'                                  # "Grandma Rose", "Nana"
+        if ADULT_TITLES.search(name) and have in ('baby', 'child', 'teen'):
+            return 'adult'                                  # "Uncle Dev" is a grown-up
+        return have
+
+    def told(self, cid):
+        """Whether the story's own words give this person's age: a stated age, or a name only a grown-up or an old
+        person has ("Uncle Dev", "Grandma Rose")."""
+        c = self.by_id.get(cid) or {}
+        name = str(c.get('name') or '')
+        return (cid in self.years or cid in self.first_years or bool(ELDER_TITLES.search(name))
+                or bool(ADULT_TITLES.search(name)) and PLAN_BAND.get(c.get('age'), 'adult') in ('baby', 'child'))
+
+    def look_age(self, cid, now=None):
+        """The age a person is drawn at: their age band, with a grown-up of forty or more middle-aged."""
+        now = now or self.age_band(cid)
+        years = self.years.get(cid, self.first_years.get(cid))
+        if now == 'adult' and years is not None and years >= MIDDLE_YEARS:
+            return 'middle'
+        return now
 
     def _kin(self, kind):
         """The animal cast member a kin word means ("his mother", "the cub's father"): the only one who fits. A
@@ -619,6 +670,14 @@ class Reader:
                     if kind in ('parents', 'family'):
                         for other in self._kin(kind):
                             refs.append([start, other, 'kin', end])
+                        continue
+                if cid is None and role:
+                    # "her daughter Rosie", "his mother, Mara": the role word right before a cast name is that person.
+                    named = next((r for r in refs if r[2] == 'name' and r[0] > start
+                                  and re.fullmatch(r',?\s*', text[end:r[0]])), None)
+                    named = named or next((t for t in tokens if t[2] == 'name' and t[0] > start
+                                           and re.fullmatch(r',?\s*', text[end:t[0]])), None)
+                    if named:
                         continue
                 if cid is None and role and not quoted and self.people_story and (
                         owner_id is None or self.human(owner_id)):
@@ -738,10 +797,23 @@ class Reader:
         outside = [r for r in refs if not _inside(quotes, r[0])]
         stated = {}
 
-        def owner(m):
+        def owner(m, years=None):
             inside = [r for r in outside if m.start() <= r[0] < m.end()]
             if inside:
                 return inside[0][1]
+            if not body[:m.start()].strip(' "“'):
+                # "At nineteen, in a lecture hall on her first day, Lena felt small": an age opening the sentence
+                # is its subject's, the first person after it who is not an owner ("her first day").
+                after = [r for r in outside if r[0] >= m.end()
+                         and not re.match(r'(?:his|her|their|its|my|your|our)\s+\w', body[r[0]:], re.I)]
+                named = [r for r in after if r[2] == 'name']
+                if named or after:
+                    return (named or after)[0][1]
+                # "At twenty-five, the text didn't come one morning.": nobody named, so the age goes on the timeline
+                # of the person whose age the story told last, when it is later than theirs.
+                timeline = [cid for cid in reversed(self.aged) if years is not None and self.years.get(cid, 0) <= years]
+                if not outside and timeline:
+                    return timeline[0]
             near = sorted(outside, key=lambda r: min(abs(r[0] - m.end()), abs(m.start() - r[3])))
             return near[0][1] if near else self.focus
 
@@ -750,9 +822,10 @@ class Reader:
         for m, years in sorted(cues, key=lambda t: t[0].start()):
             if years is None or years > 120 or _inside(quotes, m.start()):
                 continue
-            if 'who' in m.re.groupindex and not any(r[0] == m.start('who') for r in outside):
-                continue      # "Maya was seven", "she was seven"; never "it was ten"
-            cid = owner(m)
+            if 'who' in m.re.groupindex and not any(r[0] <= m.start('who') < r[3] or r[3] == m.end('who')
+                                                       for r in outside):
+                continue      # "Maya was seven", "she was seven", "Uncle Dev turns 50"; never "it was ten"
+            cid = owner(m, years)
             if not cid or cid not in self.by_id or not self.human(cid):
                 continue
             clause = re.split(r'[,;:]', body[:m.start()])[-1]
@@ -760,20 +833,35 @@ class Reader:
                 stated[cid] = band(years)
                 continue
             self.years[cid] = years
+            self.aged = [a for a in self.aged if a != cid] + [cid]
             if m.re in AGE_CUES:
                 self.first_years.setdefault(cid, years)     # a stated number: their age before this line too
+        back = LOOK_BACK.search(body)
+        if back and not _inside(quotes, back.start()):
+            cid = owner(back)
+            if cid and cid in self.by_id and self.human(cid):
+                stated.setdefault(cid, 'child')
+        together = TOGETHER.search(body)
+        if together and not _inside(quotes, together.start()):
+            n = number(next(g for g in (together['n'], together['m'], together['o'], together['w']) if g)) or 0
+            # Both partners: every person in the story the story has given no age.
+            for cid in self.by_id:
+                if self.human(cid) and n and cid not in self.first_years:
+                    self.years[cid] = max(self.years.get(cid, 0), ADULT_FROM + n)
         later = LATER.search(body)
         if later and not _inside(quotes, later.start()):
             step = number(later['n']) if later['n'] else 30 if later['d'] or 'decade' in later.group().lower() else 10
             for cid in list(self.years):
                 self.years[cid] += step or 0
-        for cid in s.present + s.extras:
+        for cid in dict.fromkeys(s.present + s.extras + list(stated)):
             if cid not in self.by_id or not self.human(cid):
                 continue
             now = stated.get(cid) or self.age_band(cid)
             if now == 'teen' and any(r[1] == cid and body[r[0]:r[3]].lower().startswith('you') for r in outside):
                 now = 'child'
             s.ages[cid] = now
+            years = None if cid in stated else self.years.get(cid, self.first_years.get(cid))
+            s.looks[cid] = 'middle' if now == 'adult' and years is not None and years >= MIDDLE_YEARS else now
         spell = SPELL.search(body)
         if spell and not _inside(quotes, spell.start()):
             for cid in list(self.years):

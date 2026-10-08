@@ -285,6 +285,17 @@ def _verbatim(words, beat) -> bool:
     return bool(words) and any(f' {words} ' in f' {_words(beat[k])} ' for k in ('text', 'spoken'))
 
 
+def _role_taken(c, cast):
+    """A kin or role word found as a name ("Mom") when a cast member already is that person ("Theo's mother")."""
+    from .story import PEOPLE_RE
+    word = name_key(c['name'])
+    for role, cue, _, _ in PEOPLE_RE:
+        if role in ('man', 'woman', 'friend') or not cue.fullmatch(word):
+            continue
+        return any(cue.search(name_key(o['name']) + ' ' + o['id'].replace('_', ' ')) for o in cast)
+    return False
+
+
 BIBLE_AGE = {'baby': 'baby', 'young': 'child', 'adult': 'adult', 'old': 'old'}
 
 
@@ -784,7 +795,7 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
                  f'cast.{c["id"]}.palette', repairs)
         cast.append(c)
     for c in detect_cast(script):
-        if any(name_key(existing['name']) == name_key(c['name']) for existing in cast):
+        if any(name_key(existing['name']) == name_key(c['name']) for existing in cast) or _role_taken(c, cast):
             continue
         while c['id'] in ids:
             c['id'] += '_2'
