@@ -302,7 +302,7 @@ def test_a_lone_resting_figure_holds_still_on_a_narrated_held_page(tmp_path):
     t = span.start + (shot.start + shot.end) / 2
     assert any(a <= t <= b for a, b in pages) and HELD_PAGE == 8.
     scene = next(s for s in plan['scenes'] if set(s['beat_ids']) == set(span.spec['beat_ids']))
-    scene['treatment'] = 'whiteboard'                        # a whiteboard draws while it speaks: no held page
+    scene['treatment'] = 'chart'                             # a chart animates while it speaks: no held page
     assert not any(a <= t <= b for a, b in pipeline._narrated_pages(cfg, tl))
 
 
