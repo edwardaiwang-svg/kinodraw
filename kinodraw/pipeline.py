@@ -595,6 +595,9 @@ def _finish(project_dir):
         from .qa import content as content_qa
         content = content_qa.check(cfg['plan_v3'], board, tl, video)
         qa['content'] = {'problems': content['problems'], 'findings': content['findings'], 'stats': content['stats']}
+        motion = content_qa.motion(build / 'acts.json', tl)
+        if motion is not None:
+            qa['motion'] = motion
     publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
             voice_source=voice_server.describe(cfg['voice_server'], lang)
             if cfg.get('voice_server') and not cfg.get('recording') else None,

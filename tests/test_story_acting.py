@@ -10,6 +10,7 @@ from kinodraw import ingest, script
 from kinodraw.director.rules import RulesDirector
 from kinodraw.director.v3.rules import from_rules
 from kinodraw.engine import acting, render, timeline
+from kinodraw.qa import content
 
 LIONS = [{'id': 'kojo', 'name': 'King Kojo', 'kind': 'quadruped', 'species': 'lion', 'age': 'adult', 'sex': 'male',
           'size': 1.4},
@@ -229,6 +230,20 @@ def test_the_plan_names_who_moves_when_the_text_does_not(tmp_path):
 
 
 # ------------------------------------------------------------------ QA and idle
+def test_a_movement_verb_whose_actor_shows_no_movement_is_a_qa_finding(tmp_path):
+    """A movement the page cannot show (its actor is not on it) is a content finding beside qa['content']."""
+    text = '# Walk\n\nPip walked home in the moonlight.'
+    beats = script.build(ingest.read(text), story='story')['beats']
+    prod = staged(tmp_path, text, WOOD[:2], shots=[shot(beats[0]['id'], 'Pip walked', 'wide',
+                                                        [('mama', 'adult', 'sleep')])])
+    acted = prod.storybook.acted
+    assert acted and acted[0]['word'] == 'walked' and acted[0]['actor'] == 'pip' and not acted[0]['shown']
+    path = tmp_path / 'acts.json'
+    path.write_text(json.dumps(acted))
+    found = content.motion(path, prod.tl)
+    assert found['stats'] == {'verbs': 1, 'shown': 0} and '"walked": pip does not move' in found['findings'][0]
+
+
 def test_someone_holding_a_thing_while_standing_does_not_sway(tmp_path):
     """The r01 Envelope's 'idle head tilt': a person holding something swayed ±2 degrees as if walking. Standing
     still, the figure keeps its outline (only the faint breath at its edge)."""
