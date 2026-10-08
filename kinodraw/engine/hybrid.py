@@ -249,6 +249,8 @@ class HybridProduction:
             (build / 'screen-text.json').write_text(json.dumps(
                 [{'start': round(a, 3), 'end': round(b, 3), 'kind': k, 'text': w} for a, b, k, w in self.screen_notes],
                 ensure_ascii=False, indent=1), encoding='utf-8')
+        # Device screens and message threads the words describe: drawn here over every scene, not by the whiteboard.
+        self.ui_moments, self.whiteboard.ui_moments, self.cutaway.ui_moments = whiteboard.ui_moments, [], []
         if self.storybook is not None:
             # The quoted spans the story pages draw in speech bubbles, for the captions to leave to them.
             build = Path(project_dir) / 'build'
@@ -1711,6 +1713,9 @@ class HybridProduction:
 
     def frame(self, t):
         image = self._frame_at(t)
+        if self.ui_moments and not self.vertical:
+            from .ui_screens import cover
+            image = cover(self, image, t, caption=True)
         return self._draw_screen_text(image, t) if self.screen_notes else image
 
     def _frame_at(self, t):

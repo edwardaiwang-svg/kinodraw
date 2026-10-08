@@ -188,15 +188,17 @@ def label_key(name: str) -> str:
 def screenplay_labels(texts) -> set:
     """The speaker labels a script uses (casefolded names). A label counts when it is written in capitals (JULES:)
     or when the same name starts two or more lines; a lone "Note:" or "Then a voice:" never does."""
-    seen = {}
+    seen, chat = {}, set()
     for text in texts:
         for pos in _line_starts(text):
             found = _label_at(text, pos)
             if found:
                 key = label_key(found[1])
                 seen.setdefault(key, []).append(found[1])
+                if _chat_line(text, pos):
+                    chat.add(key)                   # "Dad (6:12 PM): ..." is a chat line even once
     return {key for key, names in seen.items()
-            if len(names) >= 2 or all(n.isupper() and len(re.sub(r'\W', '', n)) >= 2 for n in names)}
+            if len(names) >= 2 or key in chat or all(n.isupper() and len(re.sub(r'\W', '', n)) >= 2 for n in names)}
 
 
 def _line_starts(text: str) -> list[int]:
@@ -545,6 +547,8 @@ def segments(spoken: str, lang: str, labels: set | None = None, speakers=None, l
     for k, (start, end, name) in enumerate(lines):
         stop = lines[k + 1][0] if k + 1 < len(lines) else len(spoken)
         who = (label_speaker(name) if label_speaker else None) or f'label:{label_key(name)}'
+        if _chat_line(spoken, start):
+            continue                                # "Dad (7:02 AM): ..." is a text on a phone: the narrator reads it
         for i in range(start, stop):
             owner[i] = who
     for a, b, who in speakers or ():
@@ -570,6 +574,13 @@ def segments(spoken: str, lang: str, labels: set | None = None, speakers=None, l
                 out.append(Segment(i, j, owner[i], text, index))
         i = j
     return out
+
+
+def _chat_line(text: str, start: int) -> bool:
+    """A screenplay line whose label carries a time ("Dad (7:02 AM): ...") is a chat transcript line."""
+    from .ui_screens import chat_time
+    m = LABEL.match(text, start)
+    return bool(m and chat_time(m.group('paren')))
 
 
 def said_text(spoken: str, lang: str, labels: set | None = None) -> tuple[str, list[int]]:

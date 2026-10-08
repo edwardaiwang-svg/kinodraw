@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass, field
 
 from .director.v3.semantics import name_key
+from .ui_screens import quote_kind
 from .director.v3.story import SPEAKER_LABEL, Reader, _inside
 
 SAY = (r'said|says|say|asked|asks|replied|replies|told|tells|shouted|shouts|called|calls|yelled|yells|whispered|'
@@ -133,7 +134,7 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
             for l in shot.get('lines') or ():
                 if l.get('speaker') in reader.by_id and _norm(l.get('quote') or ''):
                     planned.setdefault(shot.get('beat_id'), []).append((_norm(l['quote']), l['speaker']))
-    runs, run = [], []
+    runs, run, shown = [], [], []
     previous = None                    # the last sentence of the beat before
     for at, b in enumerate(beats):
         text = b['spoken']
@@ -151,6 +152,11 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
         for i in quoted:
             s = read[i]
             line = _line(reader, b['id'], at, s, text)
+            before = read[i - 1].text if i else (previous.text if previous is not None else '')
+            if not labelled and all(quote_kind(s.text, max(0, q0 - s.start - 1), before) for q0, _ in s.quotes):
+                line.why = 'shown'             # a text message, a notification, a button: the narrator reads it
+                shown.append(line)
+                continue
             line.plan = _planned(line, planned.get(b['id']), talkers.get(b['id']))
             if labelled:
                 line.anchor, line.why = labelled, 'label'
@@ -191,7 +197,7 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
                 parents.update(p for p in _fits(line, pair, reader) if p != line.who)
             if line.who and line.titled:
                 children.add(line.who)
-    return Speakers(done, reader)
+    return Speakers(done + shown, reader)
 
 
 def narrator_of(beats: list[dict], cast: list[dict]) -> str | None:

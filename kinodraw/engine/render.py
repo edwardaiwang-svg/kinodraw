@@ -142,6 +142,8 @@ class Production:
         self.steps = step_rail(self.ep, tline, lang, (46, 157, 79), self.size)
         from .data_cards import build as data_cards
         self.data_cards = data_cards(self.ep, tline, lang, self.skin, self.size, self.ctx.elements, self.cuts)
+        from .ui_screens import moments_for
+        self.ui_moments = [] if relaxed else moments_for(self.ep, tline, lang, project_dir)   # phones, laptops
 
     # ------------------------------------------------------------ building
     def _beats(self, cid):
@@ -959,6 +961,9 @@ class Production:
                      else Image.blend(src, dst, u))
         else:
             frame = self.board_frame(t)
+        if self.ui_moments and not self.vertical:
+            from .ui_screens import cover
+            frame = cover(self, frame, t)
         if self.vertical:
             return frame
         if chrome and not self._in_title(t):
