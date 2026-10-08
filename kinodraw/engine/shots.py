@@ -644,7 +644,7 @@ class Shots:
         moved = re.search(r'\b(?:roll\w*|fell|falls?|falling|dropp?\w*|spill\w*|fl[eiy]\w*|slid\w*|went\s+by|'
                           r'drove|drives?|passed|bounc\w*|toss\w*|thr[eo]w\w*)\b', text[2], re.I)
         for p in props:
-            ref, to = swap.get(p['ref'], p['ref']), swap.get(p.get('to') or '', p.get('to') or '')
+            ref, to = swap.get(p['ref'], p['ref']), self.person(swap.get(p.get('to') or '', p.get('to') or ''))
             if sets.picture_place(ref) and p.get('relation') in (None, 'none') and p.get('motion') in (None, 'none'):
                 continue
             if any(f.species != 'human' and re.search(r'\b' + re.escape(f.species) + r'(?:e?s)?\b', _words(ref), re.I)
@@ -653,8 +653,8 @@ class Shots:
             relation = p.get('relation') or 'none'
             if to in keys and relation != 'held_by':
                 relation = 'held_by'
-            if relation == 'held_by' and to not in keys:
-                relation, to = 'none', ''
+            if to not in keys and (relation == 'held_by' or not self._known(to)):
+                relation, to = 'none', ''                 # by someone not on this page (or nothing drawn): just there
             motion = p.get('motion') if p.get('motion') in ('roll', 'fall', 'fly', 'drop', 'slide') else None
             when = at(text[0] + moved.start()) if moved and motion else at(text[0]) + .4
             out.append({'ref': ref, 'relation': relation, 'to': to, 'motion': motion, 'at': when})
