@@ -24,7 +24,7 @@ import numpy as np
 
 from . import net, paths, voice
 
-VERSION = 1
+VERSION = 2              # 2: clips are level-matched (voice.level)
 SR = 24000
 BACK = (' To go back to the built-in voice, turn off Settings > Voice server in the Studio; in the CLI, '
         'drop the --voice-server, --server-model and --server-voice flags and TTS_* variables '
@@ -312,6 +312,7 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, server: Server, speed: f
         return voice.Clip(wav, info['duration'], info['char_times'])
     audio = decode(speech(server, said, speed))
     times = char_times(spoken, audio, lang)
+    audio = voice.level(audio, SR)
     duration = round(len(audio) / SR, 3)
     cache_dir.mkdir(parents=True, exist_ok=True)
     with wave.open(str(wav), 'wb') as out:

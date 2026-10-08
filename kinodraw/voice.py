@@ -63,7 +63,7 @@ VOICES = {
 SPEEDS = (0.85, 1.15)
 SR = 24000
 GAP = .4                 # silence after each beat
-VERSION = 2              # bump when synthesis or alignment changes (invalidates cached clips)
+VERSION = 3              # bump when synthesis or alignment changes (invalidates cached clips)
 CLAUSE = {'en': ',.;:?!—', 'zh': '，。；：？！、—', 'es': ',.;:?!—'}
 PHONE_MARKS = ',.;:?!—…'
 NOT_SOUNDS = set(' ˈˌːʲ')
@@ -282,6 +282,46 @@ def _raised(audio: np.ndarray, semitones: float) -> tuple[np.ndarray, float]:
     return resample_poly(audio, ratio.denominator, ratio.numerator).astype(np.float32), float(ratio)
 
 
+SPEECH_LUFS = -24.0      # every clip's speech, whoever says it (Kokoro's voices measured -27.6 to -19.6 LUFS)
+SPEECH_DBTP = SPEECH_LUFS + 13  # ...its peaks at most 13 dB over it, the master's own headroom (-14 LUFS, -1 dBTP):
+                                # its limiter then leaves every voice's level alone (a peakier voice lost up to 1.2 LU
+                                # more there, script 28 on 10/8)
+GATED = 1.0              # speech at least this long (s) is measured gated (BS.1770); shorter, by its short-term level
+
+
+def speech_loudness(audio: np.ndarray, rate: int) -> float:
+    """The loudness (LUFS) of a clip's speech: from its first to its last voiced sample, gated as BS.1770 measures
+    a programme, or, for a word or two too short to gate, its short-term level (K-weighted mean over that speech).
+    -inf for a clip with no speech."""
+    from scipy.signal import sosfilt
+    from .audio import master
+    if not np.any(np.abs(audio) > .01):
+        return -np.inf
+    a, b = _voiced(audio, rate)
+    if b - a >= GATED * rate:
+        return master.loudness(audio[a:b], rate)
+    k = sosfilt(master.kweighting(rate), audio[a:b].astype(np.float64))
+    return float(-.691 + 10 * np.log10(max((k ** 2).mean(), 1e-12)))
+
+
+def level(audio: np.ndarray, rate: int) -> np.ndarray:
+    """``audio`` with its speech at SPEECH_LUFS: the narrator and every character voice (child or elderly, pitched
+    or not, a voice server's) meet the mix at one level, and the mix's single gain keeps them there. A clip with no
+    speech is left as it is."""
+    from .audio import master
+    now = speech_loudness(audio, rate)
+    if not np.isfinite(now):
+        return audio
+    audio, gain = np.asarray(audio, np.float32), SPEECH_LUFS - now
+    for _ in range(8):                                       # what the limiter takes is given back (a peaky
+        out = master.limit(audio * np.float32(10 ** (gain / 20)), rate, SPEECH_DBTP)    # voice needs a few passes)
+        lost = SPEECH_LUFS - speech_loudness(out, rate)
+        if abs(lost) <= .1:
+            break
+        gain += 1.5 * lost
+    return out
+
+
 def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None, speed: float = 1.0,
                lexicon: dict | None = None) -> Clip:
     voice = voice or LANGS[lang]['voice']
@@ -301,6 +341,7 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
     if semitones:
         audio, ratio = _raised(audio, semitones)
         char_times = [round(t / ratio, 3) for t in char_times]
+    audio = level(audio, sr)
     cache_dir.mkdir(parents=True, exist_ok=True)
     with wave.open(str(wav), 'wb') as w:
         w.setnchannels(1)
