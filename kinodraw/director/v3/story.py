@@ -694,8 +694,10 @@ class Reader:
         for pattern, doodle in PROPS:
             if re.search(r'\b(?:' + pattern + r')\b', body, re.I) and doodle not in s.props:
                 s.props.append(doodle)
+        from .staging import absent
         for pattern, doodle in SKY:
-            if re.search(r'\b(?:' + pattern + r')', body, re.I) and doodle not in s.sky:
+            if doodle not in s.sky and any(not absent(body, m.start(), m.end())        # never "no moon"
+                                           for m in re.finditer(r'\b(?:' + pattern + r')', body, re.I)):
                 s.sky.append(doodle)
         s.props = s.props[:2]
         s.sky = s.sky[:2]

@@ -105,3 +105,24 @@ def test_the_storybook_shows_each_picture_on_the_sentence_that_names_it(tmp_path
     assert len(shots) == 2
     assert 'fl_houses' in props[0] and 'fl_bread' not in props[0]
     assert 'fl_bread' in props[1]
+
+
+def test_a_thing_the_words_say_is_not_there_is_never_drawn():
+    from kinodraw.director.v3.story import Reader
+    for text in ('No moon anywhere.', 'The moon is gone.', 'By morning the key was missing.'):
+        assert [s.sky for s in Reader([]).read('b', text)] in ([[]], [['fl_sun']]), text
+        assert read_text(text)[0].objects == [], text
+    assert [s.sky for s in Reader([]).read('b', 'The moon rose over the hill.')] == [['fl_crescent_moon']]
+    assert read_text('No moon anywhere.')[0].sky is False
+    # A planner's moon on a beat that says it is gone shows on none of its sentences.
+    assert tie(['"Mama," he whispered.', '"The moon is gone."'], ['fl_full_moon']) == [[], []]
+
+
+def test_a_screenplay_speaker_called_grandpa_to_his_face_is_old():
+    text = ('# Remote\n\nIt is Friday night at the Ruiz house.\n\n'
+            'WALT: Whatever happened to a movie where a man rides a horse?\n\n'
+            'JULES: Grandpa, that is a screensaver.\n\nMAYA: Mom, can I pick?\n\nDANA: No.')
+    cast = {c['name']: c for c in _plan(text)[0]['cast']}
+    assert (cast['Walt']['age'], cast['Walt']['sex']) == ('old', 'male')
+    assert cast['Jules']['age'] != 'old'
+    assert cast['Dana']['sex'] == 'unknown'          # "Mom" was said to Jules, the speaker just before Maya

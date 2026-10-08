@@ -145,6 +145,15 @@ OBJECTS = (
 SKY_WORDS = r'moon\w*|sun\w*|stars?|night|evening|dawn|sunrise|sunset|morning|afternoon|rain\w*|storm\w*|thunder|' \
             r'lightning|clouds?|snow\w*|sky|skies'
 NEGATION = re.compile(r"\b(?:no|not|never|without|nothing|nobody)\b|\b\w+n['’]t\b", re.I)
+# "The moon is gone", "the key was missing": the words name a thing that is not there.
+GONE = re.compile(r"\s+(?:(?:is|was|were|are|has|had)\s+)?(?:been\s+|already\s+|still\s+)?"
+                  r"(?:gone|missing|vanished|disappeared|lost)\b", re.I)
+
+
+def absent(body: str, start: int, end: int) -> bool:
+    """Do the words at body[start:end] name something that is not there ("no moon", "the moon is gone")?"""
+    clause = re.split(r'[,;:]|\b(?:but|and|or)\b', body[:start], flags=re.I)[-1]
+    return bool(NEGATION.search(clause) or GONE.match(body, end))
 
 
 @dataclass
@@ -204,9 +213,8 @@ def read_text(text: str, place: str | None = None) -> list[Reading]:
             if any(s < end and start < e for s, e in taken):
                 continue
             taken.append((start, end))
-            clause = re.split(r'[,;:]|\b(?:but|and|or)\b', body[:start], flags=re.I)[-1]
-            if NEGATION.search(clause):
-                continue          # "No moon anywhere", "not in a drawer": nothing to show
+            if absent(body, start, end):
+                continue          # "No moon anywhere", "not in a drawer", "the moon is gone": nothing to show
             r.words.append(word)
             if pic is None:
                 continue
@@ -217,7 +225,8 @@ def read_text(text: str, place: str | None = None) -> list[Reading]:
                 r.objects.append(pic)
                 if implied and not r.named_place and r.place is None:
                     r.place = _place_picture(implied)
-        r.sky = bool(re.search(r'\b(?:' + SKY_WORDS + r')\b', body, re.I))
+        r.sky = any(not absent(body, m.start(), m.end())
+                    for m in re.finditer(r'\b(?:' + SKY_WORDS + r')\b', body, re.I))
         if r.place is None:
             r.place = place
         place = r.place
@@ -256,29 +265,41 @@ def _keywords(doodle):
     return words, rows, any(doodle in pics for _, pics, _ in places)
 
 
+def _spans(doodle, text):
+    words, rows, _ = _keywords(doodle)
+    for p in rows:
+        yield from ((m.start(), m.end()) for m in p.finditer(text))
+    for w in words:
+        yield from ((m.start(), m.end()) for m in re.finditer(r'(?<!\w)' + re.escape(w) + r'(?:s|es)?(?!\w)', text, re.I))
+
+
 def names(doodle, text) -> bool:
     """Does this sentence name what the picture shows (its table row or one of its library keywords)?"""
-    words, rows, _ = _keywords(doodle)
-    if any(p.search(text) for p in rows):
-        return True
-    low = text.lower()
-    return any(re.search(r'(?<!\w)' + re.escape(w) + r'(?:s|es)?(?!\w)', low) for w in words)
+    return next(_spans(doodle, text), None) is not None
+
+
+def shows(doodle, text) -> bool:
+    """Does this sentence name the picture as something that is there (not "no moon", "the moon is gone")?"""
+    return any(not absent(text, a, b) for a, b in _spans(doodle, text))
 
 
 def tie(texts, pictures) -> list[list[str]]:
     """Each sentence's share of a scene's pictures. A set shows from the sentence that names it to the end of the
     scene; an object shows on the sentence that names it; a picture no sentence names shows on every sentence
-    (a set carried in from an earlier scene, or a planner's choice the words do not spell out)."""
-    first = {}
+    (a set carried in from an earlier scene, or a planner's choice the words do not spell out); a picture the
+    words only name as not there ("the moon is gone") shows on none."""
+    first, never = {}, set()
     for p in pictures:
-        first[p] = next((i for i, t in enumerate(texts) if names(p, t)), None)
+        first[p] = next((i for i, t in enumerate(texts) if shows(p, t)), None)
+        if first[p] is None and any(names(p, t) for t in texts):
+            never.add(p)          # the words only ever say it is not there
     out = []
     for i, t in enumerate(texts):
         mine = []
         for p in pictures:
             at = first[p]
             place = _keywords(p)[2]
-            if at is None or (place and at <= i) or names(p, t):
+            if p not in never and (at is None or (place and at <= i) or shows(p, t)):
                 mine.append(p)
         out.append(mine)
     return out
@@ -461,6 +482,19 @@ def _member(name, age, sex, index):
             'marks': ['none'], 'temperament': 'gentle'}
 
 
+def _addressed(text):
+    """Screenplay speakers a later line calls by a role to their face ("JULES: Grandpa, that's a screensaver." said
+    right after WALT spoke): label name -> (age, sex) of that role."""
+    out, last = {}, None
+    for m in re.finditer(r'(?m)^\s*\[?([A-Z][A-Z]+(?: [A-Z][A-Z]+)?)\]?\s*:\s*(?:\[[^\]]*\]\s*)?(?:(\w+)\s*[,!?])?', text):
+        who = m[1].title()
+        role = _role_name(m[2]) if m[2] else None
+        if role and last and last != who and role[1] in ('old', 'adult'):
+            out.setdefault(last, (role[1], role[2]))
+        last = who
+    return out
+
+
 def people(script_beats, cast) -> list[dict]:
     """The people a story's offline plan stages beside the cast the animal reader found: everyone named, and the
     unnamed roles a human story keeps coming back to ("his mother", "the stranger"). A story with animal characters
@@ -471,6 +505,7 @@ def people(script_beats, cast) -> list[dict]:
     animals = any(c['kind'] != 'human' for c in cast)
     extra = []
     found = _names(text)
+    addressed = _addressed(text)
     for name, at in found.items():
         if name_key(name) in taken or any(mentions(c['name'], name) for c in cast + extra):
             continue
@@ -501,6 +536,7 @@ def people(script_beats, cast) -> list[dict]:
         age = role[1] if role else _age_near(text, at)
         if name.split()[0] in ('Grandma', 'Grandpa', 'Nana'):
             age, sex = 'old', 'male' if name.startswith('Grandpa') else 'female'
+        age, sex = addressed.get(name, (age, sex))
         extra.append(_member(name, age, sex, len(cast) + len(extra)))
         taken.add(name_key(name))
     if animals:
