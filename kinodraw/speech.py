@@ -443,9 +443,13 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
         key = label_key(name)
         return next((cid for cid, c in cast.items() if c.get('name') and key in (
             name_key(c['name']), name_key(c['name']).split()[0], cid.casefold())), None)
+    from .speakers import narrator_of
+    me = narrator_of(beats, (plan or {}).get('cast') or [])     # "Coach Ben here": the narration is his voice
     found, order = {}, []
     for b in beats:
         segs = [] if b['silent'] else segments(b['spoken'], lang, labels, spans.get(b['id']), label_speaker)
+        for seg in segs if me else ():
+            seg.speaker = seg.speaker or me
         found[b['id']] = segs
         for seg in segs:
             if seg.speaker and seg.speaker not in order:

@@ -33,6 +33,10 @@ TAG_AFTER = re.compile(r"^\W*(?:[\w’']+\W+){0,3}?(?:\w+ly\s+)?(?:" + SAY + r")
 # The paragraph before introduces the line: '... when Marisol finally said it.' / 'Her first text said:'.
 INTRO = re.compile(r"(?:\b(?:" + SAY + r")(?:\s+(?:it|this|that|so|softly|quietly|slowly|aloud|out\s+loud))?\s*[.!]|:)"
                    r"\s*$", re.I)
+# The narrator tells it as one of the cast: "Coach Ben here", "I'm Ava", "My name is Theo" (with I/my/me around).
+INTRODUCES = r"(?:\b(?:i['’]m|i\s+am|this\s+is|it['’]s|my\s+name\s+is|name['’]s|call\s+me)\s+{0}\b|\b{0},?\s+here\b)"
+FIRST_PERSON = re.compile(r"\b(?:i|i['’]m|i['’]ve|i['’]ll|i['’]d|my|me|mine)\b", re.I)
+I_SAID = re.compile(r"\bI\s+(?:\w+ly\s+)?(?:" + SAY + r")\b|\b(?:" + SAY + r")\s+I\b")
 THEY = re.compile(r"\b(?:they|they[’']d|them)\b", re.I)
 # Parent and grandparent titles, as a name ("Dad's map", "Mom.") or in "your father".
 TITLES = (('female', 'parent', r'mom|mommy|mum|mummy|mother|mama|ma'),
@@ -76,6 +80,7 @@ class Line:
     titled: list = field(default_factory=list)      # parent titles used as a name ("Dad's map"): a child speaks
     yours: bool = False             # "your father": said to the child
     who: str | None = None
+    outside: str = ''               # the sentence without its quotations
 
 
 class Speakers:
@@ -106,6 +111,7 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
         return Speakers([], None)
     reader = Reader(cast)
     reader.prime([b['spoken'] for b in beats])
+    me = narrator_of(beats, cast)
     talkers, planned = {}, {}
     for scene in (plan or {}).get('scenes') or ():
         for a in scene.get('actions') or ():
@@ -138,6 +144,8 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
                 line.anchor, line.why = labelled, 'label'
             elif line.crowd:
                 line.why = 'crowd'
+            elif me and I_SAID.search(line.outside):
+                line.anchor, line.why = me, 'tag'                              # '"Go," I said'
             elif any(not _inside([(q0 - s.start - 1, q1 - s.start) for q0, q1 in s.quotes], r[0])
                      for r in s.refs) and s.speaker:
                 line.anchor, line.why = s.speaker, 'tag'                       # '"...," Kip said'
@@ -163,7 +171,7 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
             children |= {d['id'] for d in reader.cast if name_key(d['name']) == name_key(m[1])}
     done = []
     for run in runs:
-        pair = _solve(run, done, parents, children, reader)
+        pair = _solve(run, done, parents, children, reader, me)
         done += run
         for line in run:                                                  # what the run told about who is whose
             if line.who and line.called:
@@ -174,6 +182,21 @@ def attribute(beats: list[dict], plan: dict | None) -> Speakers:
     return Speakers(done, reader)
 
 
+def narrator_of(beats: list[dict], cast: list[dict]) -> str | None:
+    """The cast member who tells the story in the first person, introducing themselves outside any quotation
+    ("Morning, runners! Coach Ben here, with my favorite..."), else None."""
+    for b in beats:
+        text = re.sub(r'["“][^"”]*["”]?', ' ', b['spoken'])
+        if not FIRST_PERSON.search(text):
+            continue
+        for c in cast:
+            key = name_key(c.get('name') or '')
+            for k in dict.fromkeys([key] + [t for t in key.split() if len(t) > 2]):
+                if k and re.search(INTRODUCES.format(re.escape(k)), text, re.I):
+                    return c['id']
+    return None
+
+
 def _line(reader, beat, at, s, text) -> Line:
     words = ' '.join(text[q0:q1].strip(' "“”') for q0, q1 in s.quotes)
     outside = ''.join(ch if not _inside([(q0 - s.start - 1, q1 - s.start) for q0, q1 in s.quotes], i) else ' '
@@ -181,6 +204,7 @@ def _line(reader, beat, at, s, text) -> Line:
     line = Line(beat, at, list(s.quotes), words, s.speaker, list(s.present),
                 {cid: s.ages.get(cid) or reader.age_band(cid) for cid in reader.by_id})
     line.crowd = s.speaker is None and bool(THEY.search(outside))
+    line.outside = outside
     for c in reader.cast:
         key = name_key(c['name'])
         for k in dict.fromkeys([key, key.split()[0] if key.split() else '']):
@@ -254,15 +278,16 @@ def _pair_of(run, done):
     return order[:2]
 
 
-def _solve(run, done, parents, children, reader) -> list:
-    """Each line's speaker (``who``) in one run of dialogue; returns the two people talking, if two."""
+def _solve(run, done, parents, children, reader, me=None) -> list:
+    """Each line's speaker (``who``) in one run of dialogue; returns the two people talking, if two. ``me``: the
+    cast member who narrates; their own words are the narration, so a quotation nobody tags is someone else's."""
     named = {line.anchor for line in run if line.anchor}
     pair = _pair_of(run, done) if len(named) < 3 else []
     two = len(pair) == 2
     for line in run:                                    # what the text rules out, between two people, decides
         if line.anchor or line.crowd or not two:
             continue
-        out = set(line.named) | _fits(line, pair, reader)
+        out = set(line.named) | _fits(line, pair, reader) | ({me} if me else set())
         titled = [t for t in line.titled if not any(name_key(reader.by_id[cid].get('name') or '') == t for cid in pair)]
         if titled:
             out |= parents
@@ -279,7 +304,7 @@ def _solve(run, done, parents, children, reader) -> list:
         if line.anchor:
             line.who = line.anchor
             continue
-        excluded = set(line.named)
+        excluded = set(line.named) | ({me} if me else set())
         if two:
             ruled = [(abs(j - k), j > k, j) for j, other in enumerate(run) if other.anchor and other.anchor in pair]
             if ruled:

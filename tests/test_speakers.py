@@ -170,3 +170,31 @@ def test_the_voices_record_who_reads_each_part_for_the_qa():
     parts = speech.voice_parts(board, plan_of(MOTHER_AND_SON), 'af_heart')
     (bid,) = [b['id'] for b in board['beats'] if '"' in b['spoken']['en']]
     assert voiced(parts)[bid] == [[0, 14, 'marisol'], [14, 29, None]]
+
+
+# ------------------------------------------------------------------ a narrator who is one of the cast
+COACH = [{'id': 'ben', 'name': 'Coach Ben', 'kind': 'human', 'species': 'human', 'age': 'adult', 'sex': 'male'},
+         {'id': 'ava', 'name': 'Ava', 'kind': 'human', 'species': 'human', 'age': 'young', 'sex': 'female'}]
+PANCAKES = ('Morning, runners! Coach Ben here, with my favorite pre-race breakfast. My helper today is Ava.\n\n'
+            '"Hi!"\n\n1. Peel the bananas and mash them in a bowl with a fork.\n\n"This part is my favorite."\n\n'
+            '2. Crack in the eggs and stir.\n\n"Can we have them before practice every day?"\n\n'
+            'Only on race days, Ava. Only on race days.')
+
+
+def test_a_first_person_narrator_reads_in_their_own_voice_and_a_bare_quote_is_the_other_persons():
+    plan = dict(lines=[(bid_of(PANCAKES, 'favorite.'), 'This part is my favorite.', 'ben')],
+                talk=[(bid_of(PANCAKES, 'Hi!'), 'ben')])
+    parts = speech.voice_parts(script.build(ingest.read(PANCAKES), 'story'), plan_of(COACH, **plan), 'af_heart')
+    said_by = [(seg.speaker, voice, seg.said) for todo in parts.values() for seg, voice, _ in todo['parts']]
+    assert {s for s, _, _ in said_by} == {'ben', 'ava'}                     # nobody is left to the default narrator
+    assert [s for s, _, said in said_by if said in ('Hi!', 'This part is my favorite.',
+                                                    'Can we have them before practice every day?')] == ['ava'] * 3
+    voices = {s: v for s, v, _ in said_by}
+    assert voices['ben'].startswith('am_') and voices['ava'].startswith('af_')
+    assert speech.cast_of(parts) == voices
+
+
+def test_a_line_i_say_is_the_narrators():
+    text = 'Coach Ben here, and my helper is Ava.\n\n"Ready?" I asked.\n\n"Ready!"'
+    talk = [(bid_of(text, 'Ready?'), 'ava')]                            # the plan's talker is wrong
+    assert said(text, COACH, talk=talk) == [('Ready?', 'ben'), ('Ready!', 'ava')]
