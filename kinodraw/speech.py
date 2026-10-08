@@ -1044,7 +1044,15 @@ def shared_voices(cast: dict) -> list[dict]:
 def person_sex(c: dict, cid: str, reader, texts=(), told: str | None = None) -> str:
     """A cast member's sex, one answer for their voice and their drawing (Storybook._look): what the story's words
     tie to them ("his mother, Mara", "King Kojo"; ``told`` when already read), else the plan's or the story's
-    pronouns, else their species word ("lioness"), else their given name ("Maria"), else a pick from the id."""
+    pronouns, else their species word ("lioness"), else their given name ("Maria"), else a pick from the id that
+    keeps people with no cue apart: of two such people one is drawn and voiced a man and the other a woman."""
+    sex = _cued_sex(c, cid, reader, texts, told)
+    if sex not in ('male', 'female'):
+        sex = _uncued_sex(cid, reader, texts)
+    return sex
+
+
+def _cued_sex(c: dict, cid: str, reader, texts=(), told: str | None = None) -> str | None:
     sex = told or described(c.get('name') or '', texts)[0]
     if sex not in ('male', 'female'):
         sex = reader.sex(cid) if reader is not None and cid in reader.by_id else c.get('sex')
@@ -1054,10 +1062,27 @@ def person_sex(c: dict, cid: str, reader, texts=(), told: str | None = None) -> 
         base, implied, _ = species_base(species)              # plural or young words: "hens", "kings", "girls"
         sex = (PERSON_SEX.get(base) or implied or PERSON_SEX.get(species) or _sex_of_words(species)
                or _sex_of_words(base) or name_sex(c.get('name') or ''))
-    if sex not in ('male', 'female'):
-        seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
-        sex = 'female' if seed % 2 else 'male'
-    return sex
+    return sex if sex in ('male', 'female') else None
+
+
+def _uncued_sex(cid: str, reader, texts=()) -> str:
+    """The sex of a cast member nothing in the story or plan sexes: the same person at another age ('jo_old') is
+    them; the people with no cue alternate in cast order from the first one's pick, so two of them (a couple, a pair
+    of friends) never read as the same person twice."""
+    def pick(key):
+        return 'female' if sum((i + 1) * ord(ch) for i, ch in enumerate(key)) % 2 else 'male'
+    cast = getattr(reader, 'by_id', None) or {}
+    if cid not in cast:
+        return pick(cid)
+    from .engine.shots import same_person
+    base = same_person(cast, cid)
+    if base != cid:
+        return person_sex(cast[base], base, reader, texts)
+    uncued = [k for k, d in cast.items() if same_person(cast, k) == k and _cued_sex(d, k, reader, texts) is None]
+    if len(uncued) < 2:
+        return pick(cid)
+    first = pick(uncued[0])
+    return first if uncued.index(cid) % 2 == 0 else ('female' if first == 'male' else 'male')
 
 
 def _person(c: dict, cid: str, reader, texts=(), bands=None) -> tuple[str | None, str]:

@@ -294,6 +294,30 @@ def chunks(words, most):
     return out
 
 
+VARIANT = re.compile(r'^(?:(?:old|older|young|younger|little|baby|teen|adult|grown|elder|kid|child)_(?P<a>.+)|'
+                     r'(?P<b>.+?)_(?:old|older|young|younger|little|baby|teen|adult|grown|elder|kid|child|'
+                     r'now|then|later|past|future|\d+))$')
+
+
+def same_person(cast, cid):
+    """The cast member an id stands for: 'sam_old', 'young_sam' or a cast entry named "Old Sam" is Sam."""
+    if not cid:
+        return cid
+    m = VARIANT.match(cid)
+    base = m and (m['a'] or m['b'])
+    if base in cast and base != cid:
+        return base
+    c = cast.get(cid)
+    if c is not None:
+        core = re.sub(r'\b(?:old|older|young|younger|little|baby|teen(?:age)?|adult|grown[- ]up|elderly)\b|[()]', '',
+                      c.get('name') or '', flags=re.I).strip()
+        other = next((d['id'] for d in cast.values() if d['id'] != cid and core
+                      and name_key(d.get('name') or '') == name_key(core)), None)
+        if other and core != (c.get('name') or '').strip():
+            return other
+    return cid
+
+
 class Shots:
     """Shots for one scene span from its plan shots. ``book`` is the engine.storybook.Storybook."""
 
@@ -1019,28 +1043,11 @@ class Shots:
             if others and not f.travel:
                 f.facing = 'r' if sum(others) / len(others) > f.x else 'l'
 
-    VARIANT = re.compile(r'^(?:(?:old|older|young|younger|little|baby|teen|adult|grown|elder|kid|child)_(?P<a>.+)|'
-                         r'(?P<b>.+?)_(?:old|older|young|younger|little|baby|teen|adult|grown|elder|kid|child|'
-                         r'now|then|later|past|future|\d+))$')
+    VARIANT = VARIANT
 
     def person(self, cid):
         """The cast member an id stands for: 'sam_old', 'young_sam' or a cast entry named "Old Sam" is Sam."""
-        cast = self.book.cast
-        if not cid:
-            return cid
-        m = self.VARIANT.match(cid)
-        base = m and (m['a'] or m['b'])
-        if base in cast and base != cid:
-            return base
-        c = cast.get(cid)
-        if c is not None:
-            core = re.sub(r'\b(?:old|older|young|younger|little|baby|teen(?:age)?|adult|grown[- ]up|elderly)\b|[()]', '',
-                          c.get('name') or '', flags=re.I).strip()
-            other = next((d['id'] for d in cast.values() if d['id'] != cid and core
-                          and name_key(d.get('name') or '') == name_key(core)), None)
-            if other and core != (c.get('name') or '').strip():
-                return other
-        return cid
+        return same_person(self.book.cast, cid)
 
     def _talked_about(self, p, bid):
         """A thing only spoken of (the horse in "a movie where a man just rides a horse") is not in the room: its

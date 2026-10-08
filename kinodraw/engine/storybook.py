@@ -127,6 +127,8 @@ DRAWN_AGE = {'baby': 'child', 'young': 'child', 'child': 'child', 'teen': 'teen'
              'middle': 'middle', 'old': 'elder', 'elder': 'elder'}
 PERSON_SEX = {'boy': 'male', 'man': 'male', 'girl': 'female', 'woman': 'female'}
 PERSON_BAND = {'boy': 'child', 'girl': 'child'}
+# Hair styles that read as a woman's and as a man's at any size: short curls on a woman read as a man's.
+FEMALE_STYLES, MALE_STYLES = ('long', 'bun', 'ponytail'), ('short', 'curly', 'bald')
 OUTFITS = {'adult': ('villager', 'teacher', 'explorer'), 'child': ('casual', 'explorer'), 'elder': ('villager',)}
 ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|librarian|counsel+or)\b', 'teacher'),
                 (r'\b(?:explorer|hiker|ranger|scout|adventurer)\b', 'explorer'),
@@ -134,9 +136,11 @@ ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|librarian|counsel+or)\
                 (r'\bqueen\b', 'queen'), (r'\bprincess\b', 'princess'),
                 # Work clothes from role words (engine.people draws them).
                 (r'\b(?:cook|chef|baker|butcher|barista|waiter|waitress|grocer|shopkeeper|cashier|bartender|'
-                 r'(?:cafe|café|diner|bakery|restaurant|shop|store)\s+owner)s?\b', 'apron'),
+                 r'(?:cafe|café|diner|bakery|restaurant|shop|store)\s+owner|(?:owner|founder|proprietor)\s+of\s+'
+                 r'(?:[\w\'’-]+\s+){0,3}(?:cafe|café|coffee|diner|bakery|restaurant|kitchen|shop|store|deli|bistro|'
+                 r'pizzeria|grocery|market|food))s?\b', 'apron'),
                 (r'\b(?:anchor|anchorman|anchorwoman|newsreader|reporter|correspondent|host|presenter|manager|boss|'
-                 r'ceo|executive|banker|lawyer|attorney|mayor|senator|president|businessman|businesswoman|'
+                 r'ceo|executive|owner|co-?owner|founder|co-?founder|proprietor|supervisor|chair|banker|lawyer|attorney|mayor|senator|president|businessman|businesswoman|'
                  r'salesman|saleswoman|realtor|agent|director|principal)s?\b', 'suit'),
                 (r'\b(?:scientist|chemist|researcher|doctor|physician|surgeon|dentist|pharmacist|vet|veterinarian|'
                  r'lab\s+tech\w*|technician)s?\b', 'labcoat'),
@@ -269,8 +273,14 @@ def _person(age, sex, pose, facing, marks):
                                          and outfit not in ('suit', 'labcoat', 'uniform', 'worker'))) if on)
         hair = look['elder_hair'] if drawn == 'elder' else people.greying(look['hair']) if drawn == 'middle' else \
             look['hair']
-        style = 'bald' if drawn == 'elder' and sex == 'male' and look.get('style') == 'short' else \
-            'bun' if elder_woman and look['style'] in ('long', 'ponytail') else look['style']
+        style = look['style']
+        if sex == 'female':
+            # A woman keeps a woman's hair at every age: an old one's goes up in a bun; greying changes the colour.
+            style = 'bun' if elder_woman or style not in FEMALE_STYLES else style
+        elif style not in MALE_STYLES:
+            style = 'short'
+        if drawn == 'elder' and sex == 'male' and style != 'bald':
+            style = 'bald'          # an old man's hair recedes to white at the sides, never an old woman's curls
         key = people.look_key(sex, drawn, outfit, tone if tone in people.SKIN else 'tan', look['top'],
                               look['bottom'], hair, style, look.get('accent', '#C62828'), flags or 'x')
         pid = f"{key}_{info.get('pose', 'stand')}_{info.get('facing', 'r')}"
@@ -667,6 +677,11 @@ class Storybook:
         clothes and hair colours no other person on the cast wears (engine.people draws them at every age)."""
         if cid in self.looks:
             return self.looks[cid]
+        base = planned.same_person(self.cast, cid)
+        if base != cid and self._human(base):
+            # The same person at another age ("theo_old", "Old Sam"): their look, so a time jump keeps them.
+            self.looks[cid] = self._look(base)
+            return self.looks[cid]
         c = self.cast[cid]
         seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
         sex = person_sex(c, cid, self.reader, self.texts)       # the same as their voice's (speech.voice_parts)
@@ -688,9 +703,11 @@ class Storybook:
         tops = [t for t in prefer if t not in used_tops] or \
             [people.TOPS[(seed + i) % len(people.TOPS)] for i in range(len(people.TOPS))]
         top = next((t for t in tops if t not in used_tops), tops[0])
-        styles = ('long', 'bun', 'ponytail', 'curly') if sex == 'female' else ('short', 'curly')
-        hairs = [(people.HAIRS[(seed + i) % len(people.HAIRS)], styles[(seed // 7 + j) % len(styles)])
-                 for j in range(len(styles)) for i in range(len(people.HAIRS))]
+        styles = FEMALE_STYLES if sex == 'female' else MALE_STYLES[:2]
+        # Hair that stands out from the skin, so the hairstyle (a bun, a fringe) reads at a glance.
+        colours = [h for h in people.HAIRS if people.distance(h, people.SKIN[chosen[1]]) >= 60] or list(people.HAIRS)
+        hairs = [(colours[(seed + i) % len(colours)], styles[(seed // 7 + j) % len(styles)])
+                 for j in range(len(styles)) for i in range(len(colours))]
         hair, style = next((h for h in hairs if h not in used_hair), hairs[0])
         everyday = EVERYDAY[seed % len(EVERYDAY)] if role not in EVERYDAY else role
         self.looks[cid] = {
@@ -716,6 +733,10 @@ class Storybook:
             told = re.match(r",?\s+(?:is\s+|was\s+)?(?:the|a|an|our|my|your|his|her|their)\s+(?:[\w-]+\s+){0,2}[\w-]+|"
                             r"\s*[-–—:]\s*(?:[\w'’-]+\s+){0,2}[\w-]+", after)      # a lower third: "Sam - Engineer"
             near.append(told.group() if told else '')
+            owns = re.match(r",?\s+(?:and\s+)?(?:I'?m\s+|is\s+)?(?:the\s+|a\s+|our\s+|my\s+)?(?:co-?)?(?:owner|founder|"
+                            r"proprietor)\s+of\s+(?:the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}[\w'’-]+", after)
+            if owns:                    # "the owner of Juniper Lane Bakery": the place says the clothes
+                near.insert(len(near) - 1, owns.group())
             before = re.search(r'([\w-]+)\s+$', text[max(0, m.start() - 30):m.start()])
             near.append(before[1] if before else '')
         for chunk in near:

@@ -41,6 +41,12 @@ def greying(hair, share=.35):
     return '#%02X%02X%02X' % tuple(round(x + (y - x) * share) for x, y in zip(a, (0x9A, 0x96, 0x8F)))
 
 
+def distance(a, b):
+    """How far apart two colours are (RGB, 0-441)."""
+    x, y = ([int(c.lstrip('#')[i:i + 2], 16) for i in (0, 2, 4)] for c in (a, b))
+    return sum((p - q) ** 2 for p, q in zip(x, y)) ** .5
+
+
 def look_key(sex, age, outfit, tone, top, bottom, hair, style, accent, flags='x'):
     """The id prefix of one look (without the pose and facing)."""
     hexes = [str(c).lstrip('#').lower() for c in (top, bottom, hair, accent)]

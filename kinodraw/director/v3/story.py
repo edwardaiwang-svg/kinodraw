@@ -116,6 +116,10 @@ AGE_CUES = (
     # "her daughter Rosie, six, fed the ducks": a number set off by commas right after a name.
     re.compile(r'\b(?P<who>[A-Z][\w’\']*),\s+(?:aged\s+|age\s+)?(?P<n>' + NUM + r')\s*(?:,|\.|;|$)'),
 )
+# A clock time, not an age: "we open at nine.", "doors close at ten", "see you at seven tonight".
+CLOCK = re.compile(r'\b(?:open|opens|opened|close|closes|closed|until|till|tonight|tomorrow|meet|meets|wake|wakes|'
+                   r'shift|doors?|dinner|lunch|breakfast)\b[^,;:.!?]*$|^\s*(?:a\.?m\b|p\.?m\b|o[’\']clock|sharp|tonight|'
+                   r'tomorrow|in\s+the\s+(?:morning|evening|afternoon))', re.I)
 BAND_CUES = (
     ('elder', r'\b(?:he|she|they)\s+(?:was|were|grew|got|had\s+grown|became)\s+(?:very\s+|quite\s+|so\s+|too\s+)?old\b|'
               r'\bin\s+(?:his|her|their)\s+(?:old\s+age|sixties|seventies|eighties|nineties)\b|\bas\s+an\s+old\s+(?:man|woman|lady)\b'),
@@ -151,9 +155,33 @@ ADULT_TITLES = re.compile(r'\b(?:uncle|aunt|auntie|aunty|mr|mrs|ms|miss|dr|docto
                           r'chef|cook|mom|mum|dad|mother|father|parent|husband|wife|sir|madam|judge|mayor|pastor|'
                           r'reverend|teacher|manager|boss|driver|anchor|reporter|nurse|pilot|farmer|plumber|engineer|'
                           r'owner|grown[\s-]?up)\b\.?', re.I)
+# A grown-up's role the story ties to a person by name: "I'm Dana, the owner of ...", "Sam, our founder",
+# "Lee - Store Manager", "Kim is the principal": that person is a grown-up whatever the plan's age.
+ADULT_ROLES = re.compile(r'\b(?:owner|co-?owner|founder|co-?founder|proprietor|ceo|cfo|cto|president|director|'
+                         r'manager|supervisor|principal|headteacher|head\s+teacher|chief|chair(?:man|woman|person)?|'
+                         r'boss|chef|baker|teacher|professor|doctor|nurse|lawyer|engineer|mayor|anchor|reporter|'
+                         r'host|presenter|pastor|coach|officer|captain|pilot|plumber|farmer)\b', re.I)
 ELDER_TITLES = re.compile(r'\b(?:grand(?:ma|pa|mother|father|mom|dad)|granny|gran|nana|grampa|gramps|abuela|abuelo|'
                           r'nainai|yeye|oma|opa)\b', re.I)
 PLAN_BAND = {'baby': 'baby', 'young': 'child', 'adult': 'adult', 'old': 'elder'}
+
+
+def adult_role(name, story) -> bool:
+    """Whether the story ties a grown-up's role to this name: an appositive ("Dana, the owner of ..."), a lower third
+    ("Dana - Store Manager") or "Dana is the principal"."""
+    name = re.sub(r'\s+', ' ', str(name or '')).strip()
+    if not name or not story:
+        return False
+    key = re.escape(name.split()[-1] if len(name.split()) > 1 else name)
+    for m in re.finditer(r'\b' + key + r'\b', story):
+        told = re.match(r",\s+(?!(?:and|but|or|so|then|who|which|when|while)\s+(?!I'?m\b))(?:and\s+I'?m\s+|I'?m\s+|I\s+am\s+)?(?:(?:the|a|an|our|my|your|his|her|their)\s+)?"
+                        r"(?:[\w-]+\s+){0,2}[\w-]+|"
+                        r"\s+(?:is|was)\s+(?:the|a|an|our|my|your|his|her|their)\s+(?:[\w-]+\s+){0,2}[\w-]+|"
+                        r"\s*[-\u2013\u2014:]\s*(?:[\w'\u2019-]+\s+){0,2}[\w-]+",
+                        story[m.end():m.end() + 60])
+        if told and ADULT_ROLES.search(told.group()):
+            return True
+    return False
 
 
 def number(text):
@@ -508,6 +536,7 @@ class Reader:
         self.sexes = {}           # sex the story's pronouns showed for a cast member the plan left unknown
         self.years = {}           # cast id -> age in years the story has reached
         self.first_years = {}     # cast id -> the first age the story states (their age before it, too)
+        self.roled = set()        # cast ids the story ties a grown-up's role to ("Dana, the owner of ...")
         self.aged = []            # cast ids in the order the story last stated their ages
         self.people_story = any(c.get('kind') == 'human' for c in self.cast) or not any(
             c.get('kind') not in ('human', 'object') for c in self.cast)
@@ -520,6 +549,8 @@ class Reader:
             ahead.read(None, text)
         self.sexes.update(ahead.sexes)
         self.first_years = dict(ahead.first_years)
+        story = ' '.join(texts)
+        self.roled = {cid for cid, c in self.by_id.items() if adult_role(c.get('name') or '', story)}
 
     def sex(self, cid):
         c = self.by_id[cid]
@@ -538,7 +569,7 @@ class Reader:
         name = str(c.get('name') or '')
         if ELDER_TITLES.search(name) and have != 'elder':
             return 'elder'                                  # "Grandma Rose", "Nana"
-        if ADULT_TITLES.search(name) and have in ('baby', 'child', 'teen'):
+        if (ADULT_TITLES.search(name) or cid in self.roled) and have in ('baby', 'child', 'teen'):
             return 'adult'                                  # "Uncle Dev" is a grown-up
         return have
 
@@ -548,7 +579,8 @@ class Reader:
         c = self.by_id.get(cid) or {}
         name = str(c.get('name') or '')
         return (cid in self.years or cid in self.first_years or bool(ELDER_TITLES.search(name))
-                or bool(ADULT_TITLES.search(name)) and PLAN_BAND.get(c.get('age'), 'adult') in ('baby', 'child'))
+                or bool(ADULT_TITLES.search(name) or cid in self.roled)
+                and PLAN_BAND.get(c.get('age'), 'adult') in ('baby', 'child'))
 
     def look_age(self, cid, now=None):
         """The age a person is drawn at: their age band, with a grown-up of forty or more middle-aged."""
@@ -822,6 +854,9 @@ class Reader:
         for m, years in sorted(cues, key=lambda t: t[0].start()):
             if years is None or years > 120 or _inside(quotes, m.start()):
                 continue
+            if m.re is AGE_CUES[0] and (CLOCK.search(body[max(0, m.start() - 60):m.start()])
+                                        or CLOCK.match(body[m.end():m.end() + 20])):
+                continue      # "we open at nine." is a time of day, never an age
             if 'who' in m.re.groupindex and not any(r[0] <= m.start('who') < r[3] or r[3] == m.end('who')
                                                        for r in outside):
                 continue      # "Maya was seven", "she was seven", "Uncle Dev turns 50"; never "it was ten"

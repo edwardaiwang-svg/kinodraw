@@ -286,9 +286,10 @@ class _Build:
             f.patch(Union([self.ellipse(hc + V(s * r * .95, r * .05), r * .25, r * .35) for s in (-1, 1)]), g.hair, head,
                     'hair_sides')
 
-        if g.age == 'middle' and hs != 'bald':        # grey at the temples, over any curls
-            f.fill(Union([self.ellipse(hc + V(s * r * .93, r * .12), r * .17, r * .34) for s in (-1, 1)]), GREY,
-                   SW_DETAIL, 'grey_temples')
+        if g.age == 'middle' and hs in ('short', 'long', 'ponytail', 'bun', 'curly'):
+            # Grey streaks at the temples inside the hair (a patch over the ears reads as headphones).
+            f.patch(Union([self.ellipse(hc + V(s * r * .78, r * .52), r * .3, r * .26) for s in (-1, 1)]), GREY, cap,
+                    'grey_temples')
         if g.beard:
             beard = Union([self.ellipse(hc + V(lx * .5, -r * .8), r * .66, r * .36),
                            self.circle(hc + V(lx * .5, -r * 1.06), r * .26)], k=.06)
@@ -439,6 +440,9 @@ class _Build:
         elif o == 'teacher':
             f.patch(self.poly([c + V(-.035, .01), c + V(.035, .01), c + V(0, -.07)], r=.003), '#FAFAF7', torso,
                     'collar')
+            if g.sex == 'female':       # a woman's blouse: a pendant at the collar, never a tie
+                f.dot(self.T(c + V(0, -.085)), .014, g.accent or GOLD, 'pendant', SW_FINE)
+                return
             f.patch(self.poly([c + V(-.012, -.03), c + V(.012, -.03), c + V(.016, -self.torso * .6),
                                c + V(0, -self.torso * .7), c + V(-.016, -self.torso * .6)], r=.004),
                     g.accent or '#C62828', torso, 'tie')
@@ -451,9 +455,12 @@ class _Build:
                                h + V(-self.hw - .05, -.06)], r=.01), g.accent or '#FAFAF7', torso, 'apron')
             f.patch(self.ellipse(h + up * .08, self.hw * 2.2, .016), C.shade(g.accent or '#FAFAF7', .25), torso,
                     'apron_tie')
-        elif o == 'suit':           # a jacket open on a white shirt and a tie
+        elif o == 'suit':           # a jacket open on a white shirt and a tie (a woman's: a pendant, no tie)
             f.patch(self.poly([c + V(-.05, .01), c + V(.05, .01), c + V(0, -self.torso * .62)], r=.004), '#FAFAF7',
                     torso, 'shirt')
+            if g.sex == 'female':
+                f.dot(self.T(c + V(0, -.07)), .014, g.accent or GOLD, 'pendant', SW_FINE)
+                return
             f.patch(self.poly([c + V(-.012, -.02), c + V(.012, -.02), c + V(.015, -self.torso * .5),
                                c + V(0, -self.torso * .58), c + V(-.015, -self.torso * .5)], r=.004),
                     g.accent or '#C62828', torso, 'tie')
