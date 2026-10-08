@@ -133,7 +133,8 @@ def test_latin_display_beats_and_captions_repair_sentence_spacing(text):
     board = script.build(ingest.read(text), story='story')
     assert board['beats'][0]['display']['en'] == expected
     cues = captions.cues_for_beat(text, text, 'en', lambda p: p / 10, 10, fits=lambda t, lang: True)
-    assert cues[0][2] == expected
+    # One cue per sentence (a caption never runs on into the next sentence); the spacing between them is repaired.
+    assert ' '.join(c[2] for c in cues) == expected
     assert ' '.join(captions.balanced_lines(text, 'en')) == expected
     assert ingest._sentence_spacing('Dr. Kojo paid 3.14 dollars at friendr.nl at 5 p.m. Pendo waited.', 'en') == \
         'Dr. Kojo paid 3.14 dollars at friendr.nl at 5 p.m. Pendo waited.'
@@ -144,16 +145,16 @@ def test_chinese_beats_and_captions_keep_quotes_and_have_no_spaces():
     assert script.sentences(text, 'zh') == ['科乔说：“过来。现在！”', '彭多走进狮群。', '玛拉笑了。']
     assert script.beats_of([text], 'zh') == [text]
     cues = captions.cues_for_beat(text, text, 'zh', lambda p: p / 10, 10, fits=lambda t, lang: True)
-    assert cues[0][2] == text
+    assert [c[2] for c in cues] == ['科乔说：“过来。现在！”', '彭多走进狮群。', '玛拉笑了。']
 
 
 def test_caption_split_inside_straight_quote_preserves_spacing_and_speech_offsets():
     text = 'Pendo said "Come here. Now."Mara followed.'
     cues = captions.cues_for_beat(text, text, 'en', lambda p: p / 10, 10,
                                  fits=lambda t, lang: len(t.strip()) <= 12)
-    assert [c[2] for c in cues] == ['Pendo said', '"Come here.', 'Now." Mara', 'followed.']
+    assert [c[2] for c in cues] == ['Pendo said', '"Come here.', 'Now."', 'Mara', 'followed.']
     assert ' '.join(c[2] for c in cues) == 'Pendo said "Come here. Now." Mara followed.'
-    assert captions.balanced_lines(cues[2][2], 'en') == ['Now." Mara']
+    assert captions.balanced_lines(cues[2][2], 'en') == ['Now."']
     assert cues[2][0] == pytest.approx(text.index(' Now.') / 10 - .05)
 
 

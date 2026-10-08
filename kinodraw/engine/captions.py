@@ -2,7 +2,8 @@
 
 ``spoken`` and ``display`` share the same clause punctuation sequence (validated),
 so clause k of the display text is timed by clause k of the spoken text. Cues
-group whole clauses and by default fit in <= 2 balanced lines at 70 px (never shrunk).
+group whole clauses, never run on past a sentence end, and by default fit in <= 2 balanced lines at 70 px
+(never shrunk).
 A look may supply its own two-line fit check.
 
 Word highlight: every cue also carries the time each of its words is said (the spoken characters' measured times,
@@ -113,6 +114,17 @@ def split_long(text, lang, fits=fits):
     return pieces
 
 
+# Periods that end an abbreviation, not a sentence: titles, "a.m."/"p.m.", and initialisms such as "U.S.".
+ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m)\.|'
+                           r'(?:[A-Z]\.){2,})$', re.I)
+
+
+def sentence_end(text):
+    """Does this caption text end a sentence? A cue never runs on into the next sentence."""
+    text = text.rstrip().rstrip(CLOSERS + '"”’」』)）')
+    return bool(text) and text[-1] in '.!?…。！？' and not ABBREVIATIONS.search(text)
+
+
 def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False):
     """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)], with
     ``words`` [(start, end, text, [the time each of word_spans(text) is said])]."""
@@ -148,10 +160,14 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
             off += len(p)
     target = 80 if lang in ('en', 'es') else 28
     minimum = 26 if lang in ('en', 'es') else 8
-    cues, cur, cur_pos, cur_spots = [], '', None, []
+    cues, cur, cur_pos, cur_spots, said = [], '', None, [], ''
     for text, pos, spots in atoms:
         trial = cur + text
-        if cur and (not fits(trial, lang) or (len(cur.strip()) >= minimum and len(trial.strip()) > target)):
+        # A period inside an open quotation ("Come here. Now.") does not end the narrating sentence.
+        quoted = said.count('“') > said.count('”') or said.count('"') % 2 == 1
+        said += text
+        if cur and (not fits(trial, lang) or (len(cur.strip()) >= minimum and len(trial.strip()) > target)
+                    or (sentence_end(cur) and not quoted)):
             cues.append((cur_pos, cur, cur_spots))
             cur, cur_pos, cur_spots = text, pos, spots
         else:
@@ -161,7 +177,8 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
     if cur.strip():
         cues.append((cur_pos, cur, cur_spots))
     # Merge a tiny trailing cue into the previous one when it still fits.
-    if len(cues) >= 2 and len(cues[-1][1].strip()) < minimum and fits(cues[-2][1] + cues[-1][1], lang):
+    if len(cues) >= 2 and len(cues[-1][1].strip()) < minimum and fits(cues[-2][1] + cues[-1][1], lang) \
+            and not sentence_end(cues[-2][1]):
         p, t, spots = cues[-2]
         cues[-2:] = [(p, t + cues[-1][1], spots + cues[-1][2])]
     out = []
