@@ -79,7 +79,8 @@ UNITS = {'km/h': 'kilometers per hour', 'mph': 'miles per hour', 'km': 'kilomete
          'kWh': 'kilowatt hours', 'MW': 'megawatts', 'GW': 'gigawatts', 'lbs': 'pounds', 'ft': 'feet',
          'tbsp': 'tablespoons', 'Tbsp': 'tablespoons', 'tsp': 'teaspoons', 'oz': 'ounces', 'lb': 'pounds',
          'ml': 'milliliters', 'mL': 'milliliters', 'g': 'grams', 'mg': 'milligrams', 'min': 'minutes',
-         'mins': 'minutes', 'hr': 'hours', 'hrs': 'hours', 'sec': 'seconds', 'secs': 'seconds', 'mi': 'miles'}
+         'mins': 'minutes', 'hr': 'hours', 'hrs': 'hours', 'sec': 'seconds', 'secs': 'seconds', 'mi': 'miles',
+         'yrs': 'years', 'yr': 'years', 'wks': 'weeks', 'wk': 'weeks'}
 FRACTIONS = {'1/2': 'one half', '1/3': 'one third', '2/3': 'two thirds', '1/4': 'one quarter',
              '3/4': 'three quarters', '1/5': 'one fifth', '1/10': 'one tenth'}
 SINGULAR = {'kilometers': 'kilometer', 'kilograms': 'kilogram', 'centimeters': 'centimeter',
@@ -87,7 +88,7 @@ SINGULAR = {'kilometers': 'kilometer', 'kilograms': 'kilogram', 'centimeters': '
             'terabytes': 'terabyte', 'megawatts': 'megawatt', 'gigawatts': 'gigawatt', 'pounds': 'pound', 'feet': 'foot',
             'tablespoons': 'tablespoon', 'teaspoons': 'teaspoon', 'ounces': 'ounce', 'milliliters': 'milliliter',
             'grams': 'gram', 'milligrams': 'milligram', 'minutes': 'minute', 'hours': 'hour', 'seconds': 'second',
-            'miles': 'mile'}
+            'miles': 'mile', 'years': 'year', 'weeks': 'week', 'inches': 'inch'}
 # A fraction before a noun reads as a cook or a teacher says it: "1/2 cup" is "half a cup", "1 1/2 cups" is
 # "one and a half cups". (phrase before a noun, phrase after a whole number)
 FRACTION_WORDS = {'1/2': ('half a', 'a half'), '1/3': ('a third of a', 'a third'),
@@ -111,13 +112,35 @@ _unit = '|'.join(re.escape(u) for u in sorted(UNITS, key=len, reverse=True))
 _vulgar = '[' + ''.join(VULGAR) + ']'
 _frac = r'[1-9]/[2-8](?!\d)'
 _ampm = r'(?P<{0}>[aApP])(?:\.[mM]\.?|[mM](?![\w-]))'          # a.m., am, AM (a.m.'s period goes with it)
+# A unit's abbreviation period goes with it when the sentence runs on ("3 ft. away", "2 in. thick"): the voice never
+# stops there, and captions.clause_marks does not break the caption there either.
+_udot = r'(?:\.(?=[ \t]+[a-z(]|,))?'
+# Addresses people read out: an email, a web address, a phone number, a hashtag. Each is said the way an announcer
+# reads it ("hello at pipewise bayside dot com", "seven oh seven, five five five, ...") and shown as written.
+TLDS = ('com|org|net|edu|gov|mil|int|io|co|us|uk|ca|au|nz|ie|de|fr|es|nl|eu|jp|cn|br|mx|app|dev|ai|tv|fm|info|biz|'
+        'example|test|ly|gg|xyz|shop|store|site|online|tech|news|blog|church|school|health|community|city|town|'
+        'travel|games|page|link|live|life|art|design|studio|world|email|org|coop|museum|social|events|club|party')
+_email = r'(?P<email>(?<![\w.+%-])[A-Za-z0-9][A-Za-z0-9._%+-]*@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?![\w-]))'
+_url = (r'(?P<url>(?:https?://|www\.)[^\s<>"“”‘’]*[^\s<>"“”‘’.,;:!?)\]]'
+        r'|(?<![\w@.-])(?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+(?i:' + TLDS + r')(?![\w-])'
+        r'(?:/(?:[^\s<>"“”‘’]*[^\s<>"“”‘’.,;:!?)\]])?)?)')
+_phone = (r'(?P<phone>(?<![\w+$#.,/-])(?:\+?1[ .-]?)?(?:\(\d{3}\)[ .-]?|\d{3}[ .-])\d{3}[ .-]\d{4}(?![\w-]|[.,]\d)'
+          r'|\+\d{1,3}(?:[ .-]\(?\d{1,4}\)?){2,5}(?![\w-]|[.,]\d)'
+          r'|(?<![\w+$#.,/-])\d{3}-\d{4}(?![\w-]|[.,]\d))')
+_ext = r'(?P<extw>\b(?:[Ee]xt|EXT)\.?|\b[Ee]xtension)[ \t]?(?P<ext>\d{1,6})(?!\d)'
+_tag = r'(?<![\w&#])#(?P<tag>[A-Za-z][A-Za-z0-9_]*[A-Za-z0-9]|[A-Za-z])'
 EN_PATTERN = re.compile(
-    rf'(?P<mixw>\d+)(?:\s+(?P<mixf>{_frac})|\s?(?P<mixv>{_vulgar}))(?:\s?(?P<munit>{_unit})(?![A-Za-z]))?'
-    rf'|(?P<vul>{_vulgar})(?:\s?(?P<vunit>{_unit})(?![A-Za-z]))?'
+    rf'{_email}|{_url}|{_phone}|{_ext}|{_tag}'
+    rf'|(?P<tr1>\d{{1,2}})(?::(?P<trm1>\d{{2}}))?\s?(?:{_ampm.format("tra1")})?\s?[–-]\s?'
+    rf'(?P<tr2>\d{{1,2}})(?::(?P<trm2>\d{{2}}))?\s?{_ampm.format("tra2")}'
+    rf'|(?P<inch>{NUM})\s?in\.(?=[ \t]+[a-z(]|,)'
+    rf'|'
+    rf'(?P<mixw>\d+)(?:\s+(?P<mixf>{_frac})|\s?(?P<mixv>{_vulgar}))(?:\s?(?P<munit>{_unit})(?![A-Za-z]){_udot})?'
+    rf'|(?P<vul>{_vulgar})(?:\s?(?P<vunit>{_unit})(?![A-Za-z]){_udot})?'
     rf'|(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>(?i:{_scale}))\b)?'      # $4.2M, $12K, $1.5 bn
     rf'|(?P<ra>{NUM})\s?(?:-|–|to)\s?(?P<rb>{NUM})\s?(?P<rpct>%)'
     rf'|(?P<pct>-?(?:{NUM}))\s?%'
-    rf'|(?P<month>{_month})\s(?P<day>\d{{1,2}})(?!\d|,\d)(?:st|nd|rd|th)?'
+    rf'|(?P<month>{_month})\s(?P<day>\d{{1,2}})(?!\d|,\d)(?:st|nd|rd|th)?(?:\s?[–-]\s?(?P<day2>\d{{1,2}})(?!\d|,\d)(?:st|nd|rd|th)?)?'
     rf'|(?P<h>\d{{1,2}}):(?P<mi>\d{{2}})(?:\s?{_ampm.format("ampm")})?'
     rf'|(?P<hh>\d{{1,2}})\s?{_ampm.format("ampm2")}'
     rf'|(?P<ord>\d+)(?:st|nd|rd|th)\b'
@@ -125,11 +148,11 @@ EN_PATTERN = re.compile(
     rf'|(?P<ya>1[1-9]\d{{2}}|20\d{{2}})\s?(?:-|–)\s?(?P<yb>1[1-9]\d{{2}}|20\d{{2}})(?!\d)'
     rf'|(?P<mult>{NUM})\s?[x×](?![a-z])'
     rf'|(?<![A-Za-z])(?P<samt>{NUM})(?P<sscale>bn|mn|tn|[kmbKMB])\b'
-    rf'|(?P<uamt>{NUM})\s?(?P<unit>{_unit})(?![A-Za-z])'
+    rf'|(?P<uamt>{NUM})\s?(?P<unit>{_unit})(?![A-Za-z]){_udot}'
     rf'|#(?P<hash>\d+)'
     rf'|(?P<frac>\d+/\d+)'
     rf'|(?P<ra2>{NUM})\s?(?:–|-(?=\d{{1,3}}(?![\d,.]\d)\s?(?:{_unit}|[a-z])))\s?(?P<rb2>{NUM})'
-    rf'(?:\s?(?P<runit>{_unit})(?![A-Za-z]))?'
+    rf'(?:\s?(?P<runit>{_unit})(?![A-Za-z]){_udot})?'
     rf'|(?P<year>(?<![\d.,$])(?:1[1-9]\d{{2}}|20\d{{2}})(?![\d%]|\.\d|,\d))'
     rf'|(?P<neg>(?<![\w.])-)?(?P<num>{NUM})'
 )
@@ -178,9 +201,136 @@ def _clock(hour: int, minute: int | None, ampm: str | None) -> str | None:
     return words + (f" {ampm.upper()}M" if ampm else '')
 
 
+DIGIT_WORDS = 'zero one two three four five six seven eight nine'.split()
+# Words before a number that make it a code read digit by digit ("code 482913", "PIN 0420", "order number 10023").
+CODE_BEFORE = re.compile(r'\b(?:code|codes|pin|otp|passcode|password|verification|confirmation|zip|postcode|tracking|'
+                         r'order|reference|ref|account|acct|ticket|serial|booking|member|membership|policy|invoice|'
+                         r'case|claim|id|room|flight|gate|seat|unit|apt|apartment|suite|ste|extension|ext)\b'
+                         r'(?:\s*(?:number|no\.?|num|#|is|was|:|=))*\s*[:#]?\s*$', re.I)
+PHONE_BEFORE = re.compile(r'\b(?:call|calls|phone|tel|telephone|text|txt|fax|dial|number|mobile|cell|reach|ring|'
+                          r'hotline|line|whatsapp)\b[^.!?\d]{0,24}$', re.I)
+# How a web address's pieces sound: "pipewisebayside.com/tips" is "pipewise bayside dot com slash tips".
+URL_MARKS = {'.': 'dot', '/': 'slash', '@': 'at', '-': 'dash', '_': 'underscore', ':': 'colon', '~': 'tilde',
+             '+': 'plus', '=': 'equals', '&': 'and', '%': 'percent', '#': 'hash', '?': 'question mark'}
+SPELLED_TLDS = {'edu': 'E D U', 'io': 'I O', 'ai': 'A I', 'tv': 'T V', 'fm': 'F M', 'uk': 'U K', 'us': 'U S',
+                'gg': 'G G', 'ly': 'L Y', 'nz': 'N Z', 'eu': 'E U', 'jp': 'J P', 'cn': 'C N', 'mx': 'M X',
+                'br': 'B R', 'nl': 'N L', 'de': 'D E', 'fr': 'F R', 'es': 'E S', 'ie': 'I E', 'au': 'A U',
+                'ca': 'C A', 'xyz': 'X Y Z'}
+
+
+def digits(token: str, zero: str = 'zero') -> str:
+    """A number read one digit at a time: "0147" is "oh one four seven" with ``zero='oh'``."""
+    return ' '.join(zero if d == '0' else DIGIT_WORDS[int(d)] for d in token if d.isdigit())
+
+
+_WORDS = None
+
+
+def _english_words() -> frozenset:
+    """Real English words: the voice's own pronunciation dictionary (misaki's us_gold.json, shipped with it)."""
+    global _WORDS
+    if _WORDS is None:
+        try:
+            import json
+            import misaki
+            from pathlib import Path
+            path = Path(misaki.__file__).parent / 'data' / 'us_gold.json'
+            _WORDS = frozenset(w for w in json.loads(path.read_text(encoding='utf-8'))
+                               if w.isalpha() and w.islower())
+        except (ImportError, OSError, ValueError):
+            _WORDS = frozenset()
+    return _WORDS
+
+
+def split_words(run: str) -> str:
+    """A run of letters as the words it is made of: "MillbrookLeafWeek" -> "Millbrook Leaf Week" (its capitals),
+    "pipewisebayside" -> "pipewise bayside"-like pieces from the dictionary (fewest pieces of three letters or more);
+    a run the dictionary cannot cut, or a short one, stays whole."""
+    parts = re.findall(r'[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+', run)
+    if len(parts) > 1:
+        return ' '.join(split_words(p) if p.isalpha() else digits(p) for p in parts)
+    low = run.lower()
+    words = _english_words()
+    if len(run) < 10 or not run.isalpha() or not words or low in words:
+        return run
+    best = [None] * (len(low) + 1)                # best[i]: fewest dictionary pieces covering low[:i]
+    best[0] = []
+    for i in range(3, len(low) + 1):
+        for j in range(0, i - 2):
+            if best[j] is not None and low[j:i] in words and (best[i] is None or len(best[j]) + 1 < len(best[i])):
+                best[i] = best[j] + [run[j:i]]
+    pieces = best[len(low)]
+    return ' '.join(pieces) if pieces and len(pieces) <= 4 else run
+
+
+def _address(text: str, url: bool) -> str:
+    """An email or web address as it is read out: no "https://" or "www.", each mark a word, numbers digit by digit,
+    run-together words apart, and the ending ("com", "org") said as a word or, when it is not one, letter by letter."""
+    if url:
+        text = re.sub(r'^(?:https?://)?(?:www\.)?', '', text, flags=re.I).rstrip('/')
+    pieces = re.findall(r'[A-Za-z]+|\d+|[^A-Za-z\d]', text)
+    last = max((k for k, p in enumerate(pieces) if p.isalpha()), default=-1)
+    tld = next((k for k in range(len(pieces) - 1, 0, -1) if pieces[k].isalpha() and pieces[k - 1] == '.'), None)
+    out = []
+    for k, piece in enumerate(pieces):
+        if piece.isdigit():
+            out.append(digits(piece, 'oh' if len(piece) > 1 else 'zero'))
+        elif piece.isalpha():
+            if k == tld and (url or k == last):
+                out.append(SPELLED_TLDS.get(piece.lower(), piece.lower()))
+            else:
+                out.append(split_words(piece))
+        elif piece in URL_MARKS:
+            out.append(URL_MARKS[piece])
+    return ' '.join(out)
+
+
+def _phone(text: str) -> str:
+    """A phone number as digit groups an announcer pauses between ("(555) 018-7720" is "five five five-oh one eight-
+    seven seven two zero"): the groups are joined by hyphens, which the voice turns into short pauses (speech._say)
+    and which are no clause break, so the captions keep their timing."""
+    plus = text.lstrip().startswith('+')
+    groups = re.findall(r'\d+', text)
+    if not plus and len(groups) == 4 and groups[0] == '1':
+        groups = groups[1:]
+    said = '-'.join(digits(g, 'oh') for g in groups)
+    return ('plus ' if plus else '') + said
+
+
+def _code_before(m: re.Match) -> bool:
+    return bool(CODE_BEFORE.search(m.string[max(0, m.start() - 40):m.start()]))
+
+
 def _en_speak(m: re.Match) -> str:
     g = m.groupdict()
     rest = m.string[m.end():]
+    if g['email']:
+        return _address(g['email'], url=False)
+    if g['url']:
+        return _address(g['url'], url=True)
+    if g['phone']:
+        if re.fullmatch(r'\d{3}-\d{4}', g['phone']) and not (
+                g['phone'][4] == '0' or PHONE_BEFORE.search(m.string[max(0, m.start() - 40):m.start()])):
+            a, b = g['phone'].split('-')                # "555-1000" with no phone around it: two numbers
+            return f'{en_number(a)}-{en_number(b)}'
+        return _phone(g['phone'])
+    if g['ext']:
+        return 'extension ' + digits(g['ext'], 'oh' if len(g['ext']) > 1 else 'zero')
+    if g['tag']:
+        return 'hashtag ' + ' '.join(split_words(p) if not p.isdigit() else en_number(p)
+                                     for p in g['tag'].split('_') if p)
+    if g['tr1']:
+        first = _clock(int(g['tr1']), int(g['trm1']) if g['trm1'] else None, g['tra1'])
+        second = _clock(int(g['tr2']), int(g['trm2']) if g['trm2'] else None, g['tra2'])
+        if first and second:
+            return f'{first} to {second}'
+        return f"{en_number(g['tr1'])} to {en_number(g['tr2'])}" + (f" {g['tra2'].upper()}M" if g['tra2'] else '')
+    if g['inch']:
+        return f"{en_number(g['inch'])} inch{'' if Decimal(g['inch'].replace(',', '')) == 1 else 'es'}"
+    token = g['year'] or g['num']
+    if token and re.fullmatch(r'\d+', token) and ((len(token) >= 3 and _code_before(m)) or
+                                                  (len(token) >= 3 and token.startswith('0'))):
+        return ('minus ' if g['neg'] else '') + digits(token)     # "code 482913", "0147"
     if g['mixw']:
         unit = f" {UNITS[g['munit']]}" if g['munit'] else ''
         return _fraction(g['mixf'] or VULGAR[g['mixv']], rest, g['mixw']) + unit
@@ -208,7 +358,8 @@ def _en_speak(m: re.Match) -> str:
         return ('minus ' if token.startswith('-') else '') + f"{en_number(token.lstrip('-'))} percent"
     if g['month']:
         month = MONTHS[g['month'].rstrip('.').lower()[:3]]
-        return f"{month} {num2words(int(g['day']), to='ordinal')}"
+        said = f"{month} {num2words(int(g['day']), to='ordinal')}"
+        return said + (f" to {num2words(int(g['day2']), to='ordinal')}" if g['day2'] else '')
     if g['h']:
         return _clock(int(g['h']), int(g['mi']), g['ampm'])
     if g['hh']:

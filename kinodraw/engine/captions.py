@@ -15,6 +15,7 @@ from __future__ import annotations
 import bisect
 import colorsys
 import re
+import textwrap
 from functools import lru_cache
 
 from PIL import Image, ImageDraw
@@ -44,7 +45,15 @@ def clause_marks(text, lang):
     must share. A period that ends an abbreviation ("p.m.", "Dr.", "U.S.") is not one."""
     pat = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
     return [m for m in pat.finditer(text)
-            if not (lang != 'zh' and m.group() == '.' and _abbreviated(text[:m.end()]))]
+            if not (lang != 'zh' and m.group() == '.' and (_abbreviated(text[:m.end()]) or _unit_dot(text, m.end())))]
+
+
+def _unit_dot(text, end):
+    """The period of a unit after a number in a running sentence ("3–4 ft. away", "2 in. thick"): numbers.py says
+    the unit and drops it, so it is no clause break in either text."""
+    from ..numbers import UNITS
+    units = '|'.join(re.escape(u) for u in sorted(set(UNITS) | {'in'}, key=len, reverse=True))
+    return bool(re.search(r'\d\s?(?:' + units + r')\.$', text[:end]) and re.match(r'[ \t]+[a-z(]|,', text[end:]))
 
 
 def clause_spans(text, lang):
@@ -91,6 +100,8 @@ def balanced_lines(text, lang, fonts=ink.FONTS):
         if wa > MAX_W or wb > MAX_W:
             continue
         penalty = abs(wa - wb)
+        if _needs_next(a, b):
+            penalty += 5000
         if lang in ('en', 'es'):
             last = a.split()[-1].lower().strip(',.;:') if a.split() else ''
             if last in (ES_WEAK if lang == 'es' else EN_WEAK):
@@ -100,6 +111,24 @@ def balanced_lines(text, lang, fonts=ink.FONTS):
         if best is None or penalty < best[0]:
             best = (penalty, [a, b])
     return best[1] if best else None
+
+
+def _needs_next(a, b):
+    """Line ``a`` ends on what belongs with the start of ``b``: "Nov." and its date, "Ext." and its number, an area
+    code and its number, "#" or "No." and the number."""
+    return bool(re.match(r'[\d(]', b) and re.search(
+        r'(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|[Ee]xt|EXT|Nos?|Apt|Ste|Rm|Rte|Hwy)\.?|\(\d{3}\)|'
+        r'\+\d{1,3}|#|\d)$', a))
+
+
+_HELD = (r'(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|[Ee]xt|EXT|Nos?|Apt|Ste|Rm|Rte|Hwy)\.?|'
+         r'\(\d{3}\)|\+\d{1,3}|#) (?=[\d(])')
+
+
+def wrap(text, width):
+    """``textwrap.wrap`` that never ends a line on what belongs with the next word (see ``_needs_next``)."""
+    held = re.sub(_HELD, '\\1\u00a0', text)        # textwrap breaks only at ASCII whitespace
+    return [line.replace('\u00a0', ' ') for line in textwrap.wrap(held, width, break_long_words=False)]
 
 
 def fits(text, lang):
@@ -122,7 +151,7 @@ def split_long(text, lang, fits=fits):
 
 
 # Periods that end an abbreviation, not a sentence: titles, "a.m."/"p.m.", and initialisms such as "U.S.".
-_ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m)\.|'
+_ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m|ext)\.|'
                             r'(?:[A-Z]\.){2,})$', re.I)
 # Capitalised only, so a sentence ending "in the sun." or "she sat." still ends: months, weekdays, streets, offices.
 _CAPITAL_ABBREVIATIONS = re.compile(

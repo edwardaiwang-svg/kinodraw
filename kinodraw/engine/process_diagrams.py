@@ -117,7 +117,13 @@ def typeset(words: str) -> str:
     """Spoken math written as math; other words kept as spoken. Fragments joined by ' ... ' are typeset one by one
     and joined by a space ("seconds ... divide by five ... roughly ... miles away" -> "seconds ÷ 5 ≈ miles away")."""
     parts = [p.strip(' ,.;:!?') for p in re.split(r'\s*(?:\.\.\.|…)\s*', words.strip()) if p.strip(' ,.;:!?')]
-    return ' '.join(_typeset(p) for p in parts)
+    out = ' '.join(_typeset(p) for p in parts)
+    bare = lambda s: re.sub(r'[\s.,;:!?]', '', s)
+    # Nothing spoken to write as math: the text is already written ("Mon. & Tue.", "8 a.m.–2 p.m."), keep it as is.
+    return re.sub(r'\s*(?:\.\.\.|…)\s*', ' ', words.strip()).strip() if bare(out) == bare(words) else out
+
+
+DETERMINERS = {'a', 'an', 'the', 'this', 'that', 'each', 'every', 'any', 'which', 'another', 'no'}
 
 
 def _typeset(text: str) -> str:
@@ -140,7 +146,10 @@ def _typeset(text: str) -> str:
             out[-1] += word if word[0].isdigit() else str(number(word))
             i += 1
             continue
-        if kind == 'num':
+        if kind == 'num' and lower == 'one' and any(t[0].lower() in DETERMINERS for t in toks[max(0, i - 2):i]) \
+                and toks[i - 1][0].isalpha():
+            out.append(word)                              # a pronoun ("a full one", "the one"), not the number 1
+        elif kind == 'num':
             value = number(word)
             out.append(word if word[0].isdigit() else str(value))
         elif kind == 'var' and spoken and (nxt in ('op', 'pair', 'eq') or prev in ('+', '−', '×', '·', '÷', '=')):

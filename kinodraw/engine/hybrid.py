@@ -23,6 +23,7 @@ from . import motion
 from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
 from . import timeline
+from .captions import wrap as caption_wrap
 from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
 from .bold.render import _SceneLayers
@@ -43,6 +44,11 @@ def camera_move(image, zoom, dx, dy, fill):
     inv = 1 / zoom
     return image.transform((w, h), Image.AFFINE, (inv, 0, w / 2 * (1 - inv) + dx, 0, inv, h / 2 * (1 - inv) + dy),
                            Image.BICUBIC, fillcolor=fill)
+
+
+def _contrast(a, b):
+    from .skin import contrast
+    return contrast(a, b)
 
 
 def seed(value):
@@ -158,6 +164,9 @@ class HybridProduction:
         self.ctx, self.els, self.cap_words = whiteboard.ctx, whiteboard.els, whiteboard.cap_words
         self.warnings = list(whiteboard.warnings)
         self.by_id = {b['id']: b for b in beats(episode, lang)}
+        from .. import speech
+        self.labels = speech.screenplay_labels(b['text'] for b in self.by_id.values())
+        self._shown_text = {}
         self.marked = {b['id'] for b in episode['beats'] if markup.board(b, lang)}     # code, formula, warning
         self.cast = {c['id']: cast_genome(c) for c in plan['cast']}
         for c in plan['cast']:
@@ -233,6 +242,13 @@ class HybridProduction:
                      if s.spec['transition_in'] == 'cut' or s.scientific or self.spans[i - 1].scientific]
         self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
         self.anchor_keys = self._anchor_keys()
+        self.screen_notes = self._screen_notes()
+        if self.screen_notes:
+            build = Path(project_dir) / 'build'
+            build.mkdir(parents=True, exist_ok=True)
+            (build / 'screen-text.json').write_text(json.dumps(
+                [{'start': round(a, 3), 'end': round(b, 3), 'kind': k, 'text': w} for a, b, k, w in self.screen_notes],
+                ensure_ascii=False, indent=1), encoding='utf-8')
         if self.storybook is not None:
             # The quoted spans the story pages draw in speech bubbles, for the captions to leave to them.
             build = Path(project_dir) / 'build'
@@ -407,14 +423,14 @@ class HybridProduction:
         if text_kind == 'quote':
             quotes = [v for v in source['visuals'] if v.get('type') == 'quote'] if source else []
             value = quotes[0] if quotes else {}
-            body = self._label(value.get('text')) or (source['text'] if source else text)
+            body = self._label(value.get('text')) or (self._shown(ref)[0] if source else text)
             who = self._label(value.get('who'))
             atomic = '“' + body.strip().strip('"“”').strip() + '”'      # the script's own quote marks, once
             if not span.source_character:
-                atomic = '\n'.join(textwrap.wrap(atomic, 48))
+                atomic = '\n'.join(caption_wrap(atomic, 48))
             atomic += '\n— ' + who if who else ''
             elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
-            if source and body == source['text']:
+            if source and body == self._shown(ref)[0]:
                 span.on_screen += (ref,)
             if span.source_character and source:
                 elements[-1].start = self._source_text_start(span, source, body)
@@ -426,16 +442,18 @@ class HybridProduction:
             said_here = e['ref'] in spec['beat_ids'] and text_kind in ('none', 'caption_only', 'quote') \
                 and not span.source_character
             if not span.diagram and not numeric_chart and e['kind'] == 'text' and e['ref'] in self.by_id and \
-                    (e['ref'] != ref or text_kind in ('none', 'caption_only')) and not said_here:
-                elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
+                    (e['ref'] != ref or text_kind in ('none', 'caption_only')) and not said_here and \
+                    self._shown(e['ref'])[0].strip():
+                elements.append(MotionElement(text=self._shown(e['ref'])[0], width=1450, size=72,
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
+                elements[-1]._ref = e['ref']
                 span.on_screen += (e['ref'],)
                 if span.source_character:
                     elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
                 else:
                     self._clause_build(span, elements[-1], e['ref'])
         if not span.diagram and not numeric_chart and text_kind not in ('none', 'caption_only', 'quote'):
-            words = source['text'] if source else text
+            words = self._shown(ref)[0] if source else text
             elements.append(MotionElement(text=words, preset='counter' if text_kind == 'counter' else
                 'type_on' if treatment == 'kinetic_type' else 'word_pop', width=1500, size=72,
                 y=.25 if elements and spec['composition'] not in ('grid', 'split') else None))
@@ -498,7 +516,7 @@ class HybridProduction:
             # Source copy remains verbatim, but line breaks give kinetic headlines
             # enough ink to read and move; a prop gets its own space below the copy.
             for e in copy_elements:
-                e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
+                e.text = '\n'.join(caption_wrap(e.text, 36))
                 e.size = 96
             if pictures and copy_elements and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 for e in copy_elements:
@@ -577,13 +595,37 @@ class HybridProduction:
         ct = timing['char_times']
         return timing['start'] + (ct[min(char, len(ct) - 1)] if ct else 0.)
 
+    def _shown(self, bid):
+        """A beat's written text as the picture draws it (speech.shown: no speaker labels, stage directions or
+        emoji; a line of on-screen-text directions shows their words) and the offset in the written text of each
+        of its characters, which times it from the spoken text."""
+        if bid not in self._shown_text:
+            from .. import speech
+            self._shown_text[bid] = speech.shown(self.by_id[bid]['text'], self.labels)
+        return self._shown_text[bid]
+
+    def _shown_offset(self, bid, pos):
+        """The spoken-text offset of character ``pos`` of a beat's shown text."""
+        index = self._shown(bid)[1]
+        return self._spoken_offset(bid, index[min(pos, len(index) - 1)] if index else 0)
+
+    def _spoken_offset(self, bid, pos):
+        """The spoken-text offset of character ``pos`` of a beat's written text: exact where the spoken text is the
+        written text's own reading (numbers.normalize), else clause by clause."""
+        from ..numbers import normalize
+        display, spoken = self.by_id[bid]['text'], self.by_id[bid]['spoken']
+        reading = normalize(display, self.lang)
+        if reading.spoken == spoken:
+            return min(reading.to_spoken(pos), max(0, len(spoken) - 1))
+        return arc.spoken_offset(display, spoken, pos)
+
     def _clause_build(self, span, element, bid):
         """Reveal displayed source text clause by clause, each clause at the time the narration starts it."""
-        display, spoken = self.by_id[bid]['text'], self.by_id[bid]['spoken']
+        shown = self._shown(bid)[0]
         cues = []
-        for a, b in arc.clauses(display):
-            first = a + len(display[a:b]) - len(display[a:b].lstrip())
-            cues.append(max(0., self._spoken_at(bid, arc.spoken_offset(display, spoken, first)) - span.start))
+        for a, b in arc.clauses(shown):
+            first = a + len(shown[a:b]) - len(shown[a:b].lstrip())
+            cues.append(max(0., self._spoken_at(bid, self._shown_offset(bid, first)) - span.start))
         element.preset, element.cues = 'clauses', tuple(cues) or (0.,)
         element.start = element.cues[0]
 
@@ -598,13 +640,13 @@ class HybridProduction:
         """Hovercast's proof beat: the source sentence over its number, which rolls up with an ease-out from the
         moment the number is spoken and lands on a music beat with a pulse and a burst of ticks."""
         counter = elements[-1]
-        display, spoken = source['text'], source['spoken']
-        at = max(0., self._spoken_at(source['id'], arc.spoken_offset(display, spoken, proof['start'])) - span.start)
+        display = self._shown(source['id'])[0]
+        at = max(0., self._spoken_at(source['id'], self._shown_offset(source['id'], proof['start'])) - span.start)
         landing = self._on_beat(span.start + at, .8, 1.5, span.end - .4)
         counter.start, counter.duration = at, max(.3, landing - span.start - at)
         counter.ease, counter.hit = 'cubic_out', True
         counter.x, counter.y, counter.size, counter.width = .5, .62, 200, 1500
-        headline = MotionElement(text='\n'.join(textwrap.wrap(display, 40, break_long_words=False)), width=1500,
+        headline = MotionElement(text='\n'.join(caption_wrap(display, 40)), width=1500,
                                  size=80, x=.5, y=.27)
         self._clause_build(span, headline, source['id'])
         elements.insert(len(elements) - 1, headline)
@@ -612,12 +654,12 @@ class HybridProduction:
 
     def _call_to_action(self, span, elements, source):
         """Hovercast's ask: the words before it as the headline, its imperative as a button pressed on a beat."""
-        display, spoken = source['text'], source['spoken']
+        display = self._shown(source['id'])[0]
         hit = arc.cta_phrase(display)
         if hit is None:
             return
         a, b = hit
-        at = max(0., self._spoken_at(source['id'], arc.spoken_offset(display, spoken, a)) - span.start)
+        at = max(0., self._spoken_at(source['id'], self._shown_offset(source['id'], a)) - span.start)
         press = self._on_beat(span.start + at, .45, 1.3, span.end - .5) - span.start
         headline = elements[-1]
         if display[:a].strip():
@@ -997,11 +1039,13 @@ class HybridProduction:
                 paged.append(e)
                 continue
             quote = e.preset == 'corner_caption'
+            whole = e.text
             e.size = 48
             if not quote:
                 # A label is a verbatim source excerpt; narration and timed captions
                 # retain every word. Do not let a paragraph consume the cast stage.
                 sentence = re.split(r'(?<=[.!?])\s+', e.text.strip(), maxsplit=1)[0]
+                whole = e.text.strip()
                 e.text = sentence
                 e.preset = 'type_on'
             wrapped, _, size, _ = _text_metrics(e.text, e.size, e.width, True, e.font)
@@ -1035,8 +1079,18 @@ class HybridProduction:
                 cards[-1].end = span.end - span.start
                 paged.extend(cards)
                 continue
-            if not quote and len(wrapped.splitlines()) > rows:
-                wrapped = '\n'.join(wrapped.splitlines()[:rows])
+            if not quote and (len(wrapped.splitlines()) > rows or e.text != whole):
+                # A label shows whole clauses only, never a stub cut before its number or unit ("Flip gently, and
+                # cook 1"): the longest run of clauses that fits, else no label. Either way the caption carries
+                # the beat's words, since the label no longer shows them all.
+                span.on_screen = tuple(b for b in span.on_screen if b != getattr(e, '_ref', None))
+                cuts = [m.end() for m in re.finditer(r'[,;:.!?](?=\s|$)', e.text)]
+                fit = next((c for c in reversed(cuts) if len(_text_metrics(
+                    e.text[:c].rstrip(',;:'), e.size, e.width, True, e.font)[0].splitlines()) <= rows), None)
+                if fit is None:
+                    continue
+                e.text = e.text[:fit].rstrip(',;:')
+                wrapped = _text_metrics(e.text, e.size, e.width, True, e.font)[0]
             e.text = wrapped
             paged.append(e)
         span.motion.elements = paged
@@ -1556,7 +1610,86 @@ class HybridProduction:
             renderer._composite(art, layers, i, [t], 'text')
         return np.clip(art + .5, 0, 255).astype(np.uint8)
 
+    def _screen_notes(self):
+        """The on-screen text the script's directions ask for, as (start, end, kind, words): a text card for
+        "[TEXT ON SCREEN: SAVE UP TO 20%]", a name strap for "LOWER THIRD: Maria Chen - Owner". A note on a line
+        nobody says shows over the next line that is said (the strap is under the person who speaks next); a note
+        inside a said line shows from where it is written. Each holds at least 3 s and at most 6 s."""
+        from .. import speech
+        order = [b for b in self.tl['beat_order'] if b in self.by_id]
+        said = {b: bool(self.tl['beats'][b].get('char_times')) and any(ch.isalnum() for ch in speech.caption_text(
+            self.by_id[b]['text'], self.labels)) for b in order}
+        stop = self.tl['end_card']['start']
+        out = []
+        for k, bid in enumerate(order):
+            beat = self.by_id[bid]
+            for pos, kind, words in speech.screen_text(beat['text'], self.labels):
+                if said[bid]:
+                    at = self._spoken_at(bid, self._spoken_offset(bid, pos))
+                    until = self.tl['beats'][bid]['end']
+                else:
+                    host = next((b for b in order[k + 1:] if said[b]), bid)
+                    at, until = self.tl['beats'][host]['start'], self.tl['beats'][host]['end']
+                end = min(max(until, at + 3.), at + 6., stop)
+                if end > at:
+                    out.append((at, end, kind, words))
+        return out
+
+    def _draw_screen_text(self, image, t):
+        """The script's on-screen text at ``t`` over the finished frame: the newest name strap low on the left, above
+        the caption, and the newest text card across the top. Both ease in and out (0.25 s)."""
+        from . import ink
+        live = {}
+        for at, end, kind, words in self.screen_notes:
+            if at <= t < end:
+                live[kind] = (at, end, words)
+        if not live:
+            return image
+        w, h = self.size
+        unit = min(w, h) / 1080
+        p = {k: ImageColor.getrgb(v)[:3] for k, v in self.style['palette'].items()}
+        layer = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        for kind, (at, end, words) in live.items():
+            fade = max(0., min(1., (t - at) / .25, (end - t) / .25))
+            alpha = round(255 * fade)
+            if kind == 'strap':
+                name, role = (re.split(r'\s+[-–—|]\s+', words, maxsplit=1) + [''])[:2]   # "Maria Chen - Owner"
+                big, small = ink.font('en_caption', round(52 * unit)), ink.font('en_caption', round(36 * unit))
+                lines = [(name.strip(), big)] + ([(role.strip(), small)] if role.strip() else [])
+                pad = round(22 * unit)
+                width = max(draw.textlength(text, font=f) for text, f in lines) + 2 * pad + round(12 * unit)
+                height = sum(f.size * 1.2 for _, f in lines) + 2 * pad - round(4 * unit)
+                x = round(w * .05 - (1 - fade) * 60 * unit)
+                bottom = round(h * (.80 if not self.vertical else .72))
+                y = bottom - height
+                draw.rectangle((x, y, x + width, bottom), fill=p['ink'] + (round(alpha * .92),))
+                draw.rectangle((x, y, x + round(12 * unit), bottom), fill=p['accent'] + (alpha,))
+                ty = y + pad
+                for text, f in lines:
+                    draw.text((x + pad + round(12 * unit), ty), text, font=f, fill=p['background'] + (alpha,))
+                    ty += f.size * 1.2
+            else:
+                f = ink.font('en_caption', round(64 * unit))
+                rows = textwrap.wrap(words, max(8, int(w * .8 / max(1., f.getlength('n')))), break_long_words=False)
+                pad = round(26 * unit)
+                width = max(draw.textlength(r, font=f) for r in rows) + 2 * pad
+                height = len(rows) * f.size * 1.2 + 2 * pad - round(6 * unit)
+                x, y = (w - width) / 2, round(h * .06) - (1 - fade) * 30 * unit
+                draw.rounded_rectangle((x, y, x + width, y + height), radius=round(14 * unit),
+                                       fill=p['accent'] + (round(alpha * .95),))
+                ink_on = p['ink'] if _contrast(p['ink'], p['accent']) >= _contrast(p['background'], p['accent']) \
+                    else p['background']
+                for i, r in enumerate(rows):
+                    draw.text(((w - draw.textlength(r, font=f)) / 2, y + pad + i * f.size * 1.2), r, font=f,
+                              fill=ink_on + (alpha,))
+        return Image.alpha_composite(image.convert('RGBA'), layer).convert('RGB')
+
     def frame(self, t):
+        image = self._frame_at(t)
+        return self._draw_screen_text(image, t) if self.screen_notes else image
+
+    def _frame_at(self, t):
         if not self.spans or t < self.starts[0]:
             return self.whiteboard.frame(t)
         end_start = self.tl['end_card']['start']
