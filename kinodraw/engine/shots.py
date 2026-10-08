@@ -1125,8 +1125,9 @@ def draw_hands(book, overlay, shot, cam):
         _, bottom, _ = book._to_screen(x0, y1, cam)
         s = min(h / 540, max(h / 1440, .4 * (bottom - top) / 160))
         x, y, s = gx * k, gy * k, s * k
-        arm = [(x + 100 * s, y + 150 * s), (x + 100 * s + .45 * (h * k - y), h * k + 200 * s)]
-        draw.line(arm, fill=INK, width=round(148 * s))          # the forearm runs on out of the frame's bottom
+        reach = w * k + 200 * s - (x + 100 * s)
+        arm = [(x + 100 * s, y + 150 * s), (x + 100 * s + reach, y + 150 * s + .3 * reach)]
+        draw.line(arm, fill=INK, width=round(148 * s))          # the forearm runs on out of the frame's right side
         draw.line(arm, fill=SLEEVE + (255,), width=round(132 * s))
         _hand(draw, x, y, s, SKIN.get(tone, SKIN['tan']), 'front')
     overlay.alpha_composite(layer.resize((w, h), Image.Resampling.LANCZOS))
