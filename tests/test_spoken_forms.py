@@ -238,3 +238,43 @@ def test_hybrid_draws_the_shown_text_and_times_each_clause_from_it():
     HybridProduction._clause_build(fake, SimpleNamespace(start=0.), element, 'b000')
     spoken = fake.by_id['b000']['spoken']
     assert element.cues == pytest.approx((0., spoken.index('It wastes') * .01))
+
+
+# ------------------------------------------------------------------ 6. labels beside the cast are whole clauses
+@pytest.mark.usefixtures('procedural_rig')
+def test_a_crowded_label_shows_whole_clauses_and_leaves_the_words_to_the_caption(tmp_path):
+    # Script 10 (r02): "Heat a nonstick pan over", "Scoop about two", "Flip gently, and cook 1": each label beside
+    # the cook was cut to its first line, before the quantity, and the caption that carried the words was off.
+    import json
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    from kinodraw.engine import render
+    board = board_of('# Pancakes\n\nNia, a tiny lion cub, loved her mother, Sora.\n\n'
+                     'Nia flipped it gently, and she cooked it 1 more minute until both sides were golden brown.')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style'].update(mode='hybrid', music_mood='none')
+    for scene in plan['scenes']:
+        bid = scene['beat_ids'][0]
+        scene.update(treatment='character', composition='split', camera='static', transition_in='cut',
+                     elements=[{'kind': 'cast', 'ref': c['id']} for c in plan['cast'][:1]] +
+                     [{'kind': 'text', 'ref': bid}] + [{'kind': 'picture', 'ref': r} for r in (
+                         'fl_banana', 'fl_egg', 'fl_bowl_with_spoon', 'fl_spoon', 'fl_cooking')],
+                     text={'kind': 'caption_only', 'ref': bid})
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    span = prod.spans[-1]
+    labels = [' '.join(e.text.split()) for e in span.motion.elements if e.kind == 'text']
+    assert span.source_character and labels in ([], ['Nia flipped it gently']), labels
+    beat = span.spec['beat_ids'][0]
+    assert beat not in span.on_screen
+    middle = (tl['beats'][beat]['start'] + tl['beats'][beat]['speech_end']) / 2
+    assert not prod._written(span, middle)                        # the caption shows the whole line
+
+
+def test_a_phone_in_a_screenplay_line_keeps_its_area_code():
+    text = 'MARIA: Call (707) 555-0147 (smiling) today.'
+    assert speech.caption_text(text, {'maria'}) == 'Call (707) 555-0147 today.'
+    assert speech.said_text(numbers.normalize(text, 'en').spoken, 'en', {'maria'})[0] == \
+        'Call seven oh seven, five five five, oh one four seven today.'

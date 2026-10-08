@@ -439,6 +439,7 @@ class HybridProduction:
                     self._shown(e['ref'])[0].strip():
                 elements.append(MotionElement(text=self._shown(e['ref'])[0], width=1450, size=72,
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
+                elements[-1]._ref = e['ref']
                 span.on_screen += (e['ref'],)
                 if span.source_character:
                     elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
@@ -1018,11 +1019,13 @@ class HybridProduction:
                 paged.append(e)
                 continue
             quote = e.preset == 'corner_caption'
+            whole = e.text
             e.size = 48
             if not quote:
                 # A label is a verbatim source excerpt; narration and timed captions
                 # retain every word. Do not let a paragraph consume the cast stage.
                 sentence = re.split(r'(?<=[.!?])\s+', e.text.strip(), maxsplit=1)[0]
+                whole = e.text.strip()
                 e.text = sentence
                 e.preset = 'type_on'
             wrapped, _, size, _ = _text_metrics(e.text, e.size, e.width, True, e.font)
@@ -1056,8 +1059,18 @@ class HybridProduction:
                 cards[-1].end = span.end - span.start
                 paged.extend(cards)
                 continue
-            if not quote and len(wrapped.splitlines()) > rows:
-                wrapped = '\n'.join(wrapped.splitlines()[:rows])
+            if not quote and (len(wrapped.splitlines()) > rows or e.text != whole):
+                # A label shows whole clauses only, never a stub cut before its number or unit ("Flip gently, and
+                # cook 1"): the longest run of clauses that fits, else no label. Either way the caption carries
+                # the beat's words, since the label no longer shows them all.
+                span.on_screen = tuple(b for b in span.on_screen if b != getattr(e, '_ref', None))
+                cuts = [m.end() for m in re.finditer(r'[,;:.!?](?=\s|$)', e.text)]
+                fit = next((c for c in reversed(cuts) if len(_text_metrics(
+                    e.text[:c].rstrip(',;:'), e.size, e.width, True, e.font)[0].splitlines()) <= rows), None)
+                if fit is None:
+                    continue
+                e.text = e.text[:fit].rstrip(',;:')
+                wrapped = _text_metrics(e.text, e.size, e.width, True, e.font)[0]
             e.text = wrapped
             paged.append(e)
         span.motion.elements = paged

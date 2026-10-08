@@ -378,8 +378,8 @@ def hidden(text: str, labels: set | None = None) -> list[tuple[int, int]]:
     for m in re.finditer(r'\[[^\]]*(?:\]|$)', text):
         spans.append(m.span())
     spans += [n['span'] for n in notes(text, labels)]
-    if found:                                       # in a screenplay line every (parenthetical) is a direction
-        for m in re.finditer(r'\([^)]*(?:\)|$)', text):
+    if found:                                       # in a screenplay line every (parenthetical) is a direction,
+        for m in re.finditer(r'\((?!\d{3}\))[^)]*(?:\)|$)', text):     # never a phone's area code
             if m.start() >= found[0][0]:
                 spans.append(m.span())
     for m in EMOJI.finditer(text):
