@@ -273,14 +273,48 @@ def _pole():
         f'<rect x="12" y="6" width="16" height="588" rx="8" fill="#CFD8DC" {INK}/>'))
 
 
-SVG = {
-    'set_window': _window(False), 'set_window_night': _window(True), 'set_desk': _desk(), 'set_desk_lamp': _desk_lamp(),
+def _windscreen(night):
+    sky, hill = ('#22314F', '#1E3B2A') if night else ('#BFE6F8', '#7CB342')
+    stars = ''.join(f'<circle cx="{x}" cy="{y}" r="4" fill="#FFF59D"/>' for x, y in
+                    ((260, 90), (520, 60), (900, 110), (1240, 70), (1500, 120))) if night else ''
+    return _svg(1800, 560, (
+        f'<path d="M120 30H1680Q1760 30 1770 110L1790 540H10L30 110Q40 30 120 30Z" fill="#455A64" {INK}/>'
+        f'<path d="M170 80H1630Q1690 80 1700 140L1716 500H84L100 140Q110 80 170 80Z" fill="{sky}" {THIN}/>' + stars +
+        f'<path d="M84 360Q480 300 900 352Q1320 300 1716 350V500H84Z" fill="{hill}" {THIN}/>'
+        f'<path d="M790 500L880 350H920L1010 500Z" fill="#6D7378" {THIN}/>'
+        '<path d="M900 362V384M900 410V440M900 466V500" stroke="#F5F5F5" stroke-width="8"/>'))
+
+
+def _car_seat(colour):
+    return _svg(300, 340, (
+        f'<rect x="96" y="6" width="108" height="56" rx="22" fill="{colour}" {INK}/>'
+        f'<rect x="40" y="58" width="220" height="190" rx="40" fill="{colour}" {INK}/>'
+        f'<rect x="20" y="226" width="260" height="76" rx="26" fill="{colour}" {INK}/>'
+        f'<rect x="60" y="300" width="18" height="36" fill="#37474F" {THIN}/>'
+        f'<rect x="222" y="300" width="18" height="36" fill="#37474F" {THIN}/>'))
+
+
+def _dashboard():
+    vents = ''.join(f'<rect x="{x}" y="96" width="120" height="34" rx="10" fill="#263238" {THIN}/>' for x in (700, 980))
+    return _svg(1800, 360, (
+        f'<path d="M0 80Q900 -10 1800 80V360H0Z" fill="#546E7A" {INK}/>'
+        f'<path d="M0 150Q900 90 1800 150" fill="none" stroke="#37474F" stroke-width="8"/>' + vents +
+        f'<rect x="1260" y="170" width="300" height="110" rx="16" fill="#607D8B" {INK}/>'
+        f'<rect x="1380" y="214" width="60" height="16" rx="8" fill="#263238"/>'
+        f'<circle cx="420" cy="150" r="92" fill="none" stroke="#1B1B1B" stroke-width="30"/>'
+        f'<circle cx="420" cy="150" r="92" fill="none" stroke="#37474F" stroke-width="18"/>'
+        f'<path d="M335 160H505M420 150V242" stroke="#37474F" stroke-width="18" stroke-linecap="round"/>'))
+
+
+SVG = {    'set_window': _window(False), 'set_window_night': _window(True), 'set_desk': _desk(), 'set_desk_lamp': _desk_lamp(),
     'set_table': _table(), 'set_armchair': _armchair(), 'set_tv_stand': _tv_stand(), 'set_rug': _rug(), 'set_counter': _counter(),
     'set_stove': _stove(), 'set_fridge': _fridge(), 'set_bookshelf': _bookshelf(), 'set_chalkboard': _chalkboard(),
     'set_school_desk': _school_desk(), 'set_shop_shelves': _shop_shelves(), 'set_grocery_bag': _grocery_bag(),
     'set_streetlight': _streetlight(), 'set_swing': _swing(), 'set_church': _church(), 'set_bush': _bush(),
     'set_porthole': _porthole(), 'set_wall_clock': _wall_clock(), 'set_remote': _remote(),
     'set_bus_seat': _bus_seat('#E53935'), 'set_train_seat': _bus_seat('#3F6FB5'), 'set_pole': _pole(),
+    'set_windscreen': _windscreen(False), 'set_windscreen_night': _windscreen(True), 'set_car_seat': _car_seat('#8D6E63'),
+    'set_dashboard': _dashboard(),
 }
 
 
@@ -365,7 +399,7 @@ SUPPORTS = {
     'set_counter': ('top', .03, .74, .14), 'set_stove': ('top', .08, .92, .17), 'set_school_desk': ('top', .06, .94, .17),
     'office_desk': ('top', .06, .5, .45), 'fl_couch_and_lamp': ('seat', .13, .7, .76), 'fl_bed': ('bed', .16, .93, .43),
     'fl_chair': ('seat', .22, .78, .56), 'set_armchair': ('seat', .24, .76, .56), 'empty_bench': ('seat', .1, .86, .56), 'set_bus_seat': ('seat', .12, .62, .54),
-    'set_train_seat': ('seat', .12, .62, .54),
+    'set_train_seat': ('seat', .12, .62, .54), 'set_car_seat': ('seat', .12, .88, .68),
 }
 
 
@@ -375,7 +409,7 @@ SUPPORTS = {
 # above the floor line. A window shows the page's sun or moon.
 FLOOR, BACKLINE = .785, .7
 INTERIOR = {'room', 'living_room', 'bedroom', 'study', 'kitchen', 'dining', 'bathroom', 'office', 'classroom', 'hospital',
-            'shop', 'library', 'cafe', 'bus', 'train', 'space'}
+            'shop', 'library', 'cafe', 'bus', 'train', 'space', 'car_inside'}
 # Nature places keep the story's own trees, rivers and hills: their set only fills a page that is otherwise empty.
 NATURE = {'forest', 'jungle', 'countryside', 'outdoors'}
 _ROOM = ('strip:floor', .725, .805)
@@ -422,6 +456,9 @@ SETS = {
             ('set_pole', .28, FLOOR, .64), ('set_bus_seat', .74, FLOOR, .24), ('set_bus_seat', .92, FLOOR, .24)],
     'train': [('strip:trainwall', .14, .74), ('strip:busfloor', .725, .805), ('set_train_seat', .12, FLOOR, .24),
               ('set_pole', .28, FLOOR, .64), ('set_train_seat', .74, FLOOR, .24), ('set_train_seat', .92, FLOOR, .24)],
+    # inside a car, from the front: the road through the windscreen, two front seats, the dashboard over their laps
+    'car_inside': [('set_windscreen', .5, .64, .5), ('set_car_seat', .34, FLOOR, .36), ('set_car_seat', .66, FLOOR, .36),
+                   ('set_dashboard', .5, 1.0, .33)],
     'car': [('strip:road', .69, .8), ('fl_deciduous_tree', .14, BACKLINE, .3), ('fl_evergreen_tree', .86, BACKLINE, .26),
             ('fl_automobile', .72, .79, .2)],
     'park': [('strip:grass', .7, .805), ('fl_deciduous_tree', .1, .76, .4), ('fl_evergreen_tree', .3, .72, .26),
@@ -448,13 +485,14 @@ SETS = {
 }
 # Rooms sky shows through: their window's glass.
 WINDOWS = {'set_window', 'set_window_night'}
+FRONT = {'set_dashboard'}       # set pieces drawn over the cast (a dashboard over the laps of people in a car)
 # Plan pictures that are a place: the page is that set instead of one more picture on it.
 PICTURE_PLACES = (
     (r'house|home', 'town'), (r'city|skyline|office_building|department_store', 'city'), (r'^fl_bus$|oncoming_bus', 'bus'),
     (r'bus_stop', 'street'), (r'train|tram|metro', 'train'), (r'school', 'school'), (r'hospital', 'hospital'),
     (r'store|shop(?!ping)|market', 'shop'), (r'barn|farm', 'farm'), (r'stadium', 'stadium'),
     (r'beach', 'beach'), (r'playground', 'playground'), (r'tent|camp', 'camp'), (r'forest', 'forest'),
-    (r'church|chapel', 'church'), (r'cafe|restaurant', 'cafe'),
+    (r'church|chapel', 'church'), (r'cafe|restaurant', 'cafe'), (r'motorway|highway|freeway', 'street'),
 )
 
 
@@ -679,7 +717,10 @@ class Stager:
                     doodle, x, ground, height = spec
                     if doodle in WINDOWS and night:
                         doodle = 'set_window_night'
-                    pieces.append(Piece(doodle, x, ground, height, kind='wall' if ground < .6 else 'set'))
+                    elif night and doodle + '_night' in SVG:
+                        doodle += '_night'
+                    pieces.append(Piece(doodle, x, ground, height, kind='wall' if ground < .6 else 'set',
+                                        front=doodle in FRONT))
         things = self.things(line, scene, place)
         base = len(pieces)
         indoor = place in INTERIOR

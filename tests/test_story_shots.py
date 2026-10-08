@@ -296,7 +296,8 @@ def test_a_held_thing_stays_below_the_chin(tmp_path):
     doodle, mirror, _ = book._pose_doodle(sam, page.start + .5)
     _, mouth = book._point(doodle, mirror, 'mouth', sam.x, sam.ground, sam.height, book._reference(sam))
     top = ground - held.height * anchor_y
-    assert top > mouth
+    chin = max(head[3] for _, head in book._shapes(sam))
+    assert top > mouth and top >= chin - 1e-6                           # under the whole face, not just the mouth
 
 
 def test_things_never_stand_on_or_inside_a_person(tmp_path):
@@ -372,3 +373,78 @@ def test_a_framing_never_cuts_a_person_in_half_at_its_side(tmp_path):
         x0, _, x1, _ = book._shape(sam, 'sit', sam.x)[0]
         assert x1 <= left + .002 or x0 >= right - .002 or (x0 >= left - .002 and x1 <= right + .002), x
         assert left <= tv[0] + .002 and tv[2] - .002 <= right                # the TV stays in the shot
+
+
+def test_a_bubble_finds_room_between_close_faces(tmp_path):
+    from kinodraw.engine.storybook import Shot
+    book = staged(tmp_path, 'Sam talked to Ada.', []).storybook
+    sam = Figure('sam', 'human', 'teen', 'male', pose='stand', x=.412, ground=.8, height=.39, facing='l')
+    ada = Figure('ada', 'human', 'adult', 'female', pose='sit', x=.183, ground=.711, height=.42, facing='r')
+    page = Shot(0., 3., figures=[sam, ada], view=(.292, .58, 1.9))
+    text = "It's just a bunch of random stuff."
+    bubble = Bubble('sam', text, .2, 2.5, times=tuple(.2 + .05 * i for i in range(len(text))))
+    plan = book._bubble_plan(page, bubble)
+    assert plan is not None
+    x0, y0, x1, y1 = plan[1]
+    for a, b, c, d in book.faces(page):
+        assert min(x1, c) <= max(x0, a) or min(y1, d) <= max(y0, b)
+
+
+# ------------------------------------------------------------------ a car, its phone and its map
+CAR = [{'id': 'mia', 'name': 'Mia', 'kind': 'human', 'species': 'human', 'age': 'adult', 'sex': 'female'},
+       {'id': 'sam', 'name': 'Sam', 'kind': 'human', 'species': 'human', 'age': 'adult', 'sex': 'male'},
+       {'id': 'cow', 'name': 'cow', 'kind': 'animal', 'species': 'cow', 'age': 'adult', 'sex': None}]
+CAR_TEXT = ('The car had been quiet for miles.\n\n"We passed it."\n\n"We did not pass it," Sam said.\n\n'
+            '"There was a cow."\n\n"Cows don\'t wear hats."\n\n"No bars. Check yours."\n\n'
+            '"There is a map in the glove box."\n\nShe unfolded it across the dashboard.\n\n'
+            'He pulled over by a field and nothing else.')
+
+
+def car_shots():
+    two = [('mia', 'adult', 'look', 'no'), ('sam', 'adult', 'look', 'no')]
+    talk = lambda who: [(c, a, 'talk' if c == who else 'look', 'yes' if c == who else 'no') for c, a, _, _ in two]
+    return [shot('b001', 'The car', 'wide', two, place='car', set_refs=['fl_motorway']),
+            shot('b002', 'We passed', 'two_shot', talk('mia'), place='car', lines=[('We passed it.', 'mia')]),
+            shot('b003', 'We did not', 'two_shot', talk('sam'), place='car', lines=[('We did not pass it,', 'sam')]),
+            shot('b004', 'There was', 'medium', [('sam', 'adult', 'point', 'yes')], place='car',   # the plan's slip
+                 lines=[('There was a cow.', 'sam')]),
+            shot('b005', 'Cows', 'two_shot', talk('mia'), place='car', lines=[("Cows don't wear hats.", 'mia')]),
+            shot('b006', 'No bars', 'two_shot', talk('mia'), place='car', focus='fl_antenna_bars',
+                 lines=[('No bars. Check yours.', 'mia')]),
+            shot('b007', 'There is a map', 'two_shot', talk('mia'), place='car', focus='map_route',
+                 props=[prop('map_route', 'held_by', 'mia')], lines=[('There is a map in the glove box.', 'mia')]),
+            shot('b008', 'She unfolded', 'insert', two, place='car'),
+            shot('b009', 'He pulled', 'wide', [('mia', 'adult', 'sit', 'no'), ('sam', 'adult', 'look', 'no')],
+                 place='field')]
+
+
+def test_people_in_a_car_sit_inside_it_and_pulled_over_they_are_still_in_it(tmp_path):
+    prod = staged(tmp_path, CAR_TEXT, car_shots(), cast=CAR)
+    _, (wide,) = pages(prod, 'b001')
+    assert wide.place == 'car_inside' and {f.pose for f in wide.figures} == {'sit'}
+    seats = [s for s in wide.supports if s.doodle == 'set_car_seat']
+    assert all(any(s.x0 <= f.x <= s.x1 and abs(f.ground - s.y) < 1e-6 for s in seats) for f in wide.figures)
+    for f in wide.figures:                                                 # one each, in the middle of the seat
+        seat = next(s for s in seats if s.x0 <= f.x <= s.x1)
+        assert abs(f.x - (seat.x0 + seat.x1) / 2) < .03
+    assert 'fl_motorway' not in [p.doodle for p in wide.set]              # the road is the place, not a picture
+    assert any(p.front and p.doodle == 'set_dashboard' for p in wide.set)
+    _, (field,) = pages(prod, 'b009')
+    assert not field.figures and 'fl_automobile' in [p.doodle for p in field.set]
+
+
+def test_turns_alternate_between_the_two_talking_and_the_shot_shows_who_speaks(tmp_path):
+    prod = staged(tmp_path, CAR_TEXT, car_shots(), cast=CAR)
+    said = {r['beat']: r['speaker'] for r in prod.storybook.bubbled}
+    assert [said.get(b) for b in ('b002', 'b003', 'b004', 'b005')] == ['mia', 'sam', 'mia', 'sam']
+    _, (single,) = pages(prod, 'b004')
+    assert keys(single) == ['mia'] and [b.speaker for b in single.bubbles] == ['mia']
+
+
+def test_a_phone_with_no_signal_and_the_map_she_unfolds_fill_the_frame(tmp_path):
+    prod = staged(tmp_path, CAR_TEXT, car_shots(), cast=CAR)
+    _, (phone,) = pages(prod, 'b006')
+    assert phone.page['kind'] == 'phone' and phone.page['signal'] == 'none' and not phone.bubbles
+    assert 'b006' not in [r['beat'] for r in prod.storybook.bubbled]     # the caption carries the line
+    _, (unfolded,) = pages(prod, 'b008')
+    assert unfolded.page['kind'] == 'map'

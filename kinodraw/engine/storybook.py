@@ -1095,7 +1095,8 @@ class Storybook:
         x, ground = self._point(doodle, mirror, 'carry', fx, f.ground, f.height, self._reference(f))
         if f.pose in ('sit', 'lie', 'sleep'):              # in the lap of someone sitting, by their hands
             return fx + (1 if f.facing == 'r' else -1) * .12 * f.height, f.ground - .02 * f.height, 1.
-        _, chin = self._point(doodle, mirror, 'mouth', fx, f.ground, f.height, self._reference(f))
+        _, mouth = self._point(doodle, mirror, 'mouth', fx, f.ground, f.height, self._reference(f))
+        chin = max([mouth] + [head[3] for _, head in self._shapes(f)])
         return x, max(ground, chin + .02 * f.height + piece.height / 2), .5
 
     @staticmethod
@@ -1395,29 +1396,32 @@ class Storybook:
             side = bubble.side or ('l' if f is not None and mx < w / 2 else 'r')
             mx, my = (3. if side == 'l' else w - 3.), .5 * h
         lang = 'zh' if any(ink.is_cjk(ch) for ch in bubble.text) else 'en'
-        lines, size = ink.fit_text(bubble.text, lang, .3 * w, 3, round(.04 * h), min_size=round(.028 * h))
-        bw = max(ink.text_width(line, lang, size) for line in lines) + 1.6 * size
-        bh = len(lines) * 1.25 * size + 1.1 * size
         heads = self.faces(shot)
         bodies = [tuple(v for p in (self._to_screen(x0, y0, view), self._to_screen(x1, y1, view)) for v in p[:2])
                   for g in shot.figures for (x0, y0, x1, y1), _ in self._shapes(g)]
-        pad, edge = .02 * h, (.55 + .4) * size                       # clear of faces; corner radius + tail
         side = 1 if f is None or f.facing == 'r' else -1
         best = None
-        for y0 in np.arange(.03 * h, min(.76 * h, my - .04 * h) - bh, .015 * h):     # a tail long enough to read
-            for x0 in np.arange(.02 * w, .98 * w - bw, .01 * w):
-                box = (x0, y0, x0 + bw, y0 + bh)
-                if any(_overlap(box, (a - pad, b - pad, c + pad, d + pad), 0) for a, b, c, d in heads):
-                    continue
-                base = min(max(mx, x0 + edge), x0 + bw - edge)
-                tail = math.hypot(base - mx, y0 + bh - my)
-                if mouth is None:                                    # heard off the frame: hug that edge, up top
-                    tail = (x0 if mx < w / 2 else w - x0 - bw) + .2 * y0
-                covered = sum(max(0, min(box[2], c) - max(x0, a)) * max(0, min(box[3], d) - max(y0, b))
-                              for a, b, c, d in bodies) / (bw * bh)
-                cost = tail + .25 * h * covered + (.04 * h if (x0 + bw / 2 - mx) * side < 0 else 0)
-                if best is None or cost < best[0]:
-                    best = (cost, box, base)
+        for width, most in ((.3, 3), (.22, 4), (.16, 5)):          # narrower and taller where faces crowd the top
+            lines, size = ink.fit_text(bubble.text, lang, width * w, most, round(.04 * h), min_size=round(.028 * h))
+            bw = max(ink.text_width(line, lang, size) for line in lines) + 1.6 * size
+            bh = len(lines) * 1.25 * size + 1.1 * size
+            pad, edge = .02 * h, (.55 + .4) * size                       # clear of faces; corner radius + tail
+            for y0 in np.arange(.03 * h, min(.76 * h, my - .04 * h) - bh, .015 * h):     # a tail long enough to read
+                for x0 in np.arange(.02 * w, .98 * w - bw, .01 * w):
+                    box = (x0, y0, x0 + bw, y0 + bh)
+                    if any(_overlap(box, (a - pad, b - pad, c + pad, d + pad), 0) for a, b, c, d in heads):
+                        continue
+                    base = min(max(mx, x0 + edge), x0 + bw - edge)
+                    tail = math.hypot(base - mx, y0 + bh - my)
+                    if mouth is None:                                    # heard off the frame: hug that edge, up top
+                        tail = (x0 if mx < w / 2 else w - x0 - bw) + .2 * y0
+                    covered = sum(max(0, min(box[2], c) - max(x0, a)) * max(0, min(box[3], d) - max(y0, b))
+                                  for a, b, c, d in bodies) / (bw * bh)
+                    cost = tail + .25 * h * covered + (.04 * h if (x0 + bw / 2 - mx) * side < 0 else 0)
+                    if best is None or cost < best[0]:
+                        best = (cost, box, base)
+            if best is not None:
+                break
         if best is None:
             self._bubbles[bubble] = None
             return None
