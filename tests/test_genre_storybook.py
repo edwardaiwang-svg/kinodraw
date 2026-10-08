@@ -53,7 +53,8 @@ def produce(tmp_path, genre='lesson', insert=None, text=TEXT):
                      text={'kind': 'caption_only', 'ref': bid},
                      elements=[{'kind': 'cast', 'ref': c['id']} for c in COOKS])
     plan['scenes'][0]['shots'] = [shot(ids[0], 'wide', ['ben'])]
-    plan['scenes'][1]['shots'] = [insert(ids[1]) if insert else shot(ids[1], 'insert', ['ava'], props=['fl_egg'])]
+    chosen = insert(ids[1]) if insert else shot(ids[1], 'insert', ['ava'], props=['fl_egg'])
+    plan['scenes'][1]['shots'] = chosen if isinstance(chosen, list) else [chosen]
     plan['scenes'][2].update(treatment='kinetic_type', text={'kind': 'kinetic', 'ref': ids[2]})
     plan['scenes'][3].update(text={'kind': 'cta', 'ref': ids[3]}, shots=[shot(ids[3], 'medium', ['ben'])])
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -155,3 +156,15 @@ def test_outside_a_story_no_framing_holds_more_than_two_sentences(tmp_path):
     assert pages[0].view[2] == 1. and pages[1].view[2] > 1.2      # the wide kitchen, then a medium on Ben
     story = produce(tmp_path / 'story', genre='story', text=text)
     assert len(story.spans[0].story) == 1
+
+
+def test_two_inserts_of_one_thing_count_as_one_picture(tmp_path):
+    """The pancakes' bowl: one insert for "Crack in the eggs...", another (a spoon added) for "Stir in the oats. Let
+    the batter sit...": the third sentence on that picture cuts to a wider look."""
+    text = TEXT.replace('Ava cracks one egg into the bowl.', 'Ava cracks one egg into the bowl. She stirs it. She waits.')
+    bowl = lambda bid: [shot(bid, 'insert', ['ava'], props=['fl_spoon'], speaking='off_screen', focus='fl_bowl_with_spoon'),
+                        dict(shot(bid, 'insert', ['ava'], props=['fl_spoon', 'fl_egg'], speaking='off_screen',
+                                  focus='fl_bowl_with_spoon'), starts_at='She stirs it.')]
+    prod = produce(tmp_path, text=text, insert=bowl)
+    pages = prod.spans[1].story
+    assert len({p.view for p in pages}) >= 2 and pages[-1].view[2] < pages[0].view[2]

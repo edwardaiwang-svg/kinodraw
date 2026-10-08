@@ -362,7 +362,9 @@ class Shots:
         return out
 
     def _look(self, shot):
-        return (shot.framing, tuple(p.doodle for p in shot.set), tuple((f.key, f.pose) for f in shot.figures),
+        """What a page looks like at a glance: its framing, where the camera is and who is in it (a spoon added
+        out of frame is the same picture)."""
+        return (shot.framing, tuple(round(v, 2) for v in shot.view), tuple((f.key, f.pose) for f in shot.figures),
                 bool(shot.page))
 
     def _other_view(self, shot):
