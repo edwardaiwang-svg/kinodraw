@@ -83,8 +83,9 @@ def _cues(beat, lang, char_time, speech_end, labels, cue_options, bubbled=()):
     said, shown, index = speech.captions(beat['spoken'][lang], beat['display'][lang], labels, bubbled, lang)
     if not said.strip() or not shown.strip():
         return []
+    gaps = [(char_time(a), char_time(max(a, b - 1))) for a, b in bubbled]      # when each bubbled line is said
     return cap.cues_for_beat(said, shown, lang, lambda pos: char_time(index[min(max(pos, 0), len(index) - 1)]),
-                             speech_end, words=True, **cue_options)
+                             speech_end, words=True, gaps=gaps, **cue_options)
 
 
 def recaption(episode, tline, lang, bubbled):
