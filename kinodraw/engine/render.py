@@ -469,6 +469,8 @@ class Production:
         self.cut(end['start'], col * self.g.col, 'cut')
         n0 = len(ctx.elements)
         at = end.get('appear', end['start'] + .05)
+        if at > end['start']:                          # the old page gives way to the blank card page first
+            self.modes.append((end['start'], at, 'clear', {}))
         auto.SCENES[self.g.name]['end_card'](ctx, col * self.g.col, at)
         ready = end.get('ready', end['start'] + .6)
         # the hand's travel and the credit after it fit before end['ready']
@@ -950,6 +952,11 @@ class Production:
                                    (t - a) / (b - a), self.skin)
             else:
                 frame = self._zoom(t, p, a, b)
+        elif kind == 'clear':                          # the old page gives way to the closing card's blank page
+            src = self.view(a - 1e-3, self.camera.at(a - 1e-3), hand=False)
+            dst = self.board_frame(t)
+            frame = (skins.wipe(src, dst, (t - a) / (b - a), self.skin) if self.camera.locked
+                     else Image.blend(src, dst, ease((t - a) / (b - a))))
         elif kind == 'fade_in':
             u = ease((t - a) / (b - a))
             src = self.view(t, self.agenda_x, hand=False)
