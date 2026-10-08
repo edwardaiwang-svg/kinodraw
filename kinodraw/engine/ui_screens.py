@@ -5,7 +5,7 @@ named), ``overlay(prod, image, t)`` draws the live one over the frame: a phone (
 (landscape) on the paper, its app bar naming the app, each element drawn on the word that names it and lit for a
 moment (a finger or a cursor taps buttons and rows), or a messages screen (the thread's name, bubbles left for others
 and right for the phone's owner, small timestamps, emoji drawn in colour inside the bubble). The caption is drawn
-again on top, so the words being read stay readable.
+again on top, so the words being read stay readable. A screen comes and goes by a cut.
 """
 from __future__ import annotations
 
@@ -26,7 +26,6 @@ CODE_FONT = FONT_DIR / 'JetBrainsMono-Medium.ttf'
 EMOJI_FONTS = ('/System/Library/Fonts/Apple Color Emoji.ttc', '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf',
                '/usr/share/fonts/noto/NotoColorEmoji.ttf', 'C:/Windows/Fonts/seguiemj.ttf')
 LIT = 1.4                 # seconds an element stays lit after its word
-FADE = .25
 MIN_HOLD = 2.2            # a screen stays at least this long
 TAIL = .6                 # and this long after its last word
 PHONE_FIRST = 1.8         # a chat log's message shows on the phone this long before the cut to its sender
@@ -209,11 +208,8 @@ def cover(prod, image, t, caption=False):
     palette = {k: ImageColor.getrgb(v)[:3] for k, v in (style.get('palette') or {}).items()}
     paper = board_of.skin.background(w, h).convert('RGBA').copy()
     paper.alpha_composite(draw(prod.size, moment, t, palette))
-    fade = max(0., min(1., (t - moment['start']) / FADE, (moment['end'] - t) / FADE))
     base = image.convert('RGBA')
-    if fade < 1:
-        paper.putalpha(paper.getchannel('A').point(lambda v: round(v * fade)))
-    base.alpha_composite(paper)
+    base.alpha_composite(paper)                  # a cut in and out: never half a screen over half a face
     if caption:
         prod.whiteboard._caption(base, t, prod.caption_look, prod.caption_accent)
     return base.convert(image.mode)

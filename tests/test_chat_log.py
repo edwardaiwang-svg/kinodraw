@@ -146,3 +146,16 @@ def test_a_chat_lines_time_gets_no_data_card_and_wordless_messages_pass_the_scre
             for m in thread()]
     (tmp_path / 'build' / 'ui-screens.json').write_text(json.dumps(rows))
     assert screens_qa.check(b, video) == []
+
+
+def test_a_screen_cuts_in_and_never_crossfades_over_the_picture():
+    from types import SimpleNamespace
+    m = thread()[1]
+    m['start'], m['end'] = 1., 4.
+    paper = Image.new('RGB', (640, 360), (250, 250, 245))
+    prod = SimpleNamespace(ui_moments=[m], size=(640, 360), style={},
+                           skin=SimpleNamespace(background=lambda w, h: paper))
+    face = Image.new('RGB', (640, 360), (200, 30, 30))
+    for t in (1.02, 1.1, 3.9, 3.98):                    # right after it starts and right before it ends
+        assert screens.cover(prod, face, t).getpixel((8, 8)) == (250, 250, 245)
+    assert screens.cover(prod, face, 4.01).getpixel((8, 8)) == (200, 30, 30)
