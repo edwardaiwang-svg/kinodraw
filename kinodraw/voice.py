@@ -63,7 +63,7 @@ VOICES = {
 SPEEDS = (0.85, 1.15)
 SR = 24000
 GAP = .4                 # silence after each beat
-VERSION = 1              # bump when synthesis or alignment changes (invalidates cached clips)
+VERSION = 2              # bump when synthesis or alignment changes (invalidates cached clips)
 CLAUSE = {'en': ',.;:?!—', 'zh': '，。；：？！、—', 'es': ',.;:?!—'}
 PHONE_MARKS = ',.;:?!—…'
 NOT_SOUNDS = set(' ˈˌːʲ')
@@ -174,7 +174,8 @@ def align(spoken: str, timings, lang: str) -> list[float]:
     sounds, phone_marks = [], []
     for t in timings:
         if t.phoneme in PHONE_MARKS:
-            phone_marks.append(len(sounds))
+            if not phone_marks or phone_marks[-1] != len(sounds):     # "..." is one mark, as the text counts it
+                phone_marks.append(len(sounds))
         elif t.phoneme not in NOT_SOUNDS:
             sounds.append(t.start)
     if not sounds:
@@ -359,6 +360,94 @@ def speak(spoken: str, parts, lang: str, cache_dir: Path, speed: float = 1.0, le
                                            'said': seg.said} for seg, name, factor in parts], 'cut_off': cut},
                                ensure_ascii=False), encoding='utf-8')
     return Clip(wav, duration, char_times, speakers, cut)
+
+
+# ------------------------------------------------------ pacing (speech.pace)
+PACE_VERSION = 1         # bump when paced() changes (invalidates its cached clips)
+QUIET = .01              # a 10 ms frame under this peak is voice-free (-40 dBFS)
+NEXT_LEAD = .08          # voice-free time a synthesized beat typically starts with (measured .05-.10 s)
+
+
+def _quiet_frames(audio: np.ndarray) -> np.ndarray:
+    n = SR // 100
+    frames = len(audio) // n
+    return np.abs(audio[:frames * n]).reshape(frames, n).max(1) < QUIET if frames else np.zeros(0, bool)
+
+
+def quiet_ends(wav: Path) -> tuple[float, float]:
+    """Voice-free seconds at the start and the end of a clip."""
+    audio = _read_wav(wav)
+    a, b = _voiced(audio, SR, QUIET)
+    return (a / SR, (len(audio) - b) / SR) if b > a else (len(audio) / SR, len(audio) / SR)
+
+
+def paced(clip: Clip, spoken: str, stops, cache_dir: Path) -> Clip:
+    """``clip`` with silence added where speech.pace asks for more voice-free time than the voice left: [(pos, gap,
+    anchor, step)]. Inside the beat the silence goes into the middle of the quiet run before the word at ``pos`` (its
+    characters and every later one move with it); at pos == len(spoken) it is added after the beat (less the GAP the
+    timeline adds and the next beat's own lead), never after a line that breaks off for the next speaker."""
+    if not stops or not Path(clip.wav).exists() or len(clip.char_times) != len(spoken):
+        return clip
+    key = hashlib.sha256(json.dumps([PACE_VERSION, Path(clip.wav).name, clip.duration, stops]).encode()
+                         ).hexdigest()[:16]
+    cache_dir = Path(cache_dir)
+    wav, meta = cache_dir / f'paced-{key}.wav', cache_dir / f'paced-{key}.json'
+    if wav.exists() and meta.exists():
+        info = json.loads(meta.read_text(encoding='utf-8'))
+        return Clip(wav, info['duration'], info['char_times'], clip.speakers, clip.cut_off)
+    audio = _read_wav(clip.wav)
+    quiet = _quiet_frames(audio)
+    ct = list(clip.char_times)
+    inserts = []                                      # (sample, seconds, first character that moves)
+    for pos, gap, anchor, step in stops:
+        if pos >= len(spoken):
+            if clip.cut_off:
+                continue
+            tail = (len(audio) - _voiced(audio, SR, QUIET)[1]) / SR
+            extra = gap - tail - GAP - NEXT_LEAD
+            if extra > .01:
+                inserts.append((len(audio), extra, len(spoken)))
+            continue
+        t_next = ct[pos]
+        before = [ct[j] for j in range(pos) if spoken[j].isalnum() and ct[j] < t_next]
+        if not before:                                # a pause before the first word: after the last beat's tail
+            lead = _voiced(audio, SR, QUIET)[0] / SR
+            extra = gap - lead - GAP - .28
+            if extra > .01:
+                inserts.append((0, extra, 0))
+            continue
+        lo, hi = int(max(before) * 100), min(len(quiet), int(t_next * 100) + 10)
+        best, k = (int(t_next * 100), int(t_next * 100)), lo
+        while k < hi:                                 # the longest quiet run between the two words
+            if quiet[k]:
+                j = k
+                while j < len(quiet) and quiet[j]:
+                    j += 1
+                if j - k > best[1] - best[0]:
+                    best = (k, j)
+                k = j
+            else:
+                k += 1
+        q, onset = (best[1] - best[0]) / 100, best[1] / 100
+        extra = gap - q
+        if anchor is not None and step:
+            extra = max(extra, step - (onset - ct[anchor]))
+        if extra > .01:
+            inserts.append((round((best[0] + best[1]) / 2 * SR / 100), extra, pos))
+    if not inserts:
+        return clip
+    pieces, last = [], 0
+    for at, seconds, _ in sorted(inserts):
+        pieces += [audio[last:at], np.zeros(round(seconds * SR), np.float32)]
+        last = at
+    pieces.append(audio[last:])
+    out = np.concatenate(pieces)
+    char_times = [round(t + sum(s for _, s, first in inserts if i >= first), 3) for i, t in enumerate(ct)]
+    duration = round(len(out) / SR, 3)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    _write_wav(wav, out)
+    meta.write_text(json.dumps({'duration': duration, 'char_times': char_times, 'stops': stops}), encoding='utf-8')
+    return Clip(wav, duration, char_times, clip.speakers, clip.cut_off)
 
 
 # ------------------------------------------------------ your own recording

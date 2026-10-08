@@ -389,6 +389,7 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
     # their own voice (a voice server or your recording reads every part in its one voice).
     plan = cfg.get('plan_v3') if cfg.get('director_v3') else None
     parts = speech.voice_parts(board, plan, cfg['voice'], None if server else (lambda: voice.voices(lang)))
+    labels = speech.screenplay_labels(b['display'][lang] for b in board['beats'])
     (project_dir / 'voice').mkdir(parents=True, exist_ok=True)
     (project_dir / 'voice' / 'cast.json').write_text(json.dumps(speech.cast_of(
         parts, 'your recording' if cfg.get('recording') else 'the voice server' if server else None)), encoding='utf-8')
@@ -403,10 +404,14 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
                 if said else voice.silence(todo['hold'], len(spoken), project_dir / 'voice')
             clips[beat['id']] = _remapped(clip, spoken, said, index)
         else:
-            clips[beat['id']] = voice.speak(spoken, todo['parts'], lang, project_dir / 'voice', cfg['speed'], lexicon,
-                                            todo['hold'])
+            clip = voice.speak(spoken, todo['parts'], lang, project_dir / 'voice', cfg['speed'], lexicon, todo['hold'])
+            # The voice stops where the text asks: between sentences, on a count, at a written pause.
+            clips[beat['id']] = voice.paced(clip, spoken, speech.pace(spoken, lang, labels), project_dir / 'voice') \
+                if todo['parts'] else clip
         if progress:
             progress('voice', i + 1, len(board['beats']))
+    if not server:
+        _hold_pauses(board, parts, clips, project_dir / 'voice')
     if cfg.get('recording'):
         if progress:
             progress('align', 0, 1)
@@ -428,6 +433,21 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
                                        f'numbered sentence a line, with the lines {PRODUCT["name"]} adds to yours), is '
                                        f'in "{text}".', error.beat, error.plain) from None
     return _Narration(clips, saved['revision'], source_hash)
+
+
+def _hold_pauses(board: dict, parts: dict, clips: dict, cache_dir: Path):
+    """A beat that is only a written pause ("[pause 4 seconds]") lasts so that the voice-free time from the last word
+    before it to the first word after it is the length it asks for: its silence less the quiet the clips around it
+    already end and start with, and the GAP the timeline adds after each beat."""
+    beats = board['beats']
+    for i, beat in enumerate(beats):
+        want = parts[beat['id']].get('pause')
+        if not want:
+            continue
+        tail = voice.quiet_ends(clips[beats[i - 1]['id']].wav)[1] if i else 0.
+        lead = voice.quiet_ends(clips[beats[i + 1]['id']].wav)[0] if i + 1 < len(beats) else 0.
+        seconds = round(max(.1, want - tail - lead - 2 * voice.GAP), 3)
+        clips[beat['id']] = voice.silence(seconds, len(clips[beat['id']].char_times), cache_dir)
 
 
 def _one_voice(parts) -> tuple[str, list]:
