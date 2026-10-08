@@ -224,14 +224,6 @@ def test_a_looped_track_never_drops_out(slug):
     assert 20 * np.log10(np.sqrt((win ** 2).mean(1)).min()) > -60
 
 
-def test_the_music_comes_up_over_the_end_card():
-    tl = {'beats': {'b1': {'speech_end': 9.5}}, 'end_card': {'start': 10.0}}
-    gain = 20 * np.log10(mix.outro(tl, 14 * SR))
-    assert gain[:10 * SR].max() == 0 and np.isclose(gain[11 * SR:].min(), mix.OUTRO_DB)
-    assert 0 < gain[round(10.5 * SR)] < mix.OUTRO_DB                    # over a second, no jump
-    assert np.all(mix.outro({'beats': {}}, SR) == 1)
-
-
 def test_the_bed_is_there_from_the_first_word():
     open_bed = mix.bed(np.zeros(6 * SR, np.float32), [], 'fresh_focus')
     rms = lambda a, b: 20 * np.log10(np.sqrt((open_bed[int(a * SR):int(b * SR)] ** 2).mean()))

@@ -690,7 +690,8 @@ def _narrated_pages(cfg, tl):
 def _hybrid_audio(board, tl, build, cfg):
     """The planned score under the whole narration (only your choice of no music, storyboard music false, leaves it
     out: a plan's music_mood 'none' plays the calm score), the renderer's sound effects plus the everyday ones the
-    words and actions name (audio.foley), mastered."""
+    words and actions name (audio.foley), held 12 dB under the voice in its gaps and on the end card (a calm score
+    fading out there; audio.fit_bed), mastered."""
     from .audio import score, sfx, master, foley
     import numpy as np
     import zlib
@@ -709,14 +710,15 @@ def _hybrid_audio(board, tl, build, cfg):
         result = score.render(tl['duration'], mood, style['tempo_bpm'], narration=speech,
                               ambient=True, seed=zlib.crc32(board['title'][cfg['lang']].encode('utf-8')),
                               track=track, sections=sections, marks=marks)  # each video its own variation
-        out = speech + result.music * audio.outro(tl, len(result.music))[:, None]
+        bed = result.music
         _save(build / 'score.json', {'bpm': result.bpm, 'track': result.track, 'beats': result.beats.tolist(),
                                    'sections': sections, 'marks': marks})
     else:
-        out = np.repeat(speech, 2, axis=1) if speech.shape[1] == 1 else speech.copy()
+        bed = np.zeros((len(speech), 2), np.float32)
     if cues and board.get('sfx', True):
         env = audio.envelope(speech.mean(axis=1))
-        out += sfx.render(cues, tl['duration']) * (1 + (10 ** (audio.SFX_DUCK_DB / 20) - 1) * env)[:, None]
+        bed = bed + sfx.render(cues, tl['duration']) * (1 + (10 ** (audio.SFX_DUCK_DB / 20) - 1) * env)[:, None]
+    out = speech + audio.fit_bed(speech, bed, tl, calm=mood == 'calm')    # 12 dB under the voice in gaps and after it
     out = master.master(out, audio.SR)
     path = build / 'mix.wav'
     audio.write_wav(path, out)
