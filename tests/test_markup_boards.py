@@ -157,7 +157,16 @@ class _Pen:
         self.size = size
 
     def state(self, elapsed):
-        return Image.new('RGBA', self.size), (10., 10.), True
+        return Image.new('RGBA', self.size, (0, 0, 0, 255)), (10., 10.), True
+
+
+class _Link(_Pen):
+    """A page-sized drawing (a link line) whose ink is one thin stroke."""
+
+    def state(self, elapsed):
+        img = Image.new('RGBA', self.size)
+        img.paste((0, 0, 0, 255), (200, 140, 1700, 146))
+        return img, (10., 10.), True
 
 
 def _resting_production(els, hand_els):
@@ -176,9 +185,10 @@ def _resting_production(els, hand_els):
 
 def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
     words = wb_board.Element(_Pen((900, 200)), 200, 250, 0., start=0., hand=False)
+    link = wb_board.Element(_Link((1920, 1080)), 0, 0, 0., start=0., hand=False)
     a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
     b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
-    prod = _resting_production([words, a, b], [a, b])
+    prod = _resting_production([words, link, a, b], [a, b])
     frame = Image.new('RGBA', (1920, 1080))
     spots = []
     for t in (2.5, 3.5):

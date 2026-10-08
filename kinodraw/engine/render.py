@@ -852,7 +852,10 @@ class Production:
                 continue
             if e.hidden_after is not None and e.hidden_after <= prev.end:
                 continue
-            block(e.x - L, e.y, e.x - L + e.w, e.y + e.h)
+            img = e.drawing.state(e.drawing.duration)[0]    # its ink (a link or a ring is a page-sized drawing)
+            box = img.getchannel('A').getbbox() if img is not None and img.mode == 'RGBA' else (0, 0, e.w, e.h)
+            if box:
+                block(e.x - L + box[0], e.y + box[1], e.x - L + box[2], e.y + box[3])
         block(W * .1, H * .84, W * .9, H)                # the caption
         block(0, 0, W * .3, H * .06)                     # the title chip
         if getattr(self, 'steps', None) is not None:
