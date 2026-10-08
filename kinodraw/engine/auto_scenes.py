@@ -242,9 +242,35 @@ def end_heading(ctx):
     return ui(ctx.ep, ctx.lang)['the_end'] if story else ctx.T(ctx.ep.get('title'))
 
 
+def build_info_card(ctx, x0, t, close):
+    """An ad's, notice's or invitation's closing page: its title, then its own last words (the call to action, the
+    contacts, the time and place) as written; a greeting's page is its wish alone. The credit goes at the foot.
+    Each line is a quick sketch, so even four of them are up early enough to be read before the video ends."""
+    els, y = [], 150
+    title = ctx.T(ctx.ep.get('title')) if close['kind'] == 'info' else ''
+    if title:
+        lines, size = fit_title(title, ctx.lang, 1500, 92, ctx.fonts)
+        head = ink.TextDrawing(lines, ctx.lang, size, color=ink.SECTION_COLORS['blue'], align='center', pace=1.8,
+                               max_dur=.7, fonts=ctx.fonts)
+        els.append(ctx.add(head, x0 + (1920 - head.size[0]) / 2, y, t))
+        y += head.size[1] + 36
+    big = close['kind'] == 'wish'
+    for item in close['items']:
+        lines, size = ink.fit_text(item, ctx.lang, 1500, 2, 110 if big else 66, min_size=40, fonts=ctx.fonts)
+        line = ink.TextDrawing(lines, ctx.lang, size, align='center', pace=1.8, max_dur=.5, fonts=ctx.fonts)
+        els.append(ctx.add(line, x0 + (1920 - line.size[0]) / 2, y + (120 if big else 0), t))
+        y += line.size[1] + 14
+    return els
+
+
 def build_end_card(ctx, x0, t):
-    """Closing page, written by the hand: title, subtitle (or thanks), host badge, thumbs-up narrator."""
+    """Closing page, written by the hand: title, subtitle (or thanks), host badge, thumbs-up narrator. An ad, notice,
+    invitation or greeting closes on its own words instead (closing.closing)."""
+    from .closing import closing
     ep = ctx.ep
+    close = closing(ep, ctx.lang)
+    if close['items']:
+        return build_info_card(ctx, x0, t, close)
     pose = narrator(ep, 'thumbs')
     shift = 150 if pose else 0
     lines, size = fit_title(end_heading(ctx), ctx.lang, 1150, 120, ctx.fonts)
@@ -504,9 +530,25 @@ def build_take_note_portrait(ctx, beat, chapter, x0, t, t_label=None, t_head=Non
 
 
 def build_end_card_portrait(ctx, x0, t):
+    from .closing import closing
     g, ep = ctx.layout.g, ctx.ep
     left, y, _, _ = g.text_safe[0]
     width, bottom = g.cell_w, g.text_safe[1][3]
+    close = closing(ep, ctx.lang)
+    if close['items']:                                 # an ad's or notice's own last words (build_info_card)
+        title = ctx.T(ep.get('title')) if close['kind'] == 'info' else ''
+        els = []
+        if title:
+            head = _portrait_title(ctx, title, 80, width, align='center', pace=1.8,
+                                   color=ink.SECTION_COLORS['blue'])
+            els.append(ctx.add(head, x0 + left + (width - head.size[0]) / 2, y, t))
+            y += head.size[1] + 24
+        for item in close['items']:
+            line = _portrait_text(ctx, item, 96 if close['kind'] == 'wish' else 60, width, lines=3, min_size=36,
+                                  align='center', pace=1.8)
+            els.append(ctx.add(line, x0 + left + (width - line.size[0]) / 2, y, t))
+            y += line.size[1] + 12
+        return els
     title = _portrait_title(ctx, end_heading(ctx), 100, width, align='center', pace=1.8)
     els = [ctx.add(title, x0 + left + (width - title.size[0]) / 2, y, t)]
     y += title.size[1] + 24
