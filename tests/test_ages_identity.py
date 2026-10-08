@@ -170,3 +170,18 @@ def test_voice_and_drawing_agree_on_a_grown_up_title():
     assert speech._person(cast[0], 'dev', reader, ['Uncle Dev waved.'])[1] == 'adult'
     assert speech._person(cast[1], 'anchor', reader, ['Anchor smiled.'])[1] == 'adult'
     assert [line.ages for line in lines] == [{'dev': 'adult'}, {'anchor': 'adult'}]
+
+
+def cast_names(text):
+    return [c['name'] for c in detect_cast([{'id': 'b1', 'spoken': text, 'section': 'main'}])]
+
+
+def test_dates_and_holidays_are_never_cast_members():
+    assert cast_names('The rain on the bus roof, the 14th of March, when you finally stopped checking your phone.') == []
+    assert cast_names('Happy Thanksgiving, you two! See you Saturday, you hear?') == []
+    assert 'August' not in cast_names('Ivo came home on the first of August, when you were away. Ivo smiled.')
+
+
+def test_a_person_named_like_a_month_still_acts():
+    assert cast_names('May said hello to Theo.') == ['May']
+    assert 'June' in cast_names('June laughed. Theo laughed too.')
