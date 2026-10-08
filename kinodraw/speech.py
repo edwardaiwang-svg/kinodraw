@@ -493,8 +493,8 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
     if callable(available):
         available = available() if people else None     # ask the voice engine only when a character speaks
     voices = cast_voices(people, narrator, lang, available)
-    people_named = {w for key in labels for w in key.split()} | {
-        w for c in cast.values() for w in name_key(c.get('name') or '').split()}
+    people_named = {w for key in labels for w in key.split()} | {     # the cast on the page, not the story's extras
+        w for c in (plan or {}).get('cast') or () for w in name_key(c.get('name') or '').split()}
     out = {}
     for b in beats:
         parts = [(s, *voices.get(s.speaker, (narrator, 1.))) for s in found[b['id']]]

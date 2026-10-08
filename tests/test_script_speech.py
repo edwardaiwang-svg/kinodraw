@@ -300,7 +300,10 @@ def test_a_direction_nobody_can_act_out_takes_no_silent_hold():
     # menus ...]" each held 1.2 s of silence on a picture where nothing moves (frozen_picture). A direction with a
     # movement the page acts out ("walks in") keeps its hold; one with none passes at once.
     board = board_of(SCREENPLAY + "\n\n[DANA walks in with two mugs.]\n\n[WALT clicks. The TV shows a girl jumping in puddles.]")
-    parts = speech.voice_parts(board, None, 'af_heart', available=None)
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    RulesDirector('en').direct(board)
+    parts = speech.voice_parts(board, from_rules(board), 'af_heart', available=None)     # the story's extras too
     still, moving, screen = board['beats'][1]['id'], board['beats'][-2]['id'], board['beats'][-1]['id']
     assert parts[moving]['hold'] == speech.DIRECTION_HOLD
     assert parts[still]['hold'] < .3 and parts[screen]['hold'] < .3
