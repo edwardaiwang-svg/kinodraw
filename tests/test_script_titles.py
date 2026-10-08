@@ -218,8 +218,10 @@ def test_a_video_with_no_people_draws_no_presenter_on_its_title_or_end_card(tmp_
     assert _cards_and_narrator(tmp_path, monkeypatch, 'A storm cloud is not just a puff of water.') == []
 
 
-def test_a_video_with_people_keeps_its_presenter_on_the_cards(tmp_path, monkeypatch):
-    assert _cards_and_narrator(tmp_path, monkeypatch, 'Ava, a girl, watched a storm cloud from her window.')
+def test_a_video_with_people_puts_no_stranger_on_its_cards(tmp_path, monkeypatch):
+    # Pancakes (u-unify3): cast Ben and Ava, but the end card showed the stock grey-haired presenter, who is no one
+    # in the story. The presenter is never a cast member, so a planned video's cards draw no presenter at all.
+    assert _cards_and_narrator(tmp_path, monkeypatch, 'Ava, a girl, watched a storm cloud from her window.') == []
 
 
 @pytest.mark.usefixtures('procedural_rig')
