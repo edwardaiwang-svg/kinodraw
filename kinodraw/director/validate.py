@@ -158,8 +158,8 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
             continue
         if re.search(r'\d', spoken):
             errors.append(f'{bid}: digits in spoken text ({spoken[:50]})')
-        if punct(spoken) != punct(display):
-            errors.append(f'{bid}: clause punctuation differs between spoken and display text')
+        if punct(spoken) != punct(display):        # captions pair the marks both share (captions.shared_marks)
+            warnings.append(f'{bid}: clause punctuation differs between spoken and display text')
         if 'direction' in b:
             _direction(b, display, lang, library, errors, warnings)
         chapter = next((c for c in chapters if c.get('id') == b.get('chapter')), None)

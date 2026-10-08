@@ -120,7 +120,8 @@ SAY_EN = [(lexicon.say, None),
           (re.compile(r'\b' + COUNT_WORD + r'\s+(?!(?:times|equals|plus|minus|less|is|was|has|does)\b)[a-z]+s(?=\s+'
                       + COUNT_WORD + r')'), lambda m: m.group() + ','),
           # A phone number's digit groups: a short pause between them (numbers.py joins them with hyphens).
-          (re.compile(r'\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)-(?=(?:zero|oh|one|two|three|'
+          # Not a year's "nineteen oh-three" (a teens, tens or hundred word before it).
+          (re.compile(r'(?<!teen )(?<!ty )(?<!hundred )\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)-(?=(?:zero|oh|one|two|three|'
                       r'four|five|six|seven|eight|nine)\b)'), lambda m: m.group(1) + ', '),
           # "7 a.m." ends its sentence when a capitalised word that is no time zone follows ("7 a.m. 🔥 Just"): the
           # voice stops there instead of running on (the period went with the abbreviation in the spoken text). A day
@@ -428,7 +429,11 @@ def _keep(text: str, spans, start: int = 0, end: int | None = None, lines: bool 
                 chars += [',', ' ']
                 index += [i, i]
                 continue
-            if not chars or chars[-1] == ' ':
+            if lines and ch == '\n' and chars and chars[-1] == '.':
+                chars.append('\n')             # kept for _say: "Elm St." ends its line, no title of the next line's name
+                index.append(i)
+                continue
+            if not chars or chars[-1] in ' \n':
                 continue
             ch = ' '
         elif ch in ',.!?;:…)' + CLOSE_QUOTES and chars and chars[-1] == ' ' and i > 0 and hide[i - 1]:
@@ -436,7 +441,7 @@ def _keep(text: str, spans, start: int = 0, end: int | None = None, lines: bool 
             index.pop()
         chars.append(ch)
         index.append(i)
-    while chars and chars[-1] == ' ':
+    while chars and chars[-1] in ' \n':
         chars.pop()
         index.pop()
     return ''.join(chars), index
@@ -507,7 +512,7 @@ def drawn(text: str) -> str:
 def _say(text: str, index: list[int], lang: str) -> tuple[str, list[int]]:
     """Abbreviations spelled out for the voice; each new character maps to where its abbreviation was."""
     if lang != 'en':
-        return text, index
+        return text.replace('\n', ' '), index
     for pattern, words in SAY_EN:
         out, out_index, last = [], [], 0
         found = pattern(text) if words is None else (
@@ -522,7 +527,7 @@ def _say(text: str, index: list[int], lang: str) -> tuple[str, list[int]]:
             out.append(text[last:])
             out_index += index[last:]
             text, index = ''.join(out), out_index
-    return text, index
+    return text.replace('\n', ' '), index
 
 
 def _trim(said: str, index: list[int]) -> tuple[str, list[int]]:

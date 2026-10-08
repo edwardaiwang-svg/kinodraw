@@ -212,17 +212,20 @@ COUNT = (r'(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|tw
          r'sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|'
          r'half|a half|quarter|third|dozen)\b')
 NUMBER_WORD = r'(?:\d|' + COUNT + ')'
+# A year said in words or written in digits ("nineteen hundred", "eighteen fifties", "two thousand ten", "1900").
+YEAR_WORD = (r'(?:1[0-9]\d\d|20\d\d|(?:eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|'
+             r'twenty)\b|two thousand\b|one thousand\b)')
 ORDINAL_WORD = (r'(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|[a-z]+teenth|'
                 r'[a-z]+tieth|hundredth|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-'
                 r'(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth))')
 # A capitalised word the sentence's grammar does not explain: a name ("Elm", "Oak", "O'Neil", "MAIN").
-_NAME_BEFORE = re.compile(r"(?:^|[\s(\"“])(?P<name>[A-Z][\w'’-]*)\s+$")
-_NEXT_CAPITAL = re.compile(r'\s+["“‘(\[]*[A-Z]')
+_NAME_BEFORE = re.compile(r"(?:^|[\s(\[{\"“‘'«—–])(?P<name>[A-Z][\w'’-]*)[ \t]+$")
+_NEXT_CAPITAL = re.compile(r'\s+["“‘\'(\[{«]*[A-Z]')
 # Words after a period that keep the abbreviation's phrase going: a date, a day, a time zone, a compass point.
-_NOT_A_NEW_SENTENCE = re.compile(r'\s+["“‘(\[]*(?:' + WEEKDAY_WORDS + '|' + MONTH_WORDS + r'|Eastern|Central|Pacific|'
+_NOT_A_NEW_SENTENCE = re.compile(r'\s+["“‘\'(\[{«]*(?:' + WEEKDAY_WORDS + '|' + MONTH_WORDS + r'|Eastern|Central|Pacific|'
                                  r'Mountain|Atlantic|GMT|UTC|[A-Z]{1,2}T|N|S|E|W|NE|NW|SE|SW)\b')
 
-_TOKEN = re.compile(r"(?<![\w.@/&'’-])(?P<tok>[A-Za-z]+(?:\.[A-Za-z]+)*(?:/[A-Za-z]+)?(?: al)?)(?P<dot>\.)?"
+_TOKEN = re.compile(r"(?<![\w.@/&’-])(?<![\w.]')(?P<tok>[A-Za-z]+(?:\.[A-Za-z]+)*(?:/[A-Za-z]+)?(?: al)?)(?P<dot>\.)?"
                     r"(?![\w@/&'’]|-\w|\.\w)")
 
 
@@ -243,18 +246,24 @@ def _cap(word: str, raw: str, start: bool) -> str:
 
 
 def _sentence_start(before: str) -> bool:
-    return not before.strip() or bool(re.search(r'[.!?:;\n]["”’)]*\s*$', before))
+    before = re.sub(r'[\s“‘"\'(\[{«—–]+$', '', before)       # an opening quote, bracket or dash starts no new clause
+    return not before.strip() or bool(re.search(r'[.!?:;\n]["”’)\]]*$', before))
 
 
 def _name_before(before: str) -> bool:
     """A name or a house number right before ("Elm St.", "42 Oak Dr", "fifth Ave", "Main St NE")."""
     return bool(_NAME_BEFORE.search(before) or re.search(r'(?:\d|\b' + COUNT + r'|\b' + ORDINAL_WORD +
-                                                        r')\s+$', before))
+                                                        r')[ \t]+$', before))
 
 
 def _name_word_before(before: str) -> str | None:
     m = _NAME_BEFORE.search(before)
     return m.group('name') if m else None
+
+
+def _next_street():
+    words = '|'.join(sorted((k for k in PLACES if k not in TITLES), key=len, reverse=True))
+    return re.compile(r'\s+[A-Z][\w\'’-]*\s+(?:' + words + r')\b')
 
 
 def _place_sense(before: str, after: str) -> bool:
@@ -266,8 +275,35 @@ def _place_sense(before: str, after: str) -> bool:
     name = _name_word_before(before)
     if not name:
         return False
-    starts = _sentence_start(before[:before.rstrip().rfind(name)])
-    return not (starts and _NEXT_CAPITAL.match(after))
+    head = before[:before.rstrip().rfind(name)]
+    if _NEXT_STREET.match(after) and not re.search(r'(?:^|[.!?\n]["”’)]*)[\s“‘"\'(]*$', head):
+        return True                     # a run of streets: "stops: Elm St. Harbor Rd. Pine Ave." (list lines joined)
+    starts = _sentence_start(head)
+    return not (starts and _NEXT_CAPITAL.match(after) and not _LINE_END.match(after))
+
+
+# The line ends right after the word: a title never reaches across a line break to the next line's name.
+_LINE_END = re.compile(r'[ \t]*(?:\n|$)')
+# Capitalised words that go on with an organisation's name after its shorthand ("Acme Corp. Headquarters", "the Water
+# Dept. Office"); any other capitalised word after the period starts a new sentence ("...joined Acme Corp. Bob left").
+ORG_NOUNS = set('office offices headquarters building buildings board president chair chairman chairwoman ceo cfo '
+                'chief director directors manager managers staff team teams employees workers members officials '
+                'officers spokesperson spokesman spokeswoman head heads plant plants factory factories store stores '
+                'branch branches campus division unit lab labs laboratory center centre hall tower annex warehouse '
+                'website site logo policy policies report reports records account accounts contract contracts shares '
+                'stock union trucks truck vans van fleet clinic library school offices parking lot lobby'.split())
+# An organisation's shorthand after its name.
+ORG_WORDS = {'Co', 'Corp', 'Inc', 'Ltd', 'Bros', 'Dept', 'Depts', 'Govt', 'Assn', 'Assoc', 'Univ', 'Hosp', 'Mfg',
+             'Mgmt', 'Svc', 'Svcs', 'Dist', 'Div', 'Inst', 'Acad', 'Lib', 'Comm', 'Sch', 'Intl', 'Natl'}
+
+
+def _org_goes_on(after: str) -> bool:
+    """After an organisation's shorthand: does a capitalised word that goes on with its name follow?"""
+    m = re.match(r'[ \t]+([A-Z][\w\'’-]*)', after)
+    return bool(m and m.group(1).lower() in ORG_NOUNS)
+
+
+_NEXT_STREET = _next_street()     # the next name is a street of its own ("... Elm St. Harbor Rd.")
 
 
 def ends_sentence(after: str) -> bool:
@@ -288,12 +324,19 @@ def _classify(raw: str, dot: bool, before: str, after: str):
             place = None
         else:
             return PLACES[place], True
-    if title and TITLES[title] and (dot or title in BARE_TITLES) and (cap_after or (
+    if title and TITLES[title] and (dot or title in BARE_TITLES) and not re.match(r'\s*\n', after) and (cap_after or (
             title in LOOSE_TITLES and dot and re.match(r'\s', after))):
         return TITLES[title], False
     key = _lookup(SUFFIXES, raw)
     if key and (dot or _NAME_BEFORE.search(before.rstrip(', ') + ' ')) and re.search(r"[A-Za-z'’],?\s+$", before):
         return SUFFIXES[key], False     # "King Jr. Day": a name goes on after it more often than a sentence
+    if raw.lower() in ('c', 'ca', 'cir', 'circ') and dot and (raw.islower() or re.match(r'\s*' + YEAR_WORD, after)) \
+            and re.match(r'\s*' + NUMBER_WORD, after) and not re.search(NUMBER_WORD + r'[ \t]*$', before):
+        return 'circa', False           # "c. 1900", "ca. 1850s", "C. 1900, the mill": circa, never the letter c
+    if raw.lower() == 'sec' and re.match(r'\.?[ \t]+dep\b', after, re.I):
+        return 'security', False        # "sec. dep." security deposit
+    if raw.lower() == 'dep' and dot and re.search(r'\bsec\.?[ \t]+$', before, re.I):
+        return 'deposit', True
     key = _lookup(BEFORE_NUMBER, raw)
     if key and (dot or key in BARE_BEFORE_NUMBER) and number_after and raw[:1] == key[:1]:
         return BEFORE_NUMBER[key], False
@@ -331,7 +374,7 @@ def _classify(raw: str, dot: bool, before: str, after: str):
             word = word[:-1]
         if key in ('incl', 'excl') and re.match(r'\s*(?:[,;:!?)·|•/]|\.?\s*$|\.\s+[A-Z])', after):
             word = word[:-3] + 'ed'     # "utilities incl." included; "incl. water" including
-        return word, key not in LEADING_WORDS
+        return word, key not in LEADING_WORDS and not (key in ORG_WORDS and _org_goes_on(after))
     return None
 
 
@@ -356,7 +399,7 @@ def abbreviation_period(before: str, after: str | None = None) -> bool | None:
     """For the period that ends ``before``: True when it is only an abbreviation's (no sentence ends there), False
     when it is an abbreviation's that also ends the sentence (``after`` starts a new one), None when no abbreviation
     in the table ends there. Units are numbers.py's and never counted here."""
-    m = re.search(r"(?<![\w.@/&'’-])([A-Za-z]+(?:\.[A-Za-z]+)*(?:/[A-Za-z]+)?)\.$", before)
+    m = re.search(r"(?<![\w.@/&’-])(?<![\w.]')([A-Za-z]+(?:\.[A-Za-z]+)*(?:/[A-Za-z]+)?)\.$", before)
     if not m:
         return None
     if re.search(r'\b(?:sq|cu|fl)\.$', before):
@@ -371,7 +414,7 @@ def abbreviation_period(before: str, after: str | None = None) -> bool | None:
 
 # ------------------------------------------------------------------ symbols, rates and separators
 _SLASH_PER = re.compile(r'(?<=[a-z])\s?/\s?(?P<per>' + '|'.join(re.escape(k) for k in sorted(PER, key=len, reverse=True))
-                        + r')\b(?:\.(?=\s+[a-z]))?')
+                        + r')\b(?:\.(?=\s+[a-z]|[,;:]))?')
 _PER_WORD = re.compile(r'\b(?P<pre>per|a|an|each)\s+(?P<per>' + '|'.join(
     re.escape(k) for k in sorted((k for k in PER if k not in ('day', 'night', 'month', 'hour', 'week', 'year', 'person',
                                                               'unit', 'item', 'each', 'visit', 'session', 'class',
