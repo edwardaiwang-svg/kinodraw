@@ -78,6 +78,7 @@ SPECIES_WORDS = {
     'grandmother': ('human', 'female', 'elder'), 'grandfather': ('human', 'male', 'elder'),
     'teacher': ('human', None, 'adult'), 'villager': ('human', None, 'adult'), 'explorer': ('human', None, 'adult'),
     'princess': ('human', 'female', 'child'), 'farmer': ('human', None, 'adult'),
+    'hoglet': ('hedgehog', None, 'young'),
 }
 # words that name one drawn look of a species
 VARIANT_WORDS = {
@@ -113,15 +114,22 @@ RELATED = {
     'jackal': 'fox', 'coyote': 'wolf', 'hound': 'dog', 'donkey': 'horse', 'mule': 'horse', 'buffalo': 'cow',
     'bison': 'cow', 'ox': 'cow', 'bull': 'cow', 'yak': 'cow', 'gazelle': 'antelope', 'impala': 'antelope',
     'moose': 'deer', 'elk': 'deer', 'reindeer': 'deer', 'rat': 'mouse', 'hamster': 'mouse', 'squirrel': 'mouse',
-    'hare': 'rabbit', 'hedgehog': 'porcupine', 'baboon': 'monkey', 'gibbon': 'monkey', 'lemur': 'monkey',
+    'hare': 'rabbit', 'baboon': 'monkey', 'gibbon': 'monkey', 'lemur': 'monkey',
     'orangutan': 'chimpanzee', 'boar': 'pig', 'warthog': 'pig', 'ram': 'sheep', 'toad': 'frog',
     'crow': 'songbird', 'sparrow': 'songbird', 'robin': 'songbird', 'bird': 'songbird', 'finch': 'songbird',
     'hawk': 'eagle', 'falcon': 'eagle', 'vulture': 'eagle', 'goose': 'duck', 'swan': 'duck', 'hen': 'chicken',
     'macaw': 'parrot', 'stork': 'flamingo', 'heron': 'flamingo', 'alligator': 'crocodile', 'lizard': 'crocodile',
-    'tortoise': 'turtle', 'python': 'snake', 'cobra': 'snake', 'serpent': 'snake', 'wasp': 'bee', 'hornet': 'bee',
+    'terrapin': 'turtle', 'python': 'snake', 'cobra': 'snake', 'serpent': 'snake', 'wasp': 'bee', 'hornet': 'bee',
     'ladybug': 'beetle', 'ladybird': 'beetle', 'moth': 'butterfly', 'termite': 'ant', 'goldfish': 'fish',
     'clownfish': 'fish', 'tuna': 'fish', 'salmon': 'fish', 'trout': 'fish', 'pup': 'dog', 'kitty': 'cat',
     'goat kid': 'goat', 'puppy': 'dog', 'kitten': 'cat',
+    # insects and other small crawlers: the nearest drawn bug (a light-bug is a firefly), never an unrelated icon
+    'lightning bug': 'firefly', 'glowworm': 'firefly', 'glow worm': 'firefly', 'glow bug': 'firefly',
+    'bug': 'beetle', 'insect': 'beetle', 'cricket': 'beetle', 'grasshopper': 'beetle', 'locust': 'beetle',
+    'katydid': 'beetle', 'cockroach': 'beetle', 'roach': 'beetle', 'weevil': 'beetle', 'scarab': 'beetle',
+    'stink bug': 'beetle', 'fly': 'bee', 'housefly': 'bee', 'mosquito': 'bee', 'gnat': 'bee', 'midge': 'bee',
+    'dragonfly': 'bee', 'damselfly': 'bee', 'cicada': 'bee', 'flea': 'ant', 'aphid': 'ant', 'louse': 'ant',
+    'slug': 'snail', 'sea snail': 'snail',
 }
 
 # family of every species the generator knows, so a species without pictures still finds a relative
@@ -130,10 +138,10 @@ FAMILY_OF = {
     **dict.fromkeys(('dog', 'wolf', 'fox'), 'canine'), 'hyena': 'hyena', 'bear': 'bear',
     **dict.fromkeys(('gorilla', 'chimpanzee', 'monkey'), 'primate'), 'elephant': 'elephant',
     **dict.fromkeys(('giraffe', 'zebra', 'horse', 'deer', 'antelope', 'cow', 'pig', 'sheep', 'goat'), 'hoofed'),
-    **dict.fromkeys(('rabbit', 'mouse', 'porcupine'), 'rodent'),
+    **dict.fromkeys(('rabbit', 'mouse', 'porcupine', 'hedgehog'), 'rodent'),
     **dict.fromkeys(('songbird', 'owl', 'eagle', 'parrot', 'chicken', 'duck', 'penguin', 'flamingo'), 'bird'),
-    'fish': 'fish', 'frog': 'amphibian', **dict.fromkeys(('turtle', 'snake', 'crocodile'), 'reptile'),
-    **dict.fromkeys(('ant', 'bee', 'butterfly', 'beetle'), 'insect'), 'human': 'human',
+    'fish': 'fish', 'frog': 'amphibian', **dict.fromkeys(('turtle', 'tortoise', 'snake', 'crocodile'), 'reptile'),
+    **dict.fromkeys(('ant', 'bee', 'butterfly', 'beetle', 'firefly'), 'insect'), 'snail': 'mollusc', 'human': 'human',
 }
 
 

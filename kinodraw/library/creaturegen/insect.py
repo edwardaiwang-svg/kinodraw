@@ -1,4 +1,4 @@
-"""Arthropod body plans: ant, bee, beetle (side view, six legs) and butterfly (wings)."""
+"""Arthropod body plans: ant, bee, beetle, firefly (side view, six legs) and butterfly (wings)."""
 from __future__ import annotations
 
 import math
@@ -12,11 +12,12 @@ from .sdf import Circle, Cone, Ellipse, Poly, Tube, Union
 
 @dataclass
 class Bug:
-    kind: str = 'ant'           # ant | bee | beetle | butterfly
+    kind: str = 'ant'           # ant | bee | beetle | firefly | butterfly
     coat: str = '#3C3533'
     accent: str = '#F2C230'
     wing: str = '#DDEFFC'
     spots: str = '#1B1B1B'
+    glow: str = '#E4F55A'       # firefly lantern
     young: bool = False
     seed: int = 0
 
@@ -26,7 +27,9 @@ POSES = {
     'bee': ('stand', 'walk1', 'walk2', 'fly', 'fly2', 'carry', 'look_up', 'scared', 'sleep'),
     'beetle': ('stand', 'walk1', 'walk2', 'run', 'look_up', 'scared', 'sleep', 'fly'),
     'butterfly': ('stand', 'fly', 'fly2', 'sleep', 'look_up', 'scared'),
+    'firefly': ('stand', 'fly', 'fly2', 'walk1', 'walk2', 'lie', 'sleep', 'shout', 'look_up', 'scared'),
 }
+HALO = ((.27, .3), (.2, .42), (.14, .6))     # a firefly's glow: (radius, opacity), outer to inner
 
 
 def _legs(f, anchors, body_y, pose, colour, far, thin=.017):
@@ -48,7 +51,7 @@ def _legs(f, anchors, body_y, pose, colour, far, thin=.017):
 
 
 def build(g: Bug, pose: str) -> Figure:
-    return {'ant': _ant, 'bee': _bee, 'beetle': _beetle, 'butterfly': _butterfly}[g.kind](g, pose)
+    return {'ant': _ant, 'bee': _bee, 'beetle': _beetle, 'firefly': _firefly, 'butterfly': _butterfly}[g.kind](g, pose)
 
 
 def _eye(f, c, r, pose, scared_scale=1.4, white=False):
@@ -230,5 +233,72 @@ def _butterfly(g, pose):
             f.dot(c, .016, C.WHITE, 'eye', SW_FINE)
         else:
             f.dot(c, .012, C.INK, 'eye', SW_FINE)
+    f.anchors['ground'] = V(0, 0)
+    return f
+
+
+def _firefly(g, pose):
+    """A firefly: a small winged beetle whose tail lantern glows, hovering with its wings up (its resting picture is
+    in flight, as it is seen at night) or perched with them folded. Asleep, the light dims."""
+    f = Figure()
+    k = .9 if g.young else 1.0
+    hover = pose in ('stand', 'fly', 'fly2', 'shout', 'look_up')
+    y = (.36 if hover else .13) * k
+    lit = pose != 'sleep'
+    tilt = deg({'stand': 8, 'fly': 8, 'fly2': 4, 'shout': 10, 'look_up': 16, 'scared': -4}.get(pose, 0))
+
+    def P(x, yy):
+        return V(0, y) + rot(V(x, yy) * k, tilt)
+
+    lamp = P(-.25, -.015)
+    if lit:   # the glow sits behind everything: three soft rings and short rays
+        for r, alpha in HALO:
+            f.spot(lamp, r * k, '#FFF27A', 'glow', alpha)
+        for a in range(0, 360, 45):
+            u = unit(deg(a + 22))
+            f.line([lamp + u * .15 * k, lamp + u * .22 * k], SW_DETAIL, color='#F2C230', name='ray')
+    head_c = P(.2, .02) + (V(0, .02) * k if pose == 'look_up' else V(0, 0))
+    hr = (.09 if g.young else .075) * k
+    wing_a = tilt + deg({'fly': 118, 'stand': 118, 'shout': 118, 'look_up': 118, 'fly2': 150}.get(pose, 172))
+    wings = [Ellipse(P(-.02, .08) + unit(wing_a) * .14 * k, .17 * k, .065 * k, wing_a),
+             Ellipse(P(-.06, .07) + unit(wing_a - deg(22)) * .12 * k, .14 * k, .055 * k, wing_a - deg(22))]
+    if hover:
+        f.fill(wings[1], C.shade(g.wing, .08), SW_FINE, 'wing_far')
+    anchors = [P(.1, -.05), P(.03, -.06), P(-.04, -.055)]
+    if not hover and pose not in ('sleep', 'lie'):
+        f.fill(_legs(f, [a + V(-.02, .01) for a in anchors], y - .05 * k, pose, C.INK, True, .014 * k), '#3A3430',
+               SW_FINE, 'legs_far')
+    lantern = Ellipse(lamp, .1 * k, .075 * k, tilt)
+    f.fill(lantern, g.glow if lit else C.mix(g.glow, '#9A9478', .55), SW_DETAIL, 'lantern')
+    if lit:
+        f.patch(Ellipse(lamp + V(-.02, .02) * k, .05 * k, .03 * k, tilt), '#FFFFF0', lantern, 'lantern_shine')
+    shield = Ellipse(P(.1, .03), .075 * k, .065 * k, tilt)
+    elytra = Ellipse(P(-.07, .04), .18 * k, .072 * k, tilt - deg(6))
+    _antenna(f, head_c + V(-.01, .06) * k, tilt, pose, '#2E2A27', scale=.75 * k)
+    f.fill(Circle(head_c, hr), '#2E2A27', SW_DETAIL, 'head')
+    f.fill(shield, g.accent, SW_DETAIL, 'shield')
+    f.patch(Circle(P(.1, .07), .028 * k), '#2E2A27', shield, 'shield_spot')
+    f.fill(elytra, g.coat, SW_DETAIL + 1, 'wing_cover')
+    f.patch(Ellipse(P(-.07, .1), .17 * k, .022 * k, tilt - deg(6)), C.light(g.accent, .3), elytra, 'wing_edge')
+    if hover:
+        f.fill(Union([Cone(a, a + V(-.03 + i * .02, -.09) * k, .013 * k, .01 * k) for i, a in enumerate(anchors)]),
+               '#2E2A27', SW_FINE, 'legs')
+        f.fill(wings[0], g.wing, SW_FINE, 'wing')
+    elif pose in ('sleep', 'lie'):
+        f.fill(Union([Cone(a, V(a[0] + .05 - i * .03 * k, .012), .014 * k, .011 * k) for i, a in enumerate(anchors)]),
+               '#2E2A27', SW_FINE, 'legs')
+    else:
+        f.fill(_legs(f, anchors, y - .05 * k, pose, C.INK, False, .014 * k), '#2E2A27', SW_FINE, 'legs')
+    eye_c = head_c + V(.035, .015) * k
+    _eye(f, eye_c, (.03 if g.young else .025) * k, pose, white=True)
+    m0 = head_c + V(.04, -.04) * k
+    if pose == 'shout':
+        f.fill(Ellipse(m0 + V(.012, 0), .022 * k, .02 * k), C.MOUTH, SW_FINE, 'mouth')
+    elif pose not in ('sleep', 'scared'):
+        f.line([m0 + V(-.02, .005) * k, m0 + V(.0, -.012) * k, m0 + V(.025, .0) * k], SW_FINE, name='smile')
+    f.anchors['head'] = head_c
+    f.anchors['eye'] = eye_c
+    f.anchors['mouth'] = m0 + V(.03, 0) * k
+    f.anchors['glow'] = lamp
     f.anchors['ground'] = V(0, 0)
     return f

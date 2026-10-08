@@ -15,6 +15,8 @@ from . import frog as _frog
 from . import human as _human
 from . import reptile as _reptile
 from . import insect as _insect
+from . import hedgehog as _hedgehog
+from . import snail as _snail
 from .primate import Ape
 from .primate import POSES as APE_POSES
 from .quad import Quad
@@ -340,6 +342,22 @@ def _small():
         Variant('butterfly', variant='blue', genes=_insect.Bug('butterfly', '#4A90E2', '#BFE3FF', spots='#1F3A68'),
                 plan='insect', poses=_insect.POSES['butterfly'], family='insect', face=None,
                 names=('blue butterfly', 'butterfly'), zh=('蓝蝴蝶', '蝴蝶'), noun='blue butterfly'),
+        Variant('firefly', genes=_insect.Bug('firefly', '#3A3330', '#F2864A'), plan='insect',
+                poses=_insect.POSES['firefly'], family='insect',
+                names=('firefly', 'lightning bug', 'glowing bug'), zh=('萤火虫',), noun='firefly with a glowing tail'),
+        Variant('firefly', age='young', genes=_insect.Bug('firefly', '#4A403A', '#F49A5A', young=True), plan='insect',
+                poses=_insect.POSES['firefly'], family='insect', names=('little firefly', 'firefly'),
+                zh=('小萤火虫', '萤火虫'), noun='little firefly with a glowing tail', jitter=.5),
+        Variant('hedgehog', genes=_hedgehog.Hedgehog(), plan='hedgehog', poses=_hedgehog.POSES, family='rodent',
+                names=('hedgehog', 'prickly hedgehog'), zh=('刺猬',), noun='hedgehog with short spines'),
+        Variant('hedgehog', age='young', genes=_hedgehog.Hedgehog(spines='#957055', young=True), plan='hedgehog',
+                poses=_hedgehog.POSES, family='rodent', names=('baby hedgehog', 'hoglet', 'hedgehog'),
+                zh=('小刺猬', '刺猬'), noun='baby hedgehog', jitter=.5),
+        Variant('snail', genes=_snail.Snail(), plan='snail', poses=_snail.POSES, family='mollusc',
+                names=('snail', 'garden snail'), zh=('蜗牛',), noun='snail with a spiral shell'),
+        Variant('snail', age='young', genes=_snail.Snail(shell='#E8A35E', young=True), plan='snail',
+                poses=_snail.POSES, family='mollusc', names=('baby snail', 'little snail', 'snail'),
+                zh=('小蜗牛', '蜗牛'), noun='little snail with a spiral shell', jitter=.5),
     ]
 
 
@@ -516,8 +534,17 @@ def _reptiles_and_fish():
     out = []
     add = out.append
     turtle = Reptile('turtle')
-    add(R('turtle', turtle, ('turtle', 'tortoise', 'green turtle'), ('乌龟', '龟'), 'turtle',
+    add(R('turtle', turtle, ('turtle', 'green turtle', 'pond turtle'), ('乌龟', '龟'), 'turtle',
           Face('turtle', turtle.coat, '#D8E3A0')))
+    for age, g, names, zh, noun in (
+            ('adult', Reptile('tortoise', coat='#A89A6E', shell='#5E4128', scute='#B07A3A'),
+             ('tortoise', 'land tortoise', 'giant tortoise'), ('陆龟', '乌龟'), 'land tortoise with a domed shell'),
+            ('young', Reptile('tortoise', coat='#B9AC7C', shell='#6B4A2A', scute='#C48A44', young=True),
+             ('baby tortoise', 'little tortoise', 'tortoise'), ('小陆龟', '小乌龟', '陆龟'), 'baby tortoise'),
+            ('elder', Reptile('tortoise', coat='#9E9A86', shell='#56442F', scute='#9A8458', old=True),
+             ('old tortoise', 'tortoise', 'wise old tortoise'), ('老陆龟', '老乌龟', '陆龟'),
+             'old tortoise with a wrinkled neck')):
+        add(R('tortoise', g, names, zh, noun, None, age=age))
     snake = Reptile('snake', coat='#5DAA4A', mark='#3E7E35')
     add(R('snake', snake, ('snake', 'green snake'), ('蛇', '青蛇'), 'green snake',
           Face('snake', snake.coat, '#D8E3A0'), variant='green'))

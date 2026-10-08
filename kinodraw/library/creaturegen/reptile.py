@@ -1,4 +1,5 @@
-"""Reptile body plans (side view): turtle (dome shell), snake (curving tube) and crocodile (long low body)."""
+"""Reptile body plans (side view): turtle (low shell), tortoise (high domed patterned shell on stumpy legs), snake
+(curving tube) and crocodile (long low body)."""
 from __future__ import annotations
 
 import math
@@ -7,12 +8,12 @@ from dataclasses import dataclass
 from . import colors as C
 from .figure import SW, SW_DETAIL, SW_FINE, Figure
 from .rig import V, deg, rot, unit
-from .sdf import Circle, Cone, Ellipse, Poly, Tube, Union
+from .sdf import Circle, Cone, Diff, Ellipse, Poly, Tube, Union
 
 
 @dataclass
 class Reptile:
-    kind: str = 'turtle'        # turtle snake crocodile
+    kind: str = 'turtle'        # turtle tortoise snake crocodile
     coat: str = '#8DBB5A'       # skin
     shell: str = '#6D8B3A'
     scute: str = '#9DB85A'
@@ -20,11 +21,13 @@ class Reptile:
     mark: str = ''              # snake bands / diamonds
     length: float = 1.0
     young: bool = False
+    old: bool = False           # tortoise: heavy lids, a wrinkled neck, a faded shell
     seed: int = 0
 
 
 POSES = {
     'turtle': ('stand', 'walk1', 'walk2', 'swim1', 'swim2', 'sleep', 'roar', 'look_up', 'scared'),
+    'tortoise': ('stand', 'walk1', 'walk2', 'lie', 'sleep', 'shout', 'look_up', 'scared'),
     'snake': ('stand', 'walk1', 'walk2', 'sleep', 'roar', 'look_up', 'scared'),
     'crocodile': ('stand', 'walk1', 'walk2', 'run', 'lie', 'sleep', 'roar', 'look_up', 'swim1', 'swim2'),
 }
@@ -115,6 +118,103 @@ def _turtle(g, pose):
         f.line([head_c + fwd * .14 - up * .02, head_c + fwd * .06 - up * .04], SW_FINE, name='mouth')
     f.anchors['head'] = head_c
     f.anchors['eye'] = eye_c
+    f.anchors['ground'] = V(0, 0)
+    return f
+
+
+# ---------------------------------------------------------------------------------------------- tortoise
+def _hexagon(c, r, squash=.8):
+    return Poly([c + V(r * math.cos(a), r * squash * math.sin(a)) for a in (deg(30 + 60 * i) for i in range(6))],
+                r=r * .22)
+
+
+def _tortoise(g, pose):
+    """A land tortoise: a high dome of hexagonal scutes on four elephant-like legs, never flippers."""
+    f = Figure()
+    k = .9 if g.young else 1.0
+    low = pose in ('lie', 'sleep', 'scared')
+    y0 = (.05 if low else .13) * k
+    rx, ry = (.38 if g.young else .4) * k, (.36 if g.young else .37) * k
+    dome = Diff(Ellipse(V(0, y0), rx, ry), Poly([V(-1, y0), V(1, y0), V(1, y0 - 1), V(-1, y0 - 1)]))
+    rim = Ellipse(V(0, y0 + .01 * k), rx + .03 * k, .055 * k)
+    skin, shade = g.coat, C.shade(g.coat, .22)
+    # legs: thick columns with flat feet and toenails (far pair first)
+    stride = {'walk1': .06, 'walk2': -.06}.get(pose, 0)
+    legs = []
+    for far, x, sgn in ((True, .15, -1), (True, -.27, 1), (False, .23, 1), (False, -.19, -1)):
+        x *= k
+        if low:
+            if pose == 'scared':
+                legs.append((far, None, Ellipse(V(x * 1.1, y0 - .005), .055 * k, .03 * k)))
+            else:
+                foot = V(x * 1.1 + .03 * k, .04 * k)
+                legs.append((far, foot, Ellipse(foot, .065 * k, .045 * k)))
+            continue
+        foot = V(x + stride * sgn * k, 0)
+        legs.append((far, foot, Union([Cone(V(x, y0 + .03 * k), foot + V(0, .05 * k), .078 * k, .074 * k),
+                                    Ellipse(foot + V(.018 * k, .032 * k), .09 * k, .036 * k)], k=.02)))
+    for far, _, shape in legs:
+        if far:
+            f.fill(shape, shade, SW_DETAIL, 'leg_far')
+    f.fill(Cone(V(-.36, y0 + .03) * V(k, 1), V(-.46 * k, y0 - .01), .035 * k, .012 * k), skin, SW_DETAIL, 'tail')
+    # neck and head
+    reach = {'look_up': V(.1, .3), 'shout': V(.2, .17), 'sleep': V(.06, .02), 'lie': V(.17, .02),
+             'scared': V(-.04, .02)}.get(pose, V(.17, .12)) * k
+    base = V(.3 * k, y0 + .06 * k)
+    head_c = base + reach + V(.05 * k, 0)
+    head_a = deg({'look_up': 40, 'shout': 12, 'sleep': -8, 'lie': -6}.get(pose, 0))
+    hr = (.12 if g.young else .105) * k
+    head = Ellipse(head_c, hr, hr * .8, head_a)
+    neck = Cone(base, head_c - unit(head_a) * hr * .4, .08 * k, .075 * k)
+    f.fill(Union([neck, head], k=.04), skin, SW, 'head')
+    fwd, up = unit(head_a), unit(head_a + math.pi / 2)
+    if g.old and pose != 'scared':
+        for t in (.3, .55):
+            p = base + (head_c - base) * t
+            f.line([p + up * .05 * k, p + fwd * .015 * k, p - up * .05 * k], SW_FINE, color=shade, name='wrinkle')
+    # the shell: dark seams between raised hexagonal scutes, a ridged rim
+    f.fill(rim, C.shade(g.shell, .1), SW_DETAIL, 'shell_rim')
+    f.fill(dome, g.shell, SW, 'shell')
+    top = [(-.17, .2), (0, .27), (.17, .2)] if not g.young else [(-.12, .22), (.12, .22)]
+    side = [(-.29, .07), (-.1, .1), (.1, .1), (.29, .07)] if not g.young else [(-.25, .08), (0, .1), (.25, .08)]
+    r = (.1 if g.young else .085) * k
+    cells = [V(x * k, y0 + y * k) for x, y in top + side]
+    f.patch(Union([_hexagon(c, r) for c in cells]), g.scute, dome, 'scutes')
+    f.patch(Union([_hexagon(c + V(0, .008 * k), r * .5) for c in cells]), C.light(g.scute, .35), dome, 'scute_rings')
+    ticks = []
+    for x in (-.32, -.2, -.07, .07, .2, .32):
+        ticks.append([V(x * k, y0 + .045 * k), V(x * k * 1.04, y0 - .03 * k)])
+    for pts in ticks:
+        f.line(pts, SW_FINE, name='rim_seam')
+    for far, foot, shape in legs:
+        if not far:
+            f.fill(shape, skin, SW_DETAIL, 'leg')
+            if foot is not None:
+                for i in range(3):
+                    f.dot(foot + V((.085 - i * .028) * k, .014 * k), .011 * k, '#F2E8D0', 'toenail', SW_FINE)
+    # face
+    eye_c = head_c + fwd * hr * .35 + up * hr * .25
+    er = (.03 if g.young else .024) * k
+    if pose == 'sleep':
+        f.line([eye_c - fwd * er, eye_c - up * er * .6, eye_c + fwd * er], SW_FINE, name='eye_closed')
+    elif pose == 'scared':
+        f.dot(eye_c, er * 1.35, C.WHITE, 'eye_white', SW_FINE)
+        f.dot(eye_c + fwd * er * .3, er * .6, C.INK, 'pupil', SW_FINE)
+    else:
+        f.dot(eye_c, er, C.INK, 'eye')
+        f.spot(eye_c + V(er * .35, er * .35), er * .38)
+        if g.old:
+            f.line([eye_c - fwd * er * 1.6 + up * er * .6, eye_c + up * er * 1.3, eye_c + fwd * er * 1.6 + up * er * .5],
+                   SW_FINE, name='lid')
+    m0 = head_c + fwd * hr * .55 - up * hr * .3
+    if pose == 'shout':
+        f.fill(Poly([m0 - fwd * .03 * k, head_c + fwd * hr * .98 - up * hr * .2, m0 + fwd * .02 * k - up * .05 * k],
+                    r=.01), C.MOUTH, SW_FINE, 'mouth')
+    elif pose != 'scared':
+        f.line([m0 - fwd * .03 * k, m0 + fwd * .03 * k, head_c + fwd * hr * .95 - up * hr * .15], SW_FINE, name='mouth')
+    f.anchors['head'] = head_c
+    f.anchors['eye'] = eye_c
+    f.anchors['mouth'] = head_c + fwd * hr * .9 - up * hr * .3
     f.anchors['ground'] = V(0, 0)
     return f
 
@@ -279,4 +379,4 @@ def _crocodile(g, pose):
 
 
 def build(g: Reptile, pose: str) -> Figure:
-    return {'turtle': _turtle, 'snake': _snake, 'crocodile': _crocodile}[g.kind](g, pose)
+    return {'turtle': _turtle, 'tortoise': _tortoise, 'snake': _snake, 'crocodile': _crocodile}[g.kind](g, pose)

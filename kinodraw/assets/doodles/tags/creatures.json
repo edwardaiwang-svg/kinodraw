@@ -47544,6 +47544,1884 @@
    }
   }
  },
+ "cr_firefly_any_adult_fly2_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, flying, wings swept back, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "fly2",
+   "facing": "l",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 238.0,
+   "px_per_unit": 361.08,
+   "anchors": {
+    "head": [
+     53.3,
+     95.8
+    ],
+    "eye": [
+     40.7,
+     90.4
+    ],
+    "mouth": [
+     28.0,
+     110.2
+    ],
+    "glow": [
+     214.5,
+     119.7
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_fly2_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, flying, wings swept back, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "fly2",
+   "facing": "r",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 238.0,
+   "px_per_unit": 361.08,
+   "anchors": {
+    "head": [
+     270.7,
+     95.8
+    ],
+    "eye": [
+     283.3,
+     90.4
+    ],
+    "mouth": [
+     296.0,
+     110.2
+    ],
+    "glow": [
+     109.5,
+     119.7
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_fly_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, flying with wings spread, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "fly",
+   "facing": "l",
+   "size": [
+    324,
+    279
+   ],
+   "ground_y": 267.0,
+   "px_per_unit": 367.42,
+   "anchors": {
+    "head": [
+     50.9,
+     117.2
+    ],
+    "eye": [
+     38.0,
+     111.7
+    ],
+    "mouth": [
+     25.1,
+     131.9
+    ],
+    "glow": [
+     212.8,
+     153.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_fly_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, flying with wings spread, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "fly",
+   "facing": "r",
+   "size": [
+    324,
+    279
+   ],
+   "ground_y": 267.0,
+   "px_per_unit": 367.42,
+   "anchors": {
+    "head": [
+     273.1,
+     117.2
+    ],
+    "eye": [
+     286.0,
+     111.7
+    ],
+    "mouth": [
+     298.9,
+     131.9
+    ],
+    "glow": [
+     111.2,
+     153.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_lie_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, lying down, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    217
+   ],
+   "ground_y": 149.8,
+   "px_per_unit": 356.08,
+   "anchors": {
+    "head": [
+     55.6,
+     96.4
+    ],
+    "eye": [
+     43.2,
+     91.1
+    ],
+    "mouth": [
+     30.7,
+     110.6
+    ],
+    "glow": [
+     215.9,
+     108.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_lie_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, lying down, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    217
+   ],
+   "ground_y": 149.8,
+   "px_per_unit": 356.08,
+   "anchors": {
+    "head": [
+     268.4,
+     96.4
+    ],
+    "eye": [
+     280.8,
+     91.1
+    ],
+    "mouth": [
+     293.3,
+     110.6
+    ],
+    "glow": [
+     108.1,
+     108.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_look_up_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, looking up, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    309
+   ],
+   "ground_y": 297.0,
+   "px_per_unit": 390.67,
+   "anchors": {
+    "head": [
+     41.3,
+     119.5
+    ],
+    "eye": [
+     27.6,
+     113.6
+    ],
+    "mouth": [
+     14.0,
+     135.1
+    ],
+    "glow": [
+     206.5,
+     188.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_look_up_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, looking up, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    309
+   ],
+   "ground_y": 297.0,
+   "px_per_unit": 390.67,
+   "anchors": {
+    "head": [
+     282.7,
+     119.5
+    ],
+    "eye": [
+     296.4,
+     113.6
+    ],
+    "mouth": [
+     310.0,
+     135.1
+    ],
+    "glow": [
+     117.5,
+     188.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_scared_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, crouching, scared, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    212
+   ],
+   "ground_y": 152.4,
+   "px_per_unit": 346.46,
+   "anchors": {
+    "head": [
+     62.1,
+     105.2
+    ],
+    "eye": [
+     50.0,
+     100.0
+    ],
+    "mouth": [
+     37.8,
+     119.1
+    ],
+    "glow": [
+     218.5,
+     106.5
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_scared_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, crouching, scared, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    212
+   ],
+   "ground_y": 152.4,
+   "px_per_unit": 346.46,
+   "anchors": {
+    "head": [
+     261.9,
+     105.2
+    ],
+    "eye": [
+     274.0,
+     100.0
+    ],
+    "mouth": [
+     286.2,
+     119.1
+    ],
+    "glow": [
+     105.5,
+     106.5
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_shout_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, shouting with mouth open, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    279
+   ],
+   "ground_y": 267.0,
+   "px_per_unit": 371.13,
+   "anchors": {
+    "head": [
+     49.6,
+     113.2
+    ],
+    "eye": [
+     36.6,
+     107.6
+    ],
+    "mouth": [
+     23.6,
+     128.0
+    ],
+    "glow": [
+     211.8,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_shout_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, shouting with mouth open, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    279
+   ],
+   "ground_y": 267.0,
+   "px_per_unit": 371.13,
+   "anchors": {
+    "head": [
+     274.4,
+     113.2
+    ],
+    "eye": [
+     287.4,
+     107.6
+    ],
+    "mouth": [
+     300.4,
+     128.0
+    ],
+    "glow": [
+     112.2,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_sleep_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, sleeping, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 188.0,
+   "px_per_unit": 446.1,
+   "anchors": {
+    "head": [
+     66.6,
+     121.1
+    ],
+    "eye": [
+     51.0,
+     114.4
+    ],
+    "mouth": [
+     35.4,
+     138.9
+    ],
+    "glow": [
+     267.4,
+     136.7
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_sleep_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, sleeping, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 188.0,
+   "px_per_unit": 446.1,
+   "anchors": {
+    "head": [
+     257.4,
+     121.1
+    ],
+    "eye": [
+     273.0,
+     114.4
+    ],
+    "mouth": [
+     288.6,
+     138.9
+    ],
+    "glow": [
+     56.6,
+     136.7
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_stand_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, standing, facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    279
+   ],
+   "ground_y": 267.0,
+   "px_per_unit": 367.42,
+   "anchors": {
+    "head": [
+     50.9,
+     117.2
+    ],
+    "eye": [
+     38.0,
+     111.7
+    ],
+    "mouth": [
+     25.1,
+     131.9
+    ],
+    "glow": [
+     212.8,
+     153.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_stand_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, standing, facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    279
+   ],
+   "ground_y": 267.0,
+   "px_per_unit": 367.42,
+   "anchors": {
+    "head": [
+     273.1,
+     117.2
+    ],
+    "eye": [
+     286.0,
+     111.7
+    ],
+    "mouth": [
+     298.9,
+     131.9
+    ],
+    "glow": [
+     111.2,
+     153.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_walk1_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, walking (stride A), facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    201
+   ],
+   "ground_y": 138.4,
+   "px_per_unit": 326.37,
+   "anchors": {
+    "head": [
+     77.0,
+     89.5
+    ],
+    "eye": [
+     65.6,
+     84.6
+    ],
+    "mouth": [
+     54.2,
+     102.5
+    ],
+    "glow": [
+     223.9,
+     100.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_walk1_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, walking (stride A), facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    201
+   ],
+   "ground_y": 138.4,
+   "px_per_unit": 326.37,
+   "anchors": {
+    "head": [
+     247.0,
+     89.5
+    ],
+    "eye": [
+     258.4,
+     84.6
+    ],
+    "mouth": [
+     269.8,
+     102.5
+    ],
+    "glow": [
+     100.1,
+     100.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_walk2_l": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, walking (stride B), facing left (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    210
+   ],
+   "ground_y": 144.8,
+   "px_per_unit": 343.37,
+   "anchors": {
+    "head": [
+     64.8,
+     93.3
+    ],
+    "eye": [
+     52.8,
+     88.1
+    ],
+    "mouth": [
+     40.7,
+     107.0
+    ],
+    "glow": [
+     219.3,
+     105.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_adult_walk2_r": {
+  "category": "animals",
+  "desc": "firefly with a glowing tail, walking (stride B), facing right (full body)",
+  "en": [
+   "firefly",
+   "lightning bug",
+   "glowing bug"
+  ],
+  "zh": [
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    210
+   ],
+   "ground_y": 144.8,
+   "px_per_unit": 343.37,
+   "anchors": {
+    "head": [
+     259.2,
+     93.3
+    ],
+    "eye": [
+     271.2,
+     88.1
+    ],
+    "mouth": [
+     283.3,
+     107.0
+    ],
+    "glow": [
+     104.7,
+     105.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_fly2_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, flying, wings swept back, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "fly2",
+   "facing": "l",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 238.0,
+   "px_per_unit": 400.13,
+   "anchors": {
+    "head": [
+     54.0,
+     96.1
+    ],
+    "eye": [
+     41.4,
+     90.7
+    ],
+    "mouth": [
+     28.8,
+     110.6
+    ],
+    "glow": [
+     214.8,
+     120.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_fly2_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, flying, wings swept back, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "fly2",
+   "facing": "r",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 238.0,
+   "px_per_unit": 400.13,
+   "anchors": {
+    "head": [
+     270.0,
+     96.1
+    ],
+    "eye": [
+     282.6,
+     90.7
+    ],
+    "mouth": [
+     295.2,
+     110.6
+    ],
+    "glow": [
+     109.2,
+     120.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_fly_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, flying with wings spread, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "fly",
+   "facing": "l",
+   "size": [
+    324,
+    278
+   ],
+   "ground_y": 266.0,
+   "px_per_unit": 407.14,
+   "anchors": {
+    "head": [
+     51.6,
+     116.6
+    ],
+    "eye": [
+     38.7,
+     111.1
+    ],
+    "mouth": [
+     25.9,
+     131.3
+    ],
+    "glow": [
+     213.1,
+     152.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_fly_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, flying with wings spread, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "fly",
+   "facing": "r",
+   "size": [
+    324,
+    278
+   ],
+   "ground_y": 266.0,
+   "px_per_unit": 407.14,
+   "anchors": {
+    "head": [
+     272.4,
+     116.6
+    ],
+    "eye": [
+     285.3,
+     111.1
+    ],
+    "mouth": [
+     298.1,
+     131.3
+    ],
+    "glow": [
+     110.9,
+     152.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_lie_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, lying down, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    216
+   ],
+   "ground_y": 149.0,
+   "px_per_unit": 394.61,
+   "anchors": {
+    "head": [
+     56.3,
+     95.7
+    ],
+    "eye": [
+     43.9,
+     90.4
+    ],
+    "mouth": [
+     31.4,
+     109.9
+    ],
+    "glow": [
+     216.1,
+     108.1
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_lie_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, lying down, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    216
+   ],
+   "ground_y": 149.0,
+   "px_per_unit": 394.61,
+   "anchors": {
+    "head": [
+     267.7,
+     95.7
+    ],
+    "eye": [
+     280.1,
+     90.4
+    ],
+    "mouth": [
+     292.6,
+     109.9
+    ],
+    "glow": [
+     107.9,
+     108.1
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_look_up_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, looking up, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    305
+   ],
+   "ground_y": 293.0,
+   "px_per_unit": 425.76,
+   "anchors": {
+    "head": [
+     46.5,
+     118.9
+    ],
+    "eye": [
+     33.1,
+     113.2
+    ],
+    "mouth": [
+     19.7,
+     134.2
+    ],
+    "glow": [
+     208.5,
+     187.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_look_up_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, looking up, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    305
+   ],
+   "ground_y": 293.0,
+   "px_per_unit": 425.76,
+   "anchors": {
+    "head": [
+     277.5,
+     118.9
+    ],
+    "eye": [
+     290.9,
+     113.2
+    ],
+    "mouth": [
+     304.3,
+     134.2
+    ],
+    "glow": [
+     115.5,
+     187.0
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_scared_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, crouching, scared, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    206
+   ],
+   "ground_y": 147.8,
+   "px_per_unit": 373.55,
+   "anchors": {
+    "head": [
+     69.5,
+     102.0
+    ],
+    "eye": [
+     57.7,
+     97.0
+    ],
+    "mouth": [
+     46.0,
+     115.5
+    ],
+    "glow": [
+     221.2,
+     103.2
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_scared_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, crouching, scared, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    206
+   ],
+   "ground_y": 147.8,
+   "px_per_unit": 373.55,
+   "anchors": {
+    "head": [
+     254.5,
+     102.0
+    ],
+    "eye": [
+     266.3,
+     97.0
+    ],
+    "mouth": [
+     278.0,
+     115.5
+    ],
+    "glow": [
+     102.8,
+     103.2
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_shout_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, shouting with mouth open, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    278
+   ],
+   "ground_y": 266.0,
+   "px_per_unit": 411.24,
+   "anchors": {
+    "head": [
+     50.3,
+     112.6
+    ],
+    "eye": [
+     37.3,
+     107.1
+    ],
+    "mouth": [
+     24.4,
+     127.4
+    ],
+    "glow": [
+     212.1,
+     154.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_shout_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, shouting with mouth open, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    278
+   ],
+   "ground_y": 266.0,
+   "px_per_unit": 411.24,
+   "anchors": {
+    "head": [
+     273.7,
+     112.6
+    ],
+    "eye": [
+     286.7,
+     107.1
+    ],
+    "mouth": [
+     299.6,
+     127.4
+    ],
+    "glow": [
+     111.9,
+     154.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_sleep_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, sleeping, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 188.0,
+   "px_per_unit": 494.03,
+   "anchors": {
+    "head": [
+     67.5,
+     121.3
+    ],
+    "eye": [
+     51.9,
+     114.6
+    ],
+    "mouth": [
+     36.3,
+     139.1
+    ],
+    "glow": [
+     267.5,
+     136.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_sleep_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, sleeping, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 188.0,
+   "px_per_unit": 494.03,
+   "anchors": {
+    "head": [
+     256.5,
+     121.3
+    ],
+    "eye": [
+     272.1,
+     114.6
+    ],
+    "mouth": [
+     287.7,
+     139.1
+    ],
+    "glow": [
+     56.5,
+     136.9
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_stand_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, standing, facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    278
+   ],
+   "ground_y": 266.0,
+   "px_per_unit": 407.14,
+   "anchors": {
+    "head": [
+     51.6,
+     116.6
+    ],
+    "eye": [
+     38.7,
+     111.1
+    ],
+    "mouth": [
+     25.9,
+     131.3
+    ],
+    "glow": [
+     213.1,
+     152.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_stand_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, standing, facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    278
+   ],
+   "ground_y": 266.0,
+   "px_per_unit": 407.14,
+   "anchors": {
+    "head": [
+     272.4,
+     116.6
+    ],
+    "eye": [
+     285.3,
+     111.1
+    ],
+    "mouth": [
+     298.1,
+     131.3
+    ],
+    "glow": [
+     110.9,
+     152.3
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_walk1_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, walking (stride A), facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 139.1,
+   "px_per_unit": 350.43,
+   "anchors": {
+    "head": [
+     84.9,
+     91.8
+    ],
+    "eye": [
+     73.9,
+     87.1
+    ],
+    "mouth": [
+     62.8,
+     104.4
+    ],
+    "glow": [
+     226.8,
+     102.8
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_walk1_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, walking (stride A), facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 139.1,
+   "px_per_unit": 350.43,
+   "anchors": {
+    "head": [
+     239.1,
+     91.8
+    ],
+    "eye": [
+     250.1,
+     87.1
+    ],
+    "mouth": [
+     261.2,
+     104.4
+    ],
+    "glow": [
+     97.2,
+     102.8
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_walk2_l": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, walking (stride B), facing left (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    204
+   ],
+   "ground_y": 140.4,
+   "px_per_unit": 370.11,
+   "anchors": {
+    "head": [
+     72.2,
+     90.4
+    ],
+    "eye": [
+     60.5,
+     85.4
+    ],
+    "mouth": [
+     48.9,
+     103.7
+    ],
+    "glow": [
+     222.1,
+     102.1
+    ]
+   }
+  }
+ },
+ "cr_firefly_any_young_walk2_r": {
+  "category": "animals",
+  "desc": "little firefly with a glowing tail, walking (stride B), facing right (full body)",
+  "en": [
+   "little firefly",
+   "firefly"
+  ],
+  "zh": [
+   "小萤火虫",
+   "萤火虫"
+  ],
+  "search": false,
+  "creature": {
+   "species": "firefly",
+   "family": "insect",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    204
+   ],
+   "ground_y": 140.4,
+   "px_per_unit": 370.11,
+   "anchors": {
+    "head": [
+     251.8,
+     90.4
+    ],
+    "eye": [
+     263.5,
+     85.4
+    ],
+    "mouth": [
+     275.1,
+     103.7
+    ],
+    "glow": [
+     101.9,
+     102.1
+    ]
+   }
+  }
+ },
  "cr_fish_any_adult_clown_face_determined_f": {
   "category": "animals",
   "desc": "clownfish, head close-up, front view, determined, brows lowered",
@@ -56816,6 +58694,1552 @@
     "mouth": [
      274.1,
      109.5
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_lie_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, lying down, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 183.0,
+   "px_per_unit": 335.53,
+   "anchors": {
+    "head": [
+     89.1,
+     143.9
+    ],
+    "eye": [
+     75.3,
+     140.2
+    ],
+    "mouth": [
+     44.9,
+     172.1
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_lie_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, lying down, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 183.0,
+   "px_per_unit": 335.53,
+   "anchors": {
+    "head": [
+     234.9,
+     143.9
+    ],
+    "eye": [
+     248.7,
+     140.2
+    ],
+    "mouth": [
+     279.1,
+     172.1
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_look_up_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, looking up, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 340.12,
+   "anchors": {
+    "head": [
+     90.5,
+     120.0
+    ],
+    "eye": [
+     80.5,
+     109.4
+    ],
+    "mouth": [
+     37.3,
+     120.5
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_look_up_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, looking up, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 340.12,
+   "anchors": {
+    "head": [
+     233.5,
+     120.0
+    ],
+    "eye": [
+     243.5,
+     109.4
+    ],
+    "mouth": [
+     286.7,
+     120.5
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_run_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, running, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "run",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 336.73,
+   "anchors": {
+    "head": [
+     90.1,
+     143.9
+    ],
+    "eye": [
+     76.3,
+     139.8
+    ],
+    "mouth": [
+     44.7,
+     170.7
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_run_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, running, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "run",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 336.73,
+   "anchors": {
+    "head": [
+     233.9,
+     143.9
+    ],
+    "eye": [
+     247.7,
+     139.8
+    ],
+    "mouth": [
+     279.3,
+     170.7
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_scared_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, crouching, scared, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    284
+   ],
+   "ground_y": 252.2,
+   "px_per_unit": 511.86,
+   "anchors": {
+    "head": [
+     107.7,
+     195.9
+    ],
+    "eye": [
+     92.4,
+     190.8
+    ],
+    "mouth": [
+     33.5,
+     236.9
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_scared_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, crouching, scared, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    284
+   ],
+   "ground_y": 252.2,
+   "px_per_unit": 511.86,
+   "anchors": {
+    "head": [
+     216.3,
+     195.9
+    ],
+    "eye": [
+     231.6,
+     190.8
+    ],
+    "mouth": [
+     290.5,
+     236.9
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_shout_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, shouting with mouth open, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.43,
+   "anchors": {
+    "head": [
+     91.5,
+     129.0
+    ],
+    "eye": [
+     78.9,
+     122.2
+    ],
+    "mouth": [
+     41.5,
+     148.9
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_shout_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, shouting with mouth open, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.43,
+   "anchors": {
+    "head": [
+     232.5,
+     129.0
+    ],
+    "eye": [
+     245.1,
+     122.2
+    ],
+    "mouth": [
+     282.5,
+     148.9
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_sleep_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, sleeping, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    270
+   ],
+   "ground_y": 249.7,
+   "px_per_unit": 534.06,
+   "anchors": {
+    "head": [
+     111.9,
+     190.9
+    ],
+    "eye": [
+     95.8,
+     185.6
+    ],
+    "mouth": [
+     34.4,
+     233.6
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_sleep_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, sleeping, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    270
+   ],
+   "ground_y": 249.7,
+   "px_per_unit": 534.06,
+   "anchors": {
+    "head": [
+     212.1,
+     190.9
+    ],
+    "eye": [
+     228.2,
+     185.6
+    ],
+    "mouth": [
+     289.6,
+     233.6
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_stand_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, standing, facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.85,
+   "anchors": {
+    "head": [
+     90.5,
+     132.6
+    ],
+    "eye": [
+     77.1,
+     127.6
+    ],
+    "mouth": [
+     43.7,
+     156.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_stand_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, standing, facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.85,
+   "anchors": {
+    "head": [
+     233.5,
+     132.6
+    ],
+    "eye": [
+     246.9,
+     127.6
+    ],
+    "mouth": [
+     280.3,
+     156.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_walk1_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, walking (stride A), facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.85,
+   "anchors": {
+    "head": [
+     90.5,
+     132.6
+    ],
+    "eye": [
+     77.1,
+     127.6
+    ],
+    "mouth": [
+     43.7,
+     156.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_walk1_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, walking (stride A), facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.85,
+   "anchors": {
+    "head": [
+     233.5,
+     132.6
+    ],
+    "eye": [
+     246.9,
+     127.6
+    ],
+    "mouth": [
+     280.3,
+     156.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_walk2_l": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, walking (stride B), facing left (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.85,
+   "anchors": {
+    "head": [
+     90.5,
+     132.6
+    ],
+    "eye": [
+     77.1,
+     127.6
+    ],
+    "mouth": [
+     43.7,
+     156.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_adult_walk2_r": {
+  "category": "animals",
+  "desc": "hedgehog with short spines, walking (stride B), facing right (full body)",
+  "en": [
+   "hedgehog",
+   "prickly hedgehog"
+  ],
+  "zh": [
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 186.0,
+   "px_per_unit": 333.85,
+   "anchors": {
+    "head": [
+     233.5,
+     132.6
+    ],
+    "eye": [
+     246.9,
+     127.6
+    ],
+    "mouth": [
+     280.3,
+     156.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_lie_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, lying down, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 182.8,
+   "px_per_unit": 402.33,
+   "anchors": {
+    "head": [
+     94.6,
+     138.7
+    ],
+    "eye": [
+     78.6,
+     135.1
+    ],
+    "mouth": [
+     45.9,
+     171.6
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_lie_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, lying down, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 182.8,
+   "px_per_unit": 402.33,
+   "anchors": {
+    "head": [
+     229.4,
+     138.7
+    ],
+    "eye": [
+     245.4,
+     135.1
+    ],
+    "mouth": [
+     278.1,
+     171.6
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_look_up_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, looking up, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 408.01,
+   "anchors": {
+    "head": [
+     97.7,
+     116.2
+    ],
+    "eye": [
+     85.8,
+     104.5
+    ],
+    "mouth": [
+     38.1,
+     118.3
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_look_up_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, looking up, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 408.01,
+   "anchors": {
+    "head": [
+     226.3,
+     116.2
+    ],
+    "eye": [
+     238.2,
+     104.5
+    ],
+    "mouth": [
+     285.9,
+     118.3
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_run_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, running, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "run",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 403.78,
+   "anchors": {
+    "head": [
+     95.7,
+     138.9
+    ],
+    "eye": [
+     79.8,
+     134.8
+    ],
+    "mouth": [
+     45.7,
+     170.2
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_run_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, running, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "run",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 403.78,
+   "anchors": {
+    "head": [
+     228.3,
+     138.9
+    ],
+    "eye": [
+     244.2,
+     134.8
+    ],
+    "mouth": [
+     278.3,
+     170.2
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_scared_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, crouching, scared, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    286
+   ],
+   "ground_y": 252.3,
+   "px_per_unit": 594.85,
+   "anchors": {
+    "head": [
+     107.7,
+     196.0
+    ],
+    "eye": [
+     92.3,
+     190.9
+    ],
+    "mouth": [
+     35.2,
+     238.6
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_scared_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, crouching, scared, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    286
+   ],
+   "ground_y": 252.3,
+   "px_per_unit": 594.85,
+   "anchors": {
+    "head": [
+     216.3,
+     196.0
+    ],
+    "eye": [
+     231.7,
+     190.9
+    ],
+    "mouth": [
+     288.8,
+     238.6
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_shout_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, shouting with mouth open, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 399.74,
+   "anchors": {
+    "head": [
+     97.8,
+     124.2
+    ],
+    "eye": [
+     83.2,
+     117.0
+    ],
+    "mouth": [
+     42.4,
+     147.7
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_shout_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, shouting with mouth open, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 399.74,
+   "anchors": {
+    "head": [
+     226.2,
+     124.2
+    ],
+    "eye": [
+     240.8,
+     117.0
+    ],
+    "mouth": [
+     281.6,
+     147.7
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_sleep_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, sleeping, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    272
+   ],
+   "ground_y": 249.7,
+   "px_per_unit": 620.48,
+   "anchors": {
+    "head": [
+     111.8,
+     191.0
+    ],
+    "eye": [
+     95.8,
+     185.7
+    ],
+    "mouth": [
+     36.1,
+     235.4
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_sleep_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, sleeping, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    272
+   ],
+   "ground_y": 249.7,
+   "px_per_unit": 620.48,
+   "anchors": {
+    "head": [
+     212.2,
+     191.0
+    ],
+    "eye": [
+     228.2,
+     185.7
+    ],
+    "mouth": [
+     287.9,
+     235.4
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_stand_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, standing, facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 400.26,
+   "anchors": {
+    "head": [
+     96.3,
+     127.4
+    ],
+    "eye": [
+     80.8,
+     122.3
+    ],
+    "mouth": [
+     44.7,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_stand_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, standing, facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 400.26,
+   "anchors": {
+    "head": [
+     227.7,
+     127.4
+    ],
+    "eye": [
+     243.2,
+     122.3
+    ],
+    "mouth": [
+     279.3,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_walk1_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, walking (stride A), facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 400.26,
+   "anchors": {
+    "head": [
+     96.3,
+     127.4
+    ],
+    "eye": [
+     80.8,
+     122.3
+    ],
+    "mouth": [
+     44.7,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_walk1_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, walking (stride A), facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 400.26,
+   "anchors": {
+    "head": [
+     227.7,
+     127.4
+    ],
+    "eye": [
+     243.2,
+     122.3
+    ],
+    "mouth": [
+     279.3,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_walk2_l": {
+  "category": "animals",
+  "desc": "baby hedgehog, walking (stride B), facing left (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 400.26,
+   "anchors": {
+    "head": [
+     96.3,
+     127.4
+    ],
+    "eye": [
+     80.8,
+     122.3
+    ],
+    "mouth": [
+     44.7,
+     155.0
+    ]
+   }
+  }
+ },
+ "cr_hedgehog_any_young_walk2_r": {
+  "category": "animals",
+  "desc": "baby hedgehog, walking (stride B), facing right (full body)",
+  "en": [
+   "baby hedgehog",
+   "hoglet",
+   "hedgehog"
+  ],
+  "zh": [
+   "小刺猬",
+   "刺猬"
+  ],
+  "search": false,
+  "creature": {
+   "species": "hedgehog",
+   "family": "rodent",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 185.9,
+   "px_per_unit": 400.26,
+   "anchors": {
+    "head": [
+     227.7,
+     127.4
+    ],
+    "eye": [
+     243.2,
+     122.3
+    ],
+    "mouth": [
+     279.3,
+     155.0
     ]
    }
   }
@@ -158977,6 +162401,1380 @@
    }
   }
  },
+ "cr_snail_any_adult_lie_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, lying down, facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 187.4,
+   "px_per_unit": 304.98,
+   "anchors": {
+    "head": [
+     58.3,
+     132.5
+    ],
+    "eye": [
+     23.6,
+     82.6
+    ],
+    "mouth": [
+     37.0,
+     147.2
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_lie_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, lying down, facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 187.4,
+   "px_per_unit": 304.98,
+   "anchors": {
+    "head": [
+     265.7,
+     132.5
+    ],
+    "eye": [
+     300.4,
+     82.6
+    ],
+    "mouth": [
+     287.0,
+     147.2
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_look_up_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, looking up, facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    211
+   ],
+   "ground_y": 198.3,
+   "px_per_unit": 329.85,
+   "anchors": {
+    "head": [
+     50.8,
+     109.3
+    ],
+    "eye": [
+     70.1,
+     25.4
+    ],
+    "mouth": [
+     27.8,
+     125.2
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_look_up_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, looking up, facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    211
+   ],
+   "ground_y": 198.3,
+   "px_per_unit": 329.85,
+   "anchors": {
+    "head": [
+     273.2,
+     109.3
+    ],
+    "eye": [
+     253.9,
+     25.4
+    ],
+    "mouth": [
+     296.2,
+     125.2
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_scared_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, crouching, scared, facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    247
+   ],
+   "ground_y": 229.7,
+   "px_per_unit": 443.13,
+   "anchors": {
+    "head": [
+     49.7,
+     180.9
+    ],
+    "eye": [
+     30.2,
+     125.4
+    ],
+    "mouth": [
+     18.8,
+     202.3
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_scared_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, crouching, scared, facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    247
+   ],
+   "ground_y": 229.7,
+   "px_per_unit": 443.13,
+   "anchors": {
+    "head": [
+     274.3,
+     180.9
+    ],
+    "eye": [
+     293.8,
+     125.4
+    ],
+    "mouth": [
+     305.2,
+     202.3
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_shout_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, shouting with mouth open, facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 206.3,
+   "px_per_unit": 329.85,
+   "anchors": {
+    "head": [
+     50.8,
+     114.0
+    ],
+    "eye": [
+     28.2,
+     27.3
+    ],
+    "mouth": [
+     27.8,
+     129.9
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_shout_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, shouting with mouth open, facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 206.3,
+   "px_per_unit": 329.85,
+   "anchors": {
+    "head": [
+     273.2,
+     114.0
+    ],
+    "eye": [
+     295.8,
+     27.3
+    ],
+    "mouth": [
+     296.2,
+     129.9
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_sleep_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, sleeping, facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    211
+   ],
+   "ground_y": 198.2,
+   "px_per_unit": 379.99,
+   "anchors": {
+    "head": [
+     56.6,
+     141.2
+    ],
+    "eye": [
+     35.7,
+     95.6
+    ],
+    "mouth": [
+     30.1,
+     159.6
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_sleep_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, sleeping, facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    211
+   ],
+   "ground_y": 198.2,
+   "px_per_unit": 379.99,
+   "anchors": {
+    "head": [
+     267.4,
+     141.2
+    ],
+    "eye": [
+     288.3,
+     95.6
+    ],
+    "mouth": [
+     293.9,
+     159.6
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_stand_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, standing, facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    206
+   ],
+   "ground_y": 193.3,
+   "px_per_unit": 326.31,
+   "anchors": {
+    "head": [
+     53.6,
+     111.8
+    ],
+    "eye": [
+     24.4,
+     28.1
+    ],
+    "mouth": [
+     30.8,
+     127.5
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_stand_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, standing, facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    206
+   ],
+   "ground_y": 193.3,
+   "px_per_unit": 326.31,
+   "anchors": {
+    "head": [
+     270.4,
+     111.8
+    ],
+    "eye": [
+     299.6,
+     28.1
+    ],
+    "mouth": [
+     293.2,
+     127.5
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_walk1_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, walking (stride A), facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 187.4,
+   "px_per_unit": 294.3,
+   "anchors": {
+    "head": [
+     49.5,
+     113.8
+    ],
+    "eye": [
+     23.2,
+     38.3
+    ],
+    "mouth": [
+     29.0,
+     128.0
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_walk1_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, walking (stride A), facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 187.4,
+   "px_per_unit": 294.3,
+   "anchors": {
+    "head": [
+     274.5,
+     113.8
+    ],
+    "eye": [
+     300.8,
+     38.3
+    ],
+    "mouth": [
+     295.0,
+     128.0
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_walk2_l": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, walking (stride B), facing left (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    221
+   ],
+   "ground_y": 208.3,
+   "px_per_unit": 353.2,
+   "anchors": {
+    "head": [
+     57.0,
+     120.0
+    ],
+    "eye": [
+     25.4,
+     29.4
+    ],
+    "mouth": [
+     32.4,
+     137.0
+    ]
+   }
+  }
+ },
+ "cr_snail_any_adult_walk2_r": {
+  "category": "animals",
+  "desc": "snail with a spiral shell, walking (stride B), facing right (full body)",
+  "en": [
+   "snail",
+   "garden snail"
+  ],
+  "zh": [
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    221
+   ],
+   "ground_y": 208.3,
+   "px_per_unit": 353.2,
+   "anchors": {
+    "head": [
+     267.0,
+     120.0
+    ],
+    "eye": [
+     298.6,
+     29.4
+    ],
+    "mouth": [
+     291.6,
+     137.0
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_lie_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, lying down, facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 187.3,
+   "px_per_unit": 365.14,
+   "anchors": {
+    "head": [
+     64.9,
+     128.2
+    ],
+    "eye": [
+     26.8,
+     68.7
+    ],
+    "mouth": [
+     39.1,
+     147.7
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_lie_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, lying down, facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    200.0
+   ],
+   "ground_y": 187.3,
+   "px_per_unit": 365.14,
+   "anchors": {
+    "head": [
+     259.1,
+     128.2
+    ],
+    "eye": [
+     297.2,
+     68.7
+    ],
+    "mouth": [
+     284.9,
+     147.7
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_look_up_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, looking up, facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    226
+   ],
+   "ground_y": 213.3,
+   "px_per_unit": 393.55,
+   "anchors": {
+    "head": [
+     59.8,
+     117.7
+    ],
+    "eye": [
+     77.2,
+     28.0
+    ],
+    "mouth": [
+     32.0,
+     138.7
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_look_up_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, looking up, facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    226
+   ],
+   "ground_y": 213.3,
+   "px_per_unit": 393.55,
+   "anchors": {
+    "head": [
+     264.2,
+     117.7
+    ],
+    "eye": [
+     246.8,
+     28.0
+    ],
+    "mouth": [
+     292.0,
+     138.7
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_scared_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, crouching, scared, facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    266
+   ],
+   "ground_y": 248.2,
+   "px_per_unit": 535.91,
+   "anchors": {
+    "head": [
+     65.1,
+     195.2
+    ],
+    "eye": [
+     42.8,
+     126.3
+    ],
+    "mouth": [
+     27.2,
+     223.9
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_scared_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, crouching, scared, facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    266
+   ],
+   "ground_y": 248.2,
+   "px_per_unit": 535.91,
+   "anchors": {
+    "head": [
+     258.9,
+     195.2
+    ],
+    "eye": [
+     281.2,
+     126.3
+    ],
+    "mouth": [
+     296.8,
+     223.9
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_shout_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, shouting with mouth open, facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    235
+   ],
+   "ground_y": 222.3,
+   "px_per_unit": 393.55,
+   "anchors": {
+    "head": [
+     59.8,
+     123.1
+    ],
+    "eye": [
+     36.4,
+     30.7
+    ],
+    "mouth": [
+     32.0,
+     144.2
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_shout_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, shouting with mouth open, facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    235
+   ],
+   "ground_y": 222.3,
+   "px_per_unit": 393.55,
+   "anchors": {
+    "head": [
+     264.2,
+     123.1
+    ],
+    "eye": [
+     287.6,
+     30.7
+    ],
+    "mouth": [
+     292.0,
+     144.2
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_sleep_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, sleeping, facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 214.2,
+   "px_per_unit": 458.51,
+   "anchors": {
+    "head": [
+     67.7,
+     152.3
+    ],
+    "eye": [
+     44.1,
+     95.5
+    ],
+    "mouth": [
+     35.3,
+     176.8
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_sleep_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, sleeping, facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 214.2,
+   "px_per_unit": 458.51,
+   "anchors": {
+    "head": [
+     256.3,
+     152.3
+    ],
+    "eye": [
+     279.9,
+     95.5
+    ],
+    "mouth": [
+     288.7,
+     176.8
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_stand_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, standing, facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    224
+   ],
+   "ground_y": 211.3,
+   "px_per_unit": 393.55,
+   "anchors": {
+    "head": [
+     59.8,
+     122.7
+    ],
+    "eye": [
+     29.7,
+     32.3
+    ],
+    "mouth": [
+     32.0,
+     143.8
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_stand_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, standing, facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    224
+   ],
+   "ground_y": 211.3,
+   "px_per_unit": 393.55,
+   "anchors": {
+    "head": [
+     264.2,
+     122.7
+    ],
+    "eye": [
+     294.3,
+     32.3
+    ],
+    "mouth": [
+     292.0,
+     143.8
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_walk1_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, walking (stride A), facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    203
+   ],
+   "ground_y": 190.4,
+   "px_per_unit": 351.99,
+   "anchors": {
+    "head": [
+     54.8,
+     111.2
+    ],
+    "eye": [
+     27.8,
+     30.3
+    ],
+    "mouth": [
+     29.9,
+     130.0
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_walk1_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, walking (stride A), facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    203
+   ],
+   "ground_y": 190.4,
+   "px_per_unit": 351.99,
+   "anchors": {
+    "head": [
+     269.2,
+     111.2
+    ],
+    "eye": [
+     296.2,
+     30.3
+    ],
+    "mouth": [
+     294.1,
+     130.0
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_walk2_l": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, walking (stride B), facing left (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    242
+   ],
+   "ground_y": 229.2,
+   "px_per_unit": 429.0,
+   "anchors": {
+    "head": [
+     64.1,
+     132.7
+    ],
+    "eye": [
+     31.3,
+     34.2
+    ],
+    "mouth": [
+     33.8,
+     155.7
+    ]
+   }
+  }
+ },
+ "cr_snail_any_young_walk2_r": {
+  "category": "animals",
+  "desc": "little snail with a spiral shell, walking (stride B), facing right (full body)",
+  "en": [
+   "baby snail",
+   "little snail",
+   "snail"
+  ],
+  "zh": [
+   "小蜗牛",
+   "蜗牛"
+  ],
+  "search": false,
+  "creature": {
+   "species": "snail",
+   "family": "mollusc",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    242
+   ],
+   "ground_y": 229.2,
+   "px_per_unit": 429.0,
+   "anchors": {
+    "head": [
+     259.9,
+     132.7
+    ],
+    "eye": [
+     292.7,
+     34.2
+    ],
+    "mouth": [
+     290.2,
+     155.7
+    ]
+   }
+  }
+ },
  "cr_snake_any_adult_green_face_determined_f": {
   "category": "animals",
   "desc": "green snake, head close-up, front view, determined, brows lowered",
@@ -167695,14 +172493,2155 @@
    }
   }
  },
+ "cr_tortoise_any_adult_lie_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, lying down, facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 127.5,
+   "px_per_unit": 273.52,
+   "anchors": {
+    "head": [
+     40.7,
+     91.9
+    ],
+    "eye": [
+     29.9,
+     85.8
+    ],
+    "mouth": [
+     15.9,
+     103.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_lie_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, lying down, facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 127.5,
+   "px_per_unit": 273.52,
+   "anchors": {
+    "head": [
+     283.3,
+     91.9
+    ],
+    "eye": [
+     294.1,
+     85.8
+    ],
+    "mouth": [
+     308.1,
+     103.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_look_up_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, looking up, facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    267
+   ],
+   "ground_y": 184.3,
+   "px_per_unit": 294.44,
+   "anchors": {
+    "head": [
+     40.5,
+     40.1
+    ],
+    "eye": [
+     37.2,
+     27.2
+    ],
+    "mouth": [
+     13.2,
+     29.3
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_look_up_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, looking up, facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    267
+   ],
+   "ground_y": 184.3,
+   "px_per_unit": 294.44,
+   "anchors": {
+    "head": [
+     283.5,
+     40.1
+    ],
+    "eye": [
+     286.8,
+     27.2
+    ],
+    "mouth": [
+     310.8,
+     29.3
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_scared_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, crouching, scared, facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    271
+   ],
+   "ground_y": 152.6,
+   "px_per_unit": 332.59,
+   "anchors": {
+    "head": [
+     51.9,
+     109.3
+    ],
+    "eye": [
+     39.7,
+     100.6
+    ],
+    "mouth": [
+     20.5,
+     119.8
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_scared_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, crouching, scared, facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    271
+   ],
+   "ground_y": 152.6,
+   "px_per_unit": 332.59,
+   "anchors": {
+    "head": [
+     272.1,
+     109.3
+    ],
+    "eye": [
+     284.3,
+     100.6
+    ],
+    "mouth": [
+     303.5,
+     119.8
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_shout_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, shouting with mouth open, facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    220
+   ],
+   "ground_y": 144.7,
+   "px_per_unit": 263.85,
+   "anchors": {
+    "head": [
+     42.3,
+     49.7
+    ],
+    "eye": [
+     34.3,
+     40.9
+    ],
+    "mouth": [
+     16.2,
+     52.6
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_shout_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, shouting with mouth open, facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    220
+   ],
+   "ground_y": 144.7,
+   "px_per_unit": 263.85,
+   "anchors": {
+    "head": [
+     281.7,
+     49.7
+    ],
+    "eye": [
+     289.7,
+     40.9
+    ],
+    "mouth": [
+     307.8,
+     52.6
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_sleep_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, sleeping, facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 140.7,
+   "px_per_unit": 304.06,
+   "anchors": {
+    "head": [
+     43.8,
+     101.2
+    ],
+    "eye": [
+     31.6,
+     94.8
+    ],
+    "mouth": [
+     16.7,
+     114.7
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_sleep_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, sleeping, facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 140.7,
+   "px_per_unit": 304.06,
+   "anchors": {
+    "head": [
+     280.2,
+     101.2
+    ],
+    "eye": [
+     292.4,
+     94.8
+    ],
+    "mouth": [
+     307.3,
+     114.7
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_stand_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, standing, facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     40.7,
+     64.6
+    ],
+    "eye": [
+     30.7,
+     57.4
+    ],
+    "mouth": [
+     14.9,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_stand_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, standing, facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     283.3,
+     64.6
+    ],
+    "eye": [
+     293.3,
+     57.4
+    ],
+    "mouth": [
+     309.1,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_walk1_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, walking (stride A), facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     40.7,
+     64.6
+    ],
+    "eye": [
+     30.7,
+     57.4
+    ],
+    "mouth": [
+     14.9,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_walk1_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, walking (stride A), facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     283.3,
+     64.6
+    ],
+    "eye": [
+     293.3,
+     57.4
+    ],
+    "mouth": [
+     309.1,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_walk2_l": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, walking (stride B), facing left (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     40.7,
+     64.6
+    ],
+    "eye": [
+     30.7,
+     57.4
+    ],
+    "mouth": [
+     14.9,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_adult_walk2_r": {
+  "category": "animals",
+  "desc": "land tortoise with a domed shell, walking (stride B), facing right (full body)",
+  "en": [
+   "tortoise",
+   "land tortoise",
+   "giant tortoise"
+  ],
+  "zh": [
+   "陆龟",
+   "乌龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "adult",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     283.3,
+     64.6
+    ],
+    "eye": [
+     293.3,
+     57.4
+    ],
+    "mouth": [
+     309.1,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_lie_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, lying down, facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 127.5,
+   "px_per_unit": 273.52,
+   "anchors": {
+    "head": [
+     40.7,
+     91.9
+    ],
+    "eye": [
+     29.9,
+     85.8
+    ],
+    "mouth": [
+     15.9,
+     103.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_lie_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, lying down, facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 127.5,
+   "px_per_unit": 273.52,
+   "anchors": {
+    "head": [
+     283.3,
+     91.9
+    ],
+    "eye": [
+     294.1,
+     85.8
+    ],
+    "mouth": [
+     308.1,
+     103.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_look_up_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, looking up, facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    267
+   ],
+   "ground_y": 184.3,
+   "px_per_unit": 294.44,
+   "anchors": {
+    "head": [
+     40.5,
+     40.1
+    ],
+    "eye": [
+     37.2,
+     27.2
+    ],
+    "mouth": [
+     13.2,
+     29.3
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_look_up_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, looking up, facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    267
+   ],
+   "ground_y": 184.3,
+   "px_per_unit": 294.44,
+   "anchors": {
+    "head": [
+     283.5,
+     40.1
+    ],
+    "eye": [
+     286.8,
+     27.2
+    ],
+    "mouth": [
+     310.8,
+     29.3
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_scared_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, crouching, scared, facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    271
+   ],
+   "ground_y": 152.6,
+   "px_per_unit": 332.59,
+   "anchors": {
+    "head": [
+     51.9,
+     109.3
+    ],
+    "eye": [
+     39.7,
+     100.6
+    ],
+    "mouth": [
+     20.5,
+     119.8
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_scared_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, crouching, scared, facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    271
+   ],
+   "ground_y": 152.6,
+   "px_per_unit": 332.59,
+   "anchors": {
+    "head": [
+     272.1,
+     109.3
+    ],
+    "eye": [
+     284.3,
+     100.6
+    ],
+    "mouth": [
+     303.5,
+     119.8
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_shout_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, shouting with mouth open, facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    220
+   ],
+   "ground_y": 144.7,
+   "px_per_unit": 263.85,
+   "anchors": {
+    "head": [
+     42.3,
+     49.7
+    ],
+    "eye": [
+     34.3,
+     40.9
+    ],
+    "mouth": [
+     16.2,
+     52.6
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_shout_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, shouting with mouth open, facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    220
+   ],
+   "ground_y": 144.7,
+   "px_per_unit": 263.85,
+   "anchors": {
+    "head": [
+     281.7,
+     49.7
+    ],
+    "eye": [
+     289.7,
+     40.9
+    ],
+    "mouth": [
+     307.8,
+     52.6
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_sleep_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, sleeping, facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 140.7,
+   "px_per_unit": 304.06,
+   "anchors": {
+    "head": [
+     43.8,
+     101.2
+    ],
+    "eye": [
+     31.6,
+     94.8
+    ],
+    "mouth": [
+     16.7,
+     114.7
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_sleep_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, sleeping, facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    250
+   ],
+   "ground_y": 140.7,
+   "px_per_unit": 304.06,
+   "anchors": {
+    "head": [
+     280.2,
+     101.2
+    ],
+    "eye": [
+     292.4,
+     94.8
+    ],
+    "mouth": [
+     307.3,
+     114.7
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_stand_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, standing, facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     40.7,
+     64.6
+    ],
+    "eye": [
+     30.7,
+     57.4
+    ],
+    "mouth": [
+     14.9,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_stand_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, standing, facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     283.3,
+     64.6
+    ],
+    "eye": [
+     293.3,
+     57.4
+    ],
+    "mouth": [
+     309.1,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_walk1_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, walking (stride A), facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     40.7,
+     64.6
+    ],
+    "eye": [
+     30.7,
+     57.4
+    ],
+    "mouth": [
+     14.9,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_walk1_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, walking (stride A), facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     283.3,
+     64.6
+    ],
+    "eye": [
+     293.3,
+     57.4
+    ],
+    "mouth": [
+     309.1,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_walk2_l": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, walking (stride B), facing left (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     40.7,
+     64.6
+    ],
+    "eye": [
+     30.7,
+     57.4
+    ],
+    "mouth": [
+     14.9,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_elder_walk2_r": {
+  "category": "animals",
+  "desc": "old tortoise with a wrinkled neck, walking (stride B), facing right (full body)",
+  "en": [
+   "old tortoise",
+   "tortoise",
+   "wise old tortoise"
+  ],
+  "zh": [
+   "老陆龟",
+   "老乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "elder",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    227
+   ],
+   "ground_y": 149.4,
+   "px_per_unit": 273.47,
+   "anchors": {
+    "head": [
+     283.3,
+     64.6
+    ],
+    "eye": [
+     293.3,
+     57.4
+    ],
+    "mouth": [
+     309.1,
+     73.2
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_lie_l": {
+  "category": "animals",
+  "desc": "baby tortoise, lying down, facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "l",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 123.3,
+   "px_per_unit": 299.82,
+   "anchors": {
+    "head": [
+     44.3,
+     88.3
+    ],
+    "eye": [
+     32.2,
+     81.4
+    ],
+    "mouth": [
+     16.3,
+     101.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_lie_r": {
+  "category": "animals",
+  "desc": "baby tortoise, lying down, facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "lie",
+   "facing": "r",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 123.3,
+   "px_per_unit": 299.82,
+   "anchors": {
+    "head": [
+     279.7,
+     88.3
+    ],
+    "eye": [
+     291.8,
+     81.4
+    ],
+    "mouth": [
+     307.7,
+     101.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_look_up_l": {
+  "category": "animals",
+  "desc": "baby tortoise, looking up, facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "l",
+   "size": [
+    324,
+    265
+   ],
+   "ground_y": 186.2,
+   "px_per_unit": 322.77,
+   "anchors": {
+    "head": [
+     44.2,
+     43.8
+    ],
+    "eye": [
+     40.4,
+     29.3
+    ],
+    "mouth": [
+     13.4,
+     31.7
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_look_up_r": {
+  "category": "animals",
+  "desc": "baby tortoise, looking up, facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "look_up",
+   "facing": "r",
+   "size": [
+    324,
+    265
+   ],
+   "ground_y": 186.2,
+   "px_per_unit": 322.77,
+   "anchors": {
+    "head": [
+     279.8,
+     43.8
+    ],
+    "eye": [
+     283.6,
+     29.3
+    ],
+    "mouth": [
+     310.6,
+     31.7
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_scared_l": {
+  "category": "animals",
+  "desc": "baby tortoise, crouching, scared, facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "l",
+   "size": [
+    324,
+    264
+   ],
+   "ground_y": 148.9,
+   "px_per_unit": 369.55,
+   "anchors": {
+    "head": [
+     51.9,
+     105.7
+    ],
+    "eye": [
+     37.9,
+     95.7
+    ],
+    "mouth": [
+     16.0,
+     117.6
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_scared_r": {
+  "category": "animals",
+  "desc": "baby tortoise, crouching, scared, facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "scared",
+   "facing": "r",
+   "size": [
+    324,
+    264
+   ],
+   "ground_y": 148.9,
+   "px_per_unit": 369.55,
+   "anchors": {
+    "head": [
+     272.1,
+     105.7
+    ],
+    "eye": [
+     286.1,
+     95.7
+    ],
+    "mouth": [
+     308.0,
+     117.6
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_shout_l": {
+  "category": "animals",
+  "desc": "baby tortoise, shouting with mouth open, facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "l",
+   "size": [
+    324,
+    212
+   ],
+   "ground_y": 140.2,
+   "px_per_unit": 289.07,
+   "anchors": {
+    "head": [
+     46.1,
+     46.5
+    ],
+    "eye": [
+     37.0,
+     36.6
+    ],
+    "mouth": [
+     16.7,
+     49.8
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_shout_r": {
+  "category": "animals",
+  "desc": "baby tortoise, shouting with mouth open, facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "shout",
+   "facing": "r",
+   "size": [
+    324,
+    212
+   ],
+   "ground_y": 140.2,
+   "px_per_unit": 289.07,
+   "anchors": {
+    "head": [
+     277.9,
+     46.5
+    ],
+    "eye": [
+     287.0,
+     36.6
+    ],
+    "mouth": [
+     307.3,
+     49.8
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_sleep_l": {
+  "category": "animals",
+  "desc": "baby tortoise, sleeping, facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "l",
+   "size": [
+    324,
+    240
+   ],
+   "ground_y": 135.1,
+   "px_per_unit": 332.81,
+   "anchors": {
+    "head": [
+     47.8,
+     96.2
+    ],
+    "eye": [
+     34.1,
+     89.1
+    ],
+    "mouth": [
+     17.3,
+     111.4
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_sleep_r": {
+  "category": "animals",
+  "desc": "baby tortoise, sleeping, facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "sleep",
+   "facing": "r",
+   "size": [
+    324,
+    240
+   ],
+   "ground_y": 135.1,
+   "px_per_unit": 332.81,
+   "anchors": {
+    "head": [
+     276.2,
+     96.2
+    ],
+    "eye": [
+     289.9,
+     89.1
+    ],
+    "mouth": [
+     306.7,
+     111.4
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_stand_l": {
+  "category": "animals",
+  "desc": "baby tortoise, standing, facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "l",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 144.9,
+   "px_per_unit": 299.76,
+   "anchors": {
+    "head": [
+     44.4,
+     61.3
+    ],
+    "eye": [
+     33.0,
+     53.2
+    ],
+    "mouth": [
+     15.2,
+     71.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_stand_r": {
+  "category": "animals",
+  "desc": "baby tortoise, standing, facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "stand",
+   "facing": "r",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 144.9,
+   "px_per_unit": 299.76,
+   "anchors": {
+    "head": [
+     279.6,
+     61.3
+    ],
+    "eye": [
+     291.0,
+     53.2
+    ],
+    "mouth": [
+     308.8,
+     71.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_walk1_l": {
+  "category": "animals",
+  "desc": "baby tortoise, walking (stride A), facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "l",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 144.9,
+   "px_per_unit": 299.76,
+   "anchors": {
+    "head": [
+     44.4,
+     61.3
+    ],
+    "eye": [
+     33.0,
+     53.2
+    ],
+    "mouth": [
+     15.2,
+     71.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_walk1_r": {
+  "category": "animals",
+  "desc": "baby tortoise, walking (stride A), facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk1",
+   "facing": "r",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 144.9,
+   "px_per_unit": 299.76,
+   "anchors": {
+    "head": [
+     279.6,
+     61.3
+    ],
+    "eye": [
+     291.0,
+     53.2
+    ],
+    "mouth": [
+     308.8,
+     71.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_walk2_l": {
+  "category": "animals",
+  "desc": "baby tortoise, walking (stride B), facing left (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "l",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 144.9,
+   "px_per_unit": 299.76,
+   "anchors": {
+    "head": [
+     44.4,
+     61.3
+    ],
+    "eye": [
+     33.0,
+     53.2
+    ],
+    "mouth": [
+     15.2,
+     71.0
+    ]
+   }
+  }
+ },
+ "cr_tortoise_any_young_walk2_r": {
+  "category": "animals",
+  "desc": "baby tortoise, walking (stride B), facing right (full body)",
+  "en": [
+   "baby tortoise",
+   "little tortoise",
+   "tortoise"
+  ],
+  "zh": [
+   "小陆龟",
+   "小乌龟",
+   "陆龟"
+  ],
+  "search": false,
+  "creature": {
+   "species": "tortoise",
+   "family": "reptile",
+   "sex": "any",
+   "age": "young",
+   "variant": "",
+   "marks": [],
+   "pose": "walk2",
+   "facing": "r",
+   "size": [
+    324,
+    219
+   ],
+   "ground_y": 144.9,
+   "px_per_unit": 299.76,
+   "anchors": {
+    "head": [
+     279.6,
+     61.3
+    ],
+    "eye": [
+     291.0,
+     53.2
+    ],
+    "mouth": [
+     308.8,
+     71.0
+    ]
+   }
+  }
+ },
  "cr_turtle_any_adult_face_determined_f": {
   "category": "animals",
   "desc": "turtle, head close-up, front view, determined, brows lowered",
   "en": [
    "turtle face",
    "turtle",
-   "tortoise",
    "green turtle",
+   "pond turtle",
    "face",
    "close-up",
    "determined"
@@ -167737,8 +174676,8 @@
   "en": [
    "turtle face",
    "turtle",
-   "tortoise",
    "green turtle",
+   "pond turtle",
    "face",
    "close-up",
    "happy"
@@ -167773,8 +174712,8 @@
   "en": [
    "turtle face",
    "turtle",
-   "tortoise",
    "green turtle",
+   "pond turtle",
    "face",
    "close-up",
    "calm"
@@ -167809,8 +174748,8 @@
   "en": [
    "turtle face",
    "turtle",
-   "tortoise",
    "green turtle",
+   "pond turtle",
    "face",
    "close-up",
    "sad"
@@ -167845,8 +174784,8 @@
   "en": [
    "turtle face",
    "turtle",
-   "tortoise",
    "green turtle",
+   "pond turtle",
    "face",
    "close-up",
    "wide-eyed and scared"
@@ -167880,8 +174819,8 @@
   "desc": "turtle, looking up, facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -167920,8 +174859,8 @@
   "desc": "turtle, looking up, facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -167960,8 +174899,8 @@
   "desc": "turtle, roaring with its mouth open, facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168000,8 +174939,8 @@
   "desc": "turtle, roaring with its mouth open, facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168040,8 +174979,8 @@
   "desc": "turtle, crouching, scared, facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168080,8 +175019,8 @@
   "desc": "turtle, crouching, scared, facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168120,8 +175059,8 @@
   "desc": "turtle, sleeping, facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168160,8 +175099,8 @@
   "desc": "turtle, sleeping, facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168200,8 +175139,8 @@
   "desc": "turtle, standing, facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168240,8 +175179,8 @@
   "desc": "turtle, standing, facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168279,8 +175218,8 @@
   "desc": "turtle, swimming, facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168319,8 +175258,8 @@
   "desc": "turtle, swimming, facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168359,8 +175298,8 @@
   "desc": "turtle, swimming (tail sweep), facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168399,8 +175338,8 @@
   "desc": "turtle, swimming (tail sweep), facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168439,8 +175378,8 @@
   "desc": "turtle, walking (stride A), facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168479,8 +175418,8 @@
   "desc": "turtle, walking (stride A), facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168519,8 +175458,8 @@
   "desc": "turtle, walking (stride B), facing left (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
@@ -168559,8 +175498,8 @@
   "desc": "turtle, walking (stride B), facing right (full body)",
   "en": [
    "turtle",
-   "tortoise",
-   "green turtle"
+   "green turtle",
+   "pond turtle"
   ],
   "zh": [
    "乌龟",
