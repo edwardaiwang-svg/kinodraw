@@ -5,7 +5,6 @@ scenes, and nothing that belongs to a picture book (its title page, its "The End
 import json
 
 import numpy as np
-from types import SimpleNamespace
 
 from kinodraw import ingest, script
 from kinodraw.director.rules import RulesDirector
@@ -57,6 +56,7 @@ def produce(tmp_path, genre='lesson', insert=None):
     plan['scenes'][1]['shots'] = [insert(ids[1]) if insert else shot(ids[1], 'insert', ['ava'], props=['fl_egg'])]
     plan['scenes'][2].update(treatment='kinetic_type', text={'kind': 'kinetic', 'ref': ids[2]})
     plan['scenes'][3].update(text={'kind': 'cta', 'ref': ids[3]}, shots=[shot(ids[3], 'medium', ['ben'])])
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     prod = render.make_production(board, tl, 'en', tmp_path)
@@ -76,13 +76,8 @@ def test_people_in_a_lesson_are_staged_by_the_storybook_and_text_scenes_stay_mot
 def test_a_lesson_has_no_picture_book_title_page_and_ends_on_its_title(tmp_path):
     prod = produce(tmp_path)
     assert all(page.title is None for span in prod.spans if span.story for page in span.story)
-    ctx = SimpleNamespace(ep={'story': 'story', 'title': {'en': 'Weekend Pancakes'}}, lang='en',
-                          T=lambda value: value['en'], project_dir=tmp_path)
-    assert end_heading(ctx) == 'Weekend Pancakes'                  # the Studio's story setting does not make it a story
-    config = json.loads((tmp_path / 'project.json').read_text())
-    config['plan_v3']['storyboard']['genre'] = 'story'
-    (tmp_path / 'project.json').write_text(json.dumps(config))
-    assert end_heading(ctx) == 'The End'
+    assert end_heading(prod.whiteboard.ctx) == 'Weekend Pancakes'   # the Studio's story setting does not make it a story
+    assert end_heading(produce(tmp_path / 'story', genre='story').whiteboard.ctx) == 'The End'
 
 
 def test_a_person_never_takes_the_palette_body_colour_as_skin(tmp_path):

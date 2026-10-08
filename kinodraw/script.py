@@ -221,12 +221,13 @@ def sentence_of(text: str, lang: str) -> str:
     return text + ('.' if lang in ('en', 'es') else '。')
 
 
-def build(doc: Document, story: str = 'explain') -> dict:
+def build(doc: Document, story: str = 'explain', title_card: bool = False) -> dict:
     """The storyboard skeleton. Explainers get the full structure (spoken title, agenda, part openers, takeaways,
     sign-off); promos, stories and showcases are told straight: only the script's own sentences, then a silent end
-    card, because a spoken "Part 1" or "Key takeaway" would break an ad or a story."""
+    card, because a spoken "Part 1" or "Key takeaway" would break an ad or a story. With ``title_card`` (a new
+    project), the script's own top heading opens them as a silent title card."""
     if story != 'explain':
-        return _lean(doc, story)
+        return _lean(doc, story, title_card)
     lang, T = doc.lang, TEXT[doc.lang]
     sections = [s for s in doc.sections if s.paragraphs]
     preamble = list(doc.preamble)
@@ -334,14 +335,22 @@ def tell_straight(board: dict, story: str = 'story') -> dict:
                           'title': {lang: ''}}]}
 
 
-def _lean(doc: Document, story: str) -> dict:
+def _lean(doc: Document, story: str, title_card: bool = False) -> dict:
     lang = doc.lang
     paragraphs = list(doc.preamble) + [p for s in doc.sections for p in s.paragraphs]
-    beats = []
+    beats, chapters = [], []
+    heading = title_card and doc.heading
+    if heading:
+        # The script's own top heading opens the video as a title card: shown, never said. It is b000, so the
+        # script's own lines keep the ids they have without a heading.
+        chapters.append({'id': 'intro', 'kind': 'intro', 'label': {lang: doc.title}, 'title': {lang: ''}})
+        beats.append({'id': 'b000', 'chapter': 'intro', 'kind': 'title', 'display': {lang: doc.title},
+                      'spoken': {lang: normalize(doc.title, lang).spoken}, 'visuals': [], 'silent': True,
+                      'music': True})
     for text in beats_of(paragraphs, lang):
         n = normalize(text, lang)
-        beats.append({'id': f'b{len(beats) + 1:03d}', 'chapter': 'main', 'kind': 'narration',
+        beats.append({'id': f'b{len(beats) + (not heading):03d}', 'chapter': 'main', 'kind': 'narration',
                       'display': {lang: text}, 'spoken': {lang: n.spoken}, 'visuals': []})
+    chapters.append({'id': 'main', 'kind': 'board', 'label': {lang: doc.title}, 'title': {lang: ''}})
     return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator', 'story': story,
-            'chapters': [{'id': 'main', 'kind': 'board', 'label': {lang: doc.title}, 'title': {lang: ''}}],
-            'beats': beats}
+            'chapters': chapters, 'beats': beats}

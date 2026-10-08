@@ -26,8 +26,10 @@ def test_the_factory_builds_the_whiteboard_renderer_by_default(tmp_path):
 
 def test_a_promo_is_told_straight_without_whiteboard_narration(tmp_path):
     board = pipeline.new_project(FIX / 'promo_tiny.md', tmp_path / 'p', direction={'look': 'collage', 'story': 'promo'})
-    spoken = ' '.join(b['spoken']['en'] for b in board['beats'])
-    assert {b['kind'] for b in board['beats']} == {'narration'} and [c['id'] for c in board['chapters']] == ['main']
+    spoken = ' '.join(b['spoken']['en'] for b in board['beats'] if not b.get('silent'))   # what the voice says
+    title, *told = board['beats']                                       # the script's heading is a silent title card
+    assert title['kind'] == 'title' and title['silent'] and title['display']['en'] == board['title']['en']
+    assert {b['kind'] for b in told} == {'narration'} and [c['id'] for c in board['chapters']] == ['intro', 'main']
     assert 'Part 1' not in spoken and 'Key takeaway' not in spoken and 'Thanks for watching' not in spoken
     assert spoken.startswith('You want to do something fun') and 'friendr' in spoken.lower()
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))

@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import PRODUCT, ingest, library, script, styles, voice, voice_server
+from . import PRODUCT, ingest, library, script, speech, styles, voice, voice_server
 from .project_store import ProjectStore, atomic_save_json
 from .progress import RenderContext, wait_process
 from .audio import mix as audio
@@ -100,7 +100,7 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
         doc = ingest.read(str(source), title=title)
     if lang:
         doc.lang = lang
-    board = script.build(doc, (direction or {}).get('story') or 'explain')
+    board = script.build(doc, (direction or {}).get('story') or 'explain', title_card=True)
     board.update({k: v for k, v in (direction or {}).items() if v})
     config = {'script': target.name, 'lang': doc.lang, 'voice': voice.LANGS[doc.lang]['voice'], 'speed': 1.0,
               'director': 'rules', 'director_v3': False, 'series_bible': {'cast': []}, 'workers': 2, **settings}
@@ -253,7 +253,9 @@ def read_aloud(project_dir: Path) -> list[dict]:
     project_dir = Path(project_dir)
     saved = ProjectStore(project_dir).load()
     lang, board = saved['settings']['lang'], script.sync_takes(saved['storyboard'])
-    return [{'beat': b['id'], 'text': s} for b in board['beats'] for s in script.sentences(b['spoken'][lang], lang)]
+    labels = speech.screenplay_labels(b['display'][lang] for b in board['beats'])
+    return [{'beat': b['id'], 'text': s} for b in board['beats'] if not b.get('silent')
+            for s in script.sentences(speech.said_text(b['spoken'][lang], lang, labels)[0], lang)]
 
 
 def set_recording(project_dir: Path, source) -> dict:
@@ -383,31 +385,66 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
     if not server:
         voice.ensure_models(lang, progress and (lambda done, total: progress('download-voice', done, total)))
     clips = {}
+    # What each beat says and who says it: labels, stage directions and emoji are never read; each character has
+    # their own voice (a voice server or your recording reads every part in its one voice).
+    plan = cfg.get('plan_v3') if cfg.get('director_v3') else None
+    parts = speech.voice_parts(board, plan, cfg['voice'], None if server else (lambda: voice.voices(lang)))
+    (project_dir / 'voice').mkdir(parents=True, exist_ok=True)
+    (project_dir / 'voice' / 'cast.json').write_text(json.dumps(speech.cast_of(
+        parts, 'your recording' if cfg.get('recording') else 'the voice server' if server else None)), encoding='utf-8')
     for i, beat in enumerate(board['beats']):
         if progress and hasattr(progress, 'check_cancelled'):
             progress.check_cancelled()
+        spoken, todo = beat['spoken'][lang], parts[beat['id']]
         if server:
-            clips[beat['id']] = voice_server.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', server,
-                                                      cfg['speed'], lexicon)
+            said, index = _one_voice(todo['parts'])
+            clip = voice_server.synthesize(said, lang, project_dir / 'voice', server, cfg['speed'], lexicon) \
+                if said else voice.silence(todo['hold'], len(spoken), project_dir / 'voice')
+            clips[beat['id']] = _remapped(clip, spoken, said, index)
         else:
-            clips[beat['id']] = voice.synthesize(beat['spoken'][lang], lang, project_dir / 'voice', cfg['voice'],
-                                               cfg['speed'], lexicon)
+            clips[beat['id']] = voice.speak(spoken, todo['parts'], lang, project_dir / 'voice', cfg['speed'], lexicon,
+                                            todo['hold'])
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if cfg.get('recording'):
         if progress:
             progress('align', 0, 1)
-        beats = [(beat['id'], beat['spoken'][lang]) for beat in board['beats']]
+        said = {beat['id']: _one_voice(parts[beat['id']]['parts']) for beat in board['beats']}
+        beats = [(bid, text) for bid, (text, _) in said.items() if text]
         try:
-            clips = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
+            taken = voice.from_recording(project_dir / cfg['recording'], beats, lang, project_dir / 'voice',
                                          cfg['voice'], cfg['speed'], lexicon,
                                          **({} if cfg.get('clean_recording', True) else {'clean': False}))
+            if any(said[beat['id']][0] != beat['spoken'][lang] for beat in board['beats']):
+                # Labels or directions were left out of the reading: times move back onto the spoken text, and
+                # a beat with nothing to read keeps its silent hold.
+                taken = {beat['id']: _remapped(taken[beat['id']], beat['spoken'][lang], *said[beat['id']])
+                         if beat['id'] in taken else clips[beat['id']] for beat in board['beats']}
+            clips = taken
         except voice.RecordingError as error:
             raise voice.RecordingError(f'{error} To narrate with the AI voice instead, run: kinodraw voice '
                                        f'"{project_dir}" --recording none. The script to read, as it is narrated (one '
                                        f'numbered sentence a line, with the lines {PRODUCT["name"]} adds to yours), is '
                                        f'in "{text}".', error.beat, error.plain) from None
     return _Narration(clips, saved['revision'], source_hash)
+
+
+def _one_voice(parts) -> tuple[str, list]:
+    """Every part of a beat as one text for one voice, and the spoken-text offset of each of its characters."""
+    text, index = '', []
+    for seg, _, _ in parts:
+        if text:
+            text += ' '
+            index.append(seg.index[0])
+        text, index = text + seg.said, index + seg.index
+    return text, index
+
+
+def _remapped(clip, spoken: str, said: str, index: list):
+    """A clip of ``said`` with its character times moved onto the beat's spoken text."""
+    if said == spoken or not said:
+        return clip if said == spoken else voice.Clip(clip.wav, clip.duration, [0.0] * len(spoken))
+    return voice.Clip(clip.wav, clip.duration, speech.spoken_times(spoken, index, clip.char_times))
 
 
 def build_audio(project_dir: Path, clips: dict) -> dict:
@@ -585,6 +622,8 @@ def _finish(project_dir):
     if decoded.returncode or decoded.stderr.strip():
         raise RuntimeError(f'finished media decode failed ({decoded.returncode}): {decoded.stderr.decode(errors="replace")}')
     qa = encoded_qa(tl, video, mixed, size=size, narrated_pages=_narrated_pages(cfg, tl))
+    cast = project_dir / 'voice' / 'cast.json'
+    qa['voices'] = speech.shared_voices(json.loads(cast.read_text(encoding='utf-8'))) if cast.is_file() else []
     if board.get('look') == 'collage':                # words written over other words never pass
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]

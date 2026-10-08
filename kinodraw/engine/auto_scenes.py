@@ -236,21 +236,10 @@ def build_take_note(ctx, beat, chapter, x0, t, t_label=None, t_head=None):
 
 
 def end_heading(ctx):
-    """A story closes like a picture book ("The End"); other videos repeat their title. A directed plan's genre
-    decides when there is one: the Studio's "Choose for me" sets story for every script, a recipe or an update too."""
-    genre = plan_genre(getattr(ctx, 'project_dir', None))
-    story = genre == 'story' if genre else ctx.ep.get('story') == 'story'
+    """A story closes like a picture book ("The End"); other videos repeat their title. A planned video is a story
+    only when its plan reads it as one: an explainer or an ad made with the story dial never ends on "The End"."""
+    story = ctx.ep.get('genre', 'story') == 'story' and ctx.ep.get('story') == 'story'
     return ui(ctx.ep, ctx.lang)['the_end'] if story else ctx.T(ctx.ep.get('title'))
-
-
-def plan_genre(project_dir):
-    """The genre of the project's saved Director-v3 plan, or None without one."""
-    try:
-        config = json.loads((Path(project_dir) / 'project.json').read_text(encoding='utf-8'))
-    except (TypeError, OSError, ValueError):
-        return None
-    plan = config.get('plan_v3') if config.get('director_v3') else None
-    return ((plan or {}).get('storyboard') or {}).get('genre') or None
 
 
 def build_end_card(ctx, x0, t):

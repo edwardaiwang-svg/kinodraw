@@ -30,6 +30,9 @@ class Document:
     lang: str                                   # 'en', 'zh' or 'es'
     preamble: list[str] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
+    # The title is the script's own top heading (a new project shows it on a title card). Not part of the content:
+    # a .docx read as a file and as the Markdown the Studio makes of it are the same document.
+    heading: bool = field(default=False, compare=False)
 
 
 def detect_lang(text: str) -> str:
@@ -73,6 +76,9 @@ def _clean_inline(text: str) -> str:
 def _text_blocks(text: str) -> list[tuple[int, str]]:
     """[(heading level or 0 for a paragraph, text)] from Markdown or plain text."""
     lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    lines = [re.sub(r'^\s*>\s?', '', line) for line in lines]          # > quoted lines are ordinary text
+    from .speech import labels_in, screenplay_labels
+    labels = screenplay_labels(lines)
     blocks, para = [], []
 
     def flush():
@@ -97,6 +103,8 @@ def _text_blocks(text: str) -> list[tuple[int, str]]:
             flush()                                                   # list items stand alone
             blocks.append((0, _clean_inline(re.sub(r'^([-*+•]|\d+[.)])\s+', '', line))))
         else:
+            if para and (labels_in(line, labels) or re.fullmatch(r'\[[^\]]*\]', line)):
+                flush()                                               # each screenplay line or direction stands alone
             para.append(line)
         i += 1
     flush()
@@ -130,7 +138,7 @@ def _structure(blocks, title, fallback) -> Document:
     text = ' '.join(t for _, t in blocks)
     lang = detect_lang(text)
     doc = Document(title=_sentence_spacing(title or body_title or (_first_words(blocks) if blocks else fallback or 'Untitled'), lang),
-                   lang=lang)
+                   lang=lang, heading=body_title is not None)
     current = None
     for lvl, t in blocks:
         t = _sentence_spacing(t, lang)

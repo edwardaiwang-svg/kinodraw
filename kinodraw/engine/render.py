@@ -108,6 +108,10 @@ class Production:
                               for scene in plan['scenes'] for e in scene['elements']
                               if e['kind'] == 'diagram'} if plan else {}
         self._source_beats -= set(self._diagrams)
+        from .process_diagrams import board_beats
+        self._board_plan = plan if plan and board_beats(plan) else None
+        self._source_beats -= board_beats(plan)
+        self._boards = None
         self.skin = skins.for_board(self.ep)                  # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
         self.layout = Layout(self.g)
@@ -159,6 +163,12 @@ class Production:
         if beat['id'] in self._diagrams:
             self._proof(beat)
             return
+        if self._board_plan is not None:
+            from .process_diagrams import Boards
+            self._boards = self._boards or Boards(self, self._board_plan)
+            if beat['id'] in self._boards.scene_of:
+                self._boards.draw(beat, not_before)
+                return
         deferred = []
         first_new = len(ctx.elements)
         for k, v in enumerate(beat.get('visuals', [])):
@@ -1047,6 +1057,11 @@ def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16
     """Every renderer is built here, so the storyboard's look picks its class in one place (whiteboard by default).
     A look's renderer answers frame(t), warnings, ctx.elements and cues() like Production does. ``portrait`` can
     override the look's 9:16 layout for comparisons; the registry decides by default."""
+    config_path = Path(project_dir) / 'project.json'
+    config = json.loads(config_path.read_text(encoding='utf-8')) if config_path.is_file() else {}
+    plan = config.get('plan_v3') if config.get('director_v3') else None
+    if plan and plan.get('storyboard', {}).get('genre'):
+        episode = {**episode, 'genre': plan['storyboard']['genre']}    # what the planner read it as (the end card)
     if size is not None:
         from .geometry import geometry_for_size, PORTRAIT
         size = geometry_for_size(size, aspect).size
@@ -1060,9 +1075,6 @@ def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16
     if aspect == '1:1':
         from ..export import native_production
         return native_production(episode, tline, lang, project_dir, (1080, 1080), aspect=aspect, relaxed=relaxed)
-    config_path = Path(project_dir) / 'project.json'
-    config = json.loads(config_path.read_text(encoding='utf-8')) if config_path.is_file() else {}
-    plan = config.get('plan_v3') if config.get('director_v3') else None
     if (not relaxed and plan and plan['style']['mode'] != 'whiteboard'
             and any(s['treatment'] != 'whiteboard' for s in plan['scenes'])):
         from .hybrid import HybridProduction
