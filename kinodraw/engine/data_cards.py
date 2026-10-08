@@ -128,12 +128,14 @@ def _counted(text, progress):
 
 
 # ------------------------------------------------------------------ one card as an image
-def card_image(card, look, W, H, progress=1.):
+def card_image(card, look, W, H, progress=1., fit=None):
     """The card drawn at ``progress`` (0..1: a counter's count, the bars' growth); RGBA, sized to its content and
-    at most MAX_W of the frame wide."""
+    at most MAX_W of the frame wide (``fit``: the box width of the finished card, kept while a counter counts)."""
     u = look.unit
     pad = 30 * u
     width = round(min(MAX_W * W, 640 * u))
+    if card.kind in ('change', 'bars'):
+        width = round(min(width, (len(card.items) * 210 + 100) * u))        # two bars need no more room
     inner = width - 2 * pad - (0 if look.board else 12 * u)
     left = pad + (0 if look.board else 12 * u)
     kind = card.kind
@@ -274,11 +276,17 @@ def card_image(card, look, W, H, progress=1.):
             ops.append(pin)
             y = top + f.size * 1.3
     height = round(y + pad - 6 * u)
-    img = Image.new('RGBA', (width + round(10 * u), height + round(12 * u)), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    _frame_box(d, (2, 2, width, height), look, u)
+    layer = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     for op in ops:
-        op(d)
+        op(ImageDraw.Draw(layer))
+    if fit is not None:
+        width = fit
+    elif kind not in ('change', 'bars'):               # left-aligned content: the card is only as wide as it
+        box = layer.getbbox()
+        width = min(width, max(round(.16 * W), (box[2] if box else width) + round(pad)))
+    img = Image.new('RGBA', (width + round(10 * u), height + round(12 * u)), (0, 0, 0, 0))
+    _frame_box(ImageDraw.Draw(img), (2, 2, width, height), look, u)
+    img.alpha_composite(layer.crop((0, 0, width, height)), (0, 0))
     if img.height > (CAPTION_TOP - TOP) * H:
         scale = (CAPTION_TOP - TOP) * H / img.height
         img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
@@ -327,8 +335,9 @@ class DataCards:
         if key not in self._images:
             if len(self._images) > 64:
                 self._images.clear()
+            fit = self.image(k, look).width - round(10 * self.unit) if animated else None
             self._images[key] = card_image(card, _Look(look, self.skin, self.lang, self.unit), self.W, self.H,
-                                           progress if animated else 1.)
+                                           progress if animated else 1., fit)
         return self._images[key]
 
     def _candidates(self, w, h):
