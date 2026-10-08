@@ -23,6 +23,9 @@ def test_a_chat_line_with_a_time_is_read_by_the_narrator_and_its_time_never_said
     parts = speech.segments(text, 'en', labels, label_speaker=lambda name: 'otto')
     assert [(p.speaker, p.said) for p in parts] == [(None, 'Who took my charger?')]
     assert '7:02' not in speech.caption_text(text, labels)
+    # The voice reads the beat's spoken text, where the time is already words.
+    spoken = 'Otto (seven oh two AM): Who took my charger? 🔌'
+    assert [p.speaker for p in speech.segments(spoken, 'en', labels, label_speaker=lambda name: 'otto')] == [None]
     # Without a time it is still a screenplay line, in the speaker's own voice.
     assert speech.segments('Otto: Who took it?\nOtto: Me.', 'en', {'otto'}, label_speaker=lambda n: 'otto')[0].speaker \
         == 'otto'

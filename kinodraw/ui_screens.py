@@ -149,10 +149,22 @@ def _which(words: str) -> str:
     return 'message'
 
 
+# The same time as the voice's text reads it ("(seven oh two AM)", "(six twelve p.m.)").
+_HOUR = r'(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)'
+_MINUTE = (r'(?:oh\s+(?:one|two|three|four|five|six|seven|eight|nine)|ten|eleven|twelve|thirteen|fourteen|fifteen|'
+           r'sixteen|seventeen|eighteen|nineteen|(?:twenty|thirty|forty|fifty)(?:[\s-]+(?:one|two|three|four|five|six|'
+           r'seven|eight|nine))?|hundred|o[\'’]clock)')
+SAID_TIME = re.compile(r'^\s*' + _HOUR + r'(?:\s+' + _MINUTE + r')?\s*(?:[AaPp]\.?\s?[Mm]\.?|in\s+the\s+(?:morning|'
+                       r'afternoon|evening))\s*$|^\s*' + _HOUR + r'\s+' + _MINUTE + r'\s*$', re.I)
+
+
 def chat_time(paren: str | None) -> str | None:
-    """The time a chat transcript label carries ("(7:02 AM)" -> "7:02 AM"), else None."""
+    """The time a chat transcript label carries ("(7:02 AM)" -> "7:02 AM", or as the voice reads it, "(seven oh two
+    AM)"), else None."""
     inner = (paren or '').strip('() \t')
-    return inner if inner and TIME.match(inner) and re.search(r'\d', inner) else None
+    if inner and TIME.match(inner) and re.search(r'\d', inner):
+        return inner
+    return inner if inner and SAID_TIME.match(inner) else None
 
 
 # ------------------------------------------------------------------ sentences
