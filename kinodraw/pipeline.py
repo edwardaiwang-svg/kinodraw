@@ -410,6 +410,11 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
             if beat.get('stanza_end'):              # the end of a stanza in verse: a longer rest
                 rest = max([speech.STANZA_GAP] + [gap for pos, gap, _, _ in stops if pos >= len(spoken)])
                 stops = [s for s in stops if s[0] < len(spoken)] + [(len(spoken), rest, None, 0.)]
+            if beat.get('line_starts'):             # a line of verse that runs on: a short breath before the next
+                taken = {s[0] for s in stops}
+                stops = sorted(stops + [b for b in speech.line_breaths(beat['display'][lang], spoken,
+                                                                        beat['line_starts'], lang)
+                                        if b[0] not in taken])
             clips[beat['id']] = voice.paced(clip, spoken, stops, project_dir / 'voice') if todo['parts'] else clip
         if progress:
             progress('voice', i + 1, len(board['beats']))

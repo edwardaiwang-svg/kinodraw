@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 import imageio_ffmpeg
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageDraw
 
 from .. import markup, script, styles
 from . import auto_scenes as auto
@@ -30,7 +30,7 @@ from . import ink
 from . import scenes
 from . import skin as skins
 from . import timeline as tl
-from .captions import word_at
+from .captions import BACKING_ALPHA, backing_color, caption_spot, needs_backing, word_at
 from .storyboard import drawable, normalize
 from .board import Camera, Layout, Scheduler
 from .geometry import LANDSCAPE
@@ -1066,9 +1066,11 @@ class Production:
                 return next(x for x in self.ep['chapters'] if x['id'] == c['id']), c['start'], c['end']
         return None
 
-    def _caption(self, frame, t, look=None, accent=None):
+    def _caption(self, frame, t, look=None, accent=None, avoid=()):
         """The caption being said, its word being said in the skin's accent. A hybrid's motion scenes pass their
-        palette's: ``look`` = (letters, outline, stroke) and ``accent``."""
+        palette's: ``look`` = (letters, outline, stroke) and ``accent``. ``avoid``: boxes (px) of the figures on
+        the page; the caption moves off them (captions.caption_spot). An outlined caption over a busy or mid-toned
+        background gets a backing strip (captions.needs_backing)."""
         i = bisect.bisect_right(self.cap_starts, t) - 1
         if i < 0:
             return
@@ -1079,7 +1081,21 @@ class Production:
         raw = self.skin.caption_image(c['text'], self.lang, word_at(said, t), accent, look)
         img = self._fit_ui(raw)
         bottom = 1036 if raw.width > int(self.size[0] * .92) else 1046
-        ink.paste(frame, img, (self.size[0] - img.width) / 2, bottom - img.height)
+        x, y = caption_spot(self.size, img.size, bottom, avoid)
+        self.caption_box = (round(x), round(y), round(x) + img.width, round(y) + img.height)
+        if look is not None or self.skin.caption_style == 'outline':
+            letters, edge = (look or (self.skin.caption, self.skin.caption_edge))[:2]
+            region = frame.crop(self.caption_box)
+            # Only over a known background: a transparent layer is composited onto its picture later.
+            opaque = region.mode != 'RGBA' or region.getchannel('A').getextrema()[0] == 255
+            if opaque and needs_backing(region.convert('RGB').reduce(3), tuple(letters), tuple(edge)):
+                pad = 14
+                strip = Image.new('RGBA', (img.width + 2 * pad, img.height + pad), (0, 0, 0, 0))
+                ImageDraw.Draw(strip).rounded_rectangle(
+                    (0, 0, strip.width - 1, strip.height - 1), radius=18,
+                    fill=backing_color(tuple(letters), tuple(edge)) + (round(255 * BACKING_ALPHA),))
+                ink.paste(frame, strip, round(x) - pad, round(y) - pad // 2)
+        ink.paste(frame, img, x, y)
 
 
 def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None, *, size=None):

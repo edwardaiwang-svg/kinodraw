@@ -416,7 +416,7 @@ class NativeProduction(Production):
             self._caption_cache[text] = _caption_image(text, self.lang, self.skin, self.size, self.aspect)
         return self._caption_cache[text]
 
-    def _caption(self, frame, t, look=None, accent=None):
+    def _caption(self, frame, t, look=None, accent=None, avoid=()):
         i = bisect.bisect_right(self.cap_starts, t) - 1
         if i < 0:
             return

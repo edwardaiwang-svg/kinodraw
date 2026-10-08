@@ -378,6 +378,29 @@ def tell_straight(board: dict, story: str = 'story') -> dict:
                           'title': {lang: ''}}]}
 
 
+def _line_starts(beats: list[dict], lines: list[str], lang: str) -> None:
+    """Verse: mark each beat's words that start a new line of the poem (``line_starts``, word indices into its
+    display text), found by walking the script's own lines in order; the first word of a beat is not marked."""
+    if lang == 'zh' or not lines:
+        return
+    words, firsts = [], set()
+    for line in lines:
+        firsts.add(len(words))
+        words += line.split()
+    cursor = 0
+    for beat in beats:
+        if beat['kind'] != 'narration':
+            continue
+        mine = beat['display'][lang].split()
+        at = next((i for i in range(cursor, len(words) - len(mine) + 1) if words[i:i + len(mine)] == mine), None)
+        if at is None or not mine:
+            continue
+        starts = [k for k in range(1, len(mine)) if at + k in firsts]
+        if starts:
+            beat['line_starts'] = starts
+        cursor = at + len(mine)
+
+
 def _lean(doc: Document, story: str, title_card: bool = False) -> dict:
     lang = doc.lang
     paragraphs = list(doc.preamble) + [p for s in doc.sections for p in s.paragraphs]
@@ -399,6 +422,7 @@ def _lean(doc: Document, story: str, title_card: bool = False) -> dict:
         for beat in beats:
             if beat['kind'] == 'narration' and beat['display'][lang] in ends:
                 beat['stanza_end'] = True
+        _line_starts(beats, doc.verse_lines, lang)
     chapters.append({'id': 'main', 'kind': 'board', 'label': {lang: doc.title}, 'title': {lang: ''}})
     return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator', 'story': story,
             'chapters': chapters, 'beats': beats}

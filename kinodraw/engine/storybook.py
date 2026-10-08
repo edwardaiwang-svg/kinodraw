@@ -441,6 +441,8 @@ class Storybook:
     """Shot lists and frames for a story plan's scenes."""
 
     def __init__(self, plan, by_id, timeline, size, paper, title=''):
+        # Screen boxes (px) of the figures and of the props drawn since the frame began (the caption avoids them).
+        self.figure_boxes, self.prop_boxes = [], []
         self.reader = Reader(plan['cast'])
         self.texts = [b['spoken'] for b in by_id.values()]
         self.reader.prime(self.texts)
@@ -1131,7 +1133,7 @@ class Storybook:
                 for doodle, x, y, height in shot.sky:
                     self._paste(overlay, doodle, False, x, y + height / 2, height, cam)
         for doodle, x, ground, height in shot.props:
-            self._paste(overlay, doodle, False, x, ground, height, cam)
+            self._paste(overlay, doodle, False, x, ground, height, cam, record=self.prop_boxes)
         if getattr(shot, 'atmosphere', 'none') in ('fog', 'fog_with_shooting_star'):
             self._fog(overlay, local)
         if any(f.crowd for f in shot.figures) or shot.figures:
@@ -1281,7 +1283,7 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1., pin=None, reference=None, crown=0., shut=False):
+               anchor_y=1., pin=None, reference=None, crown=0., shut=False, record=None):
         """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
 
         ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
@@ -1320,6 +1322,10 @@ class Storybook:
             return at[0], at[1], image.width, image.height      # wholly off the page (a push past a prop, a closer shot)
         overlay.alpha_composite(image, (max(0, at[0]), max(0, at[1])),
                                 (max(0, -at[0]), max(0, -at[1])))
+        if record is not None:              # a figure or a prop: where it is drawn, for the caption to avoid
+            drawn = image.getchannel('A').getbbox()
+            if drawn:
+                record.append((at[0] + drawn[0], at[1] + drawn[1], at[0] + drawn[2], at[1] + drawn[3]))
         return at[0], at[1], image.width, image.height
 
     def where(self, f, shot, local):
@@ -1380,7 +1386,7 @@ class Storybook:
         reference = self._reference(f)
         self._paste(overlay, doodle, mirror, x, ground + dy, height, cam, rotate=rotate, squash=squash,
                     reference=reference, crown=CROWN_SIZE * height if 'crown' in f.marks else 0.,
-                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local), pin=pin)
+                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local), pin=pin, record=self.figure_boxes)
         effects = []
         for kind, v in (m.effects if m is not None else ()):
             effects.append(lambda o, k=kind, v=v, fig=f, d=doodle, mi=mirror, x0=x, g=ground + dy:

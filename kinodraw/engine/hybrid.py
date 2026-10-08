@@ -527,6 +527,12 @@ class HybridProduction:
             for e in copy_elements:
                 e.text = '\n'.join(caption_wrap(e.text, 36))
                 e.size = 96
+            for e in list(copy_elements):
+                # Narration written as it is said rolls on in pages of at most two lines, never a paragraph.
+                pages = self._rolled(e)
+                if len(pages) > 1:
+                    elements[elements.index(e):elements.index(e) + 1] = pages
+                    copy_elements[copy_elements.index(e):copy_elements.index(e) + 1] = pages
             if pictures and copy_elements and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 for e in copy_elements:
                     e.y, e.width = .23, 1400
@@ -638,6 +644,28 @@ class HybridProduction:
         element.preset, element.cues = 'clauses', tuple(cues) or (0.,)
         element.start = element.cues[0]
 
+    @staticmethod
+    def _rolled(element):
+        """A clause-built text element of more than two lines as pages (captions.roll_pages), each up from its first
+        clause's spoken time and gone as the next page comes; [element] when it needs no paging."""
+        from .captions import roll_pages
+        if element.preset != 'clauses' or element.text.count('\n') < 2:
+            return [element]
+        flat = ' '.join(element.text.split())
+        words, starts = flat.split(), element.word_starts(flat, element.cues)
+        pages = []
+        for a, b in roll_pages(flat, 36):
+            cues = [starts[k] for k in range(a, b) if k == a or words[k - 1][-1] in ',;:.!?…']
+            page = replace(element, text='\n'.join(caption_wrap(' '.join(words[a:b]), 36)), cues=tuple(cues),
+                           start=cues[0])
+            for name in ('_ref', '_quote_source'):
+                if hasattr(element, name):
+                    setattr(page, name, getattr(element, name))
+            pages.append(page)
+        for page, after in zip(pages, pages[1:]):
+            page.end = after.start
+        return pages
+
     def _on_beat(self, at, low, high, latest):
         """The first music beat between ``at + low`` and ``at + high`` (absolute seconds, never after ``latest``),
         else a fixed delay inside that window: state changes land on the music where the narration allows."""
@@ -658,7 +686,8 @@ class HybridProduction:
         headline = MotionElement(text='\n'.join(caption_wrap(display, 40)), width=1500,
                                  size=80, x=.5, y=.27)
         self._clause_build(span, headline, source['id'])
-        elements.insert(len(elements) - 1, headline)
+        elements[len(elements) - 1:len(elements) - 1] = self._rolled(headline)
+        span.on_screen += (source['id'],)           # the headline writes the sentence: no caption repeats it
         span.stacked = True
 
     def _call_to_action(self, span, elements, source):
@@ -1714,6 +1743,8 @@ class HybridProduction:
         return self._draw_screen_text(image, t) if self.screen_notes else image
 
     def _frame_at(self, t):
+        if getattr(self, 'storybook', None) is not None:
+            self.storybook.figure_boxes, self.storybook.prop_boxes = [], []   # for this frame's caption to avoid
         if not self.spans or t < self.starts[0]:
             return self.whiteboard.frame(t)
         end_start = self.tl['end_card']['start']
@@ -1733,7 +1764,7 @@ class HybridProduction:
                                           duration=last.join_length)      # a picture book turns to its last page
                 image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
-                    self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
+                    self.whiteboard._caption(image, t, self.caption_look, self.caption_accent, self._figures())
                 return image.convert('RGB')
             return self.whiteboard.frame(t)
         i = bisect.bisect_right(self.starts, t) - 1
@@ -1778,8 +1809,14 @@ class HybridProduction:
         if not self.vertical:
             self.whiteboard._steps(image, t)
         if not self.vertical and not self._written(span, t):
-            self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
+            self.whiteboard._caption(image, t, self.caption_look, self.caption_accent, self._figures())
         return image.convert('RGB')
+
+    def _figures(self):
+        """The boxes of the figures on this frame's story page, then of its props (none on other scenes)."""
+        if getattr(self, 'storybook', None) is None:
+            return ()
+        return tuple(self.storybook.figure_boxes), tuple(self.storybook.prop_boxes)
 
     def _leave_bubbled_lines_to_the_bubbles(self):
         """Where a story page shows a line in a speech bubble (the storybook's ``bubbled`` rows: beat, start, end of
