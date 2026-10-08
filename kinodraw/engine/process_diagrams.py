@@ -293,8 +293,8 @@ class Rect:
         return not (self.x + self.w + pad <= other.x or other.x + other.w + pad <= self.x or
                     self.y + self.h + pad <= other.y or other.y + other.h + pad <= self.y)
 
-    def inside(self, W, H):
-        return self.x >= 0 and self.y >= 0 and self.x + self.w <= W and self.y + self.h <= H
+    def inside(self, W, H, mx=0., my=0.):
+        return self.x >= mx and self.y >= my and self.x + self.w <= W - mx and self.y + self.h <= H - my
 
     def tuple(self):
         return (self.x, self.y, self.w, self.h)
@@ -329,8 +329,9 @@ class Layout:
     texts take the first free position from an ordered list of candidates for their kind; links and rings are
     lines and need no room of their own (their labels do)."""
 
-    def __init__(self, board, W, H, measure, picture_box=None, ground_ids=None):
+    def __init__(self, board, W, H, measure, picture_box=None, ground_ids=None, margin=(0., 0.)):
         self.board, self.W, self.H, self.measure = board, W, H, measure
+        self.mx, self.my = margin            # how far in from the page edges text must stay to be on screen
         self.ground_ids = ground_ids
         self.picture_box = picture_box or (lambda item, rect: rect)   # content bbox of a picture fitted in rect
         self.items = {it['id']: it for it in board['items']}
@@ -342,7 +343,7 @@ class Layout:
 
     # -- helpers
     def free(self, rect, pad=None):
-        return rect.inside(self.W, self.H) and not any(rect.hits(r, self.pad if pad is None else pad) for r in self.taken)
+        return rect.inside(self.W, self.H, self.mx, self.my) and not any(rect.hits(r, self.pad if pad is None else pad) for r in self.taken)
 
     def take(self, iid, rect):
         self.place[iid] = rect
@@ -350,8 +351,8 @@ class Layout:
         return rect
 
     def clamp(self, rect):
-        rect.x = min(max(0., rect.x), self.W - rect.w)
-        rect.y = min(max(0., rect.y), self.H - rect.h)
+        rect.x = min(max(self.mx, rect.x), self.W - self.mx - rect.w)
+        rect.y = min(max(self.my, rect.y), self.H - self.my - rect.h)
         return rect
 
     def _first_free(self, candidates, size, pad=None):
@@ -373,7 +374,7 @@ class Layout:
         kinds = {it['id']: it['kind'] for it in self.board['items']}
         texts = {k: r for k, r in self.place.items() if k.endswith(':label') or kinds.get(k) in ('label', 'equation')}
         pictures = {k: r for k, r in self.place.items() if kinds.get(k) == 'picture'}
-        out = [f'{k} leaves the page' for k, r in texts.items() if not r.inside(self.W, self.H)]
+        out = [f'{k} leaves the page' for k, r in texts.items() if not r.inside(self.W, self.H, self.mx, self.my)]
         names = sorted(texts)
         for i, a in enumerate(names):
             out += [f'{a} covers picture {b}' for b, r in pictures.items() if texts[a].hits(r)]
@@ -870,7 +871,13 @@ class Boards:
             doodles[it['id'] + ':at'] = (ox, oy)
             return Rect(ox + bbox[0], oy + bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1])
 
-        lay = Layout(board, W, H, measure, picture_box, lay_ground)
+        # The renderer hides a text that comes closer than 4% of the frame to its edge (Production.text_visible);
+        # the camera stands at the page's column, give or take its 12 px idle drift (Production._drift), so that
+        # edge is this far inside the page.
+        fw, fh = prod.size
+        px = x0 - col * prod.layout.g.col
+        margin = (max(0., fw * .04 - px, px + W - fw * .96) + 14, max(0., fh * .04 - y0, y0 + H - fh * .96) + 2)
+        lay = Layout(board, W, H, measure, picture_box, lay_ground, margin)
         adds, width = [], max(3., 5 * s)
         deadline = end - .2
         items = board['items']
@@ -1065,10 +1072,11 @@ class Boards:
 
     @staticmethod
     def _charges(area, sign, colour, W, H, width):
-        n = max(3, min(9, round(area.w * area.h / (H * .075) ** 2)))
-        cols = max(1, min(n, round(math.sqrt(n * area.w / max(1., area.h)))))
+        r = min(H * .032, max(H * .022, min(area.w, area.h) * .14))     # signs big enough to read at a glance
+        cols = max(1, min(5, int(area.w // (r * 2.8))))
+        rows = max(1, min(3, int(area.h // (r * 2.8))))
+        n = max(2, min(9, cols * rows))
         rows = math.ceil(n / cols)
-        r = min(area.w / cols, area.h / rows, H * .05) * .32
         polys = []
         for k in range(n):
             row, c = divmod(k, cols)
@@ -1078,7 +1086,7 @@ class Boards:
             polys.append([(x - r * .55, y), (x + r * .55, y)])
             if sign == '+':
                 polys.append([(x, y - r * .55), (x, y + r * .55)])
-        return ink.stroke_drawing((W, H), polys, color=colour, width=max(2., width * .55), min_dur=.6, max_dur=1.4)
+        return ink.stroke_drawing((W, H), polys, color=colour, width=max(2.5, width * .7), min_dur=.6, max_dur=1.4)
 
     @staticmethod
     def _path(p, q, style, H):

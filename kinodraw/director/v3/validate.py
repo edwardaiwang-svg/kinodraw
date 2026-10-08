@@ -314,12 +314,15 @@ TARGETED = ('charges', 'link', 'rings', 'highlight', 'hop', 'rotate')
 LINK_STYLES = ('straight', 'curved', 'dashed', 'zigzag')
 
 
-def _position(item, order, by_id):
-    beat = by_id[item['beat_id']]
-    at = pd.find(beat['spoken'], item['cue']) if item['cue'] else 0
+def _spoken_at(beat, cue):
+    at = pd.find(beat['spoken'], cue) if cue else 0
     if at is None:
-        at = pd.find(beat['text'], item['cue']) or 0
-    return order[item['beat_id']], at
+        at = pd.find(beat['text'], cue) or 0
+    return at
+
+
+def _position(item, order, by_id):
+    return order[item['beat_id']], _spoken_at(by_id[item['beat_id']], item['cue'])
 
 
 def _item(beat_id, kind, text='', cue=None, to='', ref='', at='auto', style='none', iid=''):
@@ -339,9 +342,18 @@ def _board_items(board, where, scene, by_id, offered, repairs):
             repairs.append(f'{w}: dropped {it["kind"]} for beat {it["beat_id"]!r} outside the scene')
             continue
         beat = by_id[it['beat_id']]
+        said = (re.split(r'\s*(?:\.\.\.|…)\s*', it['text'])[0] if it['kind'] == 'equation' else it['text']).strip(
+            ' ,.;:!?')
+        said = said if said and _verbatim(said, beat) else ''
         if it['cue'] and not _verbatim(it['cue'], beat):
-            repairs.append(f'{w}.cue: {it["cue"]!r} is not in {it["beat_id"]}; it appears as the beat starts')
-            it['cue'] = ''
+            repairs.append(f'{w}.cue: {it["cue"]!r} is not in {it["beat_id"]}; it appears '
+                           + (f'as {said!r} is said' if said else 'as the beat starts'))
+            it['cue'] = said
+        elif said and _spoken_at(beat, said) < _spoken_at(beat, it['cue']):
+            # a thing appears when its own words are said, not at a later cue ("negative charge zigzags" draws
+            # the leader then, not at "a tree or a rooftop" ten seconds later)
+            repairs.append(f'{w}.cue: {it["cue"]!r} -> {said!r}, where its words are said')
+            it['cue'] = said
         if not re.fullmatch(r'[\w-]{1,40}', it['id']) or it['id'] in ids:
             fresh = f'{it["kind"]}_{k + 1}'
             repairs.append(f'{w}.id: named {fresh} (missing or repeated id {it["id"]!r})')
@@ -379,18 +391,20 @@ def _board_items(board, where, scene, by_id, offered, repairs):
         ids.add(it['id'])
         items.append(it)
     items.sort(key=lambda it: _position(it, order, by_id))
-    # an item cued before the item it points at waits for that item's cue ("drops to the ground" before "ground")
-    ids_at = {it['id']: k for k, it in enumerate(items)}
-    for it in list(items):
-        refs = [r for r in (it['to'], it['ref'] if it['kind'] == 'link' else '') if r in ids_at]
-        later = [items[ids_at[r]] for r in refs if ids_at[r] > items.index(it)]
-        if later and it['kind'] != 'picture':
-            target = max(later, key=items.index)
-            items.remove(it)
-            items.insert(items.index(target) + 1, it)
-            it['beat_id'], it['cue'] = target['beat_id'], target['cue']
-            repairs.append(f'{where}: {it["kind"]} {it["id"]} now appears with {target["id"]}, which it points at')
-            ids_at = {i['id']: k for k, i in enumerate(items)}
+    # an item cued before something it points at brings that thing forward with it ("drops to the ground" draws
+    # the ground then; waiting for a later cue instead left the board empty while the step was being said)
+    for _ in range(2 * len(items)):
+        pos = {i['id']: k for k, i in enumerate(items)}
+        late = next(((it, items[pos[r]]) for it in items if it['kind'] != 'picture'
+                     for r in (it['to'], it['ref'] if it['kind'] == 'link' else '')
+                     if r in pos and pos[r] > pos[it['id']]), None)
+        if late is None:
+            break
+        it, target = late
+        items.remove(target)
+        items.insert(items.index(it), target)
+        target['beat_id'], target['cue'] = it['beat_id'], it['cue']
+        repairs.append(f'{where}: {target["kind"]} {target["id"]} now appears with {it["id"]}, which points at it')
     seen, kept = {}, []
     for it in items:
         kind, target = it['kind'], it['to']
@@ -430,8 +444,8 @@ def _auto_items(scene, by_id, board_items, constructs):
                     n += 1
                     line = f'line_{n}'
                     out.append((bid, _item(bid, 'number_line', start.group(), iid=line)))
-                jumps = list(re.finditer(r'\b(?:jump|hop|step|then)\s+(?:back\s+)?' + pd._NUM + r'\b', sentence, re.I))
-                if jumps and re.search(r'\b(?:jump|hop)', sentence, re.I):
+                jumps = _jumps(sentence)
+                if jumps:
                     if line is None:
                         n += 1
                         line = f'line_{n}'
@@ -467,6 +481,51 @@ def _auto_items(scene, by_id, board_items, constructs):
     return out
 
 
+def _jumps(sentence):
+    """The hops a sentence says ('Jump 5 first, then 3'), when it talks about jumping at all."""
+    if not re.search(r'\b(?:jump|hop)', sentence, re.I):
+        return []
+    return list(re.finditer(r'\b(?:jump|hop|step|then)\s+(?:back\s+)?' + pd._NUM + r'\b', sentence, re.I))
+
+
+def _complete_lines(boards, scene, by_id, repairs, path):
+    """A planner's number line gets every hop the narration says while it is up ('Jump 5 first, then 3' draws
+    both hops, never only the first)."""
+    order = {bid: k for k, bid in enumerate(scene['beat_ids'])}
+    for n, board in enumerate(boards):
+        lines = [it for it in board['items'] if it['kind'] == 'number_line']
+        if not lines:
+            continue
+        first = min(order[it['beat_id']] for it in lines)
+        last = max(order[it['beat_id']] for it in board['items'])
+        taken = {it['id'] for it in board['items']}
+        for bid in scene['beat_ids'][first:last + 1]:
+            for sentence in re.split(r'(?<=[.!?])\s+', by_id[bid]['text']):
+                for k, m in enumerate(_jumps(sentence)):
+                    hop = _item(bid, 'hop', m.group())
+                    here = _position(hop, order, by_id)
+                    line = next((ln for ln in reversed(lines) if _position(ln, order, by_id) <= here), lines[0])
+                    on_line = [it for it in board['items'] if it['kind'] == 'hop' and it['to'] == line['id']]
+                    said = next((it for it in on_line if it['beat_id'] == bid
+                                 and pd.hop_of(it['text']) == pd.hop_of(m.group())), None)
+                    before = [it for it in on_line if _position(it, order, by_id) < here]
+                    restart = k == 0 and bool(before) and sentence_restarts(scene, by_id, bid, sentence)
+                    if said is not None:
+                        if restart and said['style'] != 'restart':   # "Now swap the order. Jump 2 first" starts over
+                            said['style'] = 'restart'
+                            repairs.append(f'{path}.boards[{n}]: hop {said["id"]} starts again from the line\'s start')
+                        continue
+                    hop['style'] = 'restart' if restart else 'none'
+                    i = 1
+                    while f'hop_{i}' in taken:
+                        i += 1
+                    hop['id'], hop['to'] = f'hop_{i}', line['id']
+                    taken.add(hop['id'])
+                    board['items'].append(hop)
+                    repairs.append(f'{path}.boards[{n}]: added hop {m.group()!r} said in {bid}')
+        board['items'].sort(key=lambda it: _position(it, order, by_id))
+
+
 def sentence_restarts(scene, by_id, bid, sentence):
     """A hop sentence starts again from the line's start when the narration has just landed or swapped."""
     text = ' '.join(by_id[b]['text'] for b in scene['beat_ids'][:scene['beat_ids'].index(bid) + 1])
@@ -500,6 +559,8 @@ def _boards(scene, path, by_id, offered, intent, repairs):
     if not boards:
         scene['boards'] = []
         return
+    if not auto:
+        _complete_lines(boards, scene, by_id, repairs, path)
     all_items = [it for b in boards for it in b['items']]
     order = {bid: k for k, bid in enumerate(scene['beat_ids'])}
     added = _auto_items(scene, by_id, all_items, constructs=auto)

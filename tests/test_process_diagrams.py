@@ -102,13 +102,81 @@ def test_valid_board_is_kept_and_bad_items_are_repaired_or_dropped_with_notes():
     kept = {it['id']: it for it in out['scenes'][0]['boards'][0]['items']}
     assert set(kept) >= {'cloud', 'ice', 'stone', 'heavy', 'ground', 'drop', 'late'}
     assert 'made_up' not in kept and 'ufo' not in kept and 'loop' not in kept
-    assert kept['late']['cue'] == 'ground'           # unheard cue cleared, then it waits for the picture it names
-    assert kept['drop']['cue'] == 'ground'           # cued before its target: appears with it
+    assert kept['late']['cue'] == 'hailstorm'        # unheard cue: it appears as its own words are said
+    assert kept['ground']['cue'] == 'drops to the ground'   # a step said before its target brings the target along
+    assert kept['ice']['cue'] == 'freezing air'
     assert out['scenes'][0]['treatment'] == 'whiteboard' and out['style']['mode'] == 'hybrid'
     notes = '\n'.join(repairs)
     for needle in ("dropped label 'ice nucleation'", "dropped picture 'flying_saucer'", 'dropped link loop',
-                   "'not said anywhere' is not in", 'motion -> hybrid', 'drop now appears with ground'):
+                   "'not said anywhere' is not in", 'motion -> hybrid', 'ground now appears with drop'):
         assert needle in notes
+
+
+LEADER = ('# Lightning\n\nWhen the difference gets big enough, a faint path of negative charge zigzags down from the '
+          'cloud in short steps. Scientists call it a stepped leader. At the same time, a spark called a streamer '
+          'reaches up from a tree or a rooftop.\n\nCount the seconds between the flash and the thunder, divide by '
+          'five, and you\'ll know roughly how many miles away the strike was.')
+
+
+def test_each_step_is_drawn_when_its_words_are_said_and_brings_what_it_points_at():
+    board = _board(LEADER)
+    bid = board['beats'][0]['id']
+    plan = from_rules(board)
+    late = 'from a tree or a rooftop'                  # a planner cued every step at the end of the beat
+    scene = copy.deepcopy(plan['scenes'][0])
+    scene.update(beat_ids=[bid], treatment='whiteboard', elements=[], shots=[], boards=[{'layout': 'parts', 'items': [
+        _item('cloud', bid, 'picture', 'When the difference gets big enough', ref='storm_cloud', at='center'),
+        _item('tree', bid, 'picture', late, ref='fl_house', at='ground'),
+        _item('streamer', bid, 'link', late, ref='tree', to='cloud', style='zigzag', text='streamer'),
+        _item('leader', bid, 'link', late, ref='cloud', to='tree', style='zigzag', text='negative charge'),
+        _item('leader_term', bid, 'label', late, to='leader', text='stepped leader')]}])
+    plan['scenes'] = [scene] + [s for s in plan['scenes'] if bid not in s['beat_ids']]
+    out, repairs = validate(plan, board, _offered(board, ['storm_cloud', 'fl_house']))
+    items = out['scenes'][0]['boards'][0]['items']
+    cues = {it['id']: it['cue'] for it in items}
+    assert cues['leader'] == 'negative charge' and cues['leader_term'] == 'stepped leader'
+    assert cues['streamer'] == 'streamer' and cues['tree'] == 'negative charge'    # the tree comes with the leader
+    assert [it['id'] for it in items] == ['cloud', 'tree', 'leader', 'leader_term', 'streamer']
+
+
+def test_a_planner_number_line_gets_every_hop_the_narration_says():
+    board = _board(LESSON)
+    bids = [b['id'] for b in board['beats']]
+    plan = from_rules(board)
+    scene = copy.deepcopy(plan['scenes'][0])
+    scene.update(beat_ids=bids[:2], treatment='whiteboard', elements=[], shots=[], boards=[{'layout': 'flow', 'items': [
+        _item('line', bids[0], 'number_line', 'Start at 0', text='Start at 0'),
+        _item('four', bids[0], 'hop', 'Jump 4', to='line', text='Jump 4'),
+        _item('two', bids[1], 'hop', 'Jump 2 first', to='line', text='Jump 2')]}])   # "then 4" left out
+    plan['scenes'] = [scene] + [s for s in plan['scenes'] if not set(s['beat_ids']) & set(bids[:2])]
+    out, repairs = validate(plan, board, _offered(board, []))
+    hops = [(it['beat_id'], it['text'], it['style']) for it in out['scenes'][0]['boards'][0]['items']
+            if it['kind'] == 'hop']
+    assert hops == [(bids[0], 'Jump 4', 'none'), (bids[0], 'jump 2', 'none'),
+                    (bids[1], 'Jump 2', 'restart'), (bids[1], 'then 4', 'none')]   # the swap starts over
+    assert any("added hop 'then 4'" in r for r in repairs)
+
+
+def test_board_text_stays_where_the_renderer_shows_it(tmp_path):
+    def edit(board, plan):
+        bids = [b['id'] for b in board['beats']]
+        scene = copy.deepcopy(plan['scenes'][-1])
+        scene.update(beat_ids=[bids[-1]], treatment='whiteboard', elements=[], shots=[], boards=[{
+            'layout': 'flow', 'items': [
+                _item('light', bids[-1], 'picture', 'Count the seconds', ref='storm_cloud'),
+                _item('sound', bids[-1], 'picture', 'Count the seconds', ref='fl_house'),
+                _item('rule', bids[-1], 'equation', 'divide by five',              # third step: the right edge
+                      text='seconds ... divide by five ... roughly ... miles away')]}])
+        plan['scenes'] = [s for s in plan['scenes'] if bids[-1] not in s['beat_ids']] + [scene]
+        plan['style']['mode'] = 'whiteboard'
+    board, plan, timing, prod = _render(tmp_path, LEADER, edit)
+    wb = getattr(prod, 'whiteboard', prod)
+    texts = [e for e in wb.ctx.elements if e.group.startswith('board:') and isinstance(e.drawing, render.ink.TextDrawing)]
+    assert any(e.group.endswith(':rule') for e in texts)
+    for e in texts:
+        t = e.start + e.drawing.duration + .1
+        for drift in (-12, 0, 12):                     # wherever the idle drift takes the camera
+            assert wb.text_visible(e, t, wb.camera.at(t) + drift), e.group
 
 
 def test_an_unresolvable_diagram_ref_becomes_a_board_instead_of_being_dropped():
