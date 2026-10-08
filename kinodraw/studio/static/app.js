@@ -22,8 +22,8 @@ const autoLabel = (director) => `Choose for me (${PICKER[director] || PICKER.rul
 function autoNote(director) {
   const who = director === 'rules'
     ? 'The offline word rules pick on this computer from words in your script; planning text is not uploaded.'
-    : `${director === 'cloud' ? 'KinoDraw Cloud AI' : PICKER[director][0].toUpperCase() + PICKER[director].slice(1)} receives the full story and planning prompt to choose the video plan. Use Offline to keep planning on this computer.`;
-  return `${who} Only styles that work in the chosen format are picked. Name a product below only for a promo (then the paper-collage promo can be picked).`;
+    : `${director === 'cloud' ? 'KinoDraw Cloud AI' : (PICKER[director] || director)[0].toUpperCase() + (PICKER[director] || director).slice(1)} receives the full story and planning prompt to choose the video plan. Use Offline to keep planning on this computer.`;
+  return `${who} Only styles that work in the chosen format are picked. Name a product under More options only for a promo (then the paper-collage promo can be picked).`;
 }
 const pickLine = (pick) => `Style: ${pick.label}, chosen by ${pick.by === 'rules' ? 'the offline word rules' : PICKER[pick.by] || pick.by}: ${pick.reason}${pick.note ? ` (${pick.note})` : ''}`;
 async function needsCloudSignIn(director, lang) {   // KinoDraw Cloud picked with no email sign-in: no account needed while
@@ -450,13 +450,14 @@ function showNew() {
       scriptEdits++;
     } catch (err) { toast(err.message, 8000); } finally { e.target.value = ''; }
   };
-  $('#style').innerHTML = `<option id="style-auto" value="auto">${esc(autoLabel(dirSel.value))}</option>`
-    + STATE.styles.map((s, i) => `<option value="${esc(s.value)}"${i ? '' : ' selected'}>${esc(s.label)}</option>`).join('');
+  $('#style').innerHTML = `<option id="style-auto" value="auto" selected>${esc(autoLabel(dirSel.value))}</option>`   // J 10/7: Choose for me is the default
+    + STATE.styles.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('');
   $('#format').innerHTML = formatOptions('16:9');
   function syncStyle() {                    // a promo names its product; the whiteboard ignores Motion
     const auto = $('#style').value === 'auto', collage = $('#style').value === 'collage/promo';
     $('#style-auto').textContent = autoLabel(dirSel.value);
     $('#brand').classList.toggle('hidden', !collage && !auto);
+    if (collage) $('#more').open = true;     // the promo's product fields sit under More options
     $('#motion-wrap').classList.toggle('hidden', !collage);
     $('#style-note').classList.toggle('hidden', !auto);
     $('#style-note').textContent = auto ? autoNote(dirSel.value) : '';

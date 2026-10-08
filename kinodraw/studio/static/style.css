@@ -64,7 +64,7 @@ label.row input[type="checkbox"] { width: auto; flex: none; accent-color: var(--
 details.more { margin: 4px 0 8px; }
 details.more summary, details#writer summary { cursor: pointer; font-size: 14px; color: var(--soft); }
 details.more[open] { padding: 4px 0 8px; }
-#director-note { margin: 10px 0 0; max-width: 70ch; }
+#director-note, #style-note { margin: 10px 0 0; max-width: 70ch; }
 #voice-play, #n-play { flex: none; white-space: nowrap; }
 #voice, #n-voice { flex: 1; min-width: 0; }
 @media (min-width: 700px) { #voice-wrap { grid-column: span 2; } }

@@ -41,7 +41,7 @@ KinoDraw 在你自己的电脑上把一篇讲稿变成手绘视频：一只手�
 
 ## 选择风格和尺寸
 
-- **Style** 决定画面风格：Whiteboard、Chalkboard、Notebook、Pixel Quest、Mosaic 或 Paper collage promo。**Choose for me** 让导演来选。选 Paper collage promo 或 **Choose for me** 时，还可以填写宣传用的 **Product name**、**Website** 和 **Button text**。
+- **Style** 决定画面风格：Whiteboard、Chalkboard、Notebook、Pixel Quest、Mosaic 或 Paper collage promo。**Choose for me**（默认）让导演来选。选 Paper collage promo 或 **Choose for me** 时，还可以在 **More options** 里填写宣传用的 **Product name**、**Website** 和 **Button text**。
 - **Format** 是横屏 16:9、竖屏 9:16 或方形 1:1，之后可以在项目里修改。
 - 在项目里，画幅旁边的分辨率菜单决定制作和导出的尺寸：**Landscape 1080p**、**Landscape 4K**、**Square 1080** 或 **Portrait 1080**。
 

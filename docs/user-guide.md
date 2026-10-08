@@ -45,7 +45,7 @@ Your first video in a language downloads its voice (about 190 MB, or 220 MB for 
 
 ## Pick a style and a size
 
-- **Style** sets the look: Whiteboard, Chalkboard, Notebook, Pixel Quest, Mosaic, or Paper collage promo. **Choose for me** lets the director pick. With Paper collage promo or **Choose for me**, you can also fill in a **Product name**, **Website** and **Button text** for a promo.
+- **Style** sets the look: Whiteboard, Chalkboard, Notebook, Pixel Quest, Mosaic, or Paper collage promo. **Choose for me** (the default) lets the director pick. With Paper collage promo or **Choose for me**, you can also fill in a **Product name**, **Website** and **Button text** for a promo under **More options**.
 - **Format** is Landscape 16:9, Vertical 9:16 or Square 1:1. You can change it later in the project.
 - In a project, the resolution menu next to the format sets the size when you make or export: **Landscape 1080p**, **Landscape 4K**, **Square 1080** or **Portrait 1080**.
 

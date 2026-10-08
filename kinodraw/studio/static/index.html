@@ -86,13 +86,7 @@
       <label id="motion-wrap" class="hidden">Motion <select id="motion"><option value="calm">Calm</option><option value="lively" selected>Lively</option>
         <option value="showreel">Showreel</option></select></label>
     </div>
-    <p id="style-note" class="note hidden"></p>
-    <div id="brand" class="grid hidden">
-      <label>Product name <input id="brand-name" placeholder="from the script"></label>
-      <label>Website <input id="brand-url" placeholder="example.com"></label>
-      <label>Button text <input id="brand-cta" placeholder="Try it for free"></label>
-    </div>
-    <details class="more">
+    <details id="more" class="more">
       <summary>More options</summary>
       <div class="grid">
         <label>Title <input id="title" placeholder="from the script"></label>
@@ -105,7 +99,13 @@
         <label>Model <input id="model" placeholder="default"></label>
         <label id="base-wrap" class="hidden">Base URL <input id="base-url" placeholder="https://…/v1"></label>
       </div>
+      <div id="brand" class="grid hidden">
+        <label>Product name <input id="brand-name" placeholder="from the script"></label>
+        <label>Website <input id="brand-url" placeholder="example.com"></label>
+        <label>Button text <input id="brand-cta" placeholder="Try it for free"></label>
+      </div>
     </details>
+    <p id="style-note" class="muted hidden"></p>
     <p id="director-note" class="muted"></p>
     <button id="create" class="primary big">Create storyboard</button>
   </section>
