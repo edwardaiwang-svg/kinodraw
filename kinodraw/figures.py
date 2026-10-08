@@ -382,8 +382,8 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
                                                      text[max(a, f.start - 24):f.start], re.I)):
         unit = re.match(r'\s*(each|apiece|a piece|per \w+|an? \w+|/\s?\w+)\b', text[f.end:])
         return Card('price', first, b, value=_shown(f), label=unit.group(1) if unit else '', qualifier=qualifier)
-    if f.family == 'count' and f.value is not None and f.value < 10 and not f.unit:
-        return None                                # "2 of them": too small to be a headline
+    if f.family == 'count' and f.value is not None and f.value < 10 and f.unit not in UNITS:
+        return None                                # "2 of them", "2 friends": too small to be a headline
     label = _label(text, f.end, 4) if not f.unit else _label(text, f.end, 4)
     value = _shown(f)
     direction = ''
