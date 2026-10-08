@@ -15,7 +15,8 @@ from kinodraw.qa import content
 
 # Customer-style scripts the critics measured (pool scripts reduced to the sentences that drew a wrong picture).
 BIRTHDAY = 'Uncle Dev turns fifty!!\n\ngrew up in Kestrel Falls\n\nran Bramwell Hardware twenty-two yrs\n'
-PLUMBER = ('Find the drip. A faucet leaking one drop a second wastes over three thousand gallons a year.\n\n'
+PLUMBER = ('[SHOW: Sam standing in front of the white plumbing van, arms crossed]\n\n'
+           'Find the drip. (cut to close up of a dripping kitchen faucet) A faucet leaking one drop a second wastes over three thousand gallons a year.\n\n'
            'Do all five and you could save up to twenty percent. And if that drip turns out to be bigger than a '
            'washer, you know who to call.\n')
 LESSON = ('Start at 0. Jump 3, then jump 5. You land on 8.\n\n'
@@ -27,11 +28,12 @@ LESSON = ('Start at 0. Jump 3, then jump 5. You land on 8.\n\n'
           'So the answer is still 15.\n\n'
           'This is the commutative property of multiplication. x times y equals y times x.\n\n'
           'Quick check. Decide whether each statement is true or false.\n')
-LIONS = ('Once upon a time, a tiny lion cub named Pendo lived with his pride. Pendo loved his mother, Mara, more than '
+LIONS = ('Once upon a time, in the heart of the golden grasslands, a tiny lion cub named Pendo lived with his pride. Pendo loved his mother, Mara, a lioness, more than '
          'anyone else.\n\n'
          'But Pendo was terrified of his father, the great King Kojo. Kojo had a massive black mane.\n\n'
          'With one massive swipe of his heavy paw, Kojo sent the lead hyena flying into the bushes.\n\n'
-         'Then, the giant king turned around and nudged Pendo with his nose.\n')
+         'Then, the giant king turned around and nudged Pendo with his nose.\n\n'
+         'Mara nudged her cub gently. "Your father has a different job than I do, little one."\n')
 PORCH = ('Ruth made lemonade for the whole street. She set out a pitcher on the porch with a sign that said "Free. '
          'From Eddie."\n\nHe pulled over. The headlights lit up a fence, a field, and nothing else.\n')
 LETTER = 'The Envelope\n\nTheo found an old envelope in the drawer with a letter inside.\n'
@@ -43,6 +45,9 @@ WRONG = [
                                                  'fl_floppy_disk'}),
     (PLUMBER, 'Find the drip', 'drip', {'hi_intravenous_drip', 'hi_intravenous_bag'}),
     (PLUMBER, 'that drip turns out', 'drip', {'hi_intravenous_drip', 'hi_intravenous_bag'}),
+    (PLUMBER, 'white plumbing van', 'white', {'fl_white_heart', 'fl_man_with_white_cane_facing_right', 'fl_man_white_hair'}),
+    (PLUMBER, 'arms crossed', 'crossed', {'fl_hand_with_index_finger_and_thumb_crossed'}),
+    (PLUMBER, 'cut to close up', 'cut', {'fl_cut_of_meat'}),
     (LESSON, 'Jump 3', 'jump', {'fl_kangaroo'}),
     (LESSON, 'swap the order', 'order', {'tb_menu_order'}),
     (LESSON, 'quarter turn', 'picture', {'fl_framed_picture', 'camera'}),
@@ -50,6 +55,7 @@ WRONG = [
     (LESSON, 'A plus B', 'plus', {'fl_plus', 'fl_heavy_equals_sign'}),
     (LIONS, 'King Kojo', 'King', {'crown', 'fl_crown', 'tb_crown', 'tb_chess_king'}),
     (LIONS, 'giant king', 'king', {'crown', 'fl_crown', 'tb_crown', 'tb_chess_king'}),
+    (LIONS, 'heart of the golden', 'heart', {'heart_organ', 'heart_symbol', 'fl_heart_on_fire'}),
     (LIONS, 'heavy paw', 'paw', {'fl_paw_prints', 'tb_paw'}),
     (PORCH, 'sign that said', 'sign', {'fl_stop_sign'}),
     (PORCH, 'a fence, a field', 'field', {'fl_field_hockey'}),
@@ -99,8 +105,12 @@ def test_a_picture_the_sentence_plainly_names_is_still_offered(sentence, right):
 
 
 def test_a_story_of_animals_is_offered_no_people_for_its_kin_words():
-    ids = _beat(LIONS, 'his mother')
-    assert not [i for i in ids if i.startswith('cr_human_')], ids
+    from kinodraw.library import catalog
+    people = {i for ids in _offered(LIONS).values() for i in ids
+              if (catalog()[i].get('creature') or {}).get('family') == 'human'
+              or catalog()[i].get('category') == 'People & Body' and {'man', 'woman', 'person', 'baby'} & set(
+                  catalog()[i]['desc'].lower().split())}
+    assert not people, sorted(people)
 
 
 def test_a_math_lesson_is_offered_only_what_its_numbers_count():

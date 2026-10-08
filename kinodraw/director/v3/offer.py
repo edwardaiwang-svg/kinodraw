@@ -222,6 +222,12 @@ KIN = re.compile(r'\b(?:mother|mom|mum|mama|father|dad|papa|daughter|son|sister|
                  r'grand\w*|nana|granny|bab(?:y|ies)|child(?:ren)?|kids?)\b', re.I)
 SPECIFIC = .03      # a kind of the thing ("stop sign" for "sign"): the context must lean to it over the bare word
 LOOSE = 0.          # a tag for something else ("crown" for "king"): the context must lean to it at least as much
+# Editing directions and idioms name no thing: "(cut to the faucet)", "in the heart of the Serengeti".
+EDIT = re.compile(r'\s+(?:to|away|back|in|out)\b', re.I)
+EDITS = {'cut', 'fade', 'pan', 'zoom', 'dissolve'}
+IDIOM = {'heart': re.compile(r'\s+of\s+(?:the|a|an|this|that|our|their)\b', re.I)}
+# Pictures of people; a story whose characters are all animals is offered none.
+PERSON = set('man woman person people baby boy girl child adult kid human'.split())
 NAME_CUT = re.compile(r'\b(?:with|and|on|in|of|for|from|at|to|or|under|over|by|showing|holding)\b|[,(:;.]')
 
 
@@ -241,14 +247,33 @@ def _drawing(did: str) -> tuple[tuple[str, ...], str]:
     return words, next((w for w in reversed(words) if w in tags), words[-1])
 
 
-def _animals(texts) -> list[str]:
-    """The names of the story's animal characters ("Pendo", "Kojo"), as the offline director casts them."""
+def _animals(texts) -> tuple[list[str], bool]:
+    """The names of the story's animal characters ("Pendo", "Kojo"), as the offline director casts them, and whether
+    it casts any person."""
     from .semantics import core_name, detect_cast
     try:
         cast = detect_cast([{'id': f'b{i:03d}', 'spoken': t} for i, t in enumerate(texts)])
     except Exception:  # noqa: BLE001 - a reading this cannot make leaves everyone a person
-        return []
-    return [core_name(c['name']) for c in cast if c.get('kind') != 'human' and core_name(c['name'])]
+        return [], True
+    return ([core_name(c['name']) for c in cast if c.get('kind') != 'human' and core_name(c['name'])],
+            any(c.get('kind') == 'human' for c in cast))
+
+
+@lru_cache(maxsize=None)
+def _person(did: str) -> bool:
+    entry = catalog().get(did) or {}
+    if (entry.get('creature') or {}).get('family') == 'human':
+        return True
+    return entry.get('category') == 'People & Body' and bool(PERSON & set(re.findall(r'[a-z]+', entry.get('desc', '').lower())))
+
+
+@lru_cache(maxsize=None)
+def _qualifiers(did: str) -> set:
+    """The words that only describe a part of the drawing: one before the word it modifies ("man: white hair",
+    "man with white cane") or a participle ("thumb crossed"). A thing after 'with' ("cloud with rain") is drawn."""
+    desc = (catalog().get(did) or {}).get('desc', '').lower()
+    return {singular(m.group(1)) for m in re.finditer(r'\b([a-z]+)(?=\s+(?!(?:with|and|of|on|in|or|for|from|at|to|by)\b)[a-z])', desc)} | \
+        {singular(w) for w in re.findall(r'\b[a-z]{3,}ed\b', desc)}
 
 
 class Sense:
@@ -259,7 +284,8 @@ class Sense:
         texts = [t for t in texts if t]
         self.math = lang == 'en' and sum(bool(MATH.search(t)) for t in texts) >= 2
         # An animal's title ("King Kojo" is a lion) names no thing anywhere in the story.
-        self.animals = _animals(texts) if lang == 'en' and texts else []
+        self.animals, people = _animals(texts) if lang == 'en' and texts else ([], True)
+        self.no_people = bool(self.animals) and not people   # a story of animals: no person drawn anywhere
         names = '|'.join(re.escape(n) for n in self.animals)
         self.titles = {t for t in TITLES if names and any(re.search(rf'\b{t}\s+(?:{names})\b', x, re.I)
                                                             for x in texts)}
@@ -283,6 +309,8 @@ class Sense:
                     (self.math and (head in GROUPING or not COUNTED.search(before))) or   # "jump 3", "the order"
                     (' ' not in key and CLAUSE_START.search(before) and OBJECT_NEXT.match(after)) or  # "Check your"
                     (head in BODY and POSSESSIVE.search(before)) or               # "his heavy paw"
+                    (head in EDITS and EDIT.match(after)) or                      # "(cut to a close-up)"
+                    (head in IDIOM and IDIOM[head].match(after)) or               # "the heart of the Serengeti"
                     head in self.titles)                                          # the lion king
 
     def about_animal(self, text: str, at: int) -> bool:
@@ -296,8 +324,12 @@ class Sense:
     # ------------------------------------------------------------ pictures
     def fits(self, did: str, key: str, text: str, a: int, b: int) -> bool:
         """Does the word at text[a:b] (``key``, singular) name this picture in the sense its sentence uses it?"""
-        if self.lang != 'en' or _staged(did, text, a, b):
-            return True                                   # other languages; the curated story tables
+        if self.lang != 'en':
+            return True                                   # other languages: every word
+        if self.no_people and _person(did):
+            return False                                  # a story of animals: "his father" is a lion
+        if _staged(did, text, a, b):
+            return True                                   # the curated story tables
         words, head = _drawing(did)
         said = tuple(ALIASES.get(key, key).split())
         if not words or words == said:
@@ -312,8 +344,8 @@ class Sense:
             if not kinds or any(w in near for w in kinds) or self._called(did, sentence, key):
                 return True
             return self.contrast(did, sentence, a - start, b - start) >= SPECIFIC
-        if set(said) <= set(words):
-            return head in near                           # "paw prints", "field hockey": the word only qualifies it
+        if set(said) <= set(words) | _qualifiers(did):
+            return head in near                           # "paw prints", "man: white hair": the word only qualifies it
         return self.contrast(did, sentence, a - start, b - start) >= LOOSE
 
     def judge(self, did: str, text: str) -> bool | None:
@@ -326,6 +358,8 @@ class Sense:
 
     def allowed(self, did: str, text: str) -> bool:
         """May this beat be offered the picture? Named: only in sense. Unnamed (by meaning): not in a math lesson."""
+        if self.no_people and _person(did):
+            return False
         verdict = self.judge(did, text)
         return not self.math if verdict is None else verdict
 
@@ -474,7 +508,7 @@ class Offer:
         return out
 
     def people(self, text: str) -> list[str]:
-        if self.lang != 'en':
+        if self.lang != 'en' or self.sense.no_people:
             return []
         pose = next((p for p, cue in POSE_RE if cue.search(text)), None)
         out = []
