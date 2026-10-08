@@ -3,6 +3,8 @@ voices, the speech bubbles and the talking figures all follow; and the QA net th
 voiced by somebody else."""
 import json
 
+import pytest
+
 from kinodraw import ingest, script, speech
 
 from test_story_shots import shot, staged
@@ -198,3 +200,128 @@ def test_a_line_i_say_is_the_narrators():
     text = 'Coach Ben here, and my helper is Ava.\n\n"Ready?" I asked.\n\n"Ready!"'
     talk = [(bid_of(text, 'Ready?'), 'ava')]                            # the plan's talker is wrong
     assert said(text, COACH, talk=talk) == [('Ready?', 'ben'), ('Ready!', 'ava')]
+
+
+# ------------------------------------------------------------------ which voice each speaker gets
+def voices_of(text, cast=None, narrator='af_heart'):
+    """speaker (None = the narration) -> the one voice that reads all their parts."""
+    plan = {'cast': cast, 'scenes': []} if cast else None
+    parts = speech.voice_parts(script.build(ingest.read(text), 'story'), plan, narrator)
+    out = {}
+    for todo in parts.values():
+        for seg, voice, _ in todo['parts']:
+            out.setdefault(seg.speaker, set()).add(voice)
+    assert all(len(v) == 1 for v in out.values()), out
+    return {who: v.pop() for who, v in out.items()}
+
+
+def sex_of(voice):
+    """A Kokoro voice id's sex: af_* / bf_* a woman's, am_* / bm_* a man's."""
+    return {'f': 'female', 'm': 'male'}[voice[1]]
+
+
+def person(cid, name, sex='unknown', age='adult', kind='human', species='human'):
+    return {'id': cid, 'name': name, 'kind': kind, 'species': species, 'age': age, 'sex': sex}
+
+
+PLUMBER = ('Hey folks, Tom from Pipewise Plumbing here. Your water bill is too high, and I\'m gonna show you 5 ways to '
+           'fix that.\n\n1. Find the drip. A faucet leaking one drop a second wastes thousands of gallons a year.')
+
+
+def test_a_narrator_introducing_themselves_from_a_business_reads_in_their_own_voice():
+    assert sex_of(voices_of(PLUMBER, [person('tom', 'Tom', 'male')])['tom']) == 'male'
+    # Not in the plan's cast at all, or no plan: the self-introduction still sets the narrator's voice.
+    assert sex_of(voices_of(PLUMBER, [person('van', 'Van', kind='object', species='van')])[None]) == 'male'
+    assert sex_of(voices_of(PLUMBER)[None]) == 'male'
+    assert sex_of(voices_of(PANCAKES, [COACH[1]])[None]) == 'male'          # the plan left Coach Ben out
+    # A narrator the project's voice already fits keeps it; no self-introduction keeps it too.
+    assert voices_of("Hi, I'm Grace from Bluebird Bakery. Today I'll show you my sourdough.")[None] == 'af_heart'
+    assert voices_of(PLUMBER.replace('Tom from Pipewise Plumbing here', 'welcome back'))[None] == 'af_heart'
+    assert voices_of(PLUMBER, narrator='am_michael')[None] == 'am_michael'
+
+
+NEWS = ('ANCHOR: Good evening. The bridge reopens tomorrow. Jenna Ruiz has the story.\n\n'
+        'REPORTER (V/O): Drivers have taken a four-mile detour for eighteen months.\n\n'
+        'SOT (Maria Chen): We lost about a third of our walk-in customers.\n\n'
+        'SOT (Sam Okafor): About two thousand cars a day used the old bridge.\n\n'
+        'REPORTER (STAND-UP): The ribbon cutting is Saturday. Jenna Ruiz, Millbrook Community News.')
+
+
+def test_a_name_decides_the_sex_only_when_the_text_says_nothing_else():
+    cast = [person('anchor', 'Anchor'), person('jenna_ruiz', 'Jenna Ruiz'), person('maria_chen', 'Maria Chen'),
+            person('sam_okafor', 'Sam Okafor')]
+    for plan_cast in (cast, None):
+        voices = voices_of(NEWS, plan_cast)
+        who = {k.split(':')[-1].replace('_', ' '): v for k, v in voices.items() if k}
+        assert sex_of(who['maria chen']) == 'female'
+        assert sex_of(who['sam okafor']) == 'male'
+        # The reporter signs off with her name: her voice is a woman's.
+        assert sex_of(who['reporter']) == 'female'
+        assert len(set(voices.values())) == len(voices)                         # four people, four voices
+    # The text's own words win over a given name and over the plan.
+    told = 'Sam waved. Her aunt, Sam, ran the hardware store.\n\nSAM: We lost a third of our customers.'
+    assert sex_of(voices_of(told, [person('sam', 'Sam', 'male')])['sam']) == 'female'
+    assert sex_of(voices_of('MRS. OKAFOR: The signals are retimed.')['label:mrs. okafor']) == 'female'
+
+
+@pytest.mark.parametrize('text, name, told', [
+    ('Once upon a time, a tiny lion cub named Pendo lived with his pride.', 'Pendo', (None, 'child')),
+    ('Pendo loved his mother, Mara, more than anyone else.', 'Mara', ('female', None)),
+    ('Pendo loved his mother, Mara, more than anyone else.', 'Pendo', (None, None)),
+    ('But Pendo was terrified of his father, the great King Kojo.', 'King Kojo', ('male', None)),
+    ('Ava is a ten-year-old girl who loves pancakes.', 'Ava', ('female', 'child')),
+    ('"Mine\'s broken," Theo said. Theo, his mother said, was asleep.', 'Theo', (None, None)),
+    ('Grandpa Joe sat down. Little Mia laughed.', 'Grandpa Joe', ('male', 'elder')),
+    ('Grandpa Joe sat down. Little Mia laughed.', 'Mia', (None, 'child')),
+    ('Uncle Dev is turning 50 on Saturday.', 'Uncle Dev', ('male', None)),
+    ('"Hi, Grandma Rose," said the boy.', 'Rose', (None, None)),            # inside a quotation: never counts
+])
+def test_the_words_tied_to_a_name_tell_sex_and_age(text, name, told):
+    assert speech.described(name, [text]) == told
+
+
+LION = ('Once upon a time, a tiny lion cub named Pendo lived with his pride. Pendo loved his mother, Mara.\n\n'
+        '"Why is Baba so scary?" Pendo whimpered one afternoon.\n\n'
+        'Mara nudged her cub gently. "Your father has a different job than I do, little one."')
+
+
+def test_a_cub_or_a_child_speaks_in_a_childs_voice_and_a_lioness_in_a_womans():
+    cast = [person('pendo', 'Pendo', 'male', 'adult', 'quadruped', 'lion'),       # the plan got his age wrong
+            person('mara', 'Mara', 'unknown', 'adult', 'quadruped', 'lion')]
+    voices = voices_of(LION, cast)
+    assert voices['pendo'].endswith('+4')                                        # a light voice, raised
+    assert sex_of(voices['mara']) == 'female' and not voices['mara'].endswith('+4')
+    # The plan's baby or young animal is a child too; a "young" person with no word for a child reads as a teen.
+    cast[0].update(age='young')
+    assert voices_of(LION.replace('a tiny lion cub', 'a lion'), cast)['pendo'].endswith('+4')
+    kids = ('Mia is seven. Leo is a little boy. Jules is their big sister.\n\nMIA: Look at the moon!\n\n'
+            'LEO: It is following us.\n\nJULES: Whatever.')
+    voices = voices_of(kids, [person('mia', 'Mia', 'female', 'young'), person('leo', 'Leo', 'male', 'young'),
+                              person('jules', 'Jules', 'female', 'young')])
+    assert voices['mia'].endswith('+4') and voices['leo'].endswith('+4') and not voices['jules'].endswith('+4')
+    assert len(set(voices.values())) == len(voices)
+
+
+def test_a_raised_voice_sounds_higher_at_the_same_pace(tmp_path):
+    import numpy as np
+    from kinodraw import voice
+    line = 'Why is Baba so scary? He never plays with me.'
+
+    def f0(clip):                                       # median pitch of the loud frames, by autocorrelation
+        x = voice._read_wav(clip.wav)
+        found = []
+        for i in range(0, len(x) - 1200, 240):
+            f = x[i:i + 1200] - x[i:i + 1200].mean()
+            if np.abs(f).max() < .1 * np.abs(x).max():
+                continue
+            ac = np.correlate(f, f, 'full')[len(f) - 1:]
+            lag = 40 + int(np.argmax(ac[40:400]))       # 60-600 Hz at 24 kHz
+            if ac[lag] > .5 * ac[0]:
+                found.append(voice.SR / lag)
+        return float(np.median(found))
+    low, high = voice.synthesize(line, 'en', tmp_path, 'af_jessica'), voice.synthesize(line, 'en', tmp_path,
+                                                                                       'af_jessica+4')
+    assert 1.18 < f0(high) / f0(low) < 1.34                                   # four semitones = x1.26
+    assert abs(high.duration - low.duration) < .12 * low.duration
+    assert len(high.char_times) == len(line) and high.char_times[-1] <= high.duration
+    assert voice.base_voice('af_jessica+4') == ('af_jessica', 4.0) and voice.base_voice('af_heart') == ('af_heart', 0.)

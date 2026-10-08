@@ -217,8 +217,13 @@ def _line_starts(text: str) -> list[int]:
     joined into one paragraph) right after a sentence end."""
     starts = [len(text) - len(text.lstrip())]
     starts += [m.end() for m in re.finditer(r'\n[ \t]*', text)]
-    starts += [m.end() for m in re.finditer(r'[.!?…—)\]]["”’]?[ \t]+(?=[^\W\d_]+[ \t]*(?:\([^)\n]*\))?[ \t]*:)', text)]
+    starts += [m.end() for m in re.finditer(r'[.!?…—)\]]["”’]?[ \t]+(?=[^\W\d_]+[ \t]*(?:\([^)\n]*\))?[ \t]*:)', text)
+               if not TITLE_STOP.search(text, 0, m.start() + 1)]       # "MRS. OKAFOR:" is one label
     return sorted(set(starts))
+
+
+TITLE_STOP = re.compile(r'\b(?:mr|mrs|ms|dr|prof|st|sgt|capt|lt|col|gen|rev|fr|sr|jr|hon|gov|sen|rep|pres|supt|insp|'
+                        r'det|cpl|pvt|adm|cmdr)\.$', re.I)
 
 
 # Broadcast and interview tags: "SOT (Maria Chen):" is Maria Chen speaking in her own voice, "REPORTER (V/O):" the
@@ -606,41 +611,160 @@ def spoken_times(spoken: str, index: list[int], times: list[float]) -> list[floa
 
 
 # ------------------------------------------------------------------ who speaks, in which voice
-FEMALE = re.compile(r'\b(?:mom|mum|mother|mama|ma|grandma|grandmother|granny|gran|nana|nan|aunt|auntie|girl|woman|'
-                    r'lady|queen|princess|sister|daughter|wife|bride|mrs|ms|miss|madam|she|her|niece|grandmother)\b')
-MALE = re.compile(r'\b(?:dad|father|papa|pa|grandpa|grandfather|gramps|grandad|granddad|uncle|boy|man|guy|king|'
-                  r'prince|brother|son|husband|groom|mr|sir|he|him|nephew)\b')
-ELDER = re.compile(r'\b(?:grandma|grandmother|granny|gran|nana|grandpa|grandfather|gramps|grandad|granddad|old|elder|'
-                   r'elderly|aged)\b')
-CHILD = re.compile(r'\b(?:boy|girl|kid|child|baby|little|son|daughter)\b')
-TEEN = re.compile(r'\b(?:teen|teenager|student)\b')
+# Words that tell a person's sex and age (the voices' own lists): titles, kin and role words, female and male animals,
+# young animals and children's words. A given name only decides the sex when nothing in the text does.
+FEMALE = re.compile(r"\b(?:mom|mommy|mum|mummy|mother|mama|ma|stepmom|stepmother|grandma|grandmother|granny|gran|nana|"
+                    r"nan|grammy|nainai|abuela|oma|aunt|auntie|aunty|tia|tía|girl|woman|women|lady|ladies|gal|lass|"
+                    r"queen|princess|empress|duchess|countess|baroness|sister|sis|daughter|granddaughter|niece|wife|"
+                    r"bride|widow|girlfriend|godmother|mrs|ms|miss|madam|madame|ma['’]am|señora|senora|señorita|"
+                    r"mademoiselle|she|her|hers|herself|actress|waitress|hostess|stewardess|policewoman|"
+                    r"businesswoman|chairwoman|spokeswoman|congresswoman|saleswoman|nun|heroine|goddess|witch|"
+                    r"sorceress|ballerina|maiden|schoolgirl|lioness|lionesses|tigress|mare|filly|hen|ewe|doe|vixen|"
+                    r"cow|heifer|nanny\s+goat)\b", re.I)
+MALE = re.compile(r"\b(?:dad|daddy|father|papa|pa|pop|stepdad|stepfather|grandpa|grandfather|gramps|grampa|grandad|"
+                  r"granddad|grandpop|yeye|abuelo|opa|uncle|tio|tío|boy|man|men|guy|gentleman|gentlemen|lad|fellow|"
+                  r"dude|bro|king|prince|emperor|duke|baron|brother|son|grandson|nephew|husband|groom|widower|"
+                  r"boyfriend|godfather|mr|sir|mister|lord|señor|senor|monsieur|he|him|his|himself|waiter|"
+                  r"steward|policeman|businessman|chairman|spokesman|congressman|salesman|fireman|monk|friar|"
+                  r"wizard|sorcerer|schoolboy|stallion|colt|rooster|cockerel|bull|buck|ram|boar|drake|gander|"
+                  r"billy\s+goat)\b", re.I)
+ELDER = re.compile(r"\b(?:grandma|grandmother|granny|gran|nana|grammy|nainai|abuela|oma|grandpa|grandfather|gramps|"
+                   r"grampa|grandad|granddad|grandpop|yeye|abuelo|opa|great[- ]grand\w*|old|elder|elderly|aged|"
+                   r"ageing|aging|senior|retired)\b", re.I)
+CHILD = re.compile(r"\b(?:kid|kids|kiddo|child|children|baby|babies|toddler|infant|newborn|little|tiny|wee|youngster|"
+                   r"boy|girl|schoolboy|schoolgirl|preschooler|kindergartner|cub|cubs|kitten|puppy|pup|chick|"
+                   r"duckling|gosling|cygnet|foal|filly|colt|calf|lamb|piglet|fawn|joey|hatchling|tadpole|fledgling|"
+                   r"nestling|owlet|eaglet|bunny)\b", re.I)
+TEEN = re.compile(r"\b(?:teen|teens|teenager|teenage|adolescent|high[- ]schooler)\b", re.I)
+# Common given names that tell a sex by themselves (the last fallback: the text's own words win over a name).
+FEMALE_NAMES = set("""
+abigail ada adaeze adriana aisha alice alicia aliyah alma amanda amara amelia amina amy ana anna annie aria ariana
+ashley aubrey audrey ava bella beth betty bianca brenda brianna camila carla carmen caroline catherine charlotte chloe
+christina claire clara daisy daniela diana elena eliza elizabeth ella ellie emily emma esther eva evelyn fatima fiona
+gabriela grace gloria hannah harper hazel helen ines irene isabel isabella ivy jane janet jasmine jenna jennifer
+jessica joan julia julie kate katie keisha kimberly laura layla leah lena lily linda lisa lucia lucy luna lydia maria
+marisol martha mary maya mei melissa mia michelle mila molly monica nadia naomi natalia nina nora olivia paula
+penelope priya rachel rebecca rosa rose ruby ruth sakura samantha sara sarah sofia sophia sophie stella susan
+valentina victoria violet wendy yuki zara zoe zoey
+""".split())
+MALE_NAMES = set("""
+aaron adam ahmed alan albert alejandro andre andrew anthony arjun arthur ben benjamin brandon brian bruno caleb carlos
+charles charlie chris christopher colin daniel david dev diego dmitri dylan eli elijah ethan felix frank gabriel
+george greg harry henry hiroshi hugo ian isaac jack jacob jake james jason javier jeff jim joe john jonah jorge jose
+joseph josh juan julian kenji kevin kofi kwame leo liam logan lucas luis luke marco marcus mark mateo matt matthew max
+michael miguel mike mohammed muhammad nathan nick noah oliver omar oscar owen pablo patrick paul pedro peter rafael raj
+ravi ricardo rob robert ryan sam samuel santiago scott sean sebastian simon steve steven theo thomas tim tom tony
+victor vincent walter will william wyatt xavier yusuf zach
+""".split())
+YEARS_OLD = re.compile(r"\b(?P<n>[\w]+(?:-[\w]+)?)[\s-]+years?[\s-]+old\b", re.I)
+_PERSON_WORDS = re.compile('|'.join(p.pattern for p in (FEMALE, MALE, ELDER, CHILD, TEEN, YEARS_OLD)), re.I)
+PRONOUNS = {'she', 'her', 'hers', 'herself', 'he', 'him', 'his', 'himself'}
+DETERMINERS = r'(?:a|an|the|his|her|their|my|our|your|this|that|one)'
 # Installed Kokoro voices for characters by (sex, age band), best first; measured median F0 on one line (10/8):
-# am_onyx 104 Hz, am_michael 119, am_puck 121, am_liam 132, bm_george 146; af_jessica 211, bf_alice 214,
-# af_sarah 196, af_nicole 161, bf_emma 181, af_kore 159. The default narrator af_heart sits at 198 Hz, so a grown
-# woman's first pick is the lower af_kore: her lines must not sound like the narrator's.
+# am_onyx 88-104 Hz, am_michael 119-132, am_puck 120, am_liam 128-132, bm_george 146; af_jessica 205-211, bf_alice
+# 214, af_sarah 196-214, af_nicole 161, bf_emma 181, af_kore 157-159. The default narrator af_heart sits at 198-212
+# Hz, so a grown woman's first pick is the lower af_kore: her lines must not sound like the narrator's. Kokoro has no
+# child voices: a child or a young animal reads in a light voice raised four semitones ("+4", voice.base_voice):
+# af_jessica+4 270 Hz, bf_lily+4 270, af_bella+4 264, bf_alice+4 286 (a young child speaks at about 250-300 Hz).
 CHARACTER_VOICES = {
     'en': {('male', 'elder'): ['am_onyx', 'bm_george', 'bm_fable', 'am_michael'],
            ('male', 'adult'): ['am_michael', 'am_liam', 'bm_lewis', 'bm_daniel', 'am_fenrir', 'am_eric'],
            ('male', 'young'): ['am_puck', 'am_adam', 'am_echo', 'am_liam'],
+           ('male', 'child'): ['af_jessica+4', 'af_bella+4', 'bf_alice+4', 'bf_lily+4'],
            ('female', 'elder'): ['bf_emma', 'af_nova', 'af_kore', 'af_nicole'],
            ('female', 'adult'): ['af_kore', 'af_sarah', 'af_nicole', 'bf_isabella', 'af_aoede', 'af_river'],
-           ('female', 'young'): ['af_jessica', 'bf_alice', 'af_bella', 'bf_lily', 'af_sky']},
+           ('female', 'young'): ['af_jessica', 'bf_alice', 'af_bella', 'bf_lily', 'af_sky'],
+           ('female', 'child'): ['bf_lily+4', 'af_bella+4', 'bf_alice+4', 'af_jessica+4']},
     'es': {('male', 'adult'): ['em_alex', 'em_santa'], ('female', 'adult'): ['ef_dora']},
     'zh': {('male', 'adult'): ['zm_010', 'zm_020', 'zm_009', 'zm_011'],
            ('female', 'adult'): ['zf_002', 'zf_003', 'zf_004', 'zf_001']},
 }
-SPEEDS = {'elder': .93, 'adult': 1., 'young': 1.05}
-BANDS = {'baby': 'young', 'child': 'young', 'teen': 'young', 'young': 'young', 'adult': 'adult', 'old': 'elder',
+SPEEDS = {'elder': .93, 'adult': 1., 'young': 1.05, 'child': 1.05}
+# Story age bands (director.v3.story.band) and plan ages -> voice bands. A plan's "young" person is a child or a
+# teen: they read as a teen unless the text says child; a young animal (a cub) reads as a child.
+BANDS = {'baby': 'child', 'child': 'child', 'teen': 'young', 'young': 'young', 'adult': 'adult', 'old': 'elder',
          'elder': 'elder'}
 
 
+def _band_of_words(words: str) -> str | None:
+    """The age band words tell ("a tiny lion cub" child, "a ten-year-old" child, "an elderly" elder), else None."""
+    from .director.v3.story import band, number
+    m = YEARS_OLD.search(words)
+    years = number(m['n'].replace('-', ' ')) if m else None
+    if years is not None:
+        return BANDS[band(years)]
+    return 'elder' if ELDER.search(words) else 'young' if TEEN.search(words) else \
+        'child' if CHILD.search(words) else None
+
+
+def _sex_of_words(words: str) -> str | None:
+    female, male = len(FEMALE.findall(words)), len(MALE.findall(words))
+    return 'female' if female > male else 'male' if male > female else None
+
+
+def name_sex(name: str) -> str | None:
+    """The sex a given name tells by itself (the first word of ``name`` that is a known given name), else None."""
+    for word in re.findall(r"[^\W\d_][\w’'-]*", name or ''):
+        word = word.casefold()
+        if word in FEMALE_NAMES or word in MALE_NAMES:
+            return 'female' if word in FEMALE_NAMES else 'male'
+    return None
+
+
 def guess_person(name: str) -> tuple[str | None, str]:
-    """(sex, age band) a screenplay label or a cast name tells by itself ("GRANDPA", "Little Girl"), else (None,
-    'adult')."""
-    words = name.casefold()
-    sex = 'female' if FEMALE.search(words) else 'male' if MALE.search(words) else None
-    band = 'elder' if ELDER.search(words) else 'young' if CHILD.search(words) or TEEN.search(words) else 'adult'
-    return sex, band
+    """(sex, age band) a screenplay label or a name tells by itself ("GRANDPA", "Little Girl", "Mrs. Ortiz"), its
+    given name last ("Maria Chen"), else (None, 'adult')."""
+    return _sex_of_words(name) or name_sex(name), _band_of_words(name) or 'adult'
+
+
+def described(name: str, texts) -> tuple[str | None, str | None]:
+    """(sex, age band) the story's own words tie to the person called ``name``, outside quotations, else None each:
+    words in the name ("Aunt Rosa", "King Kojo") and in a noun phrase naming them ("a tiny lion cub named Pendo",
+    "his mother, Mara", "Mara, the pride's lioness", "Pendo the cub", "Ava is a ten-year-old girl", "little Pendo").
+    Pronouns in those phrases belong to someone else ("his mother, Mara") and never count."""
+    from .director.v3.semantics import name_key
+    key = name_key(name or '')
+    proper = [w.casefold() for w in re.findall(r"[^\W\d_][\w’'-]*", name or '')      # "Maria", "Chen"; never
+              if w[:1].isupper() and len(w) > 2 and "'" not in w and '’' not in w   # "Theo's" or "Mother"
+              and not _PERSON_WORDS.fullmatch(w) and w.casefold() in key.split()]
+    keys = [k for k in dict.fromkeys([key] + proper) if k]
+    sexes = [x for x in [_sex_of_words(name or '')] if x]
+    bands = [x for x in [_band_of_words(name or '')] if x]
+    if keys:
+        found = re.compile(r'(?<![\w’\'])(?:' + '|'.join(re.escape(k) for k in keys) + r')(?![\w’\'])', re.I)
+        word = r"[\w’'-]+"
+        for text in texts:
+            text = re.sub(r'["“][^"”]*["”]?', lambda m: ' ' * len(m.group()), text)      # never inside a quote
+            for m in found.finditer(text):
+                before = re.split(r'[.!?;:()\[\]\n]', text[:m.start()])[-1]
+                after = re.split(r'[.!?;:()\[\]\n]', text[m.end():])[0]
+                phrases = []
+                head = r'(?:' + word + r'\s+){0,3}?(?=\S)(?:' + _PERSON_WORDS.pattern + r')'
+                named = re.search(r'\b(?:a|an|one)\s+((?:' + word + r'\s+){0,4})(?:named|called)\s+$|\b' +
+                                  DETERMINERS + r'\s+((?:' + word + r'\s+){0,4})named\s+$', before, re.I)
+                if named:                                                       # "a tiny lion cub named Pendo"
+                    phrases.append(named[1] or named[2])
+                apposed = re.search(r'\b' + DETERMINERS + r'\s+(' + head + r')\s*[,–—]\s*$', before, re.I)
+                if apposed:                                                     # "his mother, Mara"
+                    phrases.append(apposed[1])
+                title = re.search(r'(?:^|\s)(' + word + r')\.?\s+$', before)
+                if title:                                                       # "Aunt Rosa", "little Pendo"
+                    phrases.append(title[1])
+                follow = re.match(r'(?:\s*[,–—]\s*|\s+(?:is|was)\s+)?\s*' + DETERMINERS + r'\s+(' + head +
+                                  r')(?=\s*(?:[,.;:!?–—]|$|\band\b|\bwho\b))', after, re.I)
+                if follow and (follow.group().lstrip()[:1] in ',–—' or re.match(r'\s+(?:is|was|the)\s', after)):
+                    phrases.append(follow[1])                                   # "Mara, his mother", "Pendo the cub"
+                for phrase in phrases:
+                    words = ' '.join(w for w in phrase.split() if w.casefold() not in PRONOUNS)
+                    sexes += [x for x in [_sex_of_words(words)] if x]
+                    bands += [x for x in [_band_of_words(words)] if x]
+    pick = lambda xs: max(dict.fromkeys(xs), key=xs.count) if xs else None
+    return pick(sexes), pick(bands)
+
+
+def voice_sex(voice_id: str) -> str | None:
+    """The sex of a Kokoro voice id ("af_heart" female, "bm_george" male, "af_jessica+4" female)."""
+    return {'f': 'female', 'm': 'male'}.get((voice_id or '')[1:2])
 
 
 def cast_voices(people: list[tuple[str, str | None, str]], narrator: str, lang: str,
@@ -648,6 +772,7 @@ def cast_voices(people: list[tuple[str, str | None, str]], narrator: str, lang: 
     """speaker -> (voice, speed) for ``people`` = [(speaker, sex or None, age band)] in the order they first speak.
     Each gets an installed voice matched to their sex and age, never the narrator's and never another speaker's
     while one is left; someone whose sex is unknown alternates with the people before them."""
+    from .voice import base_voice
     table = CHARACTER_VOICES.get(lang, CHARACTER_VOICES['en'])
     available = set(available) if available is not None else None
     taken, out, unknown = {narrator}, {}, 0
@@ -658,7 +783,8 @@ def cast_voices(people: list[tuple[str, str | None, str]], narrator: str, lang: 
             unknown += 1
         keys = [(sex, band), (sex, 'adult'), (sex, 'young'), (sex, 'elder')]
         options = [v for k in keys for v in table.get(k, [])] + [v for k, vs in table.items() for v in vs]
-        options = [v for v in dict.fromkeys(options) if v != narrator and (available is None or v in available)]
+        options = [v for v in dict.fromkeys(options) if v != narrator and (available is None or
+                                                                          base_voice(v)[0] in available)]
         voice = next((v for v in options if v not in taken), next((v for v in options), narrator))
         taken.add(voice)
         out[speaker] = (voice, SPEEDS.get(band, 1.) if voice in table.get((sex, band), []) else 1.)
@@ -713,7 +839,8 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
         key = label_key(name)
         return next((cid for cid, c in cast.items() if c.get('name') and key in (
             name_key(c['name']), name_key(c['name']).split()[0], cid.casefold())), None)
-    from .speakers import narrator_of
+    from .speakers import introduced, narrator_of
+    texts = [b['spoken'] for b in beats]
     me = narrator_of(beats, (plan or {}).get('cast') or [])     # "Coach Ben here": the narration is his voice
     found, order = {}, []
     for b in beats:
@@ -724,16 +851,30 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
         for seg in segs:
             if seg.speaker and seg.speaker not in order:
                 order.append(seg.speaker)
-    people = []
-    for who in order:
+
+    def person(who):
         if who in cast:
-            sex, band = _person(cast[who], who, reader)
-            people.append((who, sex, bands.get(who, band)))
-        else:
-            people.append((who, *guess_person(who.split(':', 1)[-1])))
+            return _person(cast[who], who, reader, texts, bands)
+        said = ' '.join(seg.said for segs in found.values() for seg in segs if seg.speaker == who)
+        named = introduced(said, list(cast.values()), sign_off=True)     # "REPORTER: ... Jenna Ruiz, Channel 4 News."
+        if named in cast:
+            return _person(cast[named], named, reader, texts, bands)
+        return guess_person(named or who.split(':', 1)[-1])
+    people = [(who, *person(who)) for who in order]
+    if not me:                                  # a narrator not in the cast who names themselves: "Coach Ben here"
+        named = introduced(' '.join(seg.said for segs in found.values() for seg in segs if seg.speaker is None), [])
+        sex, band = guess_person(named) if named else (None, 'adult')
+        if sex and (sex != voice_sex(narrator) or band != 'adult'):
+            if callable(available):
+                available = available()
+            narrator = cast_voices([(None, sex, band)], narrator, lang, available)[None][0]
     if callable(available):
         available = available() if people else None     # ask the voice engine only when a character speaks
     voices = cast_voices(people, narrator, lang, available)
+    if me and me in voices:                     # a narrator who sounds like the project's voice keeps it
+        _, sex, band = next(p for p in people if p[0] == me)
+        if sex == voice_sex(narrator) and band == 'adult':
+            voices[me] = (narrator, 1.)
     people_named = {w for key in labels for w in key.split()} | {     # the cast on the page, not the story's extras
         w for c in (plan or {}).get('cast') or () for w in name_key(c.get('name') or '').split()}
     out = {}
@@ -760,15 +901,39 @@ def shared_voices(cast: dict) -> list[dict]:
              'note': f"{', '.join(roles)} all speak in the voice {v}"} for v, roles in by_voice.items() if len(roles) > 1]
 
 
-def _person(c: dict, cid: str, reader) -> tuple[str | None, str]:
-    """A cast member's (sex, age band) as the storybook draws them: the plan's or the story's sex, else the one the
-    storybook picks from the id; the age the story has reached, else the plan's."""
-    from .engine.storybook import PERSON_SEX
-    sex = (reader.sex(cid) if reader is not None and cid in reader.by_id else c.get('sex'))
+def person_sex(c: dict, cid: str, reader, texts=(), told: str | None = None) -> str:
+    """A cast member's sex, one answer for their voice and their drawing (Storybook._look): what the story's words
+    tie to them ("his mother, Mara", "King Kojo"; ``told`` when already read), else the plan's or the story's
+    pronouns, else their species word ("lioness"), else their given name ("Maria"), else a pick from the id."""
+    sex = told or described(c.get('name') or '', texts)[0]
     if sex not in ('male', 'female'):
-        sex = PERSON_SEX.get(c.get('species'))
-    if sex not in ('male', 'female'):               # the storybook's own pick (Storybook._look)
+        sex = reader.sex(cid) if reader is not None and cid in reader.by_id else c.get('sex')
+    if sex not in ('male', 'female'):
+        from .engine.storybook import PERSON_SEX
+        species = str(c.get('species') or '')
+        sex = PERSON_SEX.get(species) or _sex_of_words(species) or name_sex(c.get('name') or '')
+    if sex not in ('male', 'female'):
         seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
         sex = 'female' if seed % 2 else 'male'
-    band = reader.age_band(cid) if reader is not None and cid in reader.by_id else c.get('age', 'adult')
+    return sex
+
+
+def _person(c: dict, cid: str, reader, texts=(), bands=None) -> tuple[str | None, str]:
+    """A cast member's (sex, age band) for their voice. Sex: what the story's words tie to them ("his mother, Mara",
+    "King Kojo"), else the plan's or the story's pronouns, else their species word ("lioness"), else their given name,
+    else the one the storybook draws from the id. Age: the age the story states for them when they first speak, else
+    the story's words ("a tiny lion cub named Pendo"), else the plan's ("baby" a child; "young" a teen, or a child
+    for a young animal), else their name's or species' words."""
+    told_sex, told_band = described(c.get('name') or '', texts)
+    sex = person_sex(c, cid, reader, texts, told_sex)
+    species = str(c.get('species') or '')
+    stated = reader is not None and cid in reader.by_id and (cid in reader.first_years or c.get('band'))
+    if stated:
+        band = BANDS.get((bands or {}).get(cid) or reader.age_band(cid), 'adult')
+    elif told_band:
+        band = told_band
+    elif c.get('age') in ('young', 'baby') and c.get('kind') not in (None, 'human', 'object'):
+        band = 'child'                              # a cub, a chick, a puppy
+    else:
+        band = BANDS.get(c.get('age')) or _band_of_words(species) or 'adult'
     return sex, band
