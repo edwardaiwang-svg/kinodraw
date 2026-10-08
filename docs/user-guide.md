@@ -20,8 +20,8 @@ opens it in your web browser instead.
 ![The New video page, with the examples](media/guide/new-video.jpg)
 
 1. Press **New video**.
-2. Paste your script, press **Choose file…** to open a .md, .txt or .docx file, or pick one of the invented examples under **Start from an example**.
-3. Check **Language**, the **Narrator**, the **Director**, the **Style** and the **Format**. The defaults work.
+2. Paste your script, press **Choose file…** to open a .md, .txt or .docx file, or pick one of the invented examples under **Start from an example** (the link after them shows the examples in the other language).
+3. Check the **Narrator**, the **Style** and the **Format**. **Language**, the **Director**, **Speed** and **Title** are under **More options**. The defaults work.
 4. Press **Create storyboard**. KinoDraw plans a picture for each part of your script.
 5. Look over the storyboard, then press **Make video**. A 3-minute video takes about 3 minutes to make.
 

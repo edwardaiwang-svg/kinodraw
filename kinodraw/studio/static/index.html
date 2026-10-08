@@ -13,13 +13,16 @@
 <aside id="side">
   <div class="brand">Kino<span>Draw</span></div>
   <button id="btn-new" class="primary wide">+ New video</button>
-  <label class="file">Import project ZIP… <input id="project-import" type="file" accept=".zip,application/zip"></label>
-  <button id="btn-trash">Trash</button><button id="btn-sample" class="ghost wide">Watch an example</button>
   <div class="side-label">Your videos</div>
   <nav id="projects"></nav>
-  <button id="btn-help" class="ghost wide">Help</button>
-  <button id="btn-settings" class="ghost wide">Settings</button>
-  <button id="feedback" type="button">Feedback or a problem? Tell us</button>
+  <div class="side-links">
+    <button id="btn-sample" class="link">Watch an example</button>
+    <label class="file link">Import project ZIP… <input id="project-import" type="file" accept=".zip,application/zip"></label>
+    <button id="btn-trash" class="link">Trash</button>
+    <button id="btn-help" class="link">Help</button>
+    <button id="btn-settings" class="link">Settings</button>
+    <button id="feedback" type="button">Feedback or a problem? Tell us</button>
+  </div>
 </aside>
 <main id="main"></main>
 
@@ -39,16 +42,17 @@
 <template id="tpl-new">
   <section class="page">
     <h1>New video</h1>
-    <p class="muted">Paste a script (or choose a .md, .txt or .docx file). Headings become sections;
-      numbers, quotes and definitions become charts and notes automatically.</p>
-    <div id="starter-wrap" class="hidden"><div class="side-label">Start from an example</div>
-      <div id="starters" class="starters" role="group" aria-label="Start from an example"></div></div>
+    <p class="muted">Paste a script or choose a file. Headings become sections; numbers, quotes and definitions
+      become charts and notes.</p>
+    <div id="starter-wrap" class="starter-row hidden"><span class="muted">Start from an example:</span>
+      <div id="starters" class="starters" role="group" aria-label="Start from an example"></div>
+      <button id="starter-lang" type="button" class="link hidden"></button></div>
     <textarea id="script" placeholder="# My topic&#10;&#10;An opening paragraph…&#10;&#10;## First idea&#10;…"></textarea>
     <div class="row">
-      <label class="file">Choose file… <input id="file" type="file" accept=".md,.txt,.docx"></label>
+      <label class="file link">Choose file… <input id="file" type="file" accept=".md,.txt,.docx"></label>
       <span id="file-name" class="muted"></span>
     </div>
-    <details>
+    <details id="writer" class="hidden">
       <summary>Draft a script from source notes (optional)</summary>
       <label>Topic <input id="writer-topic" maxlength="1000" placeholder="What the script is about"></label>
       <label>Source notes (required to draft; one note per line)<textarea id="writer-notes" maxlength="30000" placeholder="Paste the facts the draft may use"></textarea></label>
@@ -69,19 +73,14 @@
       <label class="seg"><input type="radio" name="narrator" value="own"><b>My own voice</b>
         <small>You read the script aloud; every drawing follows your voice</small></label>
     </div>
-    <div class="grid">
-      <label>Title <input id="title" placeholder="from the script"></label>
-      <label>Language <select id="lang"><option value="">Detect</option><option value="en">English</option><option value="es">Español</option><option value="zh">中文</option></select></label>
+    <div class="grid basics">
       <div id="voice-wrap">
         <label id="voice-label" for="voice">Voice</label><div class="row"><select id="voice"></select>
           <input id="server-voice" class="hidden" maxlength="80">
           <button id="voice-play" type="button" class="ghost" aria-label="Play a sample of this voice">▶ Hear it</button></div>
         <select id="server-voice-pick" class="hidden" aria-label="Voices your server lists"></select>
         <div id="server-voice-note" class="muted"></div>
-        <div id="speed-wrap"></div>
       </div>
-      <label>Director <select id="director"></select></label>
-      <label><input id="director-v3" type="checkbox" checked> Whole-story director v3 — chooses cast, treatments and style. Uncheck for legacy/manual whiteboard.</label>
       <label>Style <select id="style"></select></label>
       <label>Format <select id="format"></select></label>
       <label id="motion-wrap" class="hidden">Motion <select id="motion"><option value="calm">Calm</option><option value="lively" selected>Lively</option>
@@ -93,11 +92,21 @@
       <label>Website <input id="brand-url" placeholder="example.com"></label>
       <label>Button text <input id="brand-cta" placeholder="Try it for free"></label>
     </div>
-    <div id="byo" class="grid hidden">
-      <label>Model <input id="model" placeholder="default"></label>
-      <label id="base-wrap" class="hidden">Base URL <input id="base-url" placeholder="https://…/v1"></label>
-    </div>
-    <p id="director-note" class="note"></p>
+    <details class="more">
+      <summary>More options</summary>
+      <div class="grid">
+        <label>Title <input id="title" placeholder="from the script"></label>
+        <label>Language <select id="lang"><option value="">Detect</option><option value="en">English</option><option value="es">Español</option><option value="zh">中文</option></select></label>
+        <div id="speed-wrap"></div>
+        <label>Director <select id="director"></select></label>
+      </div>
+      <label class="row"><input id="director-v3" type="checkbox" checked> Whole-story director v3: chooses cast, treatments and style. Uncheck for legacy/manual whiteboard.</label>
+      <div id="byo" class="grid hidden">
+        <label>Model <input id="model" placeholder="default"></label>
+        <label id="base-wrap" class="hidden">Base URL <input id="base-url" placeholder="https://…/v1"></label>
+      </div>
+    </details>
+    <p id="director-note" class="muted"></p>
     <button id="create" class="primary big">Create storyboard</button>
   </section>
 </template>

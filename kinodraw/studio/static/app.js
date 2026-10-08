@@ -244,7 +244,7 @@ async function loadProjects() {
     ? `<img class="thumb" alt="" loading="lazy" src="/files/${encodeURIComponent(p.name)}/${encodeURIComponent(p.thumbnail)}?token=${T}">`
     : '<span class="thumb"></span>');
   $('#projects').innerHTML = items.map((p) => `<a data-name="${esc(p.name)}" class="${p.name === current ? 'on' : ''}">
-    ${thumb(p)}<span>${esc(p.title)}</span><small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
+    ${thumb(p)}<span title="${esc(p.title)}">${esc(p.title)}</span><small>${p.broken ? 'incomplete' : `${LANG_NAMES[p.lang]} · ${p.videos?.length ? '🎬 ready' : 'storyboard'}`}</small></a>`).join('')
     || '<div class="muted">No videos yet.</div>';
   $('#projects').querySelectorAll('a').forEach((a) => (a.onclick = () => openProject(a.dataset.name)));
 }
@@ -324,11 +324,19 @@ function showNew() {
   };
   const scriptInput = $('#script');
   let scriptEdits = 0, example = '';            // example: the starter text as loaded, so swapping it never asks
-  const showStarters = () => {                  // the shipped fictional examples in the chosen language (all on Detect)
-    const list = (STATE.starters || []).filter((s) => !langSel.value || s.lang === langSel.value);
+  const starterLangs = [...new Set((STATE.starters || []).map((s) => s.lang))];
+  let browseLang = globalThis.navigator?.language?.startsWith('zh') && starterLangs.includes('zh') ? 'zh' : starterLangs[0];
+  const showStarters = () => {                  // the shipped fictional examples in the chosen language (one language on Detect)
+    const shown = langSel.value || browseLang, list = (STATE.starters || []).filter((s) => s.lang === shown);
     $('#starter-wrap').classList.toggle('hidden', !list.length);
-    $('#starters').innerHTML = list.map((s) => `<button type="button" class="starter" data-starter="${esc(s.id)}" lang="${esc(s.lang)}">
-      <b>${esc(s.title)}</b><small>${esc(s.id.slice(0, s.id.lastIndexOf('-')).replace('-', ' '))} · ${esc(LANG_NAMES[s.lang] || s.lang)}</small></button>`).join('');
+    $('#starters').innerHTML = list.map((s) => `<button type="button" class="starter" data-starter="${esc(s.id)}" lang="${esc(s.lang)}"
+      title="${esc(s.id.slice(0, s.id.lastIndexOf('-')).replace('-', ' '))}">${esc(s.title)}</button>`).join('');
+    const next = starterLangs[(starterLangs.indexOf(shown) + 1) % starterLangs.length];
+    $('#starter-lang').classList.toggle('hidden', !!langSel.value || starterLangs.length < 2);
+    $('#starter-lang').textContent = LANG_NAMES[next] || next;
+  };
+  $('#starter-lang').onclick = () => {          // browse the other language's examples without changing the narration language
+    browseLang = starterLangs[(starterLangs.indexOf(browseLang) + 1) % starterLangs.length]; showStarters();
   };
   $('#starters').onclick = async (event) => {
     const id = event.target.closest?.('[data-starter]')?.dataset.starter;
@@ -353,7 +361,7 @@ function showNew() {
   syncNewVoice();
   if (STATE.voice_server?.on) offerSavedVoices($('#server-voice-pick'), $('#server-voice-note'), $('#server-voice'));
   const ownVoice = () => document.querySelector('input[name="narrator"]:checked').value === 'own';
-  document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => $('#voice-wrap').classList.toggle('hidden', ownVoice())));
+  document.querySelectorAll('input[name="narrator"]').forEach((r) => (r.onchange = () => ['#voice-wrap', '#speed-wrap'].forEach((id) => $(id).classList.toggle('hidden', ownVoice()))));
   dirSel.innerHTML = directorOptions(STATE.default_director);
   const note = () => {
     const d = dirSel.value;
@@ -368,8 +376,8 @@ function showNew() {
       compat: 'Any OpenAI-compatible server (OpenRouter, Groq, a local Ollama…): set the base URL and model.',
       command: STATE.keys.command ? 'Runs your saved command once per section; the model name is passed along to it.' : 'Save your command under Settings first.',
     }[d];
-    if (d !== 'rules') $('#director-note').textContent += ' Planning uploads your full story and prompt to the selected provider. Choose Offline for local planning.';
-    else $('#director-note').textContent += ' Initial asset downloads may use the network; a configured voice server receives narration text.';
+    if (d === 'rules') $('#director-note').textContent += ' Initial asset downloads may use the network; a configured voice server receives narration text.';
+    else if (!($('#director-note').textContent || '').includes('Choose Offline')) $('#director-note').textContent += ' Planning uploads your full story and prompt to the selected provider. Choose Offline for local planning.';
     writerNote();
   };
   dirSel.onchange = async () => {
@@ -390,6 +398,7 @@ function showNew() {
       ? 'Only Draft from notes sends your topic, source notes and local voice/style guidance to the selected provider or command, using the model and base URL below. Provider billing may apply. Review the draft and check its facts before creating a storyboard.'
       : 'Drafting is unavailable with this director. Choose a supporting provider under Settings → Advanced directors (OpenAI, Anthropic, OpenAI-compatible, or your command). Offline and KinoDraw Cloud do not support drafting.';
     draftButton.disabled = drafting || !available;
+    $('#writer').classList.toggle('hidden', !available);     // only directors that can draft offer it
   }
   const usageText = usage => usage ? ` · Usage: ${JSON.stringify(usage)}` : '';
   $('#writer-use').onclick = () => {

@@ -17,8 +17,8 @@ KinoDraw 在你自己的电脑上把一篇讲稿变成手绘视频：一只手�
 ![New video 页面和示例讲稿](media/guide/new-video.jpg)
 
 1. 点 **New video**。
-2. 粘贴讲稿，或点 **Choose file…** 打开 .md、.txt 或 .docx 文件，也可以在 **Start from an example** 下选一篇虚构的示例。
-3. 看一下 **Language**、**Narrator**、**Director**、**Style** 和 **Format**。用默认设置就可以。
+2. 粘贴讲稿，或点 **Choose file…** 打开 .md、.txt 或 .docx 文件，也可以在 **Start from an example** 下选一篇虚构的示例（示例后面的链接可以换成另一种语言的示例）。
+3. 看一下 **Narrator**、**Style** 和 **Format**。**Language**、**Director**、**Speed** 和 **Title** 在 **More options** 里。用默认设置就可以。
 4. 点 **Create storyboard**。KinoDraw 会为讲稿的每一部分安排画面。
 5. 检查分镜，然后点 **Make video**。3 分钟的视频大约要做 3 分钟。
 

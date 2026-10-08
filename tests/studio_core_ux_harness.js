@@ -214,8 +214,14 @@ async function startersScenario() {
   run('showNew()');
   assert.equal(requests.length, 0, 'opening New video sent a request');
   assert.ok(node('#starters'), 'New video has no example gallery');
-  assert.deepEqual(shown(), STARTERS.map(s => s.id), 'Detect shows every example');
-  for (const [lang, ids] of [['en', ['comparison-en', 'explainer-en', 'process-en']], ['es', []], ['', STARTERS.map(s => s.id)]]) {
+  const en = ['comparison-en', 'explainer-en', 'process-en'];
+  assert.deepEqual(shown(), en, 'Detect shows one language of examples');
+  assert.equal(node('#starter-lang').classList.contains('hidden'), false);
+  node('#starter-lang').onclick();                  // browsing the other language leaves the narration language alone
+  assert.deepEqual(shown(), ['comparison-zh', 'explainer-zh', 'process-zh']);
+  assert.equal(node('#lang').value, '');
+  node('#starter-lang').onclick();
+  for (const [lang, ids] of [['en', en], ['es', []], ['', en]]) {
     node('#lang').value = lang; node('#lang').onchange();
     assert.deepEqual(shown(), ids, 'examples are not filtered by the chosen language ' + lang);
     assert.equal(node('#starter-wrap').classList.contains('hidden'), !ids.length);
