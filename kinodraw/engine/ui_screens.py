@@ -98,7 +98,7 @@ def _runs(text: str):
 
 def _width(text: str, size: int, code=False) -> float:
     font = _font(size, code)
-    return sum(_emoji(p, round(size * 1.05)).width + size * .12 if e else font.getlength(p) for e, p in _runs(text))
+    return sum(_emoji(p, round(size * 1.35)).width + size * .12 if e else font.getlength(p) for e, p in _runs(text))
 
 
 def _text(layer, xy, text, size, fill, code=False, anchor_right=False):
@@ -110,8 +110,8 @@ def _text(layer, xy, text, size, fill, code=False, anchor_right=False):
     font = _font(size, code)
     for emoji, piece in _runs(text):
         if emoji:
-            pic = _emoji(piece, round(size * 1.05))
-            layer.alpha_composite(pic, (round(x + size * .06), round(y + size * .02)))
+            pic = _emoji(piece, round(size * 1.35))
+            layer.alpha_composite(pic, (round(x + size * .06), round(y - size * .1)))
             x += pic.width + size * .12
         else:
             draw.text((x, y), piece, font=font, fill=fill)
@@ -521,8 +521,8 @@ def _thread(layer, screen, moment, t, accent, device):
     current = {k: moment.get(k) for k in ('sender', 'outgoing', 'time', 'text')}
     typing = current['outgoing'] and not moment.get('replay')
     since = t - moment['start']
-    size = round(unit * 3.0)
-    maxw = (x1 - x0) * .74
+    size = round(unit * 3.5)                                  # bubbles read at a glance, emoji with them
+    maxw = (x1 - x0) * .78
     if typing and since < 1.2:                                # typed into the compose box first, then sent
         part = current['text'][:max(0, round(len(current['text']) * min(1., since / 1.0)))]
         _text(layer, (x0 + unit * 5, cb + unit * 1.3), part, round(size * .9), INK)
