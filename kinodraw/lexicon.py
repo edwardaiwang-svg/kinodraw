@@ -60,7 +60,7 @@ UNITS = {
     '°': ('degree', 'degrees'), 'º': ('degree', 'degrees'), 'deg': ('degree', 'degrees'),
     'degs': ('degree', 'degrees'),
     # time
-    'ms': ('millisecond', 'milliseconds'), 'sec': ('second', 'seconds'), 'secs': ('second', 'seconds'),
+    'ms': ('millisecond', 'milliseconds'), 's': ('second', 'seconds'), 'sec': ('second', 'seconds'), 'secs': ('second', 'seconds'),
     'min': ('minute', 'minutes'), 'mins': ('minute', 'minutes'), 'hr': ('hour', 'hours'), 'hrs': ('hour', 'hours'),
     'h': ('hour', 'hours'), 'wk': ('week', 'weeks'), 'wks': ('week', 'weeks'), 'mo': ('month', 'months'),
     'mos': ('month', 'months'), 'yr': ('year', 'years'), 'yrs': ('year', 'years'),
@@ -162,14 +162,16 @@ BARE_WORDS = {'OBO', 'incl', 'excl', 'approx', 'aka', 'avail', 'util', 'utils', 
               'dept', 'govt', 'qty', 'apt', 'bldg', 'misc', 'tix', 'w/e', 'wknd', 'wkday', 'wkdays', 'wkends', 'bkfst', 'vs',
               'Dept', 'Govt', 'Mgr', 'Asst', 'Mgmt', 'Mfg', 'Svc', 'Svcs', 'Intl', 'Natl', 'Assn', 'Hrs', 'HQ',
               'Attn', 'Mtg', 'Appt', 'Appts', 'Hdqtrs', 'bdrm', 'bdrms', 'tsp', 'tbsp', 'Tbsp', 'pkg', 'pkt',
-              'oz', 'lb', 'lbs', 'doz', 'ea', 'excel', 'Misc', 'Acct', 'Coord', 'refs'}
+              'oz', 'lb', 'lbs', 'doz', 'ea', 'excel', 'Misc', 'Acct', 'Coord', 'refs', 'lg'}
 # Words that lead into a name or a phrase and so never end a sentence ("Natl. Weather Service", "Univ. of Iowa").
 LEADING_WORDS = {'e.g', 'eg', 'i.e', 'ie', 'vs', 'cf', 'viz', 'a.k.a', 'aka', 'approx', 'N.B', 'incl', 'excl', 'c/o',
                  'Attn', 'Natl', 'Intl', 'Univ', 'Asst', 'Exec', 'Dir', 'Coord', 'Min', 'Max', 'min', 'Assoc',
                  'Admin', 'Mgr', 'asst', 'mgr', 'Info'}
 # Kitchen and shelf words said only after "a", "an", "per", "each" or a number word (a bare "lb" in prose stays).
-COUNTED_WORDS = {'tsp', 'tbsp', 'Tbsp', 'oz', 'lb', 'lbs', 'doz', 'pkg', 'pkt', 'qt', 'gal', 'ea', 'lg', 'med',
-                 'sm', 'FT', 'PT'}
+COUNTED_WORDS = {'tsp', 'tbsp', 'Tbsp', 'oz', 'lb', 'lbs', 'doz', 'pkg', 'pkt', 'qt', 'gal', 'med', 'sm', 'FT', 'PT'}
+# After an ordinal ("2nd fl.", "1st mo.", "3rd ed.").
+AFTER_ORDINAL = {'fl': 'floor', 'flr': 'floor', 'Fl': 'Floor', 'mo': 'month', 'yr': 'year', 'wk': 'week',
+                 'ed': 'edition', 'Ed': 'Edition', 'qtr': 'quarter', 'gr': 'grade', 'pl': 'place'}
 # Two capitalised names apart: "Smith v. Jones".
 BETWEEN = {'v': 'versus'}
 # After "Town, " and before the end, a ZIP code or a break: "Austin, TX 78701".
@@ -210,7 +212,7 @@ COUNT = (r'(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|tw
          r'sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|'
          r'half|a half|quarter|third|dozen)\b')
 NUMBER_WORD = r'(?:\d|' + COUNT + ')'
-ORDINAL_WORD = (r'(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|[a-z]+teenth|'
+ORDINAL_WORD = (r'(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|[a-z]+teenth|'
                 r'[a-z]+tieth|hundredth|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-'
                 r'(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth))')
 # A capitalised word the sentence's grammar does not explain: a name ("Elm", "Oak", "O'Neil", "MAIN").
@@ -295,6 +297,8 @@ def _classify(raw: str, dot: bool, before: str, after: str):
     key = _lookup(BEFORE_NUMBER, raw)
     if key and (dot or key in BARE_BEFORE_NUMBER) and number_after and raw[:1] == key[:1]:
         return BEFORE_NUMBER[key], False
+    if raw in AFTER_ORDINAL and re.search(r'\b' + ORDINAL_WORD + r'\s+$', before):
+        return AFTER_ORDINAL[raw], True
     key = _lookup(BETWEEN, raw)
     if key and dot and cap_after and _NAME_BEFORE.search(before):
         return BETWEEN[key], False
@@ -313,7 +317,7 @@ def _classify(raw: str, dot: bool, before: str, after: str):
         if len(raw) == 2 and re.search(r'\b' + street + r'\.?,?\s+$', before):
             return COMPASS[raw], True
     key = raw if raw in WORDS else raw.lower() if raw.lower() in WORDS and raw.lower() in BARE_WORDS and (
-        raw.isupper() or raw[0].isupper()) and raw.lower() not in COUNTED_WORDS else None
+        raw.isupper() or raw[0].isupper()) and raw.lower() not in COUNTED_WORDS and len(raw) > 2 else None
     if key is None and raw.isupper() and len(raw) > 2:
         key = raw[0] + raw[1:].lower() if raw[0] + raw[1:].lower() in WORDS else None
     if key and (dot or key in BARE_WORDS):
@@ -385,6 +389,16 @@ def _slash_per(m: re.Match) -> str:
     return f' {article} {noun}' if article else f' {noun}'
 
 
+def _plus(m: re.Match) -> str:
+    """A plus sign: "and" between two plain words ("salt + pepper"), else "plus" ("12+", "2 + 2", "Ctrl + C")."""
+    before, after = m.string[:m.start()], m.string[m.end():]
+    prev = re.search(r'(\w+)$', before).group(1)
+    if m.group().startswith((' ', '\t')) and re.match(r'\s+[a-z]', after) and not re.fullmatch(COUNT[:-2] + '|the|a|an', prev) \
+            and (prev.islower() or _sentence_start(before[:-len(prev)])) and not re.fullmatch(r'\d+', prev):
+        return ' and'
+    return ' plus'
+
+
 def _word(piece: str) -> bool:
     from .numbers import _english_words
     words = _english_words()
@@ -418,14 +432,13 @@ SYMBOLS = [
     # Symbols in prose: "@ 7", "~5", "12+", "bread + butter", "±2", "§ 4", "©".
     (re.compile(r'(?<![\w.])@\s*(?=[\w$])'), 'at '),
     (re.compile(r'(?:~|≈|\bapprox\b)\s*(?=' + NUMBER_WORD + ')'), 'about '),
-    (re.compile(r'(?<=\w)(?<!\+)\s*\+(?![\w+])'), lambda m: ' and' if re.match(r'\s+[A-Za-z]', m.string[m.end():])
-     and not re.search(NUMBER_WORD + r'\s*$', m.string[:m.start()]) else ' plus'),
+    (re.compile(r'(?<=\w)(?<!\+)\s*\+(?![\w+])'), _plus),
     (re.compile(r'\s*±\s*'), ' plus or minus '),
     (re.compile(r'§\s*'), 'section '),
     (re.compile(r'©\s*'), 'copyright '),
     (re.compile(r'[™®]'), ''),
     # Separators between listed facts: a short pause in speech ("3 bd | 2 ba · garage", "Open daily / free parking").
-    (re.compile(r'\s*(?:[,;]\s*)?(?:\s[·•|‖/]|[·•‖])\s+|\s+(?:-|–)\s+(?=[\w$"“])'), ', '),
+    (re.compile(r'[ \t]*(?:[,;][ \t]*)?(?:[ \t][·•|‖/]|[·•‖])[ \t]+|(?<![,:;])[ \t]+(?:-|–)[ \t]+(?=[\w$"“])'), ', '),
 ]
 
 

@@ -53,7 +53,7 @@ def _unit_dot(text, end):
     the unit and drops it, so it is no clause break in either text."""
     from ..numbers import UNITS
     units = '|'.join(re.escape(u) for u in sorted(set(UNITS) | {'in'}, key=len, reverse=True))
-    return bool(re.search(r'\d\s?(?:' + units + r')\.$', text[:end]) and re.match(r'[ \t]+[a-z(]|,', text[end:]))
+    return bool(re.search(r'\d[\s-]?(?:' + units + r')\.$', text[:end]) and re.match(r'[ \t]+[a-z(]|,', text[end:]))
 
 
 def clause_spans(text, lang):

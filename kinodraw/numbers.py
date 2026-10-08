@@ -141,7 +141,8 @@ EN_PATTERN = re.compile(
     rf'|(?P<ya>1[1-9]\d{{2}}|20\d{{2}})\s?(?:-|–)\s?(?P<yb>1[1-9]\d{{2}}|20\d{{2}})(?!\d)'
     rf'|(?P<mult>{NUM})\s?[x×](?![a-z])'
     rf'|(?<![A-Za-z])(?P<samt>{NUM})(?P<sscale>bn|mn|tn|[kmbKMB])\b'
-    rf'|(?P<hamt>{NUM})-(?P<hunit>{_unit})(?![A-Za-z²³]|-[A-Za-z]){_udot}'
+    rf'|(?<![\d.,$])(?P<sdec>[1-9]0)s\b'
+    rf'|(?P<hamt>{NUM})-(?P<hunit>{_unit}|in(?=\.?[ \t]+[a-z]))(?![A-Za-z²³]|-[A-Za-z]){_udot}'
     rf'|(?P<uneg>(?<![\w.])-)?(?P<uamt>{NUM})\s?(?P<unit>{_unit})(?![A-Za-z²³]|-[A-Za-z]){_udot}'
     rf'|#(?P<hash>\d+)'
     rf'|(?P<frac>\d+/\d+)(?:\s?(?P<funit>{_unit})(?![A-Za-z]){_udot})?'
@@ -402,11 +403,14 @@ def _en_speak(m: re.Match) -> str:
         return f"{en_number(g['mult'])} times"
     if g['samt']:
         return f"{en_number(g['samt'])} {SCALES[g['sscale'].lower()]}"
+    if g['sdec']:
+        return en_number(g['sdec'])[:-1] + 'ies'                               # "her 50s": fifties
     if g['hamt']:
-        return f"{en_number(g['hamt'])}-{_unit_said(g['hunit'], one=True)}"      # "a 6-ft fence": six-foot
+        unit = 'inch' if g['hunit'] == 'in' else _unit_said(g['hunit'], one=True)
+        return f"{en_number(g['hamt'])}-{unit}"                                # "a 6-ft fence": six-foot
     if g['uamt']:
         amount = g['uamt'].replace(',', '')
-        if g['unit'] == 'W' and re.match(r'\s+(?:\d|[A-Z])', rest):
+        if g['unit'] == 'W' and re.match(r'\.?\s+(?:\d|[A-Z])', rest):
             return f"{en_number(g['uamt'])} W"          # "12 W 4th St": West, a compass point (lexicon.py)
         if re.fullmatch(r'[1-9]\d*\.50*', amount):                              # "2.5 BA": two and a half baths
             return f"{en_number(amount.split('.')[0])} and a half {_unit_said(g['unit'])}"
