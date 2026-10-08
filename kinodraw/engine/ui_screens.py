@@ -28,6 +28,7 @@ EMOJI_FONTS = ('/System/Library/Fonts/Apple Color Emoji.ttc', '/usr/share/fonts/
 LIT = 1.4                 # seconds an element stays lit after its word
 MIN_HOLD = 2.2            # a screen stays at least this long
 TAIL = .6                 # and this long after its last word
+BRIDGE = 2.5              # a gap this short between two screens of one device keeps the device on screen
 PHONE_FIRST = 1.8         # a chat log's message shows on the phone this long before the cut to its sender
 CUT_MIN = 1.0             # when the sender is heard at least this much longer
 INK = (34, 38, 46)
@@ -177,6 +178,8 @@ def moments_for(episode, tl, lang, project_dir) -> list[dict]:
         out.append(m)
     for a, b in zip(out, out[1:]):
         a['end'] = min(a['end'], b['start'])                 # the next screen takes over
+        if a['device'] == b['device'] and not a.get('chat_log') and 0 < b['start'] - a['end'] <= BRIDGE:
+            a['end'] = b['start']                            # the same device stays: only what it shows changes
     for m in out:                                            # a chat log cuts away to its sender (Storybook):
         said = tl['beats'][m['beat']]['end'] - m['start']     # the bubble first, then them, while they are heard
         if m.get('chat_log') and m.get('sender') and said >= PHONE_FIRST + CUT_MIN:

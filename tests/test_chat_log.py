@@ -168,3 +168,15 @@ def test_a_phone_thread_held_while_it_is_read_is_a_narrated_page_not_a_freeze():
             {'kind': 'message', 'start': 34.0, 'end': 36.2}, {'kind': 'screen', 'start': 40., 'end': 42.},
             {'kind': 'message', 'start': 42.5, 'end': 44.}]
     assert pipeline._narrated_pages(cfg, {'beats': {}}, rows) == [(29.6, 36.2), (42.5, 44.)]
+
+
+def test_one_device_stays_on_screen_between_its_states(tmp_path):
+    b = script.build(ingest.read('On your laptop, open Tidewater Bank and click Settings.\n\n'
+                                 'On your laptop, click Security, then click Confirm.'), 'story')
+    ids = [x['id'] for x in b['beats']]
+    tl = {'beat_order': ids, 'end_card': {'start': 99.},
+          'beats': {bid: {'start': i * 4., 'end': i * 4. + 3.6, 'char_times': [k * .05 for k in range(200)]}
+                    for i, bid in enumerate(ids)}}
+    found = screens.moments_for(b, tl, 'en', tmp_path)
+    assert len(found) == 2 and found[0]['device'] == found[1]['device'] == 'laptop'
+    assert found[0]['end'] == found[1]['start']              # no glimpse of the board between two laptop screens
