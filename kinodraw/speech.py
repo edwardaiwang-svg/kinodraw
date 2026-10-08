@@ -816,6 +816,7 @@ TRAIL_GAP = .6            # a thought that trails off ("the north is just... on 
 COUNT_STEP = 1.25         # a count ("in... two... three... four"): from the start of one count to the start of the next
 BEAT_GAP = 1.4            # after a line that trails off or breaks off ("Mom..."), before the next line: a dramatic beat
 STANZA_GAP = 2.0          # after the last line of a stanza in verse (the references rest about 2 s)
+LINE_BREATH = .55         # a line of verse that breaks inside its sentence: a short breath before the next line
 PAUSE_SECONDS = 3.0       # "(pause)" with no length
 BEAT_SECONDS = 1.2        # "(beat)"
 PAUSE_WORDS = {'long': 5., 'longer': 5., 'short': 1.5, 'brief': 1.5, 'small': 1.5, 'little': 1.5, 'quick': 1.,
@@ -839,6 +840,23 @@ HOLD_SAID = re.compile(r'\W*(?:(?:and|now|then|just|gently|so)\W+)*(?:hold|pause
 
 def _number(word: str) -> float:
     return float(word) if word[:1].isdigit() else float(NUMBER_WORDS[word.casefold()])
+
+
+def line_breaths(display: str, spoken: str, line_starts, lang: str = 'en') -> list[tuple[int, float, None, float]]:
+    """Verse: a stop (speech.pace's shape) of LINE_BREATH before each line that goes on with the sentence of the line
+    before it ("and sets them down / in places..."); ``line_starts`` are the display's words that start a line."""
+    from .numbers import normalize
+    if lang == 'zh' or not line_starts:
+        return []
+    words = list(re.finditer(r'\S+', display))
+    to_spoken = normalize(display, lang).to_spoken
+    out = []
+    for k in line_starts:
+        if 0 < k < len(words) and not re.search(r'[.!?…][”"’)\]]*$', words[k - 1].group()):
+            pos = to_spoken(words[k].start())
+            if 0 < pos < len(spoken):
+                out.append((pos, LINE_BREATH, None, 0.))
+    return out
 
 
 def pause_seconds(note: str) -> float | None:

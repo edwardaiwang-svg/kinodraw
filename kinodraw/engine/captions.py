@@ -18,6 +18,7 @@ import re
 import textwrap
 from functools import lru_cache
 
+import numpy as np
 from PIL import Image, ImageDraw
 
 from ..ingest import CLOSERS, _outside_quotes, _sentence_spacing
@@ -86,7 +87,11 @@ def width(text, lang, fonts=ink.FONTS):
 
 
 def balanced_lines(text, lang, fonts=ink.FONTS):
-    """Return <=2 lines (balanced) or None when the text cannot fit in two lines."""
+    """Return <=2 lines (balanced) or None when the text cannot fit in two lines. A caption that carries its own
+    line breaks (verse: one script line per caption line) keeps them when each line fits."""
+    if '\n' in text.strip():
+        lines = [line.strip() for line in text.strip().split('\n')]
+        return lines if len(lines) <= 2 and all(width(line, lang, fonts) <= MAX_W for line in lines) else None
     text = _sentence_spacing(text, lang).strip()
     if width(text, lang, fonts) <= MAX_W:
         return [text]
@@ -175,10 +180,12 @@ def sentence_end(text):
     return bool(text) and text[-1] in '.!?…。！？' and not _abbreviated(text)
 
 
-def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False, gaps=()):
+def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False, gaps=(), verse=()):
     """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)], with
     ``words`` [(start, end, text, [the time each of word_spans(text) is said])]. ``gaps``: (start, end) seconds
-    from beat start of lines said in a speech bubble instead; no caption runs across one or shows over it."""
+    from beat start of lines said in a speech bubble instead; no caption runs across one or shows over it.
+    ``verse``: the words of ``display`` (indices) that start a new line of a poem; each caption line is then one
+    script line (cut only when it is wider than the caption), and a caption shows at most two of them."""
     display = _sentence_spacing(display, lang)
     sd, ss = clause_spans(display, lang), clause_spans(spoken, lang)
     # Captions include closing marks; spoken spans still index the original character times.
@@ -211,6 +218,17 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
             off += len(p)
     target = 80 if lang in ('en', 'es') else 28
     minimum = 26 if lang in ('en', 'es') else 8
+    starts = [m.start() for m in re.finditer(r'\S+', display)]
+    breaks = sorted({starts[k] for k in verse if 0 < k < len(starts)}) if lang != 'zh' else []
+    if breaks and sd:
+        cues = _verse_cues(atoms, sd[0][0], breaks, lang, char_time, gaps)
+    else:
+        cues = _clause_cues(atoms, lang, fits, char_time, gaps, target, minimum)
+    return _timed(cues, lang, char_time, speech_end, gaps, words)
+
+
+def _clause_cues(atoms, lang, fits, char_time, gaps, target, minimum):
+    """Group the clause pieces into cues of at most two lines (the narration's rolling caption)."""
     cues, cur, cur_pos, cur_spots, said = [], '', None, [], ''
     for text, pos, spots in atoms:
         trial = cur + text
@@ -234,6 +252,56 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
             and not sentence_end(cues[-2][1]):
         p, t, spots = cues[-2]
         cues[-2:] = [(p, t + cues[-1][1], spots + cues[-1][2])]
+    return cues
+
+
+def _verse_cues(atoms, offset, breaks, lang, char_time, gaps):
+    """Cues of a poem: one script line per caption line (a line wider than the caption is cut at its words), two
+    lines at most, never across a sentence end or a line left to a speech bubble."""
+    lines, at = [['', None, []]], offset            # [text, spoken pos, spots] of each script line
+    for text, pos, spots in atoms:
+        for k, ch in enumerate(text):
+            if at in breaks and lines[-1][0].strip():
+                lines.append(['', None, []])
+            line = lines[-1]
+            if line[1] is None:
+                line[1] = spots[k] if k < len(spots) else pos
+            line[0] += ch
+            line[2].append(spots[k] if k < len(spots) else pos)
+            at += 1
+    pieces = []
+    for text, pos, spots in lines:
+        if not text.strip():
+            continue
+        cut = [text] if width(text, lang) <= MAX_W else split_long(text, lang, fits=lambda t, l: width(t, l) <= MAX_W)
+        k = 0
+        for c in cut:
+            pieces.append((c, spots[k] if k < len(spots) else pos, spots[k:k + len(c)]))
+            k += len(c)
+    cues, cur, said = [], None, ''
+    for text, pos, spots in pieces:
+        quoted = said.count('“') > said.count('”') or said.count('"') % 2 == 1
+        said += text
+        apart = cur and spots and _between(gaps, char_time(int(cur[2][-1])), char_time(int(spots[0])))
+        if cur and (cur[1].count('\n') >= 1 or (sentence_end(cur[1]) and not quoted) or apart):
+            cues.append(cur)
+            cur = None
+        if cur is None:
+            cur = [pos, text, list(spots)]
+            continue
+        if cur[1][-1:].isspace():                    # the space before the next line becomes the break
+            cur[1] = cur[1][:-1] + '\n'
+        else:
+            cur[1] += '\n'
+            cur[2].append(cur[2][-1])
+        cur[1] += text
+        cur[2] += spots
+    if cur:
+        cues.append(cur)
+    return [tuple(c) for c in cues]
+
+
+def _timed(cues, lang, char_time, speech_end, gaps, words):
     out = []
     for i, (pos, text, spots) in enumerate(cues):
         start = 0. if i == 0 else max(0., char_time(int(pos)) - .05)
@@ -382,3 +450,92 @@ def _outline_word(text, lang, fonts, color, edge, stroke, word, accent):
         return base
     lit = caption_image(text, lang, fonts, highlight_color(accent, color, edge), edge, stroke)
     return paint_word(base, lit, boxes[word])
+
+
+def roll_pages(text, chars, lines=2):
+    """A long text written on screen as the narration says it, cut into pages that each wrap into at most ``lines``
+    lines of ``chars`` characters: whole clauses where they fit (a page ends at , ; : . ! ? …) and never past a
+    sentence end, a clause too long for one page cut between its words. Returns (first, end) word indices of each page; one page when it fits."""
+    words = text.split()
+    clauses, cur = [], []
+    for k, word in enumerate(words):
+        cur.append(k)
+        if word[-1] in ',;:.!?…' or k == len(words) - 1:
+            clauses.append(cur)
+            cur = []
+
+    def ok(a, b):
+        return len(wrap(' '.join(words[a:b]), chars)) <= lines
+    pages = []
+    for clause in clauses:
+        a, b = clause[0], clause[-1] + 1
+        if pages and ok(pages[-1][0], b) and not sentence_end(words[pages[-1][1] - 1]):
+            pages[-1] = (pages[-1][0], b)
+            continue
+        while a < b:                                 # a clause wider than a page: as many words as fit, then on
+            end = next((e for e in range(b, a, -1) if ok(a, e)), a + 1)
+            pages.append((a, end))
+            a = end
+    return pages or [(0, len(words))]
+
+
+# ------------------------------------------------------------------ where the caption goes, and its backing
+TOP = 30                 # the top band's first row (px) when the bottom band would cover someone
+BUSY = .12               # luminance spread (WCAG relative luminance, 0-1) above which a background is busy
+BACKING_ALPHA = .86
+
+
+def _luminance(rgb):
+    c = np.asarray(rgb, np.float64) / 255
+    c = np.where(c <= .03928, c / 12.92, ((c + .055) / 1.055) ** 2.4)
+    return c @ np.array([.2126, .7152, .0722])
+
+
+def _ratio(a, b):
+    return (np.maximum(a, b) + .05) / (np.minimum(a, b) + .05)
+
+
+def needs_backing(region, letters, edge):
+    """Whether a caption of ``letters`` in an ``edge`` outline needs a backing strip over ``region`` (the frame
+    under it, RGB): the background is busy (grass, a road, a photo, a figure), the letters fall under 4.5:1 on a
+    tenth of it, or it is mid-toned so the outline melts into it (a teal or night sky) and the letters stay under
+    7:1. Plain paper keeps the outline alone."""
+    lum = _luminance(np.asarray(region, np.float64)[..., :3]).ravel()
+    if lum.size == 0:
+        return False
+    if lum.std() > BUSY:
+        return True
+    ink_l, edge_l, mean = float(_luminance(letters[:3])), float(_luminance(edge[:3])), float(lum.mean())
+    if (_ratio(lum, ink_l) < 4.5).mean() > .1:
+        return True
+    return bool(_ratio(mean, ink_l) < 7 and _ratio(mean, edge_l) < 3)
+
+
+def backing_color(letters, edge):
+    """The strip behind the letters: the outline's colour (the look's paper) when the letters read on it, else
+    white or near-black, whichever they read on better."""
+    if contrast(letters[:3], edge[:3]) >= 4.5:
+        return tuple(edge[:3])
+    return (255, 255, 255) if contrast(letters[:3], (255, 255, 255)) >= contrast(letters[:3], (24, 24, 24)) \
+        else (24, 24, 24)
+
+
+def _overlap(a, b):
+    return max(0, min(a[2], b[2]) - max(a[0], b[0])) * max(0, min(a[3], b[3]) - max(a[1], b[1]))
+
+
+def caption_spot(frame_size, caption_size, bottom, avoid=(), margin=60):
+    """Top-left (x, y) of the caption: the bottom band, centred, unless it would cover something in ``avoid`` =
+    (figure boxes, prop boxes), each (x0, y0, x1, y1) px. Then the first spot that covers no figure (and, among
+    those, the fewest props) of: the bottom band at the left or right, the top band centred, left or right; where
+    every spot covers someone, the one covering the least of them."""
+    (w, h), (cw, ch) = frame_size, caption_size
+    figures, props = (tuple(avoid) + ((), ()))[:2]
+    centre, left, right = (w - cw) / 2, min(margin, (w - cw) / 2), max((w - cw) / 2, w - margin - cw)
+    spots = [(centre, bottom - ch), (left, bottom - ch), (right, bottom - ch), (centre, TOP), (left, TOP),
+             (right, TOP)]
+
+    def covered(spot):
+        box = (spot[0], spot[1], spot[0] + cw, spot[1] + ch)
+        return sum(_overlap(box, b) for b in figures), sum(_overlap(box, b) for b in props)
+    return min(spots, key=covered)

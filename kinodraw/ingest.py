@@ -38,6 +38,8 @@ class Document:
     heading: bool = field(default=False, compare=False)
     # Verse (a poem, a song): its lines are short and break mid-sentence; each paragraph is a stanza.
     verse: bool = field(default=False, compare=False)
+    # Verse only: every line of the script as written (the paragraphs join them), so captions and the voice keep them.
+    verse_lines: list[str] = field(default_factory=list, compare=False)
 
 
 def detect_lang(text: str) -> str:
@@ -69,7 +71,11 @@ def read(source: str | Path, title: str | None = None) -> Document:
         blocks, fallback = _text_blocks(str(source)), ''
     doc = _structure(blocks, title, fallback)
     if path is None or path.suffix.lower() != '.docx':
-        doc.verse = is_verse(path.read_text(encoding='utf-8') if path is not None and path.is_file() else str(source))
+        raw = path.read_text(encoding='utf-8') if path is not None and path.is_file() else str(source)
+        doc.verse = is_verse(raw)
+        if doc.verse:
+            doc.verse_lines = [line for line in (_clean_inline(re.sub(r'^\s*>\s?', '', line))
+                                                 for line in raw.replace('\r\n', '\n').split('\n')) if line]
     return doc
 
 

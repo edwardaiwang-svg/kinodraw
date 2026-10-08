@@ -94,6 +94,7 @@ class Skin:
         if look is not None or self.caption_style == 'outline':
             color, edge, stroke = look or (self.caption, self.caption_edge, 7)
             return captions.caption_word_image(text, lang, self.fonts, color, edge, stroke, word, accent)
+        text = text.replace('\n', ' ')        # a panel wraps its own lines (a verse caption's breaks are outlines' only)
         base = _caption_panel(text, lang, self)
         return base if word is None else _panel_word(text, lang, self, word, tuple(accent))
 

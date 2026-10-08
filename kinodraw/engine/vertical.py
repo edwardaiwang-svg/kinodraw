@@ -196,6 +196,7 @@ class PortraitFrame:
 
     def caption_image(self, text, word=None):
         """The caption, with its ``word`` being said (captions.word_spans) in the production's accent."""
+        text = text.replace('\n', ' ')        # the phone caption wraps to its own width (a verse break is a space)
         color = (18, 18, 18) if self.collage else tuple(self.skin.caption)
         edge = (255, 255, 255) if self.collage else tuple(self.skin.caption_edge)
         if not self.collage and skins.contrast(color, self.skin.base[:3]) < 4.5:
