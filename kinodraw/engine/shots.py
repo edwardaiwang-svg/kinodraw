@@ -59,6 +59,8 @@ WRITABLE = re.compile(r'page|paper|letter|note(?!book_computer)|list|scroll|clip
                       r'card|newspaper|sign|poster|receipt|ticket|map|phone|smartphone|mobile|tablet|message|'
                       r'postcard|document|menu', re.I)
 PHONE = re.compile(r'phone|smartphone|mobile|tablet|cell', re.I)
+SEAT_WORDS = {'couch': r'couch|sofa|settee', 'sofa': r'couch|sofa|settee', 'settee': r'couch|sofa|settee',
+              'seat': r'seat|chair|couch|sofa|bench'}
 SIGNAL = re.compile(r'antenna|signal|reception|wifi|bars', re.I)
 MAP = re.compile(r'\bmap\b|map_|_map|atlas', re.I)
 NO_SIGNAL = re.compile(r'\bno\s+(?:bars|signal|service|reception|connection|network)\b|out\s+of\s+range|'
@@ -271,6 +273,7 @@ class Shots:
         self.extra = {}                # place -> chairs brought in when every seat was full
         self.stamp = None              # the year a home video on a screen is dated
         self.in_car = False            # the cast is in a car: pulled over outside, they are still in it
+        self.seen = {}                 # cast id -> the place they were last on the page
         self.readable = None           # the last thing in the scene with words on it (the map she unfolds)
 
     def prepare(self, spec, start, end):
@@ -362,6 +365,9 @@ class Shots:
         figures = []
         setting = plan.get('setting') or {}
         place = place_for(setting.get('place'), self.place)
+        if place_for(setting.get('place')) is None and cast and self.last is not None and not (
+                {c['id'] for c in cast} & {f.key for f in self.last.figures}):
+            place = next((self.seen[c['id']] for c in cast if c['id'] in self.seen), None)   # her own kitchen
         humans = [c for c in cast if book._human(c['id'])]
         if place == 'car' and humans:
             place = 'car_inside'                          # people in a car are seen inside it
@@ -427,7 +433,7 @@ class Shots:
                 p.holder = prop['to']
             if prop and prop.get('motion') == 'slide' and p.kind != 'hand':
                 p.motion, p.cue, p.to = 'slide', prop['at'], (.6 if p.x < .5 else -.6, 0.)
-        seated = self._seat(shot, figures, place, refs)
+        seated = self._seat(shot, figures, place, refs, (text[2], book.by_id[bid]['spoken']))
         for f in figures:
             if f in seated:
                 self.rests[f.key] = (place, f.pose)
@@ -450,14 +456,27 @@ class Shots:
             book._face_speaker(figures, speakers[0])
         self._frame(shot, plan, figures, speakers, props, bid, text)
         self.last = shot
+        self.seen.update({f.key: place for f in figures})
         return shot
 
-    def _seat(self, shot, figures, place, refs):
-        """Seat everyone who sits, lies or sleeps: on the seat they had on this set before, else on a free one
-        (the armchair the plan names before a couch someone lies on), side by side in slots that never overlap. When
+    def _seat(self, shot, figures, place, refs, texts=()):
+        """Seat everyone who sits, lies or sleeps: the person the shot's words (else its beat's) put on a seat or in
+        bed ("Nana was sitting up in bed") on that one, the others on the seat they had on this set before, else on a free one (the
+        armchair the plan names before a couch someone lies on), side by side in slots that never overlap. When
         every seat is full, a chair is brought in beside them, and it stays on this set for the rest of the scene."""
         book = self.book
         resting = [f for f in figures if f.pose in ('sit', 'lie', 'sleep')]
+        named = next((n for n in (self._settler(t, [f.key for f in resting]) for t in texts) if n), None)
+        if named:
+            who, what = named
+            old = self.seats.get(who)
+            claim = next((s for s in shot.supports if s.kind in ('seat', 'bed') and re.search(
+                SEAT_WORDS.get(what, what), f'{s.doodle} {_words(s.doodle)}', re.I)), None)
+            if claim is not None and not (old and old[0] == place and old[1] == claim.doodle):
+                for key, seat in list(self.seats.items()):
+                    if key != who and seat[0] == place and seat[1] == claim.doodle:
+                        del self.seats[key]                   # the bed is hers now; whoever had it sits elsewhere
+                self.seats[who] = (place, claim.doodle, (claim.x0 + claim.x1) / 2)
         resting.sort(key=lambda f: (f.key not in self.seats, f.pose == 'sit'))      # who had a seat, then sleepers
         for piece in self.extra.get(place, ()):
             chair = copy.copy(piece)
@@ -507,6 +526,26 @@ class Shots:
             self.seats[f.key] = (place, support.doodle, x)
             seated.append(f)
         return seated
+
+    def _settler(self, text, keys):
+        """(cast id, seat word) when the text puts a named person onto a seat or into bed ("Nana was sitting up in
+        bed", "Dad lay in bed"): the last of these people named before the verb in its sentence, unless a pronoun
+        stands between them (then it could be anyone, and nobody is chosen)."""
+        found = sets.settles(text)
+        if not found or not keys:
+            return None
+        m = sets.SETTLE.search(text)
+        start = max(text.rfind(c, 0, m.start()) for c in '.!?;') + 1
+        before = text[start:m.start()]
+        best = None
+        for key in keys:
+            name = name_key(self.book.cast[key].get('name') or '').split()
+            for hit in re.finditer(r'(?<!\w)' + re.escape(name[0]) + r'(?!\w)', before, re.I) if name else ():
+                if best is None or hit.end() > best[1]:
+                    best = (key, hit.end())
+        if best is None or re.search(r'\b(?:he|she|they)\b', before[best[1]:], re.I):
+            return None
+        return best[0], m.group('what').lower()
 
     def _extra_seat(self, shot, place, figures, supports):
         """A chair on the floor where the page is free, as near the full seats as it can stand."""
