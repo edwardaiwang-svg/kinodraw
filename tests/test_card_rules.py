@@ -246,3 +246,11 @@ def test_a_card_with_an_unmatched_bracket_is_dropped(monkeypatch):
     monkeypatch.setattr(figures, '_sentence_card', lambda text, a, b: figures.Card('number', a, b, value='4 seconds',
                                                                                   label=']'))
     assert figures.cards('Hold for 4 seconds.') == []
+
+
+def test_a_card_leaves_before_the_camera_moves_to_another_stretch_of_board():
+    ep, tl = _episode(('Volunteers planted 1,800 trees along the river this spring.',
+                       'Volunteers planted one thousand eight hundred trees along the river this spring.'))
+    start = data_cards.entries(ep, tl, 'en')[0][0]
+    cards = data_cards.build(ep, tl, 'en', Skin(), (W, H), cuts=[(5., 0, 'cut'), (start + 1.2, 1920, 'cut')])
+    assert cards.entries[0][1] <= start + 1.2, 'the card stays over the next stretch of board'

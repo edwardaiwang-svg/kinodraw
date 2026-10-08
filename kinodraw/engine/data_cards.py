@@ -533,6 +533,11 @@ def build(episode, tline, lang, skin, frame_size, elements=(), cuts=()):
     """The DataCards of an episode, or None when its script states no figures. ``elements``: the whiteboard's
     drawn elements, whose written words show some figures already."""
     found = entries(episode, tline, lang)
+    # a camera cut or wipe to another stretch of board is the next picture: the card leaves before it
+    stops = sorted(c[0] for c in cuts)
+    found = [(start, min(end, next((t for t in stops if t > start + .05), math.inf) - .05), card, bid)
+             for start, end, card, bid in found]
+    found = [e for e in found if e[1] - e[0] > .5]
     if not found:
         return None
     written = [(el.trigger if getattr(el, 'start', None) is None else el.start, getattr(el, 'stretch', 0),
