@@ -521,6 +521,13 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
         if workers > 1:
             prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect, **native)
         _save(build / 'cues.json', {'cues': prod.cues()})
+    if start == 0 and duration is None and styles.renderer(board.get('look')) == 'whiteboard':
+        # Words cut off by a frame edge or written over other words, from the layout just rendered (finish fails
+        # the video on them).
+        from .qa import text_layout
+        if workers > 1 and not (_hybrid(cfg) or styles.renderer(board.get('look')) != 'whiteboard'):
+            prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect, **native)
+        _save(build / 'text-layout.json', text_layout.problems(prod))
     _save(build / 'render-warnings.json', warnings)
     return out
 
@@ -624,6 +631,15 @@ def _finish(project_dir):
     qa = encoded_qa(tl, video, mixed, size=size, narrated_pages=_narrated_pages(cfg, tl))
     cast = project_dir / 'voice' / 'cast.json'
     qa['voices'] = speech.shared_voices(json.loads(cast.read_text(encoding='utf-8'))) if cast.is_file() else []
+    layout = build / 'text-layout.json'
+    if layout.is_file():                              # rendered words cut off or written over words never pass
+        found = _load(layout)
+        qa['text_layout'] = found
+        qa['problems'] += [f'At {clock(f["t"])} "{f["text"][:60]}" is cut off by the edge of the picture.'
+                           if f['defect'] == 'text_clipped' else
+                           f'At {clock(f["t"])} "{f["text"][:60]}" and "{f["other"][:60]}" are written on top of each '
+                           'other.' for f in found]
+        qa['ok'] = qa['ok'] and not found
     if board.get('look') == 'collage':                # words written over other words never pass
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
