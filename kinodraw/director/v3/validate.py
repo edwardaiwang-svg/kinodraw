@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import math
 import re
+from functools import lru_cache
 
 from .arc import cta_phrase, proof_number
 from .schema import OPTIONAL, PLAN_SCHEMA, SCENE
@@ -11,9 +12,71 @@ from ...engine.source_diagrams import resolve as resolve_diagram
 from ...engine import process_diagrams as pd
 from ...library import catalog
 from ..match import singular
-from .offer import ALIASES
+from .offer import ALIASES, STOP
 from .semantics import (actor_named, beats, candidate_ids, cast_evidence, detect_cast, name_key,
                         resolve_actor)
+
+
+@lru_cache(maxsize=1)
+def _entry_words() -> dict:
+    """Each library picture's naming words: its description, its first keywords and its id."""
+    out = {}
+    for pid, entry in catalog().items():
+        text = ' '.join([entry.get('desc', ''), pid.replace('_', ' ')] + (entry.get('en') or [])[:6])
+        out[pid] = {singular(w) for w in re.findall(r'[a-z]+', text.lower())}
+    return out
+
+
+def _ref_words(ref) -> set:
+    """The words a picture ref names ("clock_fast" -> clock, fast); library prefixes and function words aside."""
+    words = {ALIASES.get(w, w) for w in map(singular, re.findall(r'[a-z]+', ref.lower()))}
+    return {w for w in words if len(w) > 2 and w not in STOP and w not in ('svg', 'icon')}
+
+
+def picture_for(ref, offered, named=lambda ref: True) -> tuple[str, str]:
+    """(picture id, note) for a planner's picture ref: ('', '') when nothing can be drawn for it.
+
+    An offered picture is drawn; so is any other library picture the scene's own words name (``named``): the offer
+    list steers a planner, it is no render requirement, so a saved plan keeps its pictures when a later matcher
+    offers others, while a library picture nothing in the scene names stays out. A ref that is no library id
+    ("couch", "hot_thermometer_icon") becomes the offered picture whose words say most of it."""
+    if ref in offered:
+        return ref, ''
+    if ref in catalog():
+        return (ref, '') if named(ref) else ('', '')
+    words, entries = _ref_words(ref), _entry_words()
+    scored = [(len(words & entries[i]), i) for i in offered if i in entries]
+    best = max((n for n, _ in scored), default=0)
+    choice = [i for n, i in scored if n == best and n]
+    if not choice:
+        return '', ''
+    match = min(choice, key=lambda i: (len(catalog()[i].get('desc', '')), i))
+    return match, f'read {ref!r} as the offered picture {match}'
+
+
+def _namer(script_beats, script):
+    """named(ref, texts): do the texts name library picture ``ref``? Yes when the offer's sense matching
+    (offer.Sense.judge) finds a word naming it in its sense, or when a text says the drawing's head word or one of
+    its first four keywords ("drivers" for a truck driver, "Security" for a padlock shield, "a truck" for a
+    delivery truck). The other word of a two-word name only says which kind: "a field" never names field hockey."""
+    from .offer import Sense, _drawing, _library
+    lang = script_beats.get('lang', 'en') if isinstance(script_beats, dict) else 'en'
+    entries, index = _library(lang)
+    sense = Sense(lang, entries, index, [b['spoken'] for b in script])
+
+    def key(text):
+        return ' '.join(singular(w) for w in re.findall(r'[a-z]+', text.lower()))
+
+    @lru_cache(maxsize=None)
+    def says(did):
+        name, head = _drawing(did)
+        kind = set(name) - {head} if len(name) == 2 else set()
+        phrases = {head} | {key(tag) for tag in (catalog().get(did, {}).get('en') or [])[:4]}
+        return {p for p in phrases if p and len(p) > 2 and p not in STOP and p not in kind}
+
+    def named(ref, texts):
+        return any(sense.judge(ref, t) or any(f' {p} ' in f' {key(t)} ' for p in says(ref)) for t in texts)
+    return named
 
 
 def _default(schema):
@@ -225,7 +288,7 @@ def _verbatim(words, beat) -> bool:
 BIBLE_AGE = {'baby': 'baby', 'young': 'child', 'adult': 'adult', 'old': 'old'}
 
 
-def _shots(scene, path, by_id, cast_by_id, offered, repairs):
+def _shots(scene, path, by_id, cast_by_id, offered, repairs, named=lambda ref: True):
     """Keep each shot's references to this scene's beats, the offered pictures, the cast and the beat's own
     words; a shot's pictures join the scene's picture elements so every renderer and editor sees them."""
     bids = scene['beat_ids']
@@ -239,20 +302,15 @@ def _shots(scene, path, by_id, cast_by_id, offered, repairs):
     on_stage = {e['ref'] for e in scene['elements'] if e['kind'] == 'cast'}
 
     def picture(ref, where):
-        """The offered picture id this ref means ('' when none): an id, or a plain name of an offered picture
-        ("couch", "TV") matched to the offered drawing whose description and first keywords say every word."""
-        if ref not in offered:
-            words = {ALIASES.get(w, w) for w in map(singular, re.findall(r'[a-z]+', ref.lower()))}
-            entries = catalog()
-            named = [i for i in offered if i in entries and words and words <= {
-                singular(w) for w in re.findall(r'[a-z]+', ' '.join([entries[i].get('desc', '')] +
-                                                                    (entries[i].get('en') or [])[:6]).lower())}]
-            match = min(named, key=lambda i: (len(entries[i].get('desc', '')), i)) if named else None
-            if match is None:
-                repairs.append(f'{where}: dropped picture {ref!r}, not offered for this scene')
-                return ''
-            repairs.append(f'{where}: read {ref!r} as the offered picture {match}')
-            ref = match
+        """The picture id this ref means ('' when none): a library id, or a plain name ("couch", "TV") read as
+        the offered drawing whose words say it (picture_for)."""
+        given = ref
+        ref, note = picture_for(ref, offered, named)
+        if note:
+            repairs.append(f'{where}: {note}')
+        if not ref:
+            repairs.append(f'{where}: dropped picture {given!r}, not offered for this scene or named by its words')
+            return ''
         if ref not in pictures:
             pictures.append(ref)
             scene['elements'].append({'kind': 'picture', 'ref': ref})
@@ -335,7 +393,7 @@ def _item(beat_id, kind, text='', cue=None, to='', ref='', at='auto', style='non
             'at': at, 'text': text, 'style': style}
 
 
-def _board_items(board, where, scene, by_id, offered, repairs):
+def _board_items(board, where, scene, by_id, offered, repairs, named=lambda ref: True):
     """Keep the items whose words come from their beat, whose pictures were offered and whose targets are earlier
     items of the same board; repair what has one reading (a missing id, an unheard cue, a lone number line)."""
     bids = scene['beat_ids']
@@ -379,9 +437,14 @@ def _board_items(board, where, scene, by_id, offered, repairs):
             repairs.append(f'{w}: dropped {kind} {it["text"]!r}: its words must be in {it["beat_id"]}'
                            + (' as "N rows of M"' if kind == 'dots' else ' with a number' if kind == 'hop' else ''))
             continue
-        if kind == 'picture' and it['ref'] not in offered:
-            repairs.append(f'{w}: dropped picture {it["ref"]!r}, not offered for this scene')
-            continue
+        if kind == 'picture':
+            ref, note = picture_for(it['ref'], offered, named)
+            if note:
+                repairs.append(f'{w}: {note}')
+            if not ref:
+                repairs.append(f'{w}: dropped picture {it["ref"]!r}, not offered for this scene or named by its words')
+                continue
+            it['ref'] = ref
         if kind == 'charges' and it['style'] not in ('plus', 'minus'):
             repairs.append(f'{w}: dropped charges without a plus or minus style')
             continue
@@ -539,7 +602,7 @@ def sentence_restarts(scene, by_id, bid, sentence):
     return bool(re.search(r'\b(?:land(?:s|ed)?\s+on|again|swap|first)\b', last + ' ' + sentence, re.I))
 
 
-def _boards(scene, path, by_id, offered, intent, repairs):
+def _boards(scene, path, by_id, offered, intent, repairs, named=lambda ref: True):
     """Validate the scene's boards; build one from the beats when the planner asked for a diagram (``intent``)
     without giving one; add each named term and spoken equation the boards leave out."""
     boards = []
@@ -548,7 +611,7 @@ def _boards(scene, path, by_id, offered, intent, repairs):
         if n >= 3:
             repairs.append(f'{where}: dropped; at most 3 boards per scene')
             continue
-        items = _board_items(board, where, scene, by_id, offered, repairs)
+        items = _board_items(board, where, scene, by_id, offered, repairs, named)
         if not any(it['kind'] in MAIN + ('label', 'equation') for it in items):
             repairs.append(f'{where}: dropped a board with nothing source-bound to draw')
             continue
@@ -620,6 +683,46 @@ def _boards(scene, path, by_id, offered, intent, repairs):
     if auto:
         repairs.append(f'{path}: diagram {", ".join(sorted(intent))}: built a board from the scene\'s pictures and '
                        'the words the beats say')
+
+
+BOARD_PICTURES = 3          # pictures a board draws at most, its own and the scene's
+
+
+def _board_pictures(scene, path, by_id, repairs):
+    """A board sits beside its scene's pictures, never in place of them: a scene picture no board draws joins
+    the board (up to BOARD_PICTURES), appearing when its beat names it, else when the scene starts."""
+    boards = scene.get('boards') or []
+    if not boards:
+        return
+    drawn = {it['ref'] for b in boards for it in b['items'] if it['kind'] == 'picture'}
+    order = {bid: k for k, bid in enumerate(scene['beat_ids'])}
+    taken = {it['id'] for b in boards for it in b['items']}
+    for e in scene['elements']:
+        if e['kind'] != 'picture' or e['ref'] in drawn:
+            continue
+        board = min(boards, key=lambda b: sum(it['kind'] == 'picture' for it in b['items']))
+        if sum(it['kind'] == 'picture' for it in board['items']) >= BOARD_PICTURES:
+            break
+        names = _ref_words(e['ref']) | _ref_words((catalog().get(e['ref']) or {}).get('desc', ''))
+        bid, cue = scene['beat_ids'][0], ''
+        for b in scene['beat_ids']:
+            hit = next((m for m in re.finditer(r'[A-Za-z]+', by_id[b]['text'])
+                        if singular(m.group().lower()) in names), None)
+            if hit:
+                bid, cue = b, hit.group()
+                break
+        k = 1
+        while f'picture_{k}' in taken:
+            k += 1
+        item = _item(bid, 'picture', '', cue=cue, ref=e['ref'], iid=f'picture_{k}')
+        taken.add(item['id'])
+        drawn.add(e['ref'])
+        here = _position(item, order, by_id)          # ahead of what is said with or after it: words point at it
+        at = next((k for k, it in enumerate(board['items']) if _position(it, order, by_id) >= here),
+                  len(board['items']))
+        board['items'].insert(at, item)
+        repairs.append(f'{path}: the board draws the scene picture {e["ref"]} '
+                       + (f'when {bid} says {cue!r}' if cue else 'from the start'))
 
 
 def _merge_diagram_scenes(scenes, script_beats, repairs):
@@ -708,6 +811,7 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
             repairs.append(f'storyboard.sections: added intent for {sid}')
     out['storyboard']['sections'] = [intents[sid] for sid in sections]
 
+    namer = _namer(script_beats, script)
     default_treatment = 'motion' if style['mode'] == 'motion' else 'whiteboard'
     titles = {bid for bid, b in by_id.items() if b.get('kind') == 'title'}
     out['scenes'] = _merge_diagram_scenes(_cover(out['scenes'], list(by_id), default_treatment, repairs, titles),
@@ -716,6 +820,8 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
         path = f'scenes[{i}]'
         bids = scene['beat_ids']
         offered = set().union(*(candidate_ids(candidates, bid) for bid in bids))
+        texts = [by_id[bid]['spoken'] for bid in bids]
+        named = (lambda ref, texts=texts: namer(ref, texts))
         elements, intent = [], set()
         for e in scene['elements']:
             allowed = (offered if e['kind'] == 'picture' else set(cast_by_id) if e['kind'] == 'cast' else
@@ -728,12 +834,20 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
                     repairs.append(f'{path}: diagram ref {e["ref"]!r} is not a dot-array or panel beat; '
                                    'drawn as a board')
                     continue
-            if e['ref'] in allowed:
+            if e['kind'] == 'picture':
+                ref, note = picture_for(e['ref'], offered, named)
+                if note:
+                    repairs.append(f'{path}: {note}')
+                if not ref:
+                    repairs.append(f'{path}: dropped unknown or out-of-scene picture ref {e["ref"]!r}')
+                elif all(o['ref'] != ref for o in elements if o['kind'] == 'picture'):
+                    elements.append({**e, 'ref': ref})
+            elif e['ref'] in allowed:
                 elements.append(e)
             else:
                 repairs.append(f'{path}: dropped unknown or out-of-scene {e["kind"]} ref {e["ref"]!r}')
         scene['elements'] = elements
-        _boards(scene, path, by_id, offered, intent, repairs)
+        _boards(scene, path, by_id, offered, intent, repairs, named)
         if scene['boards']:
             if style['mode'] == 'motion':
                 style['mode'] = 'hybrid'
@@ -761,7 +875,8 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
             _clamp(action, 'intensity', 1, 3, path + '.action', repairs)
             kept.append(action)
         scene['actions'] = kept
-        _shots(scene, path, by_id, cast_by_id, offered, repairs)
+        _shots(scene, path, by_id, cast_by_id, offered, repairs, named)
+        _board_pictures(scene, path, by_id, repairs)
         _clamp(scene['atmosphere'], 'density', 0, 1, path + '.atmosphere', repairs)
         _clamp(scene, 'hold_s', 0, None, path, repairs)
         forced = ('whiteboard' if style['mode'] == 'whiteboard' else

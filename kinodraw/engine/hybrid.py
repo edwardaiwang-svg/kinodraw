@@ -406,8 +406,16 @@ class HybridProduction:
             self.warnings.append('hybrid: character scene without cast uses source whiteboard fallback')
         p = self.style['palette']
         elements = []
-        for e in spec['elements']:
-            if e['kind'] == 'picture' and not span.diagram:
+        refs = [e['ref'] for e in spec['elements'] if e['kind'] == 'picture']
+        if not refs and not span.actors and not span.diagram and treatment in ('motion', 'kinetic_type'):
+            # A scene the plan left without pictures draws its sentences' own items (the picture director's
+            # draft for its beats), so the narration never plays over an empty stage.
+            refs = list(dict.fromkeys(item['doodle'] for bid in spec['beat_ids'] for v in self.by_id[bid]['visuals']
+                                      if v.get('type') == 'cluster' for item in v.get('items', [])
+                                      if item.get('doodle')))[:3]
+        for ref in refs:
+            e = {'kind': 'picture', 'ref': ref}
+            if not span.diagram:
                 try:
                     path = library.resolve(e['ref'], Path(project_dir))
                     # Library doodles keep their own colours; recolouring every fill made one-colour blobs.
@@ -511,6 +519,7 @@ class HybridProduction:
             if not elements:
                 self.warnings.append('hybrid: chart without supported graphics uses source whiteboard facts over motion backdrop')
         if not span.actors and not span.diagram and not numeric_chart and treatment in ('motion', 'kinetic_type'):
+            self._first_picture_on_time(span, elements)
             pictures = [e for e in elements if e.kind == 'picture']
             copy_elements = [e for e in elements if e.kind == 'text' and e.preset not in ('corner_caption', 'counter')]
             # Source copy remains verbatim, but line breaks give kinetic headlines
@@ -685,6 +694,21 @@ class HybridProduction:
             if hit:
                 return max(0., min(self._spoken_at(bid, hit.start()) - span.start, span.end - span.start - 1.))
         return 0.
+
+    EMPTY_STAGE = 1.0     # seconds of narration over an empty stage before a scene's first picture is brought in
+
+    def _first_picture_on_time(self, span, elements):
+        """A motion scene whose pictures are all named late in its narration would leave the stage empty while
+        the first sentences play (only the caption on blank paper): its first picture is on stage from the scene
+        start instead. A scene that shows something within EMPTY_STAGE seconds is left as planned."""
+        pictures = [e for e in elements if e.kind == 'picture']
+        shown = [e.start for e in elements if e.kind != 'picture' and e.text.strip()] + [e.start for e in pictures]
+        if not pictures or min(shown) <= self.EMPTY_STAGE:
+            return
+        first = min(pictures, key=lambda e: e.start)
+        self.warnings.append(f"hybrid: {'/'.join(span.spec['beat_ids'])} first picture brought in at the scene "
+                             f'start (named {first.start:.1f}s in)')
+        first.start = 0.
 
     def _reflow_square(self, span):
         """Reflow logical element boxes before their SVGs are rasterized.
