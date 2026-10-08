@@ -183,10 +183,18 @@ def _outside_quotes(text: str) -> list[bool]:
 def _protect_periods(text: str, lang: str) -> str:
     names = (r'Sr|Sra|Srta|Dr|Dra|Prof|Ud|Uds|EE\.UU|etc' if lang == 'es' else
              r'Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e|U\.S|U\.K|Ph\.D|No')
-    text = re.sub(r'\b[A-Za-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|edu|gov|io|co|nl|es|uk)\b',
+    from .numbers import TLDS
+    # Web and email addresses keep their dots: "leaves@millbrook.example", "millbrook.example/leaves".
+    text = re.sub(r'[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?![\w-])|'
+                  r'\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?:' + TLDS + r')\b(?![\w-])',
                   lambda m: m.group(0).replace('.', '\0'), text)
     text = re.sub(r'\b(?:[A-Za-z]\.){2,}', lambda m: m.group(0).replace('.', '\0'), text)
     text = re.sub(r'(?<=\d)\.(?=\d)', '\0', text)
+    if lang != 'es':
+        # An abbreviation that needs the number after it never ends a sentence: "Nov. 3", "Ext. 3", "No. 5".
+        text = re.sub(r'\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|Mon|Tues?|Wed|Thu|Thurs?|Fri|Sat|Sun|'
+                      r'[Ee]xt|EXT|Nos?|Apt|Ste|Rm|Rte|Hwy|Fig|Vol|Ch|Sec|Pt)\.(?=[ \t]*\d)',
+                      lambda m: m.group(0).replace('.', '\0'), text)
     return re.sub(r'\b(' + names + r')\.', lambda m: m.group(0).replace('.', '\0'), text)
 
 

@@ -144,6 +144,8 @@ class Typed(Element):
         if t < self.start or self.gone(t):
             return
         n = motion.typewriter(self.text, t, self.t0, self.cps)
+        if 0 < n < len(self.text) and ' ' in self.text and not self.text[n].isspace():
+            n = self.text.rfind(' ', 0, n) + 1            # whole words only: "better to" is never half of "together"
         if n == 0 or t < self.card.end:
             self.card.draw(canvas, t)
             return

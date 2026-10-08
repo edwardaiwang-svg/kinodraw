@@ -36,6 +36,63 @@ season verse chorus bridge intro outro hook cta caption headline subhead body fo
 materials vocabulary key takeaway takeaways quote warning danger q&a faq ingredients serves yield prep cook
 total'''.split())
 OPEN_QUOTES, CLOSE_QUOTES = '"“‘«「『', '"”’»」』'
+WEEKDAYS = {'mon': 'Monday', 'tue': 'Tuesday', 'tues': 'Tuesday', 'wed': 'Wednesday', 'thu': 'Thursday',
+            'thur': 'Thursday', 'thurs': 'Thursday', 'fri': 'Friday', 'sat': 'Saturday', 'sun': 'Sunday'}
+MONTH_NAMES = {m[:3].lower(): m for m in ('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+                                          'September', 'October', 'November', 'December')}
+MONTH_WORDS = ('(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)(?:uary|ruary|ch|il|e|y|ust|tember|ober|'
+               'ember)?')
+NUMBER_WORD = r'(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b'
+# A short day name is a day when a date, a time, another day or a list mark comes next ("Mon. & Tue.", "Sat., Nov. 8",
+# "party sat 6pm"); "Sun." and "Sat." on their own may be the sun or a past tense.
+DAY_NEXT = (r'(?=\s*(?:,|&|\band\b|\bor\b|\bto\b|\bthrough\b|\bthru\b|[–—-]|\d|\bat\b|\bnight\b|'
+            r'\bmorning\b|\bevening\b|\bafternoon\b|' + NUMBER_WORD + '|' + MONTH_WORDS + r'\b))')
+
+
+def _stop(m: re.Match, word: str) -> str:
+    """An abbreviation's word, with its period kept when it ended the sentence ("on Quarry Rd. Bring" -> "Road.")."""
+    rest = m.string[m.end():]
+    ends = m.group().endswith('.') and (not rest.strip() or re.match(
+        r'\s+(?!(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\w*\b|' + MONTH_WORDS + r'\b)[A-Z"“]', rest))
+    return word + ('.' if ends else '')
+
+
+def _day(m: re.Match) -> str:
+    word = WEEKDAYS[m.group(1).lower()]
+    if not m.group().endswith('.') and re.match(r'\s+' + NUMBER_WORD, m.string[m.end():]):
+        word += ' at'                                   # "party sat six PM" -> "Saturday at six PM"
+    return _stop(m, word)
+
+
+PLACE_WORDS = {'Rd': 'Road', 'Blvd': 'Boulevard', 'Ln': 'Lane', 'Hwy': 'Highway', 'Rte': 'Route', 'Pkwy': 'Parkway',
+               'Ct': 'Court', 'Apt': 'Apartment', 'Ste': 'Suite', 'Bldg': 'Building', 'Dept': 'Department',
+               'Govt': 'Government', 'Gov': 'Governor', 'Sen': 'Senator', 'Rep': 'Representative', 'Capt': 'Captain',
+               'Lt': 'Lieutenant', 'Sgt': 'Sergeant', 'Gen': 'General', 'Corp': 'Corporation', 'Univ': 'University',
+               'Assn': 'Association', 'Intl': 'International', 'Natl': 'National', 'Hosp': 'Hospital'}
+# Chat shorthand a customer types ("ran the store 22 yrs lol", "see u sat w/ the kids"): the voice says the words,
+# the captions keep the writing. Laughs and tone marks are tone, not words: the voice leaves them out.
+SHORTHAND = {'w/': 'with', 'w/o': 'without', 'b/c': 'because', 'bc': 'because', 'u': 'you', 'ur': 'your',
+             'r': 'are', 'pls': 'please', 'plz': 'please', 'thx': 'thanks', 'thnx': 'thanks', 'tnx': 'thanks',
+             'bday': 'birthday', 'b-day': 'birthday', 'ppl': 'people', 'msg': 'message', 'tmrw': 'tomorrow',
+             'tmw': 'tomorrow', 'tmr': 'tomorrow', 'tonite': 'tonight', 'btw': 'by the way', 'idk': "I don't know",
+             'omg': 'oh my gosh', 'imo': 'in my opinion', 'tbh': 'to be honest', 'fyi': 'for your information',
+             'abt': 'about', 'cuz': 'because', 'bf': 'boyfriend', 'gf': 'girlfriend', 'gr8': 'great',
+             'jk': 'just kidding', 'nvm': 'never mind', 'rn': 'right now', 'ty': 'thank you', 'yr': 'year',
+             'yrs': 'years', 'hr': 'hour', 'hrs': 'hours', 'min': 'minute', 'mins': 'minutes', 'wk': 'week',
+             'wks': 'weeks', 'mo': 'month', 'mos': 'months', 'w': 'with', 'xmas': 'Christmas', 'bros': 'brothers',
+             'sis': 'sister', 'grandkids': 'grandkids', 'gonna': 'gonna'}
+_shorthand = '|'.join(re.escape(k) for k in sorted(SHORTHAND, key=len, reverse=True) if k not in ('w', 'grandkids',
+                                                                                                    'gonna'))
+LAUGHS = re.compile(r'(?:[ \t]*\b(?:lol|lols|lmao|lmfao|rofl|roflmao|haha(?:ha)*|hehe(?:he)*|ha ha(?: ha)*|xd)\b)+(?=[\s.,!?;:)]|$)',
+                    re.I)
+def _tld_words():
+    from .numbers import SPELLED_TLDS, TLDS
+    return '|'.join(sorted({re.escape(SPELLED_TLDS.get(t, t)) for t in TLDS.split('|')}, key=len, reverse=True))
+
+
+TLD_WORDS = _tld_words()
+ARROW = re.compile(r'\s*(?:→|->|⟶|➔|➡️?|=>)\s*')
+
 # Abbreviations spelled out for the voice only (captions keep the written form).
 SAY_EN = [(re.compile(r'\bMr\.(?=\s)'), 'Mister'), (re.compile(r'\bMrs\.(?=\s)'), 'Missus'),
           (re.compile(r'\bMs\.(?=\s)'), 'Miz'),
@@ -48,10 +105,55 @@ SAY_EN = [(re.compile(r'\bMr\.(?=\s)'), 'Mister'), (re.compile(r'\bMrs\.(?=\s)')
           (re.compile(r'\bi\.e\.,?'), 'that is'), (re.compile(r'\bProf\.(?=\s)'), 'Professor'),
           (re.compile(r'\bJr\.'), 'Junior'), (re.compile(r'\bSr\.(?=\s|$)'), 'Senior'),
           (re.compile(r'\bapprox\.'), 'approximately'),
+          (re.compile(r'\b(Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri)\.'), _day),
+          (re.compile(r'\b(Sat|Sun)\.' + DAY_NEXT), _day),
+          (re.compile(r'\b(Mon|Tues?|Wed|Thu|Thurs?|Fri|Sat|Sun|mon|tues?|wed|thu|thurs?|fri|sat|sun)\b(?!\.)' + DAY_NEXT),
+           _day),
+          (re.compile(r'\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.'),
+           lambda m: _stop(m, MONTH_NAMES[m.group(1)[:3].lower()])),
+          (re.compile(r'\b(' + '|'.join(PLACE_WORDS) + r')\.'), lambda m: _stop(m, PLACE_WORDS[m.group(1)])),
+          (re.compile(r'\b[Nn]o\.(?=\s*' + NUMBER_WORD + ')'), 'number'),
+          # The voice runs on through an abbreviation's period before a lowercase word ("Tom from Pipewise Plumbing
+          # Inc. and"), and an extension never ends a sentence.
+          (LAUGHS, ''),
+          (re.compile(r'([!?])[!?]+'), lambda m: m.group(1)),
+          (ARROW, lambda m: ('' if re.search(r'[,;:]\s*$', m.string[:m.start()] + ' ') else ', ') + 'then '
+           if m.start() and m.string[:m.start()].strip() else ''),
+          (re.compile(r'(?<![\w/&])(' + _shorthand + r')(?![\w/&])', re.I),
+           lambda m: _shorthand_word(m)),
+          (re.compile(r'(?<=\w)\s*&\s*(?=\w)|\s&\s'), ' and '),
+          # Two addresses in a row ("pipewisebayside.com hello@pipewisebayside.com"): a pause after the first.
+          (re.compile(r'\bdot (' + TLD_WORDS + r')(?= (?!dot\b|slash\b|at\b|dash\b)[\w])'), lambda m: m.group() + ','),
+          # A phone number's digit groups: a short pause between them (numbers.py joins them with hyphens).
+          (re.compile(r'\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)-(?=(?:zero|oh|one|two|three|'
+                      r'four|five|six|seven|eight|nine)\b)'), lambda m: m.group(1) + ', '),
           # "7 a.m." ends its sentence when a capitalised word that is no time zone follows ("7 a.m. 🔥 Just"): the
-          # voice stops there instead of running on (the period went with the abbreviation in the spoken text).
-          (re.compile(r'\b[AP]M(?=\s+(?!(?:Eastern|Central|Pacific|Mountain|Atlantic|GMT|UTC|[A-Z]{1,3}T)\b)[A-Z])'),
+          # voice stops there instead of running on (the period went with the abbreviation in the spoken text). A day
+          # or a date after the time is the same phrase ("6 AM Tues., Oct. 14", "10 AM Saturday").
+          (re.compile(r'\b[AP]M(?=\s+(?!(?:Eastern|Central|Pacific|Mountain|Atlantic|GMT|UTC|[A-Z]{1,3}T|' +
+                      r'(?:Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)(?:day|nesday|sday|urday|rsday)?|'
+                      r'Today|Tonight|Tomorrow|' + MONTH_WORDS + r')\b)[A-Z])'),
            lambda m: m.group() + '.')]
+
+
+
+def _shorthand_word(m: re.Match) -> str:
+    """The word for a piece of chat shorthand, only where it is written as shorthand: "u", "ur" and "r" in lower
+    case ("U" may be a letter grade), "w/" before a word."""
+    raw = m.group(1)
+    key = raw.lower()
+    if key in ('u', 'ur', 'r', 'bc', 'mo', 'min', 'hr', 'yr', 'wk', 'sis', 'bros', 'abt', 'rn', 'ty', 'bf', 'gf') \
+            and raw != key:
+        return raw
+    if key in ('mo', 'min', 'mins', 'hr', 'hrs', 'yr', 'yrs', 'wk', 'wks', 'mos') and not re.search(
+            r'\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|[a-z]+teen|[a-z]+ty(?:-[a-z]+)?|'
+            r'hundred|thousand|few|many|several|some|a|an|per|\d+)\s*$', m.string[:m.start()], re.I):
+        return raw                                  # "min" alone is not minutes; "22 yrs" is years
+    if key == 'r' and not re.match(r'\s+(?:u|you|we|they|y\w*)\b', m.string[m.end():], re.I) and \
+            not re.search(r'\b(?:u|you|we|they)\s+$', m.string[:m.start()], re.I):
+        return raw
+    word = SHORTHAND[key]
+    return word[0].upper() + word[1:] if raw[0].isupper() and m.start() == 0 else word
 
 
 @dataclass
@@ -111,9 +213,18 @@ def _line_starts(text: str) -> list[int]:
     return sorted(set(starts))
 
 
+# Broadcast and interview tags: "SOT (Maria Chen):" is Maria Chen speaking in her own voice, "REPORTER (V/O):" the
+# reporter (a tag in the parentheses is no one's name).
+TAGS = {'sot', 'sound bite', 'soundbite', 'bite', 'sync', 'interview', 'int', 'vox pop', 'vo', 'v/o', 'v.o', 'v.o.',
+        'voice over', 'voiceover', 'voice-over', 'o/c', 'oc', 'on camera', 'on cam', 'nat sot', 'sot/vo', 'clip',
+        'guest', 'caller', 'phoner', 'stand-up', 'standup', 'stand up', 'live', 'os', 'o.s', 'o.s.', 'cont',
+        "cont'd", 'contd', 'off', 'off screen', 'offscreen', 'q', 'a'}
+
+
 def labels_in(text: str, labels: set) -> list[tuple[int, int, str]]:
     """(label start, speech start, name) of each screenplay label in ``text``. A label after a sentence end inside a
-    paragraph counts only in capitals (a pasted screenplay whose lines ran together)."""
+    paragraph counts only in capitals (a pasted screenplay whose lines ran together). A broadcast tag names the
+    person in its parentheses ("SOT (Maria Chen):" -> "Maria Chen")."""
     out = []
     for pos in _line_starts(text):
         found = _label_at(text, pos)
@@ -122,8 +233,133 @@ def labels_in(text: str, labels: set) -> list[tuple[int, int, str]]:
         m, name = found
         if pos != _line_starts(text)[0] and text[pos - 1] != '\n' and not name.isupper():
             continue
+        paren = (m.group('paren') or '').strip('() \t')
+        if label_key(name) in TAGS and paren and label_key(paren) not in TAGS and re.fullmatch(
+                r"[^\W\d_][\w’'.-]*(?: [^\W\d_][\w’'.-]*){0,3}", paren) and all(w[:1].isupper() for w in paren.split()):
+            name = paren
         out.append((pos, m.end(), name))
     return out
+
+
+# ------------------------------------------------------------------ directions and on-screen text
+# A line, a [bracket] or a (parenthesis) that starts with one of these is written for the picture, never said or
+# captioned. Text after a screen-text tag ("[TEXT ON SCREEN: SAVE UP TO 20%]", "LOWER THIRD: Maria Chen - Owner")
+# is shown as written: a text card or a name strap.
+SCREEN_TEXT = {'text on screen': 'text', 'on screen text': 'text', 'on-screen text': 'text', 'onscreen text': 'text',
+               'on screen': 'text', 'on-screen': 'text', 'onscreen': 'text', 'screen text': 'text', 'text': 'text',
+               'title card': 'text', 'caption': 'text', 'text card': 'text', 'card': 'text', 'graphic text': 'text',
+               'super': 'strap', 'lower third': 'strap', 'lower-third': 'strap', 'lower 3rd': 'strap', 'l3': 'strap',
+               'chyron': 'strap', 'name strap': 'strap', 'strap': 'strap', 'cg': 'strap', 'font': 'strap',
+               'name super': 'strap', 'lower third super': 'strap'}
+DIRECTION_TAGS = {'show', 'showing', 'b-roll', 'broll', 'b roll', 'visual', 'visuals', 'gfx', 'graphic', 'graphics',
+                  'scene', 'shot', 'camera', 'cam', 'sfx', 'fx', 'sound', 'sound effect', 'sound effects', 'music',
+                  'nat sound', 'nats', 'nat', 'transition', 'cut to', 'cut', 'insert', 'overlay', 'animation',
+                  'image', 'photo', 'picture', 'video', 'footage', 'montage', 'end card', 'end slate', 'slate',
+                  'cutaway', 'pov', 'close up', 'close-up', 'closeup', 'wide shot', 'establishing shot', 'drone shot',
+                  'screenshot', 'screen recording', 'screen', 'demo', 'map', 'logo', 'stock footage', 'action',
+                  'stage direction', 'direction', 'directions', 'shot list', 'beat', 'pause', 'fade in', 'fade out',
+                  'fade to black', 'v/o', 'vo', 'v.o.', 'v.o', 'o.s.', 'o.s', 'o.c.', 'voice over', 'voiceover'}
+# Single words that are a tag only in capitals or inside brackets ("Show: ..." in a sentence is prose).
+CAPITAL_ONLY = {'show', 'showing', 'visual', 'visuals', 'scene', 'shot', 'camera', 'cam', 'sound', 'music', 'nat',
+                'transition', 'cut', 'insert', 'overlay', 'animation', 'image', 'photo', 'picture', 'video',
+                'footage', 'montage', 'slate', 'screen', 'demo', 'map', 'logo', 'action', 'direction', 'directions',
+                'beat', 'pause', 'text', 'caption', 'card', 'super', 'strap', 'font', 'cg', 'fx'}
+_TAG = r'(?P<tag>[A-Za-z][A-Za-z0-9./ -]{0,26}?)[ \t]*(?:\((?P<tagparen>[^)\n]{0,40})\))?[ \t]*(?P<colon>:)'
+# A parenthesis in a narrated line is a direction when it opens with camera, edit or sound words: "(cut to close up
+# of a dripping kitchen faucet)", "(slow motion)", "(beat)". Any other parenthesis is the writer's own words.
+CAMERA = re.compile(
+    r'\(\s*(?:cut(?:s|ting)?\s+(?:to|away|back|in)\b|cut\s*\)|cutaway|smash\s+cut|jump\s+cut|match\s+cut|hard\s+cut|'
+    r'close[- ]?ups?\b|closeup|extreme\s+close|e?cu\b(?!\w)|wide(?:\s+shot|\s+angle|\s+on)\b|medium\s+shot|long\s+shot|'
+    r'two[- ]shot|over[- ]the[- ]shoulder|establishing|tracking\s+shot|aerial|drone\s+shot|overhead\s+shot|'
+    r'top[- ]down\b|bird.?s[- ]eye|pov\b|angle\s+on|reverse\s+angle|shot\s+(?:of|on)\b|camera\b|cam\s|'
+    r'pan(?:s|ning)?\s+(?:to|across|left|right|up|down|over)\b|tilt(?:s|ing)?\s+(?:up|down)\b|'
+    r'zoom(?:s|ing)?\s+(?:in|out|on|to)\b|dolly\b|push(?:es)?\s+in\b|pull(?:s)?\s+(?:back|out|away)\b|crane\b|'
+    r'fade(?:s)?\s+(?:in|out|to|up|down)\b|dissolve(?:s)?\b|wipe\s+to\b|b[- ]?roll\b|insert\s+(?:shot|of|on)\b|'
+    r'montage\b|slow[- ]?mo(?:tion)?\b|freeze[- ]frame|split[- ]screen|on[- ]?screen\b|text\s+on\s+screen|'
+    r'lower[- ]third|super\s*:|gfx\b|graphic(?:s)?\s*:|show(?:s|ing)?\s*:|sfx\b|sound\s+(?:of|effect)|music\s+'
+    r'(?:up|in|out|swells|fades|cue|stops|drops|builds)\b|beat\s*\)|pause\s*\)|long\s+pause|v\.?\s?o\.?\s*\)|'
+    r'o\.\s?[sc]\.\s*\)|voice[- ]?over|nat\s+sound|transition\b)[^)]*\)?', re.I)
+
+
+def _tag(raw: str, bracketed: bool) -> str | None:
+    """The kind of a tag ('text', 'strap', 'direction'), else None."""
+    key = re.sub(r'\s+', ' ', raw.strip(' .').casefold())
+    if key not in SCREEN_TEXT and key not in DIRECTION_TAGS:
+        return None
+    if key in CAPITAL_ONLY and not bracketed and not raw.strip().isupper():
+        return None
+    return SCREEN_TEXT.get(key, 'direction')
+
+
+def notes(text: str, labels: set | None = None) -> list[dict]:
+    """The directions written into ``text``: {'span': (start, end) neither said nor captioned, 'kind': 'direction',
+    'text' (shown as a card) or 'strap' (a name strap), 'shown': (start, end) of the words a screen-text note shows,
+    else None}. Brackets, direction parentheses, and lines that open with a direction or screen-text tag."""
+    out = []
+    for m in re.finditer(r'[\[(][^\[\]()\n]*(?:[\])]|$)', text):
+        opener = m.group()[0]
+        inner = re.match(r'[\[(]\s*' + _TAG + r'[ \t]*', m.group())
+        kind = _tag(inner.group('tag'), True) if inner and inner.group('colon') == ':' else None
+        if opener == '(' and kind is None and not CAMERA.match(m.group()):
+            continue                                # the writer's own aside, said and captioned
+        note = {'span': m.span(), 'kind': kind or 'direction', 'shown': None}
+        if kind in ('text', 'strap'):
+            note['shown'] = _content(text, m.start() + inner.end(), m.end() - (m.group()[-1] in ')]'))
+        out.append(note)
+    starts = _line_starts(text)
+    for pos in starts:
+        if pos and text[pos - 1] != '\n' and pos != starts[0]:
+            if not re.match(r'[A-Z][A-Z0-9./ -]*[ \t]*(?:\([^)\n]*\))?[ \t]*:', text[pos:]):
+                continue                            # mid-paragraph only in capitals (lines a paste ran together)
+        m = re.match(_TAG + r'[ \t]*', text[pos:])
+        if not m or m.group('colon') != ':' or any(a <= pos < b for n in out for a, b in [n['span']]):
+            continue
+        kind = _tag(m.group('tag'), False)
+        if kind is None:
+            continue
+        end = text.find('\n', pos)
+        end = len(text) if end < 0 else end
+        later = [a for a, _, _ in labels_in(text, labels or set()) if pos < a < end]
+        later += [p for p in starts if pos < p < end and re.match(
+            r'[A-Z][A-Z0-9./ -]*[ \t]*(?:\([^)\n]*\))?[ \t]*:', text[p:])]
+        end = min(later + [end])
+        note = {'span': (pos, end), 'kind': kind, 'shown': None}
+        if kind in ('text', 'strap'):
+            note['shown'] = _content(text, pos + m.end(), end)
+        out.append(note)
+    return sorted(out, key=lambda n: n['span'])
+
+
+def _content(text: str, a: int, b: int):
+    """(start, end) of the words between ``a`` and ``b`` without spaces or the quote marks around them."""
+    while a < b and (text[a].isspace() or text[a] in OPEN_QUOTES + CLOSE_QUOTES):
+        a += 1
+    while b > a and (text[b - 1].isspace() or text[b - 1] in OPEN_QUOTES + CLOSE_QUOTES):
+        b -= 1
+    return (a, b) if b > a else None
+
+
+def screen_text(text: str, labels: set | None = None) -> list[tuple[int, str, str]]:
+    """(position, kind, words) of each piece of on-screen text a direction asks for: 'text' for a text card
+    ("[TEXT ON SCREEN: SAVE UP TO 20%]"), 'strap' for a name strap ("LOWER THIRD: Maria Chen - Owner")."""
+    return [(n['span'][0], n['kind'], ' '.join(text[slice(*n['shown'])].split()))
+            for n in notes(text, labels) if n['shown']]
+
+
+def shown(text: str, labels: set | None = None) -> tuple[str, list[int]]:
+    """The written text as a picture shows it (a kinetic headline, a quote card, a label): what the caption shows,
+    "→" as "›"; a line that is only screen-text directions shows their words. With the offset in ``text`` of each
+    character, so a reveal can be timed from the spoken text."""
+    gone = hidden(text, labels)
+    out, index = _keep(text, gone)
+    if not any(ch.isalnum() for ch in out):
+        words = [n['shown'] for n in notes(text, labels) if n['shown']]
+        if words:
+            keep = [False] * len(text)
+            for a, b in words:
+                keep[a:b] = [True] * (b - a)
+            out, index = _keep(text, _merge([(i, i + 1) for i in range(len(text)) if not keep[i]]))
+    return out.replace('→', '›'), index
 
 
 # ------------------------------------------------------------------ hidden parts
@@ -141,6 +377,7 @@ def hidden(text: str, labels: set | None = None) -> list[tuple[int, int]]:
         return [(0, len(text))]
     for m in re.finditer(r'\[[^\]]*(?:\]|$)', text):
         spans.append(m.span())
+    spans += [n['span'] for n in notes(text, labels)]
     if found:                                       # in a screenplay line every (parenthetical) is a direction
         for m in re.finditer(r'\([^)]*(?:\)|$)', text):
             if m.start() >= found[0][0]:
@@ -162,9 +399,10 @@ def _merge(spans):
     return out
 
 
-def _keep(text: str, spans, start: int = 0, end: int | None = None) -> tuple[str, list[int]]:
+def _keep(text: str, spans, start: int = 0, end: int | None = None, lines: bool = False) -> tuple[str, list[int]]:
     """``text[start:end]`` without ``spans``, spaces tidied (no doubles, none at the ends, none before , . ! ? ; :),
-    and the offset in ``text`` of each kept character."""
+    and the offset in ``text`` of each kept character. With ``lines`` (the voice), a line break after words with no
+    mark of their own is a pause: "www.example.com / hello@example.com" on two lines reads as two items."""
     end = len(text) if end is None else end
     chars, index = [], []
     hide = [False] * len(text)
@@ -176,6 +414,14 @@ def _keep(text: str, spans, start: int = 0, end: int | None = None) -> tuple[str
         if hide[i]:
             continue
         if ch.isspace():
+            if lines and ch == '\n' and chars and chars[-1] == ' ' and len(chars) > 1 and chars[-2].isalnum():
+                chars[-1:] = [',', ' ']
+                index[-1:] = [i, i]
+                continue
+            if lines and ch == '\n' and chars and chars[-1].isalnum():
+                chars += [',', ' ']
+                index += [i, i]
+                continue
             if not chars or chars[-1] == ' ':
                 continue
             ch = ' '
@@ -308,7 +554,7 @@ def segments(spoken: str, lang: str, labels: set | None = None, speakers=None, l
         j = i
         while j < len(spoken) and owner[j] == owner[i]:
             j += 1
-        text, index = _keep(spoken, gone, i, j)
+        text, index = _keep(spoken, gone, i, j, lines=True)
         text, index = _trim(text, index)
         text, index = _say(text, index, lang)
         if any(ch.isalnum() for ch in text):
