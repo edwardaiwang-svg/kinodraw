@@ -704,15 +704,16 @@ NATURAL_PAUSE = .5
 
 
 def _narrated_pages(cfg, tl):
-    """(start, end) of each story or motion page of a hybrid plan while its narration speaks: from the scene's first
-    spoken word to a natural pause after its last. Whiteboard, chart and diagram scenes draw as they speak and get
-    none."""
-    if not _hybrid(cfg):
+    """(start, end) of each story, motion or whiteboard page of a planned video while its narration speaks: from the
+    scene's first spoken word to a natural pause after its last. A whiteboard page holds still while the hand is off
+    it during a long pause (no resting or drifting hand, J 10/8); chart and diagram scenes animate as they speak and
+    get none."""
+    if not (cfg.get('director_v3') and cfg.get('plan_v3')):
         return []
     pages = []
     for scene in cfg['plan_v3']['scenes']:
         beats = [tl['beats'][b] for b in scene['beat_ids'] if b in tl['beats']]
-        if beats and scene['treatment'] not in ('whiteboard', 'chart') and not any(
+        if beats and scene['treatment'] != 'chart' and not any(
                 e['kind'] == 'diagram' for e in scene['elements']):
             pages.append((min(b['start'] for b in beats), max(b['speech_end'] for b in beats) + NATURAL_PAUSE))
     return pages

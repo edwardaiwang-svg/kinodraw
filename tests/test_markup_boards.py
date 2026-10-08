@@ -2,7 +2,6 @@
 keycaps, the step indicator; board text keeps its symbols attached; the hand leaves the words it wrote; the QA
 probe fails clipped or overlapping text (qa/text_layout.py)."""
 import json
-import math
 
 import pytest
 from PIL import Image
@@ -184,26 +183,26 @@ def _resting_production(els, hand_els):
     return prod
 
 
-def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
+def test_during_a_long_pause_the_hand_leaves_the_page_and_comes_back():
+    """J's rules: the hand never covers what it has just drawn and never idles on the page. With nothing to draw for
+    a while it slides off the frame after its stroke, stays off (no drifting over the words) and slides back in to
+    start the next drawing."""
     words = wb_board.Element(_Pen((900, 200)), 200, 250, 0., start=0., hand=False)
-    link = wb_board.Element(_Link((1920, 1080)), 0, 0, 0., start=0., hand=False)
     a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
     b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
-    prod = _resting_production([words, link, a, b], [a, b])
+    prod = _resting_production([words, a, b], [a, b])
     frame = Image.new('RGBA', (1920, 1080))
-    spots = []
-    for t in (2.5, 3.5, 4.5):
+
+    def hand_at(t):
+        before = len(prod.hand.pasted)
         prod._hand(frame, t, 0)
-        spots.append(prod.hand.pasted[-1])
-    for x, y in spots:                                   # the whole hand is clear of the words and the drawings
-        hand = (x - 20, y - 26, x + 180 + 14, y + 274 + 18)
-        assert hand[0] >= 0 and hand[2] <= 1920 + 40 and hand[3] <= 1080 + 70      # and (mostly) in the frame
-        for e in (words, a, b):
-            assert hand[2] <= e.x or e.x + e.w <= hand[0] or hand[3] <= e.y or e.y + e.h <= hand[1]
-    assert min(math.dist(p, q) for p, q in zip(spots, spots[1:])) >= 40     # resting, it keeps moving, fast enough
-                                                                            # that the picture never reads as frozen
-    prod._hand(frame, .9 + 6 - .05, 0)                   # and it comes back to start the next drawing
-    assert abs(prod.hand.pasted[-1][0] - 710) < 30 and abs(prod.hand.pasted[-1][1] - 340) < 30
+        return prod.hand.pasted[-1] if len(prod.hand.pasted) > before else None
+
+    assert hand_at(1.05) is not None                                         # on its way out
+    for t in (1. + render.HAND_OUT + .01, 2.5, 3.5, 4.5, 6. - render.HAND_IN - .01):
+        assert hand_at(t) is None, t                                         # off the page: nothing covered
+    x, y = hand_at(6. - 1e-3)                                                # back on the next drawing's first point
+    assert abs(x - 710) < 3 and abs(y - 340) < 3, (x, y)
 
 
 def test_typing_moves_a_line_highlight_wide_enough_to_read_as_motion():
@@ -301,32 +300,3 @@ def test_content_qa_does_not_count_code_lines_as_narrated_sentences():
     code = _beat(board, 'balance = 1000')['id']
     found = content.lines(from_rules(board), board)
     assert found and not [line for line in found if line.beat == code]
-
-
-def test_a_resting_hand_near_the_frame_edge_stays_mostly_in_the_frame():
-    a = wb_board.Element(_Pen(), 1700, 100, 0., start=0.)
-    b = wb_board.Element(_Pen(), 1860, 70, 6., start=6.)
-    prod = _resting_production([a, b], [a, b])
-    frame = Image.new('RGBA', (1920, 1080))
-    prod._hand(frame, 3., 0)
-    x, y = prod.hand.pasted[-1]
-    left, right = max(0, x - 20), min(1920, x + 180)
-    assert right - left >= .8 * 200                      # a hand mostly off the edge barely moves the picture
-
-
-def test_a_hand_with_no_room_to_drift_still_rests():
-    a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
-    b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
-    prod = _resting_production([a, b], [a, b])
-    assert prod._resting(3., a, b, ((900., 500.), (900., 500.)), 0, (6., True)) == (900., 500.)
-
-
-def test_every_render_segment_rests_the_hand_on_the_same_spot_of_the_page():
-    def pasted(L):
-        a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
-        b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
-        prod = _resting_production([a, b], [a, b])
-        prod._hand(Image.new('RGBA', (1920, 1080)), 3., L)    # a segment's first frame, the camera drifting by L
-        return prod.hand.pasted[-1]
-    still, drifted = pasted(0), pasted(9)
-    assert drifted == (still[0] - 9, still[1])              # the same place on the page, seen 9 px further on
