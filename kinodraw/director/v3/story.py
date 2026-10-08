@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from ...library.creatures import RELATED
 from .semantics import mentions, name_key
 
 NEGATED = re.compile(r"\b(?:not|never|no|nobody|cannot|without)\b|\b\w+n['’]t\b", re.I)
@@ -151,7 +152,8 @@ CROWD = (
     ('porcupine', r'porcupines?'), ('bird', r'(?:weaver)?birds?'), ('snake', r'pythons?|snakes?'),
     ('hyena', r'hyenas?'), ('zebra', r'zebras?'), ('giraffe', r'giraffes?'), ('parrot', r'parrots?'),
     ('rabbit', r'rabbits?|hares?'), ('mouse', r'mice|mouse'), ('fish', r'fish(?:es)?'),
-    ('crocodile', r'crocodiles?'), ('turtle', r'turtles?|tortoises?'), ('owl', r'owls?'),
+    ('crocodile', r'crocodiles?'), ('turtle', r'turtles?|terrapins?'), ('tortoise', r'tortoises?'), ('owl', r'owls?'),
+    ('hedgehog', r'hedgehogs?'), ('snail', r'snails?'), ('firefly', r'firefl(?:y|ies)|lightning\s+bugs?|glow\s*worms?'),
     ('deer', r'deer'), ('wolf', r'wolf|wolves'), ('fox', r'fox(?:es)?'), ('bear', r'bears?'),
     ('animal', r'animals|creatures|every\s+creature'),
 )
@@ -831,6 +833,7 @@ class Reader:
     def _setting(self, s, body):
         cast_species = {c['species'] for c in self.cast}
         cast_species |= {'lion' if sp == 'lioness' else 'tiger' if sp == 'tigress' else sp for sp in cast_species}
+        cast_species |= {RELATED.get(str(sp).lower(), sp) for sp in cast_species}   # a cast glowworm is the fireflies
         for species, pattern in CROWD_RE:
             hit = pattern.search(body)
             if not hit or species in cast_species or NOT_CROWD.match(body[hit.end():]):

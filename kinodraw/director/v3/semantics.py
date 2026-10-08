@@ -33,6 +33,7 @@ SPECIES = {
     'butterfly': ('bird', 'other'), 'beetle': ('quadruped', 'other'), 'ladybug': ('quadruped', 'other'),
     'otter': ('quadruped', 'other'), 'badger': ('quadruped', 'other'), 'raccoon': ('quadruped', 'other'),
     'donkey': ('quadruped', 'equine'), 'whale': ('fish', 'other'), 'shark': ('fish', 'other'),
+    'snail': ('blob', 'other'),
 }
 SPECIES_RE = re.compile(r'\b(' + '|'.join(SPECIES) + r')\b', re.I)
 HUMAN_SPECIES = {'human', 'boy', 'girl', 'man', 'woman'}

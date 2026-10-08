@@ -40,7 +40,8 @@ ADULT_HEIGHT = .42               # an adult cast member's height as a share of t
 SMALL = {'ant': .06, 'frog': .11, 'bird': .1, 'mouse': .08, 'snake': .12, 'porcupine': .13, 'rabbit': .12,
          'monkey': .17, 'warthog': .15, 'antelope': .22, 'hyena': .2, 'turtle': .1, 'fish': .1, 'owl': .12,
          'parrot': .12, 'fox': .15, 'wolf': .19, 'deer': .24, 'zebra': .26, 'gorilla': .26, 'bear': .27,
-         'crocodile': .14, 'elephant': .34, 'giraffe': .4}
+         'crocodile': .14, 'elephant': .34, 'giraffe': .4, 'hedgehog': .1, 'tortoise': .13, 'snail': .07,
+         'firefly': .06}
 ARBOREAL = {'monkey', 'bird', 'parrot', 'owl'}
 # Group staging: no head behind another body. A group too wide for the page is drawn
 # smaller, as if the camera pulled back; animals bigger than the cast stand a little behind it, smaller ones in
@@ -77,6 +78,7 @@ FALLBACK = {
     'gazelle': 'fl_deer', 'deer': 'fl_deer', 'goat': 'fl_goat', 'sheep': 'fl_ewe', 'warthog': 'fl_boar',
     'pig': 'fl_pig', 'squirrel': 'fl_chipmunk', 'crocodile': 'fl_crocodile', 'turtle': 'fl_turtle',
     'frog': 'fl_frog', 'penguin': 'fl_penguin', 'ant': 'fl_ant', 'snake': 'fl_snake', 'porcupine': 'fl_hedgehog',
+    'hedgehog': 'fl_hedgehog', 'tortoise': 'fl_turtle', 'snail': 'fl_snail', 'firefly': 'fl_bug',
 }
 NATIVE_RIGHT = {'fl_monkey', 'fl_snake', 'fl_parrot'}
 FRONT = {'fl_lion', 'fl_frog', 'fl_owl', 'fl_fox', 'fl_ant'}
@@ -196,7 +198,7 @@ def _choose(species, age, sex, pose, facing, marks):
     except Exception:  # noqa: BLE001 - an unknown species falls back to the library's own doodle
         return None
     info = mod.presets().get(did) or {}
-    if not did or info.get('species') not in (species, mod.RELATED.get(species)) or library.resolve(did) is None:
+    if not did or info.get('species') not in (species, mod.drawn_species(species)) or library.resolve(did) is None:
         return None
     return did
 

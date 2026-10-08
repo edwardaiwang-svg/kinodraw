@@ -42,7 +42,7 @@ def builders():
         out['primate'] = primate.build
     except ImportError:
         pass
-    for name in ('frog', 'insect', 'bird', 'fish', 'reptile', 'human'):
+    for name in ('frog', 'insect', 'bird', 'fish', 'reptile', 'human', 'hedgehog', 'snail'):
         try:
             mod = __import__(f'{__package__}.{name}', fromlist=['build'])
             out[name] = mod.build

@@ -32,6 +32,7 @@ class Layer:
     r: float = 0.0                 # dot radius (world)
     color: str = INK
     name: str = ''
+    opacity: float = 1.0           # spots only: a soft see-through light (a firefly's glow)
 
 
 @dataclass
@@ -56,9 +57,10 @@ class Figure:
     def dot(self, c, r, color=INK, name='', sw=SW_FINE):
         return self.add(Layer('dot', c=(float(c[0]), float(c[1])), r=float(r), fill=color, sw=sw, name=name))
 
-    def spot(self, c, r, color=WHITE, name=''):
-        """Unoutlined small dot (eye highlight)."""
-        return self.add(Layer('spot', c=(float(c[0]), float(c[1])), r=float(r), fill=color, name=name))
+    def spot(self, c, r, color=WHITE, name='', opacity=1.0):
+        """Unoutlined small dot (eye highlight), or a see-through disc of light when ``opacity`` < 1."""
+        return self.add(Layer('spot', c=(float(c[0]), float(c[1])), r=float(r), fill=color, name=name,
+                              opacity=float(opacity)))
 
     def bounds(self):
         xs, ys = [], []
@@ -175,8 +177,9 @@ class Rendered:
                     body.append(f'<circle cx="{sdf.fmt(cx)}" cy="{sdf.fmt(cy)}" r="{r}"'
                                 f'{_attrs(fill=L.fill, stroke_width=sdf.fmt(L.sw))}/>')
                 else:
+                    see = f"{L.opacity:.2f}" if L.opacity < 1 else None
                     body.append(f'<circle cx="{sdf.fmt(cx)}" cy="{sdf.fmt(cy)}" r="{r}"'
-                                f'{_attrs(fill=L.fill, stroke="none", data_noink="1")}/>')
+                                f'{_attrs(fill=L.fill, fill_opacity=see, stroke="none", data_noink="1")}/>')
         return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}">\n'
                 f'<g stroke="{INK}" stroke-linecap="round" stroke-linejoin="round">\n' + '\n'.join(body) +
                 '\n</g>\n</svg>\n')
