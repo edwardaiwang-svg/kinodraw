@@ -35,7 +35,8 @@ CLEAN = {'card': (252, 252, 250), 'ink': (26, 30, 38), 'soft': (96, 104, 116), '
          'shadow': (0, 0, 0)}
 WARN = (214, 134, 18)     # amber: an overrun, a loss or a delay (figures.Card.tone 'warn'), never the growth colour
 CLEAR = 12                # cards keep this many more quarter-resolution cells (48 px at 1080p) of air around them ...
-CLEAR_WEIGHT = .35        # ... weighed at this share of covered ink: a card never hugs a picture it is not about
+CLEAR_WEIGHT = .04        # ... and an inked ring costs up to this much (under the .034 a first shrink costs): a card
+                          # takes the spot with air before one against a picture it is not about, and never shrinks for it
 ENTER = .35               # seconds a card takes to fade in whole (never wiped in through its own edge)
 BOLD = ink.ASSETS / 'fonts' / 'Arimo-Bold.ttf'
 
@@ -386,10 +387,11 @@ class DataCards:
                         x0, y0 = max(0, int(x / 4)), max(0, int(y / 4))
                         x1, y1 = min(inked.shape[1], x0 + int(sw / 4) + 1), min(inked.shape[0], y0 + int(sh / 4) + 1)
                         count = total[y1, x1] - total[y0, x1] - total[y1, x0] + total[y0, x0]
-                        close = ring[y1, x1] - ring[y0, x1] - ring[y1, x0] + ring[y0, x0] - count
-                        # inked share of the full-size card, plus the pictures it would sit right against
-                        covered = float(count + CLEAR_WEIGHT * close) / max(1., w * h / 16)
-                        scores.append((round(covered + .12 * (1 - scale), 2), -scale, i, (x, y), scale))
+                        close = ring[y1, x1] - ring[y0, x1] - ring[y1, x0] + ring[y0, x0]
+                        # inked share of the full-size card, plus the share of its own ring of air that is inked
+                        covered = round(float(count) / max(1., w * h / 16), 2) + round(
+                            CLEAR_WEIGHT * float(close) / max(1., (x1 - x0) * (y1 - y0)), 3)
+                        scores.append((round(covered + .12 * (1 - scale), 3), -scale, i, (x, y), scale))
                 _, _, _, spot, scale = min(scores)
                 best = (spot, scale)
             self._places[k] = best
