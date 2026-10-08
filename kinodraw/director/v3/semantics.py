@@ -355,7 +355,10 @@ def _detect_cast(script_beats):
                           any(w in TITLES for w in text[start:end].split()) or
                           (subject and not determiner_subject and not name.endswith('s') and not SPECIES_RE.fullmatch(name)) or
                           re.search(r'\b(?:mother|father|sister|brother),\s*$', before, re.I) or
-                          re.search(r'\b(?:hug\w*|met|saw|named|called)\s*$', before, re.I))
+                          re.search(r'\b(?:hug\w*|met|saw|named|called)\s*$', before, re.I) or
+                          # addressed: "Happy 25th Jo, ...", "Dear Sam", "Jo, you're still ..."
+                          re.search(r'\b(?:happy\s+[\w-]+|hey|hi|hello|dear|congrat\w*|thank\s+you|love\s+you)[,!\s]*$',
+                                    before, re.I) or re.match(r",[^.!?]*\byou(?:'re|r)?\b", after, re.I))
             # Only explicit noun phrases and subject-owned attributes supply traits. Mere
             # proximity (especially an object followed by someone else's description) cannot.
             local = before[noun.start():] if noun else ''
