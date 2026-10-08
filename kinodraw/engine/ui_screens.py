@@ -5,7 +5,7 @@ named), ``overlay(prod, image, t)`` draws the live one over the frame: a phone (
 (landscape) on the paper, its app bar naming the app, each element drawn on the word that names it and lit for a
 moment (a finger or a cursor taps buttons and rows), or a messages screen (the thread's name, bubbles left for others
 and right for the phone's owner, small timestamps, emoji drawn in colour inside the bubble). The caption is drawn
-again on top, so the words being read stay readable.
+again on top, so the words being read stay readable. A screen comes and goes by a cut.
 """
 from __future__ import annotations
 
@@ -27,9 +27,12 @@ CODE_FONT = FONT_DIR / 'JetBrainsMono-Medium.ttf'
 EMOJI_FONTS = ('/System/Library/Fonts/Apple Color Emoji.ttc', '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf',
                '/usr/share/fonts/noto/NotoColorEmoji.ttf', 'C:/Windows/Fonts/seguiemj.ttf')
 LIT = 1.4                 # seconds an element stays lit after its word
-FADE = .25
 MIN_HOLD = 2.2            # a screen stays at least this long
 TAIL = .6                 # and this long after its last word
+BRIDGE = 2.5              # a gap this short between two screens of one device keeps the device on screen
+SWAP = .6                 # nor this short a gap before another device: a cut, never a flash of the board
+PHONE_FIRST = 1.8         # a chat log's message shows on the phone this long before the cut to its sender
+CUT_MIN = 1.0             # when the sender is heard at least this much longer
 INK = (34, 38, 46)
 GLASS = (250, 251, 253)
 SOFT = (232, 236, 242)
@@ -177,6 +180,14 @@ def moments_for(episode, tl, lang, project_dir) -> list[dict]:
         out.append(m)
     for a, b in zip(out, out[1:]):
         a['end'] = min(a['end'], b['start'])                 # the next screen takes over
+        gap = b['start'] - a['end']
+        if not a.get('chat_log') and 0 < gap <= (BRIDGE if a['device'] == b['device'] else SWAP):
+            a['end'] = b['start']                            # the same device stays: only what it shows changes;
+                                                             # another device cuts straight in
+    for m in out:                                            # a chat log cuts away to its sender (Storybook):
+        said = tl['beats'][m['beat']]['end'] - m['start']     # the bubble first, then them, while they are heard
+        if m.get('chat_log') and m.get('sender') and said >= PHONE_FIRST + CUT_MIN:
+            m['end'] = min(m['end'], m['start'] + PHONE_FIRST)
     out = [m for m in out if m['end'] - m['start'] > .3]
     if out:
         rows = [{'start': round(m['start'], 3), 'end': round(m['end'], 3), 'kind': m['kind'], 'device': m['device'],
@@ -204,11 +215,8 @@ def cover(prod, image, t, caption=False):
     palette = {k: ImageColor.getrgb(v)[:3] for k, v in (style.get('palette') or {}).items()}
     paper = board_of.skin.background(w, h).convert('RGBA').copy()
     paper.alpha_composite(draw(prod.size, moment, t, palette))
-    fade = max(0., min(1., (t - moment['start']) / FADE, (moment['end'] - t) / FADE))
     base = image.convert('RGBA')
-    if fade < 1:
-        paper.putalpha(paper.getchannel('A').point(lambda v: round(v * fade)))
-    base.alpha_composite(paper)
+    base.alpha_composite(paper)                  # a cut in and out: never half a screen over half a face
     if caption:
         prod.whiteboard._caption(base, t, prod.caption_look, prod.caption_accent)
     return base.convert(image.mode)
@@ -519,8 +527,11 @@ def _thread(layer, screen, moment, t, accent, device):
                         outline=(200, 204, 212, 255), width=round(unit * .3))
     d.ellipse((x1 - unit * 9, cb, x1 - unit * 3.5, cb + unit * 5.5), fill=accent + (255,))
     messages = list(moment.get('history') or ())[-6:]
-    current = {k: moment.get(k) for k in ('sender', 'outgoing', 'time', 'text')}
-    typing = current['outgoing'] and not moment.get('replay')
+    current = {k: moment.get(k) for k in ('sender', 'outgoing', 'time', 'text', 'system', 'voice')}
+    if moment.get('header_only'):
+        current = None
+    typing = current is not None and current['outgoing'] and not moment.get('replay') and not current.get('voice') \
+        and current['text']
     since = t - moment['start']
     size = round(unit * 3.5)                                  # bubbles read at a glance, emoji with them
     maxw = (x1 - x0) * .78
@@ -530,16 +541,25 @@ def _thread(layer, screen, moment, t, accent, device):
         while part and _width(part, round(size * .9)) > room:
             part = part[1:]                                   # the box scrolls: its newest letters show
         _text(layer, (x0 + unit * 5, cb + unit * 1.3), part, round(size * .9), INK)
-    else:
+    elif current is not None:
         messages.append(current)
     # Lay out bottom-up from the compose bar; older bubbles that don't fit scroll off the top.
     blocks = []
+    small = round(unit * 2.0)
     for m in messages:
-        rows = _wrap(m['text'] or '', size, maxw - unit * 5)
-        bw = max(_width(r, size) for r in rows) + unit * 5
-        bh = len(rows) * size * 1.32 + unit * 3.2
-        extra = (unit * 3.2 if m.get('time') else 0) + (unit * 2.8 if not m['outgoing'] and moment.get('group')
-                                                         and m.get('sender') else 0)
+        if m.get('system'):                                   # the app's notice: centred grey words, no bubble
+            rows = _wrap(m['text'] or '', small, maxw)
+            bw = max(_width(r, small) for r in rows) + unit * 4
+            blocks.append((m, rows, bw, len(rows) * small * 1.3 + unit * 1.6, 0))
+            continue
+        if m.get('voice') is not None:                        # a voice note: play button, waveform, its length
+            rows, bw, bh = [], maxw * .8, unit * 8.5
+        else:
+            rows = _wrap(m['text'] or '', size, maxw - unit * 5)
+            bw = max(_width(r, size) for r in rows) + unit * 5
+            bh = len(rows) * size * 1.32 + unit * 3.2
+        label = (not m['outgoing'] and moment.get('group') and m.get('sender')) or m.get('time')
+        extra = unit * 2.8 if label else 0
         blocks.append((m, rows, bw, bh, extra))
     status = moment.get('status') if moment.get('status_t') is not None and t >= moment['status_t'] else None
     y = cb - unit * 2.5 - (unit * 3.4 if status else 0)
@@ -552,25 +572,59 @@ def _thread(layer, screen, moment, t, accent, device):
     for i, (m, rows, bw, bh, extra, by) in enumerate(placed):
         newest = i == 0 and m is current
         pop = min(1., (t - moment['start']) / .25) if newest else 1.
+        if pop < 1:
+            by += (1 - pop) * unit * 4
+        if m.get('system'):
+            d.rounded_rectangle(((x0 + x1 - bw) / 2, by, (x0 + x1 + bw) / 2, by + bh), unit * 1.6,
+                                fill=(238, 239, 243, 255))
+            ty = by + unit * .8
+            for r in rows:
+                _text(layer, ((x0 + x1) / 2 - _width(r, small) / 2, ty), r, small, (128, 133, 143))
+                ty += small * 1.3
+            continue
         right = m['outgoing']
         bx = x1 - unit * 3 - bw if right else x0 + unit * 3
         fill = accent if right else (229, 231, 236)
         ink_c = (255, 255, 255) if right else INK
-        if pop < 1:
-            by += (1 - pop) * unit * 4
         d.rounded_rectangle((bx, by, bx + bw, by + bh), unit * 2.6, fill=fill + (255,))
+        if m.get('voice') is not None:
+            _voice_note(d, layer, (bx, by, bx + bw, by + bh), m.get('voice') or '', ink_c, accent if not right
+                        else (255, 255, 255), unit, t - moment['start'] if newest else 99.)
         ty = by + unit * 1.5
         for r in rows:
             _text(layer, (bx + unit * 2.5, ty), r, size, ink_c)
             ty += size * 1.32
-        label_y = by
-        if not right and moment.get('group') and m.get('sender'):
-            label_y -= unit * 2.8
-            _text(layer, (bx + unit * 1.5, label_y), m['sender'], round(unit * 2.0), (110, 116, 126))
-        if m.get('time'):
-            ts = round(unit * 2.0)
-            _text(layer, ((x0 + x1) / 2 - _width(m['time'], ts) / 2, label_y - unit * 3.0), m['time'], ts,
-                  (140, 146, 156))
+        name = m.get('sender') if not right and moment.get('group') else None
+        label = '  '.join(s for s in (name, m.get('time')) if s)
+        if label:                                             # the sender's name and the small time above it
+            if right:
+                _text(layer, (bx + bw - unit, by - unit * 2.8), label, small, (140, 146, 156), anchor_right=True)
+            else:
+                _text(layer, (bx + unit * 1.5, by - unit * 2.8), name or '', small, (110, 116, 126))
+                if m.get('time'):
+                    _text(layer, (bx + unit * 1.5 + (_width(name + '  ', small) if name else 0), by - unit * 2.8),
+                          m['time'], small, (150, 156, 166))
     if status and placed:
         ss = round(unit * 2.1)
         _text(layer, (x1 - unit * 3, cb - unit * 2.5 - unit * 2.9), status, ss, (120, 126, 136), anchor_right=True)
+
+
+def _voice_note(d, layer, box, length, ink, button, unit, since):
+    """A voice message bubble: a round play button, a waveform that fills as it plays, its length."""
+    x0, y0, x1, y1 = box
+    cy = (y0 + y1) / 2
+    r = (y1 - y0) * .3
+    cx = x0 + unit * 2 + r
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=tuple(button) + (255,))
+    tri = (255, 255, 255) if tuple(button) != (255, 255, 255) else INK
+    d.polygon([(cx - r * .3, cy - r * .5), (cx - r * .3, cy + r * .5), (cx + r * .55, cy)], fill=tuple(tri) + (255,))
+    wx0, wx1 = cx + r + unit * 1.5, x1 - unit * (9 if length else 3)
+    n = max(8, int((wx1 - wx0) / (unit * 1.1)))
+    played = min(1., max(0., since) / 3.)
+    for i in range(n):
+        h = (y1 - y0) * (.12 + .3 * abs(math.sin(i * 1.7) * math.cos(i * .45)))
+        x = wx0 + i * (wx1 - wx0) / n
+        c = ink if i / n <= played else (160, 166, 176)
+        d.line((x, cy - h, x, cy + h), fill=tuple(c) + (255,), width=max(1, round(unit * .5)))
+    if length:
+        _text(layer, (x1 - unit * 8, cy - unit * 1.2), length, round(unit * 2.0), ink)

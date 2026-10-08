@@ -469,7 +469,11 @@ def _written(entry, written, cuts=()) -> bool:
 def entries(episode, tline, lang) -> list:
     """(start, end, card, beat id) of every card: from the first figure's word to its sentence's end plus TAIL (at
     least MIN_HOLD, at most MAX_HOLD), never past the next card or the end card."""
+    from .. import speech
     found = []
+    shown = lambda b: (b.get('display') or {}).get(lang, '') if isinstance(b.get('display'), dict) else \
+        str(b.get('display') or '')
+    labels = speech.screenplay_labels(shown(b) for b in episode['beats'])
     for beat in episode['beats']:
         timing = tline['beats'].get(beat['id'])
         if not timing or not timing.get('char_times'):
@@ -478,7 +482,10 @@ def entries(episode, tline, lang) -> list:
         text = display.get(lang, '') if isinstance(display, dict) else str(display or '')
         spoken = beat['spoken'][lang] if isinstance(beat.get('spoken'), dict) else str(beat.get('spoken') or '')
         ct = timing['char_times']
+        gone = speech.hidden(text, labels)
         for card in figures.beat_cards(beat, lang):
+            if any(x <= card.start < y for x, y in gone):
+                continue                                  # a chat line's time or a label is never said: no card
             a = figures.spoken_offset(text, spoken, card.start, lang)
             b = figures.spoken_offset(text, spoken, max(card.start, card.end - 1), lang)
             start = timing['start'] + ct[min(a, len(ct) - 1)] - .1

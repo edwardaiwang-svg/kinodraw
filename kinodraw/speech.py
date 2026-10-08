@@ -171,6 +171,10 @@ class Segment:
 def _label_at(text: str, pos: int):
     m = LABEL.match(text, pos)
     if not m:
+        from .chatlog import stamp_end
+        stamped = stamp_end(text, pos)               # a chat line's time before its sender: "[8:06] Maya: ..."
+        m = LABEL.match(text, stamped[0]) if stamped else None
+    if not m:
         return None
     name = m.group('name').strip(" .'’-")
     words = name.lower().split()
@@ -186,20 +190,33 @@ def label_key(name: str) -> str:
     return re.sub(r'\s+', ' ', name.strip(" .'’-")).casefold()
 
 
-def screenplay_labels(texts) -> set:
+class Labels(set):
+    """A script's speaker labels; ``chat`` when the script is a pasted chat log (chatlog.is_log): then each sender's
+    messages are in the sender's own voice, and the times, labels, notices and the header are shown, never said."""
+    chat = False
+
+
+def screenplay_labels(texts) -> Labels:
     """The speaker labels a script uses (casefolded names). A label counts when it is written in capitals (JULES:)
     or when the same name starts two or more lines; a lone "Note:" or "Then a voice:" never does."""
+    from . import chatlog
     seen, chat = {}, set()
+    lines, labelled, timed = [], 0, 0
     for text in texts:
+        lines += text.split('\n')
         for pos in _line_starts(text):
             found = _label_at(text, pos)
             if found:
                 key = label_key(found[1])
                 seen.setdefault(key, []).append(found[1])
+                labelled += 1
                 if _chat_line(text, pos):
                     chat.add(key)                   # "Dad (6:12 PM): ..." is a chat line even once
-    return {key for key, names in seen.items()
-            if len(names) >= 2 or key in chat or all(n.isupper() and len(re.sub(r'\W', '', n)) >= 2 for n in names)}
+                    timed += 1
+    out = Labels(key for key, names in seen.items()
+                 if len(names) >= 2 or key in chat or all(n.isupper() and len(re.sub(r'\W', '', n)) >= 2 for n in names))
+    out.chat = chatlog.is_log(lines, labelled, timed, len(out))
+    return out
 
 
 def _line_starts(text: str) -> list[int]:
@@ -388,6 +405,14 @@ def hidden(text: str, labels: set | None = None) -> list[tuple[int, int]]:
         for m in re.finditer(r'\((?!\d{3}\))[^)]*(?:\)|$)', text):     # never a phone's area code
             if m.start() >= found[0][0]:
                 spans.append(m.span())
+    if getattr(labels, 'chat', False):              # a chat log's notices, voice notes and header are shown only
+        from . import chatlog
+        at = 0
+        for line in text.split('\n'):
+            if line.strip() and (chatlog.system(line) or chatlog.voice_note(line) is not None or (
+                    not labels_in(line, labels) and chatlog.header(line))):
+                spans.append((at, at + len(line)))
+            at += len(line) + 1
     spans += markup.hidden_spans(text)              # fenced code and display formulas are pictures (markup.py)
     for m in EMOJI.finditer(text):
         spans.append(m.span())
@@ -552,8 +577,8 @@ def segments(spoken: str, lang: str, labels: set | None = None, speakers=None, l
     for k, (start, end, name) in enumerate(lines):
         stop = lines[k + 1][0] if k + 1 < len(lines) else len(spoken)
         who = (label_speaker(name) if label_speaker else None) or f'label:{label_key(name)}'
-        if _chat_line(spoken, start):
-            continue                                # "Dad (7:02 AM): ..." is a text on a phone: the narrator reads it
+        if _chat_line(spoken, start) and not getattr(labels, 'chat', False):
+            continue                                # "Dad (7:02 AM): ..." alone in a story: the narrator reads it
         for i in range(start, stop):
             owner[i] = who
     for a, b, who in speakers or ():
@@ -581,11 +606,21 @@ def segments(spoken: str, lang: str, labels: set | None = None, speakers=None, l
     return out
 
 
+def chat_stamp(text: str, start: int) -> str | None:
+    """The time a chat line's label carries, before the sender ("[8:06] Maya:", "8:05 AM — Coach Rivera:") or after
+    it ("Dad (7:02 AM):"), as written; None for a line with no time."""
+    from .chatlog import stamp_end
+    from .ui_screens import chat_time
+    stamped = stamp_end(text, start)
+    m = LABEL.match(text, stamped[0] if stamped else start)
+    if not m:
+        return None
+    return chat_time(m.group('paren')) or (stamped[1] if stamped else None)
+
+
 def _chat_line(text: str, start: int) -> bool:
     """A screenplay line whose label carries a time ("Dad (7:02 AM): ...") is a chat transcript line."""
-    from .ui_screens import chat_time
-    m = LABEL.match(text, start)
-    return bool(m and chat_time(m.group('paren')))
+    return bool(chat_stamp(text, start))
 
 
 def said_text(spoken: str, lang: str, labels: set | None = None) -> tuple[str, list[int]]:
@@ -810,6 +845,7 @@ def quote_speakers(board_beats: list[dict], plan: dict | None):
 
 TITLE_HOLD = 2.2          # seconds a silent title card holds before the first line
 DIRECTION_HOLD = .8       # seconds a line that is only a stage direction holds (room for the action, no dead air)
+CHAT_HOLD = 1.8           # seconds a chat log's notice, voice note or emoji-only message shows on the phone
 PASSING_HOLD = .2         # seconds a direction nobody can act out takes: its page passes, never a frozen picture
 
 
@@ -1020,8 +1056,8 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
     for b in beats:
         parts = [(s, *voices.get(s.speaker, (narrator, 1.))) for s in found[b['id']]]
         pause = None if parts or b['silent'] else pause_seconds(b['display'])
-        hold = None if parts else TITLE_HOLD if b['silent'] else (markup.hold(b['display']) or pause
-                                                                   or _direction_hold(b['display'], people_named))
+        hold = None if parts else TITLE_HOLD if b['silent'] else CHAT_HOLD if labels.chat else (
+            markup.hold(b['display']) or pause or _direction_hold(b['display'], people_named))
         out[b['id']] = {'parts': parts, 'hold': hold, **({'pause': pause} if pause else {})}
     return out
 

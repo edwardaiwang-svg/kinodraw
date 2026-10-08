@@ -662,7 +662,9 @@ def _finish(project_dir):
                              capture_output=True)
     if decoded.returncode or decoded.stderr.strip():
         raise RuntimeError(f'finished media decode failed ({decoded.returncode}): {decoded.stderr.decode(errors="replace")}')
-    qa = encoded_qa(tl, video, mixed, size=size, narrated_pages=_narrated_pages(cfg, tl))
+    shown = build / 'ui-screens.json'
+    screens = json.loads(shown.read_text(encoding='utf-8')) if shown.is_file() else []
+    qa = encoded_qa(tl, video, mixed, size=size, narrated_pages=_narrated_pages(cfg, tl, screens))
     cast = project_dir / 'voice' / 'cast.json'
     qa['voices'] = speech.shared_voices(json.loads(cast.read_text(encoding='utf-8'))) if cast.is_file() else []
     bubbles, said = build / 'bubbles.json', project_dir / 'voice' / 'speakers.json'
@@ -746,14 +748,20 @@ def _scored(cfg, board):
 NATURAL_PAUSE = .5
 
 
-def _narrated_pages(cfg, tl):
+def _narrated_pages(cfg, tl, screens=()):
     """(start, end) of each story, motion or whiteboard page of a planned video while its narration speaks: from the
     scene's first spoken word to a natural pause after its last. A whiteboard page holds still while the hand is off
     it during a long pause (no resting or drifting hand, J 10/8); chart and diagram scenes animate as they speak and
-    get none."""
+    get none. A message thread on a phone (``screens``: build/ui-screens.json) holds still while it is read, a chat
+    log's notices, voice notes and emoji included: each unbroken run of message screens is one page."""
     if not (cfg.get('director_v3') and cfg.get('plan_v3')):
         return []
     pages = []
+    for row in sorted((r for r in screens if r.get('kind') == 'message'), key=lambda r: r['start']):
+        if pages and row['start'] - pages[-1][1] <= .05:
+            pages[-1] = (pages[-1][0], max(pages[-1][1], row['end']))
+        else:
+            pages.append((row['start'], row['end']))
     for scene in cfg['plan_v3']['scenes']:
         beats = [tl['beats'][b] for b in scene['beat_ids'] if b in tl['beats']]
         if beats and scene['treatment'] != 'chart' and not any(

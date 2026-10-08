@@ -30,6 +30,8 @@ def check(board: dict, video=None) -> list[dict]:
     out = []
     for m in wanted:
         words = _norm(m.get('text'))
+        if not words:
+            continue                                  # a chat's header, a voice note or emoji alone: no words to find
         hit = next((r for r in rows if r['beat'] == m['beat'] and any(words and words in _norm(s)
                                                                        for s in r['strings'])), None)
         if hit is None:

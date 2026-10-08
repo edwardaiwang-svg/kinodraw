@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 
+from . import chatlog
+
 # ------------------------------------------------------------------ word lists
 DEVICES = (('laptop', r'laptops?|computers?|desktops?|pcs?|macbooks?|browsers?|web\s?sites?|web\s?pages?|'
                       r'monitors?|chromebooks?'),
@@ -380,25 +382,62 @@ def read(beats: list[tuple[str, str]], cast: list[dict] | None = None, labels: s
     named_thread = None                                  # "the group chat called Pizza Police"
     for k, (bid, text) in enumerate(beats):
         spans = _sentences(text)
-        # A chat transcript: "Dad (7:02 AM): Who ate the last waffle?" lines.
+        # A chat transcript: "Dad (7:02 AM): Who ate the last waffle?" lines; in a pasted chat log
+        # (labels.chat) every sender's line, the app's notices, voice notes and the header naming the chat.
         lines = speech.labels_in(text, labels)
+        log = getattr(labels, 'chat', False)
+        if log:
+            m = re.search(r"\b(?:from\s+)?([A-Z][a-z]+)['’]s\s+(?:phone|cell|mobile|screen)\b", text)
+            owner = m.group(1) if m else owner
+            at = 0
+            for row in text.split('\n'):
+                name = None if speech.labels_in(row, labels) else chatlog.header(row)
+                if name and not out and not (thread and thread['messages']):
+                    named_thread = name
+                    thread = {'name': name, 'messages': [], 'group': True}
+                    out.append({'beat': bid, 'at': at, 'until': at + len(row), 'kind': 'message', 'device': 'phone',
+                                'app': None, 'elements': [], 'thread': name, 'group': True, 'owner': owner,
+                                'sender': None, 'outgoing': False, 'time': None, 'text': '', 'header_only': True,
+                                'history': [], 'status': None, 'chat_log': True})
+                    prev_moment_beat = k
+                elif row.strip() and not speech.labels_in(row, labels) and (
+                        chatlog.system(row) or chatlog.voice_note(row) is not None):
+                    found = chatlog.stamp_end(row, 0)
+                    words = (row[found[0]:] if found else row).strip()
+                    note = chatlog.voice_note(row)
+                    thread = thread or {'name': named_thread, 'messages': [], 'group': True}
+                    msg = {'sender': None, 'outgoing': False, 'time': found[1] if found else None,
+                           'text': words if note is None else '', 'system': note is None,
+                           **({'voice': note or ''} if note is not None else {})}
+                    thread['messages'].append(msg)
+                    out.append({'beat': bid, 'at': at, 'until': at + len(row), 'kind': 'message', 'device': 'phone',
+                                'app': None, 'elements': [], 'thread': thread['name'], 'group': True, 'owner': owner,
+                                **msg, 'history': list(thread['messages'][:-1]), 'status': None, 'chat_log': True})
+                    prev_moment_beat = k
+                at += len(row) + 1
         for j, (start, body, name) in enumerate(lines):
-            m = speech.LABEL.match(text, start)
-            when = chat_time(m.group('paren') if m else None)
-            if not when and not (thread is not None and prev_moment_beat in (k - 1, k)):
+            when = speech.chat_stamp(text, start)
+            if not when and not log and not (thread is not None and prev_moment_beat in (k - 1, k)):
                 continue
             stop = lines[j + 1][0] if j + 1 < len(lines) else len(text)
             words = text[body:stop].strip()
             words = QUOTE.sub(lambda q: q.group(1), words) if words.startswith(('"', '“')) else words
             thread = thread or {'name': named_thread, 'messages': []}
             thread['group'] = True
-            mine = bool(owner) and name.split()[0].casefold() == owner.split()[0].casefold()
+            mine = (bool(owner) and name.split()[0].casefold() == owner.split()[0].casefold()) or \
+                name.casefold() in ('me', 'you', 'i')
             msg = {'sender': name, 'outgoing': mine, 'time': when, 'text': words}
+            note = chatlog.voice_note(words) if log else None
+            if note is not None:
+                msg.update(text='', voice=note)
             thread['messages'].append(msg)
             out.append({'beat': bid, 'at': start, 'until': stop, 'kind': 'message', 'device': 'phone', 'app': None,
                         'elements': [], 'thread': thread['name'], 'group': True, 'owner': owner, **msg,
-                        'history': list(thread['messages'][:-1]), 'status': None})
+                        'history': list(thread['messages'][:-1]), 'status': None, **({'chat_log': True} if log else {})})
             prev_moment_beat = k
+        if log and any(o['beat'] == bid for o in out):
+            previous = text
+            continue
         if lines and any(o['beat'] == bid for o in out):
             previous = text
             continue
