@@ -478,6 +478,8 @@ class HybridProduction:
                     counter = elements[-1]
                     counter.value_from, counter.value_to = proof['from'], proof['to']
                     counter.prefix, counter.suffix, counter.decimals = proof['prefix'], proof['suffix'], proof['decimals']
+                    if proof['from'] == 0:      # no spoken starting value: show the stated one, never roll up to it
+                        counter.value_from = counter.value_to
                     counter.duration = min(1.8, max(.1, duration - .4))
                     if source and not span.source_character:
                         self._proof_counter(span, elements, source, proof)

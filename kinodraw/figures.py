@@ -335,8 +335,10 @@ def _lead(text: str, a: int, start: int) -> tuple[int, str]:
             named = named[1:]
         if any(w in STOP for w in named):
             return start, ''                       # "Parking: $5" names its value; "you are wrong: 5%" does not
-    while words and words[0].group().lower() in STOP | {'a', 'an', 'our', 'your', 'their', 'my', 'his', 'her',
-                                                        'the'}:
+    owners = {'a', 'an', 'our', 'your', 'their', 'my', 'his', 'her', 'the', 'its'}
+    cut = max((k + 1 for k, w in enumerate(words) if w.group().lower() in owners), default=0)
+    words = words[cut:]                            # "this year our goal is $1,500" -> "goal"
+    while words and words[0].group().lower() in STOP | owners:
         words = words[1:]
     if not words:
         return start, ''
@@ -418,12 +420,14 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
     if not figs or all(_small(f) for f in figs):
         return None                                # "Jump 3, then jump 5": counting, not data
     sentence = text[a:b]
-    parts = LIST_SEP.split(sentence)
+    lead = re.match(r'[^:·|•]*:\s+(?=\S)', sentence)
+    listed = sentence[lead.end():] if lead and LIST_SEP.search(sentence[lead.end():]) else sentence
+    parts = LIST_SEP.split(listed)                     # "The card says: 2 cups · 350°F": the list after the colon
     if len(parts) >= 3 or (len(parts) == 2 and '/' not in LIST_SEP.search(sentence).group()):
         # a one-line list ("2 cups · 350°F · 25 min · serves 6"): every part whole, no separator shown
         parts = [_end(re.sub(r'[`*_]', '', p).strip()) for p in parts]
         parts = [p for p in parts if p]
-        return Card('stat', figs[0].start, b, rows=parts if len(parts) <= 6 else [' · '.join(parts)])
+        return Card('stat', figs[0].start, b, rows=parts if len(parts) <= 6 else [_end(listed.strip())])
     first = figs[0].start
     when = [f for f in figs if f.family in ('time', 'date', 'day')]
     if when:

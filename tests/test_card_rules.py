@@ -254,3 +254,28 @@ def test_a_card_leaves_before_the_camera_moves_to_another_stretch_of_board():
     start = data_cards.entries(ep, tl, 'en')[0][0]
     cards = data_cards.build(ep, tl, 'en', Skin(), (W, H), cuts=[(5., 0, 'cut'), (start + 1.2, 1920, 'cut')])
     assert cards.entries[0][1] <= start + 1.2, 'the card stays over the next stretch of board'
+
+
+def test_a_list_after_a_colon_and_a_label_after_its_owner():
+    card = figures.cards('The bake table has one recipe card: 2 cups · 350°F · 25 min · serves 6.')[0]
+    assert card.rows == ['2 cups', '350°F', '25 min', 'serves 6']
+    card = figures.cards('Last year we raised $1,200, and this year our goal is $1,500.')[0]
+    assert card.rows == ['$1,200', 'goal is $1,500']
+
+
+def test_a_counter_with_no_spoken_start_does_not_roll(tmp_path):
+    """The planned counter (hybrid MotionElement 'counter') shows the stated value; "from A to B" still rolls."""
+    from kinodraw.engine import render
+    board = script.build(ingest.read('# Our Year\n\nLast year we raised $1,200 for the shelter.\n\n'
+                                     'We planted trees in the park.'), story='explainer')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    for scene in plan['scenes']:
+        scene.update(treatment='motion', text={'kind': 'counter', 'ref': scene['beat_ids'][0]})
+    tmp_path.joinpath('project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    counters = [e for span in prod.spans for e in span.motion.elements if e.preset == 'counter']
+    assert counters and all(c.value_from == c.value_to == 1200 for c in counters if c.value_to == 1200)
+    assert any(c.value_to == 1200 for c in counters)
