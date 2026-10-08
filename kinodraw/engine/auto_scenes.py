@@ -236,8 +236,10 @@ def build_take_note(ctx, beat, chapter, x0, t, t_label=None, t_head=None):
 
 
 def end_heading(ctx):
-    """A story closes like a picture book ("The End"); other videos repeat their title."""
-    return ui(ctx.ep, ctx.lang)['the_end'] if ctx.ep.get('story') == 'story' else ctx.T(ctx.ep.get('title'))
+    """A story closes like a picture book ("The End"); other videos repeat their title. A planned video is a story
+    only when its plan reads it as one: an explainer or an ad made with the story dial never ends on "The End"."""
+    story = ctx.ep.get('genre', 'story') == 'story' and ctx.ep.get('story') == 'story'
+    return ui(ctx.ep, ctx.lang)['the_end'] if story else ctx.T(ctx.ep.get('title'))
 
 
 def build_end_card(ctx, x0, t):

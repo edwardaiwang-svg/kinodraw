@@ -266,7 +266,9 @@ def _text_metrics(text, requested_size, width, corner, family='rounded'):
 
 
 def _text(element, scene, t, color):
+    from ...speech import drawn
     text = counter_text(element, t) if element.preset == 'counter' or element.chart == 'number' and element.kind == 'chart' else element.text
+    text = drawn(text)                  # an emoji in the script would be an empty box in every font here
     text, font, size, spacing = _text_metrics(text, element.size, element.width, element.preset == 'corner_caption', element.font)
     if element.font == 'mono':
         # Silkscreen glyphs are proportional; lay them on an explicit fixed-advance grid.
