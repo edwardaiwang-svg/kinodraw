@@ -116,7 +116,10 @@ def typeset(words: str) -> str:
     """Spoken math written as math; other words kept as spoken. Fragments joined by ' ... ' are typeset one by one
     and joined by a space ("seconds ... divide by five ... roughly ... miles away" -> "seconds ÷ 5 ≈ miles away")."""
     parts = [p.strip(' ,.;:!?') for p in re.split(r'\s*(?:\.\.\.|…)\s*', words.strip()) if p.strip(' ,.;:!?')]
-    return ' '.join(_typeset(p) for p in parts)
+    out = ' '.join(_typeset(p) for p in parts)
+    bare = lambda s: re.sub(r'[\s.,;:!?]', '', s)
+    # Nothing spoken to write as math: the text is already written ("Mon. & Tue.", "8 a.m.–2 p.m."), keep it as is.
+    return words.strip() if bare(out) == bare(words) else out
 
 
 def _typeset(text: str) -> str:

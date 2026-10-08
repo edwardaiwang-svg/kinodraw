@@ -15,6 +15,7 @@ from __future__ import annotations
 import bisect
 import colorsys
 import re
+import textwrap
 from functools import lru_cache
 
 from PIL import Image, ImageDraw
@@ -118,6 +119,16 @@ def _needs_next(a, b):
     return bool(re.match(r'[\d(]', b) and re.search(
         r'(?:\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|[Ee]xt|EXT|Nos?|Apt|Ste|Rm|Rte|Hwy)\.?|\(\d{3}\)|'
         r'\+\d{1,3}|#|\d)$', a))
+
+
+_HELD = (r'(\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|[Ee]xt|EXT|Nos?|Apt|Ste|Rm|Rte|Hwy)\.?|'
+         r'\(\d{3}\)|\+\d{1,3}|#) (?=[\d(])')
+
+
+def wrap(text, width):
+    """``textwrap.wrap`` that never ends a line on what belongs with the next word (see ``_needs_next``)."""
+    held = re.sub(_HELD, '\\1\u00a0', text)        # textwrap breaks only at ASCII whitespace
+    return [line.replace('\u00a0', ' ') for line in textwrap.wrap(held, width, break_long_words=False)]
 
 
 def fits(text, lang):

@@ -23,6 +23,7 @@ from . import motion
 from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
 from . import timeline
+from .captions import wrap as caption_wrap
 from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
 from .bold.render import _SceneLayers
@@ -420,7 +421,7 @@ class HybridProduction:
             who = self._label(value.get('who'))
             atomic = '“' + body.strip().strip('"“”').strip() + '”'      # the script's own quote marks, once
             if not span.source_character:
-                atomic = '\n'.join(textwrap.wrap(atomic, 48))
+                atomic = '\n'.join(caption_wrap(atomic, 48))
             atomic += '\n— ' + who if who else ''
             elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
             if source and body == self._shown(ref)[0]:
@@ -509,7 +510,7 @@ class HybridProduction:
             # Source copy remains verbatim, but line breaks give kinetic headlines
             # enough ink to read and move; a prop gets its own space below the copy.
             for e in copy_elements:
-                e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
+                e.text = '\n'.join(caption_wrap(e.text, 36))
                 e.size = 96
             if pictures and copy_elements and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 for e in copy_elements:
@@ -626,7 +627,7 @@ class HybridProduction:
         counter.start, counter.duration = at, max(.3, landing - span.start - at)
         counter.ease, counter.hit = 'cubic_out', True
         counter.x, counter.y, counter.size, counter.width = .5, .62, 200, 1500
-        headline = MotionElement(text='\n'.join(textwrap.wrap(display, 40, break_long_words=False)), width=1500,
+        headline = MotionElement(text='\n'.join(caption_wrap(display, 40)), width=1500,
                                  size=80, x=.5, y=.27)
         self._clause_build(span, headline, source['id'])
         elements.insert(len(elements) - 1, headline)

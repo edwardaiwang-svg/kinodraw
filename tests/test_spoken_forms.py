@@ -278,3 +278,21 @@ def test_a_phone_in_a_screenplay_line_keeps_its_area_code():
     assert speech.caption_text(text, {'maria'}) == 'Call (707) 555-0147 today.'
     assert speech.said_text(numbers.normalize(text, 'en').spoken, 'en', {'maria'})[0] == \
         'Call seven oh seven, five five five, oh one four seven today.'
+
+
+def test_written_board_text_keeps_its_abbreviations():
+    from kinodraw.engine import process_diagrams as pd
+    assert pd.typeset('Mon. & Tue.') == 'Mon. & Tue.'
+    assert pd.typeset("by 6 a.m. on your zone's first day") == "by 6 a.m. on your zone's first day"
+    assert pd.typeset('Sat., Nov. 8, from 8 a.m.–2 p.m.') == 'Sat., Nov. 8, from 8 a.m.–2 p.m.'
+    assert pd.typeset('twelve minus four is eight') == '12 − 4 = 8'
+
+
+def test_on_screen_wrap_keeps_ext_and_dates_with_their_numbers():
+    from kinodraw.engine.captions import wrap
+    lines = wrap('Questions? Call (707) 555-0147, Ext. 3, email leaves@millbrook.example, '
+                 'or visit millbrook.example/leaves.', 36)
+    assert not any(re.search(r'(?:Ext\.|Nov\.|\(\d{3}\))$', line) for line in lines), lines
+    assert ' '.join(lines) == ('Questions? Call (707) 555-0147, Ext. 3, email leaves@millbrook.example, '
+                               'or visit millbrook.example/leaves.')
+    assert not any(line.endswith('Nov.') for line in wrap('Leaf Pickup Week is Mon., Nov. 3 through Fri., Nov. 7.', 30))
