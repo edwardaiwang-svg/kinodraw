@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+from types import SimpleNamespace
 
 INK = 'stroke="#1B1B1B" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"'
 THIN = 'stroke="#1B1B1B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"'
@@ -635,6 +636,15 @@ class Stager:
         return Support(kind, piece.doodle, x0, x1, Y(fy), piece)
 
     # ---------------- staging
+    def stage_explicit(self, shot, place, props, figures, at=lambda s: s, night=False, set_refs=()):
+        """Stage a page from explicit ids instead of the text (a plan's shot): the set for ``place`` (a SETS key),
+        the furniture in ``set_refs`` and ``props``, each {ref, relation: none|on|against|in|under|beside|behind|
+        held_by, to, motion: roll|fall|drop|fly|None, at}, where ``at`` (passed to ``at()``, seconds by default) is
+        when the motion starts. Fills shot.set and shot.supports like stage(); returns whether a set was built."""
+        things = [explicit_thing(ref) for ref in set_refs] + [explicit_thing(**p) for p in props]
+        line = SimpleNamespace(place=place, things=things, text='')
+        return self.stage(shot, line, self.scene([]), place, figures, at, not figures, night)
+
     def stage(self, shot, line, scene, place, figures, at, empty, night=False):
         """Fill shot.set and shot.supports for one line. Returns the sky doodles the page still draws in its sky
         (an interior shows them through its window instead)."""
@@ -877,6 +887,19 @@ class Stager:
             piece.to = (.22 if piece.x < .55 else -.22, -.4)
         elif kind == 'fall':
             piece.to = (0., 0.)
+
+
+def explicit_thing(ref, relation=None, to=None, motion=None, at=0., **_):
+    """A thing to stage from explicit ids (see Stager.stage_explicit), in the form story.py reads from text."""
+    from ..director.v3.story import THING_ROLE
+    role = THING_ROLE.get(ref) or (SUPPORTS[ref][0] if ref in SUPPORTS else 'small')
+    kind = {'on': 'on', 'in': 'on', 'against': 'against', 'beside': 'beside', 'behind': 'beside',
+            'under': 'under'}.get(relation or '')
+    if relation == 'held_by':
+        role = 'hand'
+    motion = {'drop': 'fall', 'falls': 'fall', 'rolls': 'roll', 'flies': 'fly'}.get(motion, motion)
+    return {'doodle': ref, 'role': role, 'homes': (), 'at': None, 'on': (kind, to) if kind and to else None,
+            'motion': (motion, at) if motion in ('roll', 'fall', 'fly') else None, 'target': False}
 
 
 SETTLE = re.compile(r"\b(?:(?P<lie>sprawl\w*|stretch\w*\s+out|curl\w*\s+up|lies|lay|lying|flops?|flopped|collaps\w*)|"

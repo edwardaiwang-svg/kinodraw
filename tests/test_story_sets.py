@@ -225,3 +225,17 @@ def test_a_dropped_bag_on_a_bus_page_goes_to_the_street_the_story_moves_on_to(tm
     assert shot.place == 'street' and any(p.doodle == 'set_grocery_bag' for p in shot.set)
     shot, _ = page(prod, 'The orange that rolled')
     assert any(p.doodle == 'set_grocery_bag' for p in shot.set) and any(p.doodle == 'fl_tangerine' for p in shot.set)
+
+
+def test_a_page_can_be_staged_from_explicit_ids_relations_and_motion(letter):
+    from kinodraw.engine.storybook import Shot
+    stager, shot = letter.storybook.stager, Shot(10., 14.)
+    stager.stage_explicit(shot, 'study', [{'ref': 'fl_envelope', 'relation': 'against', 'to': 'set_desk_lamp'},
+                                          {'ref': 'fl_tangerine', 'motion': 'roll', 'at': 11.}],
+                          [], set_refs=['fl_couch_and_lamp'])
+    drawn = {p.doodle: p for p in shot.set}
+    assert {'set_desk', 'set_desk_lamp', 'set_bookshelf', 'fl_couch_and_lamp'} <= set(drawn)
+    letter_, lamp = drawn['fl_envelope'], drawn['set_desk_lamp']
+    assert abs(letter_.ground - lamp.ground) < .01 and letter_.rotate != 0          # leaning on the lamp, on the desk
+    assert drawn['fl_tangerine'].motion == 'roll' and drawn['fl_tangerine'].cue == 11.
+    assert letter.storybook.support(shot, 'sleep').doodle == 'fl_couch_and_lamp'
