@@ -239,7 +239,11 @@ class CloudProvider:
                   u.get('cached_tokens', 0), 0.0)
         if out.get('contract_version') != 3:
             raise ProviderError('KinoDraw Cloud returned the wrong plan contract version')
-        return validate_structure(out.get('plan'), PLAN_SCHEMA)
+        plan = validate_structure(out.get('plan'), PLAN_SCHEMA)
+        # What the Worker repaired (or re-asked) before answering, for the plan report.
+        served = out.get('repairs')
+        self.served_repairs = [r[:300] for r in served if isinstance(r, str)][:200] if isinstance(served, list) else []
+        return plan
 
     def direct_section(self, payload: dict, usage: Usage) -> dict:
         if not self.video_id:

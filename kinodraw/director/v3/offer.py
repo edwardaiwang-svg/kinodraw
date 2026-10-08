@@ -1,0 +1,327 @@
+"""The pictures offered to the whole-video planner, per beat.
+
+The picture director's own candidates are few by design (it must never draw a wrong picture), which left the
+planner unable to show a house, a couch or a television that the story plainly has. Here each beat is offered,
+in this order: those candidates; every picture the beat's words name (any keyword, best doodle first, a line
+icon only when no doodle has the word); the furniture and set pieces of the places the beat happens in (named
+in the beat, else the place the story last established); people of the ages and poses the beat mentions without
+naming them (a stranger, a child asleep); the things the story keeps coming back to; then the closest pictures
+by meaning. Each beat gets at most CAP pictures and the whole request stays under the Cloud's size limit.
+English cues decide places and people; other languages get named and meaning matches.
+"""
+from __future__ import annotations
+
+import json
+import re
+from collections import Counter
+from functools import lru_cache
+
+import numpy as np
+
+from ...library import catalog, creatures, imported
+from ..match import EN_STOP, PACK_PENALTY, _model, _normalize, es_gloss, singular
+
+CAP = 20                    # Cloud LIMITS.candidatesPerBeat
+REQUEST_LIMIT = 56_000      # Cloud LIMITS.requestBytes is 60,000 for the whole JSON body (video id included)
+DESC = 70
+QUOTA = {'rules': 8, 'named': 10, 'place': 8, 'people': 4, 'motif': 3}
+ALIASES = {'tv': 'television', 'telly': 'television', 'sofa': 'couch', 'cellphone': 'phone', 'fridge': 'refrigerator',
+           'mom': 'mother', 'mum': 'mother', 'dad': 'father', 'grandpa': 'grandfather', 'grandma': 'grandmother'}
+# Function words and abstractions that never name a picture a story can show.
+STOP = set('''a an the and or but if then so of to in on at by for with from as is are was were be been being it its
+this that these those there here they them their we our you your he she his her i me my mine us not no yes do does did
+done can could will would should may might must shall have has had just also very really more most much many few less
+least some any all each every other another such same own than too only even still again ever never always often
+sometimes up down out over under into onto about after before between during while where when why how what which who
+whom whose because though although until since per via once off away around through without within upon toward towards
+one two three four five six seven eight nine ten first last next way thing things something nothing anything everything
+time times point kind lot lots part side end bit sort got get go went come came say said tell told make made take took
+know knew think thought want wanted like need seem seemed felt feel let put keep kept turn turned happen happened
+life moment stuff answer reason meaning purpose fact problem matter idea chance rest half whole bunch sense mind
+people person someone everyone anyone nobody small big little large new old good bad great long short high low
+day days year years week weeks today tonight morning afternoon evening night'''.split()) | (
+    EN_STOP - set('white black red blue green yellow orange pink purple brown gray grey'.split()))  # colours name things too
+# Line-icon kinds that are interface or abstract symbols, never a thing in a story's world.
+UI_CATEGORIES = {'Arrows', 'Shapes', 'Charts', 'Database', 'Development', 'Version control', 'Logic', 'Mood', 'Gender',
+                 'Symbols', 'Currencies', 'shapes', 'symbols', 'graphs'}
+UI_WORDS = re.compile(r'\b(?:layout|sidebar|border|align\w*|arrows?|cursor|toggle|layers?|minimi[sz]e|maximi[sz]e)\b', re.I)
+
+# Place kinds (schema.PLACES): words that put the story there (it stays until another place is named), and
+# words for things found there, which bring that place's set pieces to their own beat only.
+PLACE_CUES = (
+    ('living_room', r'living\s*room|lounge|downstairs', r'couch|sofa|armchair|\btv\b|television|fireplace|remote'),
+    ('bedroom', r'bedroom|upstairs', r'\bbed\b|pillow|blanket|bunk'),
+    ('kitchen', r'kitchen', r'stove|oven|fridge|refrigerator|\bsink\b|cooking|baking'),
+    ('dining_room', r'dining\s*room', r'dinner\s+table|breakfast|supper'),
+    ('office', r'office|\bstudy\b', r'\bdesk\b|computer|laptop|typing'),
+    ('classroom', r'classroom|school', r'teacher|lesson|homework|exam'),
+    ('home_exterior', r'\bhouse\b|front\s+door|porch|doorstep|driveway|front\s+yard', r'\bhome\b'),
+    ('street', r'street|\broad\b|sidewalk|pavement|crosswalk|\balley', r'traffic'),
+    ('town', r'\btown\b|village|neighbou?rhood|\bcity\b|downtown', None),
+    ('shop', r'\bshop\b|\bstore\b|supermarket|market|bakery', r'grocer\w*|checkout'),
+    ('cafe', r'\bcaf[eé]\b|restaurant|\bdiner\b', None),
+    ('park', r'\bpark\b|playground', r'bench|\bswings?\b'),
+    ('garden', r'garden|backyard|\byard\b|lawn', None),
+    ('bus', r'\bbus\b|\btrain\b|subway|\btram\b|station|platform', None),
+    ('car', r'\bcar\b|\btaxi\b|highway', r'\bdr[oi]ve\b|driving'),
+    ('hospital', r'hospital|clinic', r'doctor|nurse'),
+    ('library', r'library', r'bookshel\w*|librarian'),
+    ('forest', r'forest|\bwoods\b|jungle', None),
+    ('beach', r'beach|seaside|\bshore\b', r'\bsand\b|\bwaves\b'),
+    ('mountain', r'mountain|\bhills?\b|cliff|summit', None),
+    ('river', r'river|stream|\blake\b|\bpond\b', None),
+    ('farm', r'\bfarm\b|\bbarn\b|\bfields?\b', r'tractor'),
+    ('snow', None, r'\bsnow\w*|\bice\b|winter'),
+    ('night_sky', None, r'\bstars\b|\bmoon\b|night\s+sky'),
+    ('stage', r'\bstage\b|theat(?:er|re)|concert|auditorium', r'audience'),
+)
+FROM = re.compile(r"\bfrom\s+(?:the\s+|a\s+|an\s+|\w+(?:'s)?\s+)?$", re.I)   # "from the kitchen": not here
+PLACE_RE = [(place, est and re.compile(est, re.I), inc and re.compile(inc, re.I)) for place, est, inc in PLACE_CUES]
+KITS = {
+    'living_room': 'couch television armchair lamp window table clock houseplant',
+    'bedroom': 'bed desk lamp window chair book',
+    'kitchen': 'refrigerator stove oven table chair cup teapot',
+    'dining_room': 'table chair plate cup',
+    'office': 'desk lamp chair computer book',
+    'classroom': 'chalkboard desk book backpack school',
+    'home_exterior': 'house door window tree',
+    'street': 'street houses road car tree',
+    'town': 'houses house city school shop tree',
+    'shop': 'shop shopping cart bag',
+    'cafe': 'coffee table chair plate',
+    'park': 'tree bench flower',
+    'garden': 'flower tree fence house',
+    'bus': 'bus window seat',
+    'car': 'car road',
+    'hospital': 'hospital bed doctor',
+    'library': 'book library desk',
+    'forest': 'forest tree mushroom',
+    'beach': 'beach wave sun',
+    'mountain': 'mountain tree',
+    'river': 'river tree rock',
+    'farm': 'barn tractor field',
+    'snow': 'snowman snow tree',
+    'night_sky': 'moon star',
+    'stage': 'stage microphone',
+}
+# People the text mentions without a name -> (library age, sex).
+PEOPLE = (
+    (r'grand(?:father|pa|dad)|old\s+man|\belderly\s+man', 'elder', 'male'),
+    (r'grand(?:mother|ma|mum|mom)|granny|nana|old\s+woman|\belderly\s+woman', 'elder', 'female'),
+    (r'granddaughter|\bgirls?\b|\bdaughter\b|little\s+sister', 'child', 'female'),
+    (r'grandson|\bboys?\b|\bson\b|little\s+brother', 'child', 'male'),
+    (r'\bchild(?:ren)?\b|\bkids?\b|\bbab(?:y|ies)\b|toddler', 'child', None),
+    (r'\bmother\b|\bmom\b|\bmum\b|\bwom[ae]n\b|\blady\b|\baunt\b|\bwife\b|\bsister\b', 'adult', 'female'),
+    (r'\bfather\b|\bdad\b|\bm[ae]n\b|\buncle\b|\bhusband\b|\bbrother\b', 'adult', 'male'),
+    (r'stranger|neighbou?r|\bpeople\b|\bcrowd\b|\bpersons?\b|\bfriends?\b|\bteen\w*|passer', 'adult', None),
+)
+PEOPLE_RE = [(re.compile(cue, re.I), age, sex) for cue, age, sex in PEOPLE]
+POSE_CUES = (
+    ('sleep', r'slept|sleep\w*|asleep|dozing|dozed|napp\w*'),
+    ('sit', r'\bsat\b|\bsits?\b|sitting|seated|sprawl\w*'),
+    ('lie', r'\blay\b|lying|\blies\b|lain'),
+    ('run', r'\bran\b|\bruns?\b|running|rushed|raced|dashed'),
+    ('walk', r'walk\w*|stroll\w*|wander\w*'),
+    ('carry', r'carr(?:y|ies|ied|ying)|holding|\bheld\b'),
+    ('wave', r'wav(?:e|es|ed|ing)\b'),
+    ('shout', r'shout\w*|yell\w*|scream\w*'),
+    ('look_up', r'looked\s+up|looking\s+up'),
+    ('scared', r'afraid|scared|frighten\w*|trembl\w*'),
+)
+POSE_RE = [(pose, re.compile(r'\b(?:' + cue + r')', re.I)) for pose, cue in POSE_CUES]
+FACES = {'Smileys & Emotion', 'emotions', 'Mood'}       # emoji moods: at most two a beat, never by meaning
+SET_WEIGHT = {'bespoke': 1.08, 'fluent': .8}
+
+
+def _key(word: str) -> str:
+    return ' '.join(singular(w) for w in re.findall(r"[a-z0-9']+", word.lower()))
+
+
+def _fits(word: str, entry: dict) -> float:
+    """How well a keyword names what the drawing shows: its description ends with the word ("desk lamp" for
+    lamp; each part of "couch and lamp"), uses it to describe something else ("orange heart" for orange), or
+    never says it (a loose tag)."""
+    words = word.split()
+    parts = [[singular(w) for w in re.findall(r'[a-z]+', part)]
+             for part in re.split(r'\b(?:and|with|on|in|of)\b|[,(:]', entry.get('desc', '').lower())]
+    parts = [part for part in parts if part]
+    if not parts:
+        return 0.
+    if any(part[-len(words):] == words for part in parts):
+        return .3
+    return -.3 if any(' '.join(words) in ' '.join(part) for part in parts) else -.1
+
+
+@lru_cache(maxsize=4)
+def _library(lang: str):
+    """(entries, keyword index) for one language: every keyword of every picture, scored by how well it names it."""
+    entries = {i: e for i, e in catalog().items()
+               if e.get('search', True) and e.get('set') != 'creatures' and e.get('category') != 'narrator'
+               and not (imported(e) and (e.get('category') in UI_CATEGORIES or UI_WORDS.search(e.get('desc', ''))))}
+    index: dict[str, list[tuple[str, float]]] = {}
+    field = 'en' if lang == 'es' else lang
+    for did, e in entries.items():
+        for rank, word in enumerate(e.get(field) or []):
+            key = _key(word) if field == 'en' else word.strip()
+            if key:
+                weight = SET_WEIGHT.get(e['set'], .6 if imported(e) else .76) - .03 * min(rank, 8)
+                index.setdefault(key, []).append((did, weight + (_fits(key, e) if field == 'en' else 0)))
+    for key in index:
+        index[key].sort(key=lambda pair: -pair[1])
+    return entries, index
+
+
+class Offer:
+    """Per-beat candidate lists for one language, from the whole library (people presets aside)."""
+
+    def __init__(self, lang: str, matcher=None):
+        self.lang, self.matcher = lang, matcher
+        self.entries, self.index = _library(lang)
+
+    # ------------------------------------------------------------ pieces
+    def desc(self, did: str) -> str:
+        entry = catalog().get(did, {})
+        return (entry.get('desc') or (entry.get('en') or [''])[0])[:DESC]
+
+    def word(self, word: str, n: int = 2) -> list[tuple[str, float]]:
+        """The pictures a word names, best first: up to n doodles, else the best line icon."""
+        owners = self.index.get(ALIASES.get(word, word) if self.lang != 'zh' else word, [])
+        doodles = [pair for pair in owners if not imported(self.entries[pair[0]])]
+        return doodles[:n] or owners[:1]
+
+    def named(self, text: str) -> list[str]:
+        """Every picture the words name, best named first (rare words before words many pictures share)."""
+        if self.lang == 'zh':
+            words = [key for key in self.index if len(key) >= 2 and key in text]
+        else:
+            if self.lang == 'es':
+                tokens = es_gloss(text).split()
+            else:
+                tokens = [w.lower() for w in re.findall(r"[A-Za-z][A-Za-z']*", text)]
+            keys = [singular(t) for t in tokens]
+            words = []
+            for n in (2, 1):
+                for i in range(len(keys) - n + 1):
+                    key = ' '.join(keys[i:i + n])
+                    if n == 1 and ((key in STOP or len(key) < 3) and key not in ALIASES
+                                   or any(cue.search(key) for cue, _, _ in PEOPLE_RE)):
+                        continue                        # people come as presets of their age, below
+                    if ALIASES.get(key, key) in self.index and key not in words:
+                        words.append(key)
+        scored = {}
+        for word in words:
+            common = len(self.index[ALIASES.get(word, word)]) > 40
+            for did, score in self.word(word):
+                score += .15 * (len(word.split()) - 1) - (.2 if common else 0)
+                scored[did] = max(scored.get(did, -9), score)
+        return sorted(scored, key=lambda did: -scored[did])
+
+    def places(self, text: str) -> tuple[list[str], list[str]]:
+        """(places the text moves the story to, places whose things the text mentions)."""
+        if self.lang != 'en':
+            return [], []
+        moved, things = [], []
+        for place, est, inc in PLACE_RE:
+            hits = [m for m in est.finditer(text)] if est else []
+            if any(not FROM.search(text[:m.start()]) for m in hits):
+                moved.append(place)
+            elif hits or (inc and inc.search(text)):
+                things.append(place)
+        return moved, things
+
+    def kit(self, place: str) -> list[str]:
+        """The set pieces of a place: per word, the best drawing that shows that very thing."""
+        out = []
+        for word in KITS.get(place, '').split():
+            key = _key(word)
+            out += [did for did, _ in self.word(key, 3) if _fits(key, self.entries[did]) > -.2][:1]
+        return out
+
+    def people(self, text: str) -> list[str]:
+        if self.lang != 'en':
+            return []
+        pose = next((p for p, cue in POSE_RE if cue.search(text)), None)
+        out = []
+        for cue, age, sex in PEOPLE_RE:
+            if cue.search(text):
+                for want in ([pose] if pose else []) + ['stand']:
+                    did = creatures.best_preset('human', age=age, sex=sex, pose=want)
+                    if did:
+                        out.append(did)
+        return out
+
+    def meaning(self, texts: list[str], sentences=None) -> list[list[str]]:
+        """Per text, the closest drawings by meaning to it and to its first sentences (one batch of embeddings),
+        without faces: a story shows its people, not emoji moods."""
+        if self.matcher is None or not texts:
+            return [[] for _ in texts]
+        queries = []
+        for n, text in enumerate(texts):
+            parts = list(dict.fromkeys(sentences(text) if sentences else []))
+            queries += [(n, text, 4)] + [(n, part, 2) for part in parts[:6] if len(parts) > 1]
+        words = [es_gloss(q) if self.lang == 'es' else q for _, q, _ in queries]
+        unique = list(dict.fromkeys(w for w in words if w))       # repeated sentences are embedded once
+        ids, vecs = self.matcher._catalog_vectors()
+        rows = dict(zip(unique, _normalize(np.array(list(_model(self.lang).embed(unique)), np.float32)) @ vecs.T
+                        - PACK_PENALTY * self.matcher._packs)) if unique else {}
+        found = [rows.get(w) for w in words]
+        out = [[] for _ in texts]
+        for (n, _, k), sims, word in zip(queries, found, words):
+            if word:
+                out[n] += [ids[i] for i in np.argsort(-sims)[:k] if self.entries.get(ids[i], {}).get('category') not in FACES]
+        return out
+
+    # ------------------------------------------------------------ whole video
+    def widen(self, beats: list[dict], sentences=None) -> None:
+        """Extend each payload beat's ``candidates`` ({id, desc}) in place. ``beats`` are payload beats in order
+        (beat_id, section_id, spoken or text); ``sentences(text)`` splits a beat for meaning matches."""
+        named = {b['beat_id']: self.named(b.get('spoken') or b['text']) for b in beats}
+        meant = dict(zip([b['beat_id'] for b in beats], self.meaning([b.get('spoken') or b['text'] for b in beats],
+                                                                    sentences)))
+        counts = Counter(did for ids in named.values() for did in ids[:QUOTA['named']])
+        motifs = [did for did, n in counts.most_common() if n >= 2]
+        here, section = [], None
+        for b in beats:
+            text = b.get('spoken') or b['text']
+            if b.get('section_id') != section:
+                here, section = [], b.get('section_id')
+            moved, things = self.places(text)
+            places = moved + things + ([] if moved else here)
+            if moved:
+                here = moved                             # the story moved; until it moves again, it stays
+            groups = (
+                ([c['id'] for c in b['candidates']], QUOTA['rules']),
+                (named[b['beat_id']], QUOTA['named']),
+                ([did for place in dict.fromkeys(places) for did in self.kit(place)], QUOTA['place']),
+                (self.people(text), QUOTA['people']),
+                ([did for did in motifs if did not in named[b['beat_id']]], QUOTA['motif']),
+                (meant[b['beat_id']], CAP),
+            )
+            chosen, faces = [], 0
+            for ids, quota in groups:
+                added = 0
+                for did in ids:
+                    if len(chosen) >= CAP or added >= quota:
+                        break
+                    face = catalog().get(did, {}).get('category') in FACES
+                    if did not in chosen and did in catalog() and not (face and faces >= 2):
+                        chosen.append(did)
+                        added += 1
+                        faces += face
+            old = {c['id']: c for c in b['candidates']}
+            b['candidates'] = [old.get(did) or {'id': did, 'desc': self.desc(did)} for did in chosen]
+
+
+def fit(payload: dict, limit: int = REQUEST_LIMIT) -> None:
+    """Drop the last-ranked candidates, longest lists first, until the Cloud request body fits ``limit``."""
+    def size():
+        return len(json.dumps({'video_id': 'x' * 36, 'storyboard': payload}))
+    over = size() - limit
+    while over > 0:
+        longest = max(payload['beats'], key=lambda b: len(b['candidates']))
+        if not longest['candidates']:
+            return
+        dropped = longest['candidates'].pop()
+        over -= len(json.dumps(dropped)) + 2
+        if over <= 0:
+            over = size() - limit

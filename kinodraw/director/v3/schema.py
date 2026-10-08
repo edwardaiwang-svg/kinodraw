@@ -40,6 +40,49 @@ CAST = _obj(
                      'crown', 'glasses', 'freckles', 'fluffy', 'none')),
     temperament=_enum('gentle', 'fierce', 'playful', 'timid', 'wise', 'sly'),
 )
+# Per-shot staging (2026-10-08). A scene's optional ``shots`` list says, beat by beat, what the frame shows.
+# Plans made before it (and Cloud deployments without it) simply have no ``shots``: OPTIONAL fields may be
+# absent, and absent means "no staging given" (renderers fall back to reading the text).
+#   shot.beat_id     the scene beat this shot belongs to (shots follow beat order; a beat may have several)
+#   shot.starts_at   verbatim opening words of the sentence where the shot starts ("" = the beat's start)
+#   shot.shot        framing: wide (whole place and everyone in it), medium (people from the knees up),
+#                    close (one face), two_shot (two people facing each other), insert (close-up of an object
+#                    or arrangement, e.g. a letter propped against a lamp), first_person (what a character
+#                    sees: a page, list, letter or phone screen they read or hold, filling the frame)
+#   shot.setting     place: a PLACES kind ("none" when the text gives no place); time: day/night/dawn/dusk or
+#                    unknown; set_refs: offered picture ids that build the fixed background (house, couch, TV,
+#                    desk), back to front
+#   shot.cast[]      who is in frame: id (a cast id), age (AGES band at this moment of the story, which may
+#                    differ from the cast bible: baby infant, child ~2-12, teen 13-19, adult, old), pose
+#                    (POSES), speaking (yes = says a line in this shot, off_screen = heard but not seen, no)
+#                    Everyone on screen in a shot is also a cast element of its scene (validate adds them).
+#   shot.lines[]     each quoted line in this shot: quote = its opening words verbatim, speaker = a cast id
+#   shot.props[]     movable things: ref (an offered picture id), relation (RELATIONS) to `to` (a picture id
+#                    in this shot or a cast id; "" for none), motion (MOTIONS; how the prop moves in the shot)
+#                    Every set/prop/focus picture is also a picture element of its scene (validate adds them).
+#   shot.focus_ref   insert/first_person: the picture id the camera looks at ("" otherwise)
+#   shot.writing     first_person: the words on the page or screen, verbatim from the beat ("" otherwise)
+SHOT_TYPES = ('wide', 'medium', 'close', 'two_shot', 'insert', 'first_person')
+AGES = ('baby', 'child', 'teen', 'adult', 'old')
+POSES = ('stand', 'walk', 'run', 'sit', 'lie', 'sleep', 'look', 'look_up', 'read', 'write', 'hold', 'carry',
+         'talk', 'shout', 'wave', 'point', 'reach', 'hug', 'laugh', 'cry', 'scared', 'kneel', 'eat', 'drink')
+PLACES = ('none', 'home_exterior', 'living_room', 'bedroom', 'kitchen', 'dining_room', 'bathroom', 'hallway',
+          'office', 'classroom', 'shop', 'cafe', 'street', 'town', 'city', 'village', 'park', 'garden',
+          'playground', 'bus', 'car', 'train', 'station', 'airport', 'hospital', 'library', 'stage', 'farm',
+          'field', 'forest', 'jungle', 'mountain', 'river', 'lake', 'beach', 'sea', 'underwater', 'desert', 'snow',
+          'cave', 'castle', 'night_sky', 'space', 'other')
+TIMES = ('unknown', 'day', 'night', 'dawn', 'dusk')
+RELATIONS = ('none', 'on', 'against', 'in', 'under', 'beside', 'behind', 'held_by')
+MOTIONS = ('none', 'roll', 'fall', 'fly', 'slide', 'bounce', 'open', 'glow')
+SHOT = _obj(
+    beat_id=S, starts_at=S, shot=_enum(*SHOT_TYPES),
+    setting=_obj(place=_enum(*PLACES), time=_enum(*TIMES), set_refs=_arr(S)),
+    cast=_arr(_obj(id=S, age=_enum(*AGES), pose=_enum(*POSES), speaking=_enum('no', 'yes', 'off_screen'))),
+    lines=_arr(_obj(quote=S, speaker=S)),
+    props=_arr(_obj(ref=S, relation=_enum(*RELATIONS), to=S, motion=_enum(*MOTIONS))),
+    focus_ref=S, writing=S,
+)
+OPTIONAL = frozenset({'shots'})      # property names that older plans may lack; absent = empty
 SCENE = _obj(
     beat_ids=_arr(S),
     treatment=_enum('whiteboard', 'motion', 'kinetic_type', 'atmosphere', 'chart', 'character'),
@@ -50,6 +93,7 @@ SCENE = _obj(
     camera=_enum('static', 'slow_push', 'pull_back', 'pan_left', 'pan_right', 'shake', 'follow'),
     transition_in=_enum(*TRANSITIONS), hold_s=N,
     text=_obj(kind=_enum('none', 'caption_only', 'quote', 'title', 'counter', 'kinetic', 'cta'), ref=S),
+    shots=_arr(SHOT),
 )
 PLAN_SCHEMA = _obj(
     storyboard=_obj(
