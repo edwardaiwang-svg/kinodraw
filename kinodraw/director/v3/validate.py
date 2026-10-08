@@ -13,7 +13,7 @@ from ...engine import process_diagrams as pd
 from ...library import catalog
 from ..match import singular
 from .offer import ALIASES, STOP
-from .semantics import (actor_named, beats, candidate_ids, cast_evidence, detect_cast, name_key,
+from .semantics import (actor_named, beats, cast_evidence, detect_cast, name_key,
                         resolve_actor)
 
 
@@ -33,18 +33,26 @@ def _ref_words(ref) -> set:
     return {w for w in words if len(w) > 2 and w not in STOP and w not in ('svg', 'icon')}
 
 
-def picture_for(ref, offered, named=lambda ref: True) -> tuple[str, str]:
-    """(picture id, note) for a planner's picture ref: ('', '') when nothing can be drawn for it.
+def picture_for(ref, offered, named=lambda ref: 'named') -> tuple[str, str]:
+    """(picture id, note) for a planner's picture ref: ('', why) when nothing can be drawn for it.
 
-    An offered picture is drawn; so is any other library picture the scene's own words name (``named``): the offer
-    list steers a planner, it is no render requirement, so a saved plan keeps its pictures when a later matcher
-    offers others, while a library picture nothing in the scene names stays out. A ref that is no library id
-    ("couch", "hot_thermometer_icon") becomes the offered picture whose words say most of it."""
+    An offered picture is drawn; so is any other library picture the scene's words name (``named`` returns the
+    rule that names it, '' for none): the offer list steers a planner, it is no render requirement, so a saved plan
+    keeps its pictures when a later matcher offers others. A library picture nothing names gives way to the offered
+    picture that shares its name word ("clock_fast" -> an offered clock), else it is dropped. A ref that is no
+    library id ("couch", "hot_thermometer_icon") becomes the offered picture whose words say most of it."""
     if ref in offered:
         return ref, ''
+    entries = _entry_words()
     if ref in catalog():
-        return (ref, '') if named(ref) else ('', '')
-    words, entries = _ref_words(ref), _entry_words()
+        why = named(ref)
+        if why:
+            return ref, ''                  # kept, no change: ``named`` records why (validate's ``kept_pictures``)
+        match, word = _same_noun(ref, offered)
+        if match:
+            return match, f'{ref} is not named by the scene\'s words; drew the offered {match}, also a {word!r}'
+        return '', f'{ref} is not named by the scene\'s words and no offered picture shares its name'
+    words = _ref_words(ref)
     scored = [(len(words & entries[i]), i) for i in offered if i in entries]
     best = max((n for n, _ in scored), default=0)
     choice = [i for n, i in scored if n == best and n]
@@ -54,28 +62,126 @@ def picture_for(ref, offered, named=lambda ref: True) -> tuple[str, str]:
     return match, f'read {ref!r} as the offered picture {match}'
 
 
+def _same_noun(did, offered):
+    """(the best offered picture whose name says the same noun as library picture ``did``, that noun), offers in
+    the matcher's order: a clock for a speeding clock, plain ice for an ice cube."""
+    from .offer import _drawing
+    name, head = _drawing(did)
+    nouns = [head] + [w for w in name if w != head]
+    for noun in nouns:
+        if len(noun) < 3 or noun in STOP:
+            continue
+        for other in offered:
+            if other != did and other in catalog() and noun in _drawing(other)[0]:
+                return other, noun
+    return '', ''
+
+
+# Word forms, so "opened", "households", "children" find "open", "household", "child". Irregular plurals, then
+# -ing/-ed (doubled consonants and y restored) and plurals (match.singular). Both sides are reduced the same way.
+IRREGULAR = {'children': 'child', 'people': 'person', 'men': 'man', 'women': 'woman', 'feet': 'foot',
+             'teeth': 'tooth', 'mice': 'mouse', 'geese': 'goose', 'leaves': 'leaf', 'knives': 'knife',
+             'wives': 'wife', 'lives': 'life', 'shelves': 'shelf', 'halves': 'half', 'wolves': 'wolf'}
+# A few everyday words for things the library names otherwise (each word -> the names it also says).
+SYNONYMS = {'household': ('house', 'home', 'family'), 'home': ('house',), 'kid': ('child',),
+            'upstairs': ('stair', 'stairs'), 'downstairs': ('stair', 'stairs'), 'staircase': ('stair', 'stairs'),
+            'checklist': ('list',), 'letter': ('mail', 'envelope'), 'note': ('letter',),
+            'groceries': ('grocery',), 'mom': ('mother',), 'dad': ('father',), 'tv': ('television',)}
+
+
+ALIAS_RANK = 6      # a picture's first keywords are its other names; later ones are loose associations ("band")
+# Nouns that say where or when after another noun, not what kind of thing it is ("carried the groceries home").
+ADVERBS = {'home', 'away', 'back', 'outside', 'inside', 'indoors', 'outdoors', 'upstairs', 'downstairs', 'abroad',
+           'today', 'tonight', 'tomorrow', 'yesterday', 'ahead', 'aside', 'together', 'apart', 'overnight'}
+
+
+def forms(word: str) -> set:
+    """The forms a word may take as a picture's name: itself, its lemma, the lemma with a silent e, synonyms."""
+    w = word.lower()
+    out = {w, singular(w), IRREGULAR.get(w, w)}
+    for suffix in ('ing', 'ed'):
+        if w.endswith(suffix) and len(w) > len(suffix) + 2:
+            stem = w[:-len(suffix)]
+            if stem.endswith('i'):
+                stem = stem[:-1] + 'y'                        # carried -> carry
+            elif stem[-1] == stem[-2] and stem[-1] not in 'lsz':
+                stem = stem[:-1]                              # stopped -> stop
+            out |= {stem, stem + 'e'}
+    for form in list(out):
+        out.update(SYNONYMS.get(form, ()))
+    return {f for f in out if f}
+
+
 def _namer(script_beats, script):
-    """named(ref, texts): do the texts name library picture ``ref``? Yes when the offer's sense matching
-    (offer.Sense.judge) finds a word naming it in its sense, or when a text says the drawing's head word or one of
-    its first four keywords ("drivers" for a truck driver, "Security" for a padlock shield, "a truck" for a
-    delivery truck). The other word of a two-word name only says which kind: "a field" never names field hockey."""
-    from .offer import Sense, _drawing, _library
+    """named(ref, texts) -> the rule by which the texts name library picture ``ref`` ('' when they do not):
+
+    - the offer's sense matching (offer.Sense.judge) finds a word naming it in its sense;
+    - a text says one of its names: the drawing's name words or the library's first keywords for it, in any word
+      form or common synonym (forms): "It was a list" names a clipboard list, "downstairs" the stairs down,
+      "households" a house, "Fuel" a fuel pump;
+    - it is already in the story: an earlier scene kept it (the list stays the list when a later line only says
+      "every line").
+
+    Never in another sense: a word that only describes the next noun ("ice crystals" is no ice cube); a person in a
+    story of animals; and for a two-word line icon named by one word, a sentence that leans away from it (the
+    offer's sense contrast: a plumbing "drip" is no IV drip, "a field" no field hockey)."""
+    from .offer import Sense, _drawing, _library, _person, _sentence
     lang = script_beats.get('lang', 'en') if isinstance(script_beats, dict) else 'en'
     entries, index = _library(lang)
     sense = Sense(lang, entries, index, [b['spoken'] for b in script])
-
-    def key(text):
-        return ' '.join(singular(w) for w in re.findall(r'[a-z]+', text.lower()))
+    story: set = set()
 
     @lru_cache(maxsize=None)
-    def says(did):
+    def names(did):
+        """Each name of the picture as a tuple of words: name words, head, every keyword."""
+        entry = catalog().get(did) or {}
         name, head = _drawing(did)
-        kind = set(name) - {head} if len(name) == 2 else set()
-        phrases = {head} | {key(tag) for tag in (catalog().get(did, {}).get('en') or [])[:4]}
-        return {p for p in phrases if p and len(p) > 2 and p not in STOP and p not in kind}
+        out = {(w,) for w in name} | {(head,)} | {tuple(re.findall(r'[a-z]+', tag.lower()))
+                                                   for tag in (entry.get('en') or [])[:ALIAS_RANK]}
+        return {n for n in out if n and not (len(n) == 1 and (len(n[0]) < 3 or n[0] in STOP))}
+
+    def tokens(text):
+        return [(m.start(), m.end(), forms(m.group())) for m in re.finditer(r"[A-Za-z]+(?:'[a-z]+)?", text)]
+
+    def modifier(text, toks, k, n):
+        """Does the hit toks[k:k+n] only describe the noun right after it ("ice crystals")?"""
+        if k + n >= len(toks):
+            return False
+        a, b, after = toks[k + n]
+        gap = text[toks[k + n - 1][1]:a]
+        word = text[a:b].lower()
+        return gap.strip() == '' and word not in STOP and word not in ADVERBS and singular(word) in index
+
+    def leans_away(did, text, a, b, said):
+        entry = catalog().get(did) or {}
+        name, head = _drawing(did)
+        if entry.get('set') in ('bespoke', 'tabler') or len(name) != 2 or set(name) <= said:
+            return False
+        start, end = _sentence(text, a)
+        floor = -.05 if head in said else -.03               # the thing itself vs only the word for its kind
+        return sense.contrast(did, text[start:end], a - start, b - start) < floor
 
     def named(ref, texts):
-        return any(sense.judge(ref, t) or any(f' {p} ' in f' {key(t)} ' for p in says(ref)) for t in texts)
+        if sense.no_people and _person(ref):
+            return ''
+        for text in texts:
+            if sense.judge(ref, text):
+                return 'a word names it in its sense'
+            toks = tokens(text)
+            said = set().union(*(f for _, _, f in toks)) if toks else set()
+            for name in sorted(names(ref), key=len, reverse=True):
+                for k in range(len(toks) - len(name) + 1):
+                    if all(name[j] in toks[k + j][2] or singular(name[j]) in toks[k + j][2] for j in range(len(name))):
+                        a, b = toks[k][0], toks[k + len(name) - 1][1]
+                        if len(name) == 1 and modifier(text, toks, k, 1):
+                            continue
+                        if leans_away(ref, text, a, b, said):
+                            continue
+                        return f'the words say {text[a:b]!r}'
+        if ref in story:
+            return 'it is already in the story (an earlier scene keeps it)'
+        return ''
+    named.story = story
     return named
 
 
@@ -377,6 +483,10 @@ def _shots(scene, path, by_id, cast_by_id, offered, repairs, named=lambda ref: T
         shot['props'] = props
         if shot['focus_ref']:
             shot['focus_ref'] = picture(shot['focus_ref'], where + '.focus_ref')
+            if not shot['focus_ref'] and shot['shot'] in ('insert', 'first_person'):
+                # nothing of its own to look at: the shot shows the scene, never a thing held in an earlier one
+                repairs.append(f'{where}: {shot["shot"]} shot without a picture to look at; drawn as a medium shot')
+                shot['shot'] = 'medium'
         if shot['writing'] and not _verbatim(shot['writing'], beat):
             repairs.append(f'{where}.writing: not verbatim from {shot["beat_id"]}; cleared')
             shot['writing'] = ''
@@ -701,7 +811,9 @@ BOARD_PICTURES = 3          # pictures a board draws at most, its own and the sc
 
 def _board_pictures(scene, path, by_id, repairs):
     """A board sits beside its scene's pictures, never in place of them: a scene picture no board draws joins
-    the board (up to BOARD_PICTURES), appearing when its beat names it, else when the scene starts."""
+    the board (up to BOARD_PICTURES), appearing when its beat names it, else with the board's last item. It never
+    takes a board item's turn: it follows every item heard with or before it, so the board's own items keep their
+    words (a kangaroo drawn ahead of "Start at 0." pushed the number line and its hops a second late)."""
     boards = scene.get('boards') or []
     if not boards:
         return
@@ -722,18 +834,21 @@ def _board_pictures(scene, path, by_id, repairs):
             if hit:
                 bid, cue = b, hit.group()
                 break
+        last = max(board['items'], key=lambda it: _position(it, order, by_id), default=None)
+        if not cue and last:
+            bid, cue = last['beat_id'], last['cue']           # after the board's own items, not ahead of them
         k = 1
         while f'picture_{k}' in taken:
             k += 1
         item = _item(bid, 'picture', '', cue=cue, ref=e['ref'], iid=f'picture_{k}')
         taken.add(item['id'])
         drawn.add(e['ref'])
-        here = _position(item, order, by_id)          # ahead of what is said with or after it: words point at it
-        at = next((k for k, it in enumerate(board['items']) if _position(it, order, by_id) >= here),
+        here = _position(item, order, by_id)          # after every item heard with or before it
+        at = next((k for k, it in enumerate(board['items']) if _position(it, order, by_id) > here),
                   len(board['items']))
         board['items'].insert(at, item)
         repairs.append(f'{path}: the board draws the scene picture {e["ref"]} '
-                       + (f'when {bid} says {cue!r}' if cue else 'from the start'))
+                       + (f'when {bid} says {cue!r}, after the items heard by then' if cue else 'from the start'))
 
 
 def _merge_diagram_scenes(scenes, script_beats, repairs):
@@ -761,8 +876,11 @@ def _merge_diagram_scenes(scenes, script_beats, repairs):
     return out
 
 
-def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
+def validate(plan, script_beats, candidates, kept_pictures=None) -> tuple[dict, list[str]]:
     """Return (repaired plan, repairs). Invalid script ids raise ValueError rather than inventing coverage.
+
+    Repairs list changes only (a saved plan re-checks clean); ``kept_pictures``, when given, collects why each library picture
+    the matcher did not offer stays ("kept tb_clipboard_list, not offered: the words say 'list'").
 
     Text references are beat ids; pictures must be offered for a beat in their scene. Scene holds cover
     all distinct on-screen references at 27 chars/s (all beats for sequential caption_only scenes).
@@ -830,9 +948,15 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
     for i, scene in enumerate(out['scenes']):
         path = f'scenes[{i}]'
         bids = scene['beat_ids']
-        offered = set().union(*(candidate_ids(candidates, bid) for bid in bids))
+        offered = list(dict.fromkeys(c if isinstance(c, str) else c['id'] for bid in bids for c in (
+            candidates.get(bid, []) if isinstance(candidates, dict) else candidates) or ()))   # the matcher's order
         texts = [by_id[bid]['spoken'] for bid in bids]
-        named = (lambda ref, texts=texts: namer(ref, texts))
+        def named(ref, texts=texts, path=path):
+            why = namer(ref, texts)
+            note = f'{path}: kept {ref}, not offered: {why}'
+            if why and kept_pictures is not None and note not in kept_pictures:
+                kept_pictures.append(note)
+            return why
         elements, intent = [], set()
         for e in scene['elements']:
             allowed = (offered if e['kind'] == 'picture' else set(cast_by_id) if e['kind'] == 'cast' else
@@ -888,6 +1012,7 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
         scene['actions'] = kept
         _shots(scene, path, by_id, cast_by_id, offered, repairs, named)
         _board_pictures(scene, path, by_id, repairs)
+        namer.story.update(e['ref'] for e in scene['elements'] if e['kind'] == 'picture')
         _clamp(scene['atmosphere'], 'density', 0, 1, path + '.atmosphere', repairs)
         _clamp(scene, 'hold_s', 0, None, path, repairs)
         forced = ('whiteboard' if style['mode'] == 'whiteboard' else

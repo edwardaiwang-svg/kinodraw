@@ -36,7 +36,7 @@ def plan_v3(doc_or_script, provider=None):
             b['visuals'] = scientific[b['id']]
     name = provider if isinstance(provider, str) else (
         getattr(provider, 'name', type(provider).__name__) if provider is not None else 'rules')
-    repairs, reason, candidates, help_ = [], None, None, None
+    repairs, reason, candidates, help_, kept = [], None, None, None, []
     try:
         if provider is not None and provider != 'rules':
             if isinstance(provider, str):
@@ -67,7 +67,7 @@ def plan_v3(doc_or_script, provider=None):
             answer = provider.direct_plan(payload, usage)
             if not isinstance(answer, dict):
                 raise ProviderError('the v3 answer must be a JSON object')
-            plan, repairs = validate(answer, board, candidates)
+            plan, repairs = validate(answer, board, candidates, kept)
             repairs += literal(plan, board)
             repairs = [f'{name}: {note}' for note in getattr(provider, 'served_repairs', None) or []] + repairs
         else:
@@ -76,6 +76,6 @@ def plan_v3(doc_or_script, provider=None):
         help_ = errors.explain(error, name)          # in plain words, with what to do; never a key
         reason = errors.message(error, name)
         plan = from_rules(board)
-    return plan, {'repairs': repairs, 'provider': name, 'seconds': time.monotonic() - started,
+    return plan, {'repairs': repairs, 'kept_pictures': kept, 'provider': name, 'seconds': time.monotonic() - started,
                   'usage': usage, 'fallback': reason is not None, 'fallback_reason': reason, 'fallback_help': help_,
                   'notes': [f'The offline v3 director planned this video ({reason})'] if reason else repairs}
