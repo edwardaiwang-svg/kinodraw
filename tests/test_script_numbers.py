@@ -51,3 +51,25 @@ def test_money_with_a_scale_keeps_its_written_form_in_the_captions():
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     assert ' '.join(c['text'] for c in tl['captions']) == 'Q3 revenue hit $4.2M. Costs were $3.56M.'
     assert not [e for e in validate(board)['errors'] if 'punctuation' in e]
+
+
+NEWS = ('ANCHOR: Good evening. The Elm Street Bridge reopens tomorrow.\n\n'
+        'REPORTER (V/O): Drivers took a detour down Route 9. The old bridge, built in 1958, failed.\n\n'
+        'REPORTER (V/O): The new bridge cost $4.2 million, most of it paid by the state Dept. of Transportation. '
+        'Crews will pull the last barrels at 6 a.m. Tues., Oct. 14.\n\n'
+        'SOT (Sam Okafor): About 2,300 cars a day used it, so the signals on Elm St. and River Rd. have been retimed.'
+        '\n\nREPORTER (STAND-UP): The ribbon cutting is at 10 a.m. Saturday. Mail it by Sept. 3, or Jan. 5, 2027.')
+
+
+def test_abbreviations_the_voice_expands_never_fail_the_make():
+    # Script 28: "6 a.m. Tues., Oct. 14." is said "six AM Tues., October fourteenth." and the whole make failed on
+    # "b006: clause punctuation differs between spoken and display text".
+    report = validate(board_of(NEWS))
+    assert not [e for e in report['errors'] if 'punctuation' in e], report['errors']
+
+
+@pytest.mark.parametrize('text', ['the state Dept. of Transportation', 'on Elm St. and River Rd. today',
+                                  'at 6 a.m. Tues., Oct. 14 sharp', 'on Mon. Feb. 2 we left'])
+def test_an_abbreviation_period_is_no_clause_break(text):
+    from kinodraw.engine.captions import clause_marks
+    assert [m.group() for m in clause_marks(text, 'en')] == [','] * text.count(',')

@@ -422,6 +422,21 @@ def quote_speakers(board_beats: list[dict], plan: dict | None):
 
 TITLE_HOLD = 2.2          # seconds a silent title card holds before the first line
 DIRECTION_HOLD = .8       # seconds a line that is only a stage direction holds (room for the action, no dead air)
+PASSING_HOLD = .2         # seconds a direction nobody can act out takes: its page passes, never a frozen picture
+
+
+def _direction_hold(text: str, people: set) -> float:
+    """A line that is only a stage direction holds for its action when the page can act it out (a movement one of
+    the ``people``, casefolded names, performs: engine.acting's verbs), else it passes at once: a silent hold over a
+    still picture is a freeze ("a little girl jumping in puddles" on a TV screen is no one on the page)."""
+    from .engine.acting import VERB_RE
+    for sentence in re.split(r'(?<=[.!?;])\s+', text):
+        for _, pattern in VERB_RE:
+            m = pattern.search(sentence)
+            before = set(re.findall(r"[\w’']+", sentence[:m.start()].casefold())) if m else ()
+            if m and (before & people or before & {'he', 'she', 'they', 'everyone'}):
+                return DIRECTION_HOLD
+    return PASSING_HOLD
 
 
 def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -> dict:
@@ -464,10 +479,12 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
     if callable(available):
         available = available() if people else None     # ask the voice engine only when a character speaks
     voices = cast_voices(people, narrator, lang, available)
+    people_named = {w for key in labels for w in key.split()} | {     # the cast on the page, not the story's extras
+        w for c in (plan or {}).get('cast') or () for w in name_key(c.get('name') or '').split()}
     out = {}
     for b in beats:
         parts = [(s, *voices.get(s.speaker, (narrator, 1.))) for s in found[b['id']]]
-        hold = None if parts else TITLE_HOLD if b['silent'] else DIRECTION_HOLD
+        hold = None if parts else TITLE_HOLD if b['silent'] else _direction_hold(b['display'], people_named)
         out[b['id']] = {'parts': parts, 'hold': hold}
     return out
 

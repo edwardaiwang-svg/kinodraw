@@ -256,3 +256,54 @@ def test_a_bubbled_line_leaves_the_caption_to_the_narrator():
     assert all(len(c['words']) == len(c['text'].split()) for c in tl['captions'])
     plain = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     assert "Mine's broken" in ' '.join(c['text'] for c in plain['captions'])         # no bubbles, no change
+
+
+def test_a_narration_caption_shows_only_while_its_own_words_are_said():
+    # Script 01 (r02): with the quotes left to the bubbles, "he whispered." showed over "Mama,", "Grandma Moss blinked
+    # one slow blink." stayed up through her whole line, and "said Pip." came up before his line was over.
+    board = board_of('"Mama," he whispered. "The moon is gone."\n\n'
+                     'Grandma Moss blinked one slow blink. "Nobody takes the moon, little one. '
+                     'Sometimes it just goes behind something for a while."\n\n'
+                     '"It was there the whole time," said Pip.')
+    bubbled = {b['id']: [(m.start() + 1, m.end() - 1) for m in re.finditer(r'"[^"]*"', b['spoken']['en'])]
+               for b in board['beats']}
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'), bubbled=bubbled)
+    quotes = []
+    for bid, spans in bubbled.items():
+        info = tl['beats'][bid]
+        ct = info['char_times']
+        quotes += [(info['start'] + ct[a], info['start'] + ct[b - 1]) for a, b in spans]
+    assert [c['text'] for c in tl['captions']] == ['he whispered.', 'Grandma Moss blinked one slow blink.',
+                                                   'said Pip.']
+    for c in tl['captions']:
+        for a, b in quotes:
+            assert min(c['end'], b) - max(c['start'], a) <= .5, (c, (a, b))     # never over a bubbled line
+        assert c['words'][0] - c['start'] <= .3                                  # up when its first word is said
+
+
+def test_a_stage_direction_takes_place_across_its_silent_hold():
+    # Script 04 (r02): "[WALT clicks through menus. The TV shows a grainy home video ...]" held 1.2 s in silence with
+    # every one of its words timed at its first instant, so its shots and actions all landed at once and the picture
+    # froze for the rest of the hold (frozen_picture at 33.4-34.5 s).
+    board = board_of(SCREENPLAY)
+    clips = timeline.synthetic_clips(board, 'en')
+    direction = board['beats'][1]
+    n = len(direction['spoken']['en'])
+    clips[direction['id']] = {'speech': 1.2, 'char_times': [0.] * n}           # voice.silence(): nobody says it
+    times = timeline.layout(board, 'en', clips)['beats'][direction['id']]['char_times']
+    later = direction['spoken']['en'].index('WALT')
+    assert times[0] == 0 and 0 < times[later] < 1.2 and times == sorted(times) and times[-1] < 1.2
+
+
+def test_a_direction_nobody_can_act_out_takes_no_silent_hold():
+    # Script 04 (r02 qa_failed): "[Living room. JULES is sprawled on the couch ...]" and "[WALT clicks through
+    # menus ...]" each held 1.2 s of silence on a picture where nothing moves (frozen_picture). A direction with a
+    # movement the page acts out ("walks in") keeps its hold; one with none passes at once.
+    board = board_of(SCREENPLAY + "\n\n[DANA walks in with two mugs.]\n\n[WALT clicks. The TV shows a girl jumping in puddles.]")
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    RulesDirector('en').direct(board)
+    parts = speech.voice_parts(board, from_rules(board), 'af_heart', available=None)     # the story's extras too
+    still, moving, screen = board['beats'][1]['id'], board['beats'][-2]['id'], board['beats'][-1]['id']
+    assert parts[moving]['hold'] == speech.DIRECTION_HOLD
+    assert parts[still]['hold'] < .3 and parts[screen]['hold'] < .3

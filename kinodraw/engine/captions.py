@@ -44,7 +44,7 @@ def clause_marks(text, lang):
     must share. A period that ends an abbreviation ("p.m.", "Dr.", "U.S.") is not one."""
     pat = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
     return [m for m in pat.finditer(text)
-            if not (lang != 'zh' and m.group() == '.' and ABBREVIATIONS.search(text[:m.end()]))]
+            if not (lang != 'zh' and m.group() == '.' and _abbreviated(text[:m.end()]))]
 
 
 def clause_spans(text, lang):
@@ -122,19 +122,29 @@ def split_long(text, lang, fits=fits):
 
 
 # Periods that end an abbreviation, not a sentence: titles, "a.m."/"p.m.", and initialisms such as "U.S.".
-ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m)\.|'
-                           r'(?:[A-Z]\.){2,})$', re.I)
+_ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m)\.|'
+                            r'(?:[A-Z]\.){2,})$', re.I)
+# Capitalised only, so a sentence ending "in the sun." or "she sat." still ends: months, weekdays, streets, offices.
+_CAPITAL_ABBREVIATIONS = re.compile(
+    r'(?:^|[\s(])(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun|'
+    r'Rd|Ave|Blvd|Ln|Hwy|Rte|Dept|Gov|Sen|Rep|Gen|Capt|Lt|Sgt|Col|Inc|Corp|Ltd|Co|Bros|Univ|Assn|Fig|Vol|Ch)\.$')
+
+
+def _abbreviated(text):
+    """Does ``text`` end with an abbreviation's period ("p.m.", "Dr.", "U.S.", "Oct.", "Rd.", "Dept.")?"""
+    return bool(_ABBREVIATIONS.search(text) or _CAPITAL_ABBREVIATIONS.search(text))
 
 
 def sentence_end(text):
     """Does this caption text end a sentence? A cue never runs on into the next sentence."""
     text = text.rstrip().rstrip(CLOSERS + '"”’」』)）')
-    return bool(text) and text[-1] in '.!?…。！？' and not ABBREVIATIONS.search(text)
+    return bool(text) and text[-1] in '.!?…。！？' and not _abbreviated(text)
 
 
-def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False):
+def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False, gaps=()):
     """char_time(pos) -> seconds from beat start; fits(text, lang) -> bool. Returns [(start, end, text)], with
-    ``words`` [(start, end, text, [the time each of word_spans(text) is said])]."""
+    ``words`` [(start, end, text, [the time each of word_spans(text) is said])]. ``gaps``: (start, end) seconds
+    from beat start of lines said in a speech bubble instead; no caption runs across one or shows over it."""
     display = _sentence_spacing(display, lang)
     sd, ss = clause_spans(display, lang), clause_spans(spoken, lang)
     # Captions include closing marks; spoken spans still index the original character times.
@@ -173,8 +183,10 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
         # A period inside an open quotation ("Come here. Now.") does not end the narrating sentence.
         quoted = said.count('“') > said.count('”') or said.count('"') % 2 == 1
         said += text
+        # Words said either side of a line left to a speech bubble are never one caption.
+        apart = cur_spots and spots and _between(gaps, char_time(int(cur_spots[-1])), char_time(int(spots[0])))
         if cur and (not fits(trial, lang) or (len(cur.strip()) >= minimum and len(trial.strip()) > target)
-                    or (sentence_end(cur) and not quoted)):
+                    or (sentence_end(cur) and not quoted) or apart):
             cues.append((cur_pos, cur, cur_spots))
             cur, cur_pos, cur_spots = text, pos, spots
         else:
@@ -191,15 +203,26 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
     out = []
     for i, (pos, text, spots) in enumerate(cues):
         start = 0. if i == 0 else max(0., char_time(int(pos)) - .05)
+        first = char_time(int(spots[0])) if spots else start
+        if _between(gaps, -1., first):              # after a bubbled line: up as its own first word is said
+            start = max(start, first - .05)
         lead, said = len(text) - len(text.lstrip()), [start]
         for a, _ in word_spans(text.strip(), lang):
             said.append(max(said[-1], char_time(int(spots[lead + a]))))
-        out.append([start, None, text.strip(), said[1:]])
+        out.append([start, None, text.strip(), said[1:], char_time(int(spots[-1])) if spots else start])
     for i in range(len(out)):
-        out[i][1] = out[i + 1][0] if i + 1 < len(out) else speech_end
+        until = out[i + 1][0] if i + 1 < len(out) else speech_end
+        last = out[i].pop()
+        bubble = _between(gaps, last, until)
+        out[i][1] = min(until, max(bubble[0], last + .15)) if bubble else until   # gone when a bubbled line starts
         if out[i][1] <= out[i][0]:
             out[i][1] = out[i][0] + .4
     return [tuple(c) if words else tuple(c[:3]) for c in out]
+
+
+def _between(gaps, a, b):
+    """The first gap (start, end) that starts after ``a`` and before ``b``, else None."""
+    return next((g for g in sorted(gaps) if a < g[0] < b), None)
 
 
 def word_spans(text, lang):

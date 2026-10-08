@@ -129,7 +129,7 @@ def _contrast(palette, repairs):
             return
 
 
-def _cover(scenes, ids, treatment, repairs):
+def _cover(scenes, ids, treatment, repairs, titles=()):
     owners = {}
     known = set(ids)
     supplied = []
@@ -149,6 +149,11 @@ def _cover(scenes, ids, treatment, repairs):
         if owner is None:
             scene = _default(SCENE)
             scene['beat_ids'], scene['treatment'] = [bid], treatment
+            if bid in titles:
+                # A title beat (a plan saved before it existed) is a title card from the heading, never an empty
+                # page: the whiteboard's hand-drawn card, or the heading as title type where scenes are motion.
+                scene['treatment'] = 'kinetic_type' if treatment == 'motion' else 'whiteboard'
+                scene['text'] = {'kind': 'title', 'ref': bid}
             out.append(scene)
             repairs.append(f'scenes: added missing beat {bid}')
         elif out and previous == owner:
@@ -704,7 +709,8 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
     out['storyboard']['sections'] = [intents[sid] for sid in sections]
 
     default_treatment = 'motion' if style['mode'] == 'motion' else 'whiteboard'
-    out['scenes'] = _merge_diagram_scenes(_cover(out['scenes'], list(by_id), default_treatment, repairs),
+    titles = {bid for bid, b in by_id.items() if b.get('kind') == 'title'}
+    out['scenes'] = _merge_diagram_scenes(_cover(out['scenes'], list(by_id), default_treatment, repairs, titles),
                                           script_beats, repairs)
     for i, scene in enumerate(out['scenes']):
         path = f'scenes[{i}]'
