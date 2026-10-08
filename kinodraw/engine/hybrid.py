@@ -1719,18 +1719,16 @@ class HybridProduction:
         end_start = self.tl['end_card']['start']
         if t >= end_start:
             last = self.spans[-1]
+            # The old scene clears onto the card's blank page before the card's words appear (end_card 'appear'):
+            # never a dissolve that layers the old scene's text under the card's.
+            clear = min(last.join_length, self.tl['end_card'].get('appear', end_start + last.join_length) - end_start)
             if (last.spec['treatment'] != 'whiteboard' and not last.source_proof and not last.scientific
-                    and t < end_start + last.join_length):
-                # Keep the existing endcard clock; ease out of a cinematic scene
-                # instead of making an extra unaligned hard cut at its boundary.
+                    and t < end_start + clear):
                 previous = self._frame(last, end_start - 1 / 30, quotes=False)
-                # A storybook ends on the end card's blank page: the whiteboard camera is still crossing its own
-                # legacy pages (labelled icons, people) during the join, which never belong in a story.
-                card_t = max(t, end_start + last.join_length) if last.story is not None else t
-                current = self.whiteboard.frame(card_t).convert('RGB')
+                current = self.whiteboard.frame(t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start, *self.size,
                                           kind='page' if last.story is not None and self.story_genre else 'match',
-                                          duration=last.join_length)      # a picture book turns to its last page
+                                          duration=clear)      # a picture book turns to its last page
                 image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
                     self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)

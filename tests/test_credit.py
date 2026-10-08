@@ -24,9 +24,10 @@ def test_a_video_ends_with_the_credit_unless_it_is_switched_off(tmp_path):
     board = _board(tmp_path)
     clips = timeline.synthetic_clips(board, 'en')
     on, off = timeline.layout(board, 'en', clips), timeline.layout(board, 'en', clips, credit=False)
-    assert on['credit'] == on['end_card'] and on['end_card']['end'] == on['duration']   # on the closing card itself
+    end = on['end_card']
+    assert on['credit'] == {'start': end['start'], 'end': end['end']} and end['end'] == on['duration']  # on the card
     assert off['credit'] is None and off['end_card'] == on['end_card']              # no longer for it
-    assert 1.5 <= on['duration'] - on['end_card']['start'] <= 4.0                    # short
+    assert end['end'] - end['ready'] >= end['read'] and end['end'] - end['start'] <= 5.0   # read, and still short
 
 
 def test_the_cli_switch_is_remembered_in_the_project(tmp_path, monkeypatch):

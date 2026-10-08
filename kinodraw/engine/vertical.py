@@ -224,12 +224,13 @@ class PortraitFrame:
 
     def _credit(self, t):
         cr = self.tl.get('credit')
-        if not cr or t < cr['start']:                 # on the closing card itself, never over the last words
+        start = max(cr['start'], (self.tl.get('end_card') or {}).get('appear', cr['start'])) if cr else 0.
+        if not cr or t < start:                       # with the closing card's words, never over the old scene
             return None, 0.
         from .. import PRODUCT
         from .auto_scenes import CREDIT_LINE
         return _credit_image(CREDIT_LINE[self.lang].format(**PRODUCT), PRODUCT['url'], self.lang, self.fonts,
-                             self._soft()), min(1., (t - cr['start']) / FADE_IN)
+                             self._soft()), min(1., (t - start) / FADE_IN)
 
     # ------------------------------------------------------------ frame
     def frame(self, t):

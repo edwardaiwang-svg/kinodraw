@@ -1,6 +1,6 @@
-"""How a video closes (engine/closing.py): the closing card holds about a tenth of the video (1.5-4 s, only the short
-tail under 20 s) with the "Made with ..." credit on the same card; an ad, notice or invitation closes on its own call
-to action and key information, a greeting on its wish, and only a story on "The End"."""
+"""How a video closes (engine/closing.py): the finished closing card holds for its reading time (card_timing; see
+test_closing_hold.py) with the "Made with ..." credit on the same card; an ad, notice or invitation closes on its own
+call to action and key information, a greeting on its wish, and only a story on "The End"."""
 import pytest
 
 from kinodraw import ingest, script
@@ -60,10 +60,12 @@ def card_text(board, tl, tmp_path):
     return prod, els, [' '.join(getattr(e.drawing, 'lines', None) or []) for e in els]
 
 
-def test_the_tail_is_about_a_tenth_of_the_video_and_short_for_a_short_piece():
-    assert closing().tail_seconds(6) == closing().tail_seconds(19.9) == 1.5
-    assert closing().tail_seconds(30) == pytest.approx(3.0)
-    assert closing().tail_seconds(74) == closing().tail_seconds(600) == 4.0
+def test_the_reading_time_is_a_rate_a_word_with_a_floor_and_a_short_floor_for_a_short_piece():
+    c = closing()
+    assert c.reading_seconds(3, 6) == 1.8 and c.reading_seconds(3, 74) == 2.5
+    assert c.reading_seconds(20, 13) == c.reading_seconds(20, 74) == pytest.approx(6.0)
+    short, long_ = c.card_timing(3, 6), c.card_timing(6, 74)
+    assert short['quick'] and short['draw'] == 0 and not long_['quick'] and long_['draw'] >= c.DRAW_MIN
 
 
 @pytest.mark.parametrize('paragraphs', [1, 5, 12, 30])
@@ -74,9 +76,8 @@ def test_the_closing_card_scales_with_the_video_and_the_credit_is_on_it(paragrap
     tl = layout(board)
     end = tl['end_card']
     body = end['start']
-    want = 1.5 if body < 20 else min(4., max(1.5, body * .1))
-    assert end['end'] - end['start'] == pytest.approx(want, abs=.04)
-    assert tl['credit'] == end                                    # one card, the credit merged in
+    assert end['end'] - end['ready'] >= closing().reading_seconds(5, body) - 1 / 30   # "The End" + "Thanks ..."
+    assert tl['credit'] == {'start': end['start'], 'end': end['end']}   # one card, the credit merged in
     off = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'), credit=False)
     assert off['credit'] is None and off['duration'] == tl['duration']
 
@@ -89,13 +90,12 @@ def test_an_ad_closes_on_its_own_call_to_action_not_the_end(tmp_path):
     assert 'Come early!' in said and 'corner of Elm and Fifth' in said
     assert 'The End' not in said and 'Thanks for watching' not in said
     assert any('Made with' in t for t in texts)                   # the credit line stays, on the same card
-    # A short piece's card is shown at once, not written slowly by the hand, and is up in time to be read.
+    # A short piece's card is shown at once, not written slowly by the hand, as soon as the old scene has cleared.
     end = tl['end_card']
-    assert end['end'] - end['start'] == pytest.approx(1.5, abs=.04)
     assert all(not e.hand for e in els)
-    assert max(e.start + e.drawing.duration / e.rate for e in els) <= end['start'] + .7
-    assert closing().closing(board, 'en') == {'kind': 'info',
-                                              'items': ['Two Ovens Bakery, corner of Elm and Fifth', 'Come early!']}
+    assert max(e.start + e.drawing.duration / e.rate for e in els) <= end['appear'] + .2
+    assert closing().closing(board, 'en')['items'] == ['Every Saturday at 7 a.m.', 'Just $3.50 each',
+                                                       'Two Ovens Bakery, corner of Elm and Fifth', 'Come early!']
 
 
 def test_a_contact_card_shows_every_contact_as_written(tmp_path):
@@ -108,8 +108,8 @@ def test_a_contact_card_shows_every_contact_as_written(tmp_path):
 
 
 def test_an_invitation_read_as_a_story_still_closes_on_its_time_and_place():
-    assert closing().closing(board_of(INVITE, 'story'), 'en') == {'kind': 'info',
-                                                               'items': ['Party sat 6pm, our back yard']}
+    close = closing().closing(board_of(INVITE, 'story'), 'en')
+    assert (close['kind'], close['items']) == ('info', ['Party sat 6pm, our back yard'])
 
 
 def test_a_greeting_closes_on_its_wish():
@@ -129,10 +129,8 @@ def test_a_long_card_is_written_with_time_left_to_read_it(tmp_path):
     board = board_of(CONTACTS.replace('Find the drip first.', tips + '\n\nFind the drip first.'), 'launch/promo')
     tl = layout(board)
     end = tl['end_card']
-    span = end['end'] - end['start']
-    assert span == pytest.approx(4.0, abs=.04)
     _, els, texts = card_text(board, tl, tmp_path)
     done = {e.group: max(x.start + x.drawing.duration / x.rate for x in els if x.group == e.group) for e in els}
-    assert all(e.hand for e in els)                                        # a long card is written by the hand
-    assert done['endcard'] <= end['start'] + .6 * span + .05               # its words are up with time to read them
-    assert done['credit'] <= end['end'] - .25
+    assert all(e.hand for e in els if e.group == 'endcard')                # a long card is written by the hand
+    assert max(done.values()) <= end['ready'] + 1 / 30                     # complete, credit too, by its ready time
+    assert end['end'] - end['ready'] >= end['read'] >= 2.5                 # and then read
