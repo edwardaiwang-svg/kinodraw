@@ -311,3 +311,10 @@ def test_two_counts_in_a_row_are_said_as_a_list():
     assert said == 'three kids, two grandkids'
     said = speech.said_text(numbers.normalize('3 times 2 is 6', 'en').spoken, 'en')[0]
     assert ',' not in said
+
+
+def test_board_fragments_join_with_a_space_when_nothing_is_typeset():
+    from kinodraw.engine import process_diagrams as pd
+    assert pd.typeset('Half a load ... almost the same water as a full one') == \
+        'Half a load almost the same water as a full one'
+    assert pd.typeset('Mon. & Tue.') == 'Mon. & Tue.'

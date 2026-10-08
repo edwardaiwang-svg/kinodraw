@@ -120,7 +120,7 @@ def typeset(words: str) -> str:
     out = ' '.join(_typeset(p) for p in parts)
     bare = lambda s: re.sub(r'[\s.,;:!?]', '', s)
     # Nothing spoken to write as math: the text is already written ("Mon. & Tue.", "8 a.m.–2 p.m."), keep it as is.
-    return words.strip() if bare(out) == bare(words) else out
+    return re.sub(r'\s*(?:\.\.\.|…)\s*', ' ', words.strip()).strip() if bare(out) == bare(words) else out
 
 
 DETERMINERS = {'a', 'an', 'the', 'this', 'that', 'each', 'every', 'any', 'which', 'another', 'no'}
