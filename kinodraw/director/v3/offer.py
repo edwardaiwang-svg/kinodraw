@@ -291,6 +291,7 @@ class Sense:
                                                             for x in texts)}
         self._vectors: dict = {}
         self._spans: dict = {}
+        self._fits: dict = {}
         self._rows = None
 
     # ------------------------------------------------------------ words
@@ -324,6 +325,11 @@ class Sense:
     # ------------------------------------------------------------ pictures
     def fits(self, did: str, key: str, text: str, a: int, b: int) -> bool:
         """Does the word at text[a:b] (``key``, singular) name this picture in the sense its sentence uses it?"""
+        if (did, key, text, a, b) not in self._fits:
+            self._fits[did, key, text, a, b] = self._fit(did, key, text, a, b)
+        return self._fits[did, key, text, a, b]
+
+    def _fit(self, did: str, key: str, text: str, a: int, b: int) -> bool:
         if self.lang != 'en':
             return True                                   # other languages: every word
         if self.no_people and _person(did):
@@ -414,10 +420,15 @@ def _sentence(text: str, at: int) -> tuple[int, int]:
 
 def _staged(did: str, text: str, a: int, b: int) -> bool:
     """Do the curated story tables (staging.OBJECTS and PLACES) give this picture to the words at text[a:b]?"""
+    return any(did in pics and start < b and a < end for start, end, pics in _staging(text))
+
+
+@lru_cache(maxsize=256)
+def _staging(text: str) -> tuple:
+    """(start, end, pictures) of every phrase of the text the curated story tables stage."""
     from .staging import _tables
     places, objects = _tables()
-    return any(did in pics and any(m.start() < b and a < m.end() for m in pattern.finditer(text))
-               for pattern, pics, _ in places + objects)
+    return tuple((m.start(), m.end(), pics) for pattern, pics, _ in places + objects for m in pattern.finditer(text))
 
 
 class Offer:
