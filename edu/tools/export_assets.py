@@ -22,21 +22,22 @@ from kinodraw.library import ASSETS as DOODLES, banned, catalog, resolve   # noq
 OUT = HERE / 'extension' / 'assets'
 APP = DOODLES.parent                                           # kinodraw/assets
 MUSIC = ('fresh_focus', 'natural_vibes')                       # the two tracks the default mix uses
+SETS = ('bespoke', 'fluent')       # what the rules director draws from (Python's: no imported packs, no creature presets)
 
 
 def main():
     if OUT.exists():
         shutil.rmtree(OUT)
     (OUT / 'doodles').mkdir(parents=True)
-    entries = catalog()
+    entries = {i: e for i, e in catalog().items() if e['set'] in SETS}
     ids = sorted(entries)
     lean = {i: {'desc': e.get('desc', ''), 'category': e.get('category', ''), 'en': e.get('en') or [],
                 'set': e['set']} for i, e in entries.items()}
     (OUT / 'catalog.json').write_text(json.dumps({'ids': ids, 'entries': lean}, ensure_ascii=False))
     for kind in ('embed', 'picture'):                          # same table order as match._table: sorted ids
         vec_ids, vecs = catalog_vectors('en', kind)
-        assert list(vec_ids) == ids, kind
-        (OUT / f'{kind}-en.f32').write_bytes(vecs.astype('<f4').tobytes())
+        row = {did: n for n, did in enumerate(vec_ids)}
+        (OUT / f'{kind}-en.f32').write_bytes(vecs[[row[did] for did in ids]].astype('<f4').tobytes())
     data = banned()
     (OUT / 'banned.json').write_text(json.dumps({'doodles': sorted(data['doodles']),
                                                  'words': {'en': sorted(data['words']['en'])}}, ensure_ascii=False))
