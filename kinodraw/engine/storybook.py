@@ -517,6 +517,9 @@ class Storybook:
     def prepare(self, spec, start, end):
         """Shots for one scene span (local seconds), from its beats' sentences and the plan's cast; a scene whose plan
         gives shots is staged from them (engine.shots)."""
+        pages = self._chat_pages(spec, start, end)
+        if pages:
+            return self._titled(spec, pages)
         if spec.get('shots'):
             return self._titled(spec, self.planned.prepare(spec, start, end))
         shots = []
@@ -576,6 +579,62 @@ class Storybook:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
             shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
         return self._titled(spec, shots)
+
+    # Where the senders of a chat log are, each in their own place (a place their own messages name comes first).
+    CHAT_HOMES = ('living_room', 'kitchen', 'bedroom', 'study', 'office', 'cafe', 'park', 'bus')
+
+    def _chat_pages(self, spec, start, end):
+        """A pasted chat log's pages (speech.Labels.chat): each message cuts to its sender alone in their own place
+        with their phone, reacting to it; nobody else is on the page, since the senders are apart. A notice or the
+        header keeps the page before it (the phone screen covers those). [] when the scene holds no chat message
+        or a sender is not in the cast."""
+        from ..speech import labels_in, label_key, screenplay_labels
+        from ..director.v3.story import Sentence, name_key, places_in
+        if not hasattr(self, '_chat'):
+            self._chat = screenplay_labels(b.get('text') or b['spoken'] for b in self.by_id.values())
+            self._homes = {}
+        if not self._chat.chat:
+            return []
+        pages = []
+        for bid in spec['beat_ids']:
+            beat = self.by_id[bid]
+            spoken = beat['spoken']
+            found = labels_in(spoken, self._chat)
+            if not found:
+                continue
+            key = label_key(found[0][2])
+            cid = next((c for c, v in self.cast.items() if v.get('name') and key in (
+                name_key(v['name']), name_key(v['name']).split()[0], c.casefold())), None)
+            if cid is None:
+                return []
+            body = spoken[found[0][1]:]
+            if cid not in self._homes:
+                own = ' '.join(b['spoken'][f[1]:] for b in self.by_id.values() for f in labels_in(b['spoken'], self._chat)
+                               if label_key(f[2]) == key)
+                named = [p for p in places_in(own) if p in sets.SETS and p not in self._homes.values()]
+                free = [p for p in self.CHAT_HOMES if p not in self._homes.values()]
+                self._homes[cid] = (named or free or list(self.CHAT_HOMES))[0]
+            timing = self.tl['beats'][bid]
+            times = timing['char_times']
+            at = lambda char, timing=timing, times=times: (timing['start'] - start +
+                                                           (times[min(char, len(times) - 1)] if times else 0.))
+            happy = re.search(r'\b(?:lol|lmao|haha\w*|yay|yes+|love|thanks?|thx|ty)\b|[😂🤣😄😊😁🎉❤️👍🥳]|!', body, re.I)
+            upset = re.search(r'\b(?:no+|oh\s+no|omg|ugh|forgot|late|sorry|help)\b|[😩😱😬😭😢😡]|\?\?', body, re.I)
+            pose = 'scared' if upset and not happy else 'happy' if happy else 'look'
+            line = Sentence(0, len(spoken), spoken, present=[cid], subject=cid, poses={cid: (pose, found[0][1])},
+                            place=self._homes[cid],
+                            things=[{'doodle': 'fl_mobile_phone', 'role': 'hand', 'homes': (), 'at': found[0][1],
+                                     'end': found[0][1], 'on': None, 'motion': None, 'target': False}])
+            shot = self._shot(line, timing['start'] - start, at, [cid], [], spec, None, bid)
+            shot.bubbles = []                                  # a text is typed, never a speech bubble
+            pages.append(shot)
+        if not pages:
+            return []
+        pages[0].start = 0.
+        for shot, following in zip(pages, pages[1:]):
+            shot.end = following.start
+        pages[-1].end = end - start
+        return pages
 
     def _titled(self, spec, shots):
         """The story's title once, on the first page (a page read from the text or one staged from plan shots)."""
