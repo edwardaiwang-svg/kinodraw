@@ -478,9 +478,12 @@ def _attach(book, shot, figures, a):
         if t is None:
             t = _partner(shot, f, ahead=True)
         a.target = t.key if t is not None else None
-        a.x0 = a.x1 = f.x
+        a.x0 = a.x1 = _here(f)
         if t is not None:
-            side = 1 if t.x > f.x else -1
+            side = 1 if t.x > a.x0 else -1
+            reach = (half + book._half(t)) * .85
+            if abs(t.x - a.x0) > reach + .02:              # across the page: lunge in to reach it by the strike
+                a.x1 = t.x - side * reach
             if not acts:
                 f.facing = 'r' if side > 0 else 'l'
             hit = Act('knocked', t.key, a.start + STRIKE * a.seconds, f.key, 'out', a.word, a.beat, a.char)
@@ -623,7 +626,9 @@ def motion(book, f, shot, local) -> Motion:
             break
         u = (local - a.start) / max(.05, a.seconds)
         e = smooth(u)
-        if a.x0 is not None and a.x1 is not None and a.kind != 'swipe':
+        if a.x0 is not None and a.x1 is not None and a.kind == 'swipe':
+            x = a.x0 + (a.x1 - a.x0) * smooth(min(1., u / STRIKE))
+        elif a.x0 is not None and a.x1 is not None:
             x = a.x0 + (a.x1 - a.x0) * (e if a.kind not in ('run', 'knocked', 'fly') else min(1., u) ** .9)
         side = 1 if (a.x1 or 0) >= (a.x0 or 0) else -1
         travels = a.x0 is not None and a.x1 is not None and abs(a.x1 - a.x0) > .005

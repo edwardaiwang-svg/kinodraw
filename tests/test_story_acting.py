@@ -111,6 +111,22 @@ def test_a_burst_leaps_in_from_off_the_frame_at_its_word_and_a_swipe_sends_its_t
     assert state(prod, page2, hyena, sent + 1.5).gone                                       # flown off
 
 
+def test_a_swipe_at_someone_across_the_page_closes_in_before_the_paw_lands(tmp_path):
+    """r3 lion story: Kojo swiped the air at .29 while the hyena he "sent flying" stood at .80. The swiper lunges in
+    to reach its target by the strike, and stays there."""
+    text = ('# Night\n\nKojo stood tall. With one massive swipe of his heavy paw, he sent the lead hyena flying '
+            'into the bushes.')
+    beats = script.build(ingest.read(text), story='story')['beats']
+    cast = [('kojo', 'adult', 'stand'), ('pendo', 'baby', 'stand'), ('hyena', 'adult', 'stand')]
+    prod = staged(tmp_path, text, LIONS, shots=[shot(beats[0]['id'], 'Kojo stood', 'wide', cast)])
+    _, p, sent = page(prod, 'sent the lead hyena')
+    kojo, hyena = fig(p, 'kojo'), fig(p, 'hyena')
+    assert abs(kojo.x - hyena.x) > .35
+    start, strike, after = (state(prod, p, kojo, sent + d) for d in (-1., 0., 1.5))
+    touching = prod.storybook._half(kojo) + prod.storybook._half(hyena)                     # bodies meet
+    assert start.x == kojo.x and abs(strike.x - hyena.x) <= touching and after.x == strike.x
+
+
 def test_tiptoe_out_moves_at_its_word_and_fly_up_shrinks_to_a_speck(tmp_path):
     """Pip "tiptoed out of the burrow" with zero movement and Flick never flew up "until she was just a speck"
     (r01 critic, Pip): on plan shots the tiptoe carries Pip across the page from its word, on careful steps, and the
