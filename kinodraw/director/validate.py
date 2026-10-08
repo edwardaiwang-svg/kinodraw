@@ -18,9 +18,6 @@ SLOT_TYPES = {'cluster', 'quote', 'glossary', 'stat'}
 PAGE_TYPES = {'ladder', 'bars', 'coins', 'grid100', 'lanes', 'range', 'zones', 'levels', 'table', 'dial', 'flow',
               'split', 'calendar'}
 OTHER_TYPES = {'emphasis', 'stock', 'scientific'}
-EN_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’)])|—')
-ES_PUNCT = re.compile(r'[,.;:?!](?=\s|$|["”’»)])|—')
-ZH_PUNCT = re.compile(r'[，。；：？！、—]')
 MAX_SECTIONS = 8
 BRAND_KEYS = ('name', 'url', 'cta')
 
@@ -150,7 +147,8 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
         if c.get('id') not in order:
             errors.append(f"chapter {c.get('id')} has no beats")
     visual_ids = set()
-    punct = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
+    from ..engine.captions import clause_marks
+    punct = lambda text: [m.group() for m in clause_marks(text, lang)]     # the captions' own clause breaks
     for b in beats:
         bid = b.get('id')
         spoken = (b.get('spoken') or {}).get(lang, '')
@@ -160,7 +158,7 @@ def validate(board: dict, project_dir: Path | None = None) -> dict:
             continue
         if re.search(r'\d', spoken):
             errors.append(f'{bid}: digits in spoken text ({spoken[:50]})')
-        if punct.findall(spoken) != punct.findall(display):
+        if punct(spoken) != punct(display):
             errors.append(f'{bid}: clause punctuation differs between spoken and display text')
         if 'direction' in b:
             _direction(b, display, lang, library, errors, warnings)

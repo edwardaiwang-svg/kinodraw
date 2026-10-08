@@ -76,24 +76,50 @@ CURRENCIES = {'US$': ('dollar', 'dollars'), '$': ('dollar', 'dollars'), '€': (
 UNITS = {'km/h': 'kilometers per hour', 'mph': 'miles per hour', 'km': 'kilometers', 'kg': 'kilograms',
          'cm': 'centimeters', 'mm': 'millimeters', '°C': 'degrees Celsius', '°F': 'degrees Fahrenheit',
          '°': 'degrees', 'GB': 'gigabytes', 'MB': 'megabytes', 'TB': 'terabytes', 'GHz': 'gigahertz',
-         'kWh': 'kilowatt hours', 'MW': 'megawatts', 'GW': 'gigawatts', 'lbs': 'pounds', 'ft': 'feet'}
+         'kWh': 'kilowatt hours', 'MW': 'megawatts', 'GW': 'gigawatts', 'lbs': 'pounds', 'ft': 'feet',
+         'tbsp': 'tablespoons', 'Tbsp': 'tablespoons', 'tsp': 'teaspoons', 'oz': 'ounces', 'lb': 'pounds',
+         'ml': 'milliliters', 'mL': 'milliliters', 'g': 'grams', 'mg': 'milligrams', 'min': 'minutes',
+         'mins': 'minutes', 'hr': 'hours', 'hrs': 'hours', 'sec': 'seconds', 'secs': 'seconds', 'mi': 'miles'}
 FRACTIONS = {'1/2': 'one half', '1/3': 'one third', '2/3': 'two thirds', '1/4': 'one quarter',
              '3/4': 'three quarters', '1/5': 'one fifth', '1/10': 'one tenth'}
 SINGULAR = {'kilometers': 'kilometer', 'kilograms': 'kilogram', 'centimeters': 'centimeter',
             'millimeters': 'millimeter', 'degrees': 'degree', 'gigabytes': 'gigabyte', 'megabytes': 'megabyte',
-            'terabytes': 'terabyte', 'megawatts': 'megawatt', 'gigawatts': 'gigawatt', 'pounds': 'pound', 'feet': 'foot'}
+            'terabytes': 'terabyte', 'megawatts': 'megawatt', 'gigawatts': 'gigawatt', 'pounds': 'pound', 'feet': 'foot',
+            'tablespoons': 'tablespoon', 'teaspoons': 'teaspoon', 'ounces': 'ounce', 'milliliters': 'milliliter',
+            'grams': 'gram', 'milligrams': 'milligram', 'minutes': 'minute', 'hours': 'hour', 'seconds': 'second',
+            'miles': 'mile'}
+# A fraction before a noun reads as a cook or a teacher says it: "1/2 cup" is "half a cup", "1 1/2 cups" is
+# "one and a half cups". (phrase before a noun, phrase after a whole number)
+FRACTION_WORDS = {'1/2': ('half a', 'a half'), '1/3': ('a third of a', 'a third'),
+                  '2/3': ('two thirds of a', 'two thirds'), '1/4': ('a quarter', 'a quarter'),
+                  '3/4': ('three quarters of a', 'three quarters'), '1/8': ('an eighth of a', 'an eighth'),
+                  '3/8': ('three eighths of a', 'three eighths'), '5/8': ('five eighths of a', 'five eighths'),
+                  '7/8': ('seven eighths of a', 'seven eighths'), '1/5': ('a fifth of a', 'a fifth')}
+VULGAR = {'½': '1/2', '⅓': '1/3', '⅔': '2/3', '¼': '1/4', '¾': '3/4', '⅛': '1/8', '⅜': '3/8', '⅝': '5/8',
+          '⅞': '7/8', '⅕': '1/5'}
+# A four-digit number before one of these is a count ("1969 people"), not a year ("in 1969").
+NOT_PLURAL = {'was', 'is', 'has', 'as', 'this', 'its', 'his', 'us', 'thus', 'plus', 'yes', 'less', 'across',
+              'always', 'sometimes', 'perhaps', 'towards'}
+COUNT_NOUNS = {'people', 'children', 'men', 'women', 'feet', 'teeth', 'mice', 'geese', 'sheep', 'fish', 'deer',
+               'staff', 'personnel', 'cattle', 'police'}
 
 _cur = '|'.join(re.escape(c) for c in CURRENCIES)
 _scale = r'trillion|billion|million|thousand|tn|bn|mn|mm|[kmbt]'
 _month = (r'\b(?:January|February|March|April|May|June|July|August|September|October|November|December'
           r'|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)\.?')
 _unit = '|'.join(re.escape(u) for u in sorted(UNITS, key=len, reverse=True))
+_vulgar = '[' + ''.join(VULGAR) + ']'
+_frac = r'[1-9]/[2-8](?!\d)'
+_ampm = r'(?P<{0}>[aApP])(?:\.[mM]\.?|[mM](?![\w-]))'          # a.m., am, AM (a.m.'s period goes with it)
 EN_PATTERN = re.compile(
-    rf'(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>{_scale})\b)?'
+    rf'(?P<mixw>\d+)(?:\s+(?P<mixf>{_frac})|\s?(?P<mixv>{_vulgar}))(?:\s?(?P<munit>{_unit})(?![A-Za-z]))?'
+    rf'|(?P<vul>{_vulgar})(?:\s?(?P<vunit>{_unit})(?![A-Za-z]))?'
+    rf'|(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>{_scale})\b)?'
     rf'|(?P<ra>{NUM})\s?(?:-|–|to)\s?(?P<rb>{NUM})\s?(?P<rpct>%)'
     rf'|(?P<pct>-?(?:{NUM}))\s?%'
     rf'|(?P<month>{_month})\s(?P<day>\d{{1,2}})(?!\d|,\d)(?:st|nd|rd|th)?'
-    rf'|(?P<h>\d{{1,2}}):(?P<mi>\d{{2}})(?:\s?(?P<ampm>[ap])\.?m\.?)?'
+    rf'|(?P<h>\d{{1,2}}):(?P<mi>\d{{2}})(?:\s?{_ampm.format("ampm")})?'
+    rf'|(?P<hh>\d{{1,2}})\s?{_ampm.format("ampm2")}'
     rf'|(?P<ord>\d+)(?:st|nd|rd|th)\b'
     rf'|(?P<decade>1[1-9]\d0|20[0-9]0)s\b'
     rf'|(?P<ya>1[1-9]\d{{2}}|20\d{{2}})\s?(?:-|–)\s?(?P<yb>1[1-9]\d{{2}}|20\d{{2}})(?!\d)'
@@ -102,7 +128,8 @@ EN_PATTERN = re.compile(
     rf'|(?P<uamt>{NUM})\s?(?P<unit>{_unit})(?![A-Za-z])'
     rf'|#(?P<hash>\d+)'
     rf'|(?P<frac>\d+/\d+)'
-    rf'|(?P<ra2>{NUM})\s?–\s?(?P<rb2>{NUM})'
+    rf'|(?P<ra2>{NUM})\s?(?:–|-(?=\d{{1,3}}(?![\d,.]\d)\s?(?:{_unit}|[a-z])))\s?(?P<rb2>{NUM})'
+    rf'(?:\s?(?P<runit>{_unit})(?![A-Za-z]))?'
     rf'|(?P<year>(?<![\d.,$])(?:1[1-9]\d{{2}}|20\d{{2}})(?![\d%]|\.\d|,\d))'
     rf'|(?P<neg>(?<![\w.])-)?(?P<num>{NUM})'
 )
@@ -121,8 +148,47 @@ def en_year(token: str) -> str:
     return _plain(num2words(int(token), to='year'))
 
 
+def _fraction(frac: str, rest: str, whole: str | None = None) -> str:
+    """A fraction as said: after a whole number "and a half"; before a noun "half a cup"; else "one half"."""
+    before, after = FRACTION_WORDS.get(frac, (None, None))
+    if whole is not None:
+        return f"{en_number(whole)} and {after or _fraction(frac, '')}"
+    noun = re.match(r'\s+([a-z]+)', rest)
+    if before and noun and not noun.group(1).endswith('s') and noun.group(1) not in ('of', 'and', 'or', 'to', 'in'):
+        return before
+    a, b = frac.split('/')
+    return FRACTIONS.get(frac, f'{en_number(a)} {en_number(b)}')
+
+
+def _price(whole: str, cents: str) -> str:
+    """A dollar price as an ad reads it: $3.50 is "three fifty", $0.99 "ninety-nine cents", $1.05 "one oh five"."""
+    if int(whole) == 0:
+        return f"{en_number(cents)} cent{'s' if int(cents) != 1 else ''}"
+    return f"{en_number(whole)} {'oh ' + en_number(cents) if int(cents) < 10 else en_number(cents)}"
+
+
+def _clock(hour: int, minute: int | None, ampm: str | None) -> str | None:
+    if hour > 24 or (minute is not None and minute > 59) or (ampm and not 1 <= hour <= 12):
+        return None
+    words = en_number(str(hour))
+    if minute:
+        words += f" oh {en_number(str(minute))}" if minute < 10 else f" {en_number(str(minute))}"
+    elif minute == 0 and not ampm:
+        words += " o'clock"
+    return words + (f" {ampm.upper()}M" if ampm else '')
+
+
 def _en_speak(m: re.Match) -> str:
     g = m.groupdict()
+    rest = m.string[m.end():]
+    if g['mixw']:
+        unit = f" {UNITS[g['munit']]}" if g['munit'] else ''
+        return _fraction(g['mixf'] or VULGAR[g['mixv']], rest, g['mixw']) + unit
+    if g['vul']:
+        if g['vunit']:
+            first, _, more = UNITS[g['vunit']].partition(' ')
+            return _fraction(VULGAR[g['vul']], ' unit') + f" {SINGULAR.get(first, first)}{' ' + more if more else ''}"
+        return _fraction(VULGAR[g['vul']], rest)
     if g['cur']:
         one, many = CURRENCIES[g['cur']]
         amount = g['camt']
@@ -130,6 +196,8 @@ def _en_speak(m: re.Match) -> str:
             return f"{en_number(amount)} {SCALES[g['cscale'].lower()]} {many}"
         if re.fullmatch(r'[\d,]+\.\d\d', amount) and not amount.endswith('.00') and one == 'dollar':
             whole, cents = amount.replace(',', '').split('.')
+            if int(whole) < 1000:
+                return _price(whole, cents)
             unit = one if int(whole) == 1 else many
             return f"{en_number(whole)} {unit} and {en_number(cents)} cents"
         return f"{en_number(amount)} {one if Decimal(amount.replace(',', '')) == 1 else many}"
@@ -142,13 +210,10 @@ def _en_speak(m: re.Match) -> str:
         month = MONTHS[g['month'].rstrip('.').lower()[:3]]
         return f"{month} {num2words(int(g['day']), to='ordinal')}"
     if g['h']:
-        hour, minute = int(g['h']), int(g['mi'])
-        if hour > 24 or minute > 59:
-            return None
-        words = en_number(str(hour)) + (" o'clock" if minute == 0 and not g['ampm'] else
-                                          '' if minute == 0 else
-                                          f" oh {en_number(str(minute))}" if minute < 10 else f" {en_number(str(minute))}")
-        return words + (f" {g['ampm']} m" if g['ampm'] else '')
+        return _clock(int(g['h']), int(g['mi']), g['ampm'])
+    if g['hh']:
+        said = _clock(int(g['hh']), None, g['ampm2'])
+        return said or en_number(g['hh']) + m.group()[len(g['hh']):]
     if g['ord']:
         return num2words(int(g['ord']), to='ordinal')
     if g['decade']:
@@ -168,11 +233,17 @@ def _en_speak(m: re.Match) -> str:
     if g['hash']:
         return f"number {en_number(g['hash'])}"
     if g['frac']:
-        a, b = g['frac'].split('/')
-        return FRACTIONS.get(g['frac'], f'{en_number(a)} {en_number(b)}')
+        return _fraction(g['frac'], rest)
     if g['ra2']:
-        return f"{en_number(g['ra2'])} to {en_number(g['rb2'])}"
+        unit = ''
+        if g['runit']:
+            first, _, more = UNITS[g['runit']].partition(' ')
+            unit = f" {first}{' ' + more if more else ''}"
+        return f"{en_number(g['ra2'])} to {en_number(g['rb2'])}{unit}"
     if g['year']:
+        noun = re.match(r'\s+([a-z]+)\b', rest)
+        if noun and (noun.group(1) in COUNT_NOUNS or (noun.group(1).endswith('s') and noun.group(1) not in NOT_PLURAL)):
+            return en_number(g['year'])                 # 1969 people, 2000 shares: a count
         return en_year(g['year'])
     return ('minus ' if g['neg'] else '') + en_number(g['num'])
 
