@@ -1740,11 +1740,13 @@ class HybridProduction:
             # not hide their labels or substitute the previous scene.
             image = self._frame(span, t)
         elif i and local < 0:
-            image = self._frame(self.spans[i - 1], min(t, span.start - 1 / 30), quotes=False)
+            # Until the join lands on its music beat the old scene keeps living (its drift and atmosphere go on):
+            # a still of its last frame froze the picture through every pause that opens a scene.
+            image = self._frame(self.spans[i - 1], t, quotes=False)
         else:
             image = self._frame(span, t)
             if i and kind != 'cut' and local < span.join_length:
-                previous = self._frame(self.spans[i - 1], span.start - 1 / 30, quotes=False)
+                previous = self._frame(self.spans[i - 1], t, quotes=False)
                 array = render_transition(np.asarray(previous), np.asarray(image), local, *self.size,
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)

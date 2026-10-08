@@ -291,7 +291,10 @@ CAMERA = re.compile(
     r'montage\b|slow[- ]?mo(?:tion)?\b|freeze[- ]frame|split[- ]screen|on[- ]?screen\b|text\s+on\s+screen|'
     r'lower[- ]third|super\s*:|gfx\b|graphic(?:s)?\s*:|show(?:s|ing)?\s*:|sfx\b|sound\s+(?:of|effect)|music\s+'
     r'(?:up|in|out|swells|fades|cue|stops|drops|builds)\b|beat\s*\)|pause\s*\)|long\s+pause|v\.?\s?o\.?\s*\)|'
-    r'o\.\s?[sc]\.\s*\)|voice[- ]?over|nat\s+sound|transition\b)[^)]*\)?', re.I)
+    r'o\.\s?[sc]\.\s*\)|voice[- ]?over|nat\s+sound|transition\b|'
+    r'(?:(?:long(?:er)?|short|brief|small|little|quick|slight|dramatic)\s+)?(?:pause|silence)\b|'
+    r'(?:hold|rest|wait)\s+for\s+(?:a\s+count\s+of\s+)?\w+\s*(?:s|secs?|seconds?|counts?|beats?)?\s*\)|'
+    r'\w+[\s-]*(?:s|secs?|seconds?)\s+(?:of\s+)?(?:pause|silence)\b)[^)]*\)?', re.I)
 
 
 def _tag(raw: str, bracketed: bool) -> str | None:
@@ -806,6 +809,115 @@ DIRECTION_HOLD = .8       # seconds a line that is only a stage direction holds 
 PASSING_HOLD = .2         # seconds a direction nobody can act out takes: its page passes, never a frozen picture
 
 
+# ------------------------------------------------------------------ pacing: the silence between and inside sentences
+# Voice-free seconds the narration leaves (the hand-made references hold .3-.4 s between sentences, the stated length
+# for a written pause, and about 1.3 s from one counted breath to the next).
+SENTENCE_GAP = .35        # between two sentences of a beat
+TRAIL_GAP = .6            # a thought that trails off ("the north is just... on the bottom")
+COUNT_STEP = 1.25         # a count ("in... two... three... four"): from the start of one count to the start of the next
+BEAT_GAP = 1.4            # after a line that trails off or breaks off ("Mom..."), before the next line: a dramatic beat
+STANZA_GAP = 2.0          # after the last line of a stanza in verse (the references rest about 2 s)
+PAUSE_SECONDS = 3.0       # "(pause)" with no length
+BEAT_SECONDS = 1.2        # "(beat)"
+PAUSE_WORDS = {'long': 5., 'longer': 5., 'short': 1.5, 'brief': 1.5, 'small': 1.5, 'little': 1.5, 'quick': 1.,
+               'slight': 1., 'dramatic': 2.}
+NUMBER_WORDS = {w: k for k, w in enumerate('zero one two three four five six seven eight nine ten eleven twelve '
+                                           'thirteen fourteen fifteen sixteen seventeen eighteen nineteen '
+                                           'twenty'.split())}
+_NUM = r'(?:\d+(?:\.\d+)?|' + '|'.join(NUMBER_WORDS) + r')'
+_UNIT = r'(?:s|secs?|seconds?|counts?|beats?)'
+PAUSE_NOTE = re.compile(
+    r'(?:(?P<adj>' + '|'.join(PAUSE_WORDS) + r')\s+)?(?P<what>pause|silence|beat|hold|rest|wait)'
+    r'(?:\s*(?:for|of|,|:|-)?\s*(?:a\s+count\s+of\s+)?(?P<n>' + _NUM + r')(?:[\s-]*' + _UNIT + r')?)?'
+    r'|(?P<n2>' + _NUM + r')[\s-]*' + _UNIT + r'?\s+(?:of\s+)?(?:pause|silence|hold|rest)', re.I)
+# A spoken instruction to hold or breathe for a count ("Hold for four.", "Now rest for ten seconds.", "Exhale for
+# six."): the voice then waits that long.
+HOLD_SAID = re.compile(r'\W*(?:(?:and|now|then|just|gently|so)\W+)*(?:hold|pause|rest|wait|stay|inhale|exhale|'
+                       r'breathe(?:\s+(?:in|out))?)\b'
+                       r'(?:\s+(?:it|still|there|here|your\s+breath|the\s+breath|gently|softly))*\s+for\s+'
+                       r'(?:a\s+count\s+of\s+)?(?P<n>' + _NUM + r')(?:\s+(?:seconds?|counts?|beats?))?\W*', re.I)
+
+
+def _number(word: str) -> float:
+    return float(word) if word[:1].isdigit() else float(NUMBER_WORDS[word.casefold()])
+
+
+def pause_seconds(note: str) -> float | None:
+    """Seconds of silence a written pause asks for ("[pause 3 seconds]", "(pause)", "[3 s pause]", "(hold for
+    four)", "(beat)"; a count is a second), else None. ``note`` is the direction with or without its brackets."""
+    inner = note.strip().strip('[]()').strip(' .:')
+    m = PAUSE_NOTE.fullmatch(inner)
+    if not m:
+        return None
+    n = m.group('n') or m.group('n2')
+    if n:
+        return min(60., _number(n))
+    if m.group('what').casefold() in ('hold', 'rest', 'wait'):
+        return None                                 # "(hold)" alone is a pose, not a length
+    if m.group('adj'):
+        return PAUSE_WORDS[m.group('adj').casefold()]
+    return BEAT_SECONDS if m.group('what').casefold() == 'beat' else PAUSE_SECONDS
+
+
+def pace(spoken: str, lang: str = 'en', labels: set | None = None) -> list[tuple[int, float, int | None, float]]:
+    """Where a beat's voice stops for a moment: [(pos, gap, anchor, step)], each asking for at least ``gap`` seconds
+    of voice-free time before the character at ``pos`` of the spoken text (pos == len(spoken): after the beat, before
+    the next one) and, with an ``anchor``, the start of the word at ``pos`` at least ``step`` seconds after the start
+    of the word at ``anchor`` (a counted breath). Sentences get SENTENCE_GAP; a trailing ellipsis TRAIL_GAP; counts
+    COUNT_STEP; a written pause ("[pause 4 seconds]", never said or shown) its own length; a spoken "hold for four"
+    four seconds; a line that trails or breaks off at the beat's end BEAT_GAP."""
+    from .ingest import _protect_periods
+    if lang == 'zh':
+        return []
+    stops = {}
+
+    def add(pos, gap, anchor=None, step=0.):
+        old = stops.get(pos)
+        stops[pos] = (pos, max(gap, old[1] if old else 0.), anchor if anchor is not None else old and old[2],
+                      max(step, old[3] if old else 0.))
+
+    def next_word(i):                             # the next word the voice says
+        for m in re.finditer(r'\w+', spoken[i:]):
+            if not any(a <= i + m.start() < b for a, b in gone):
+                return i + m.start(), m.group()
+        return len(spoken), ''
+    gone = hidden(spoken, labels)
+    for a, b in gone:
+        seconds = pause_seconds(spoken[a:b])
+        if seconds:
+            add(next_word(b)[0], seconds)
+    shielded = _protect_periods(spoken, lang)
+    for a, b in gone:                                 # nothing inside a direction ends a sentence
+        shielded = shielded[:a] + '\0' * (b - a) + shielded[b:]
+    begun = 0
+    for m in re.finditer(r'(\.{2,}|…|[.!?]+)["”’)\]]*(?=\s|$)', shielded):
+        pos, word = next_word(m.end())
+        if not word:
+            pos = len(spoken)
+        sentence = spoken[begun:m.end()]
+        held = HOLD_SAID.fullmatch(sentence.strip())
+        if held:
+            add(pos, min(60., _number(held.group('n'))))
+        if pos == len(spoken):
+            if m.group(1) in ('…',) or m.group(1).startswith('..'):
+                add(pos, BEAT_GAP)
+            break
+        if m.group(1) == '…' or m.group(1).startswith('..'):
+            if word.casefold() in NUMBER_WORDS or word.isdigit():
+                before = list(re.finditer(r'\w+', spoken[:m.start()]))
+                add(pos, .25, before[-1].start() if before else None, COUNT_STEP)
+            else:
+                add(pos, TRAIL_GAP)
+            if word[:1].islower() or word.casefold() in NUMBER_WORDS:
+                continue                              # the same sentence goes on
+        else:
+            add(pos, SENTENCE_GAP)
+        begun = m.end()
+    if re.search(r'(?:—|--|–)\s*["”’)]*\s*$', spoken.rstrip()):
+        add(len(spoken), BEAT_GAP)
+    return [stops[k] for k in sorted(stops)]
+
+
 def _direction_hold(text: str, people: set) -> float:
     """A line that is only a stage direction holds for its action when the page can act it out (a movement one of
     the ``people``, casefolded names, performs: engine.acting's verbs), else it passes at once: a silent hold over a
@@ -821,7 +933,8 @@ def _direction_hold(text: str, people: set) -> float:
 
 
 def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -> dict:
-    """beat id -> {'parts': [(Segment, voice, speed factor)], 'hold': seconds of silence when nothing is said}.
+    """beat id -> {'parts': [(Segment, voice, speed factor)], 'hold': seconds of silence when nothing is said, and for
+    a beat that is only a written pause ("[pause 3 seconds]") 'pause': the voice-free seconds it asks for}.
     The narrator reads everything nobody else says; each character gets their own voice (cast_voices), with their
     sex and age as the storybook draws them. ``available`` is the installed voices, or a function returning them."""
     lang = board.get('lang', 'en')
@@ -880,9 +993,10 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
     out = {}
     for b in beats:
         parts = [(s, *voices.get(s.speaker, (narrator, 1.))) for s in found[b['id']]]
-        hold = None if parts else TITLE_HOLD if b['silent'] else (markup.hold(b['display'])
+        pause = None if parts or b['silent'] else pause_seconds(b['display'])
+        hold = None if parts else TITLE_HOLD if b['silent'] else (markup.hold(b['display']) or pause
                                                                    or _direction_hold(b['display'], people_named))
-        out[b['id']] = {'parts': parts, 'hold': hold}
+        out[b['id']] = {'parts': parts, 'hold': hold, **({'pause': pause} if pause else {})}
     return out
 
 

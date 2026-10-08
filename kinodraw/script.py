@@ -394,6 +394,11 @@ def _lean(doc: Document, story: str, title_card: bool = False) -> dict:
         beats.append({'id': f'b{len(beats) + (not heading):03d}', 'chapter': 'main', 'kind': 'narration',
                       'display': {lang: text}, 'spoken': {lang: spoken}, 'visuals': [],
                       **({'markup': mark} if mark else {})})
+    if doc.verse:                               # the last line of each stanza: the voice rests before the next
+        ends = {beats_of([p], lang)[-1] for p in paragraphs if p.strip()}
+        for beat in beats:
+            if beat['kind'] == 'narration' and beat['display'][lang] in ends:
+                beat['stanza_end'] = True
     chapters.append({'id': 'main', 'kind': 'board', 'label': {lang: doc.title}, 'title': {lang: ''}})
     return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator', 'story': story,
             'chapters': chapters, 'beats': beats}
