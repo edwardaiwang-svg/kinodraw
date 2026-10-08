@@ -130,6 +130,11 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
     n_cards = sum(c['kind'] == 'section' for c in episode['chapters'])
     for i, beat in enumerate(beats):
         clip = clips[beat['id']]
+        if not beat.get('silent') and clip['speech'] > 0 and len(clip['char_times']) > 1 and not any(clip['char_times']):
+            # Nobody says it (a stage direction): its words take place across its hold, so the shots, pictures and
+            # actions keyed to them happen one after another while it holds instead of all at its first instant.
+            n = len(clip['char_times'])
+            clip = {**clip, 'char_times': [round(k / n * clip['speech'] * .8, 4) for k in range(n)]}
         take = beat.get('kind') == 'take' and chapters[beat['chapter']]['kind'] == 'section'
         prep = cursor
         delay = max(0., float(takeaways.get(beat['id'], 0.))) if take else 0.
