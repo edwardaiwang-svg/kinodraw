@@ -58,10 +58,10 @@ BUBBLE_WORDS = 12
 BUBBLE_POP, BUBBLE_OUT = .25, .15
 TYPE_CPS = 30
 BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
-# Idle life: a resting figure shifts its weight by leaning from its planted feet (a shear,
-# never a tilt that lifts the front or back paws) and blinks for BLINK seconds (3 frames) every 2.4-3.9 s.
-SWAY = .045
-LONE_PUSH = .10                  # the camera's push over a shot of one resting figure (any other shot: .035)
+# Idle life: a resting figure stands still (J 10/8: "reduce character wobble heavily"), breathes by BREATH of
+# its height, and blinks for BLINK seconds (3 frames) every 2.4-3.9 s. The camera is locked on every page: the only
+# moves are the push into the eyes a line is about and a roar's shake (J 10/8: no "random camera zooms").
+BREATH = .003
 BLINK = .1
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
@@ -735,14 +735,9 @@ class Storybook:
         return preset(f.species, f.age, f.sex, name, f.facing, f.marks) + (pose,)
 
     def _camera(self, shot, local):
-        """[x, y, zoom] of the camera over the page: a gentle push in, a push into the eyes, a roar's shake."""
-        u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
-        cam = [.5, .5, 1. + .035 * u]
-        lone = shot.figures[0] if len(shot.figures) == 1 and not shot.figures[0].travel else None
-        if lone is not None and shot.eyes is None:       # a figure alone on the page: push in on it, inside the page
-            zoom = 1. + LONE_PUSH * u
-            cam = [min(1 - .5 / zoom, max(.5 / zoom, .5 + (c - .5) * u))
-                   for c in (lone.x, lone.ground - lone.height / 2)] + [zoom]
+        """[x, y, zoom] of the camera over the page: locked, apart from a push into the eyes and a roar's shake.
+        A push per shot restarted at every sentence, so the picture zoomed in and jumped back every 2-3 s."""
+        cam = [.5, .5, 1.]
         shake = 0.
         roaring = [f for f in shot.figures if f.pose == 'roar' and f.cue is not None]
         for f in roaring:
@@ -760,8 +755,7 @@ class Storybook:
         canvas = self._page(cam)
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         for doodle, x, y, height in shot.sky:
-            bob = .006 * math.sin(local * .9 + x * 7)
-            self._paste(overlay, doodle, False, x, y + height / 2 + bob, height, cam, parallax=.4)
+            self._paste(overlay, doodle, False, x, y + height / 2, height, cam, parallax=.4)
         for doodle, x, ground, height in shot.props:
             self._paste(overlay, doodle, False, x, ground, height, cam)
         if getattr(shot, 'atmosphere', 'none') in ('fog', 'fog_with_shooting_star'):
@@ -806,13 +800,12 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1., pin=None, reference=None, crown=0., shear=0., shut=False):
+               anchor_y=1., pin=None, reference=None, crown=0., shut=False):
         """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
 
         ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
         character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground);
-        ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every sway and lean;
-        ``shear`` leans the doodle from its feet (the share of its height its top moves sideways); ``shut`` closes
+        ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every lean; ``shut`` closes
         its eyes."""
         w, h = self.size
         sx, sy, zoom = self._to_screen(x, ground, cam, parallax)
@@ -834,12 +827,6 @@ class Storybook:
             image = image.resize((max(1, round(image.width / (1 - squash))), max(1, round(image.height * (1 - squash)))),
                                  Image.Resampling.BICUBIC)
             foot_x, foot_y = foot_x * image.width / before[0], foot_y * image.height / before[1]
-        if shear:
-            k = shear * image.height / max(1., foot_y)          # per row, so the top moves shear of the height
-            pad = math.ceil(abs(k) * foot_y) + 2
-            image = image.transform((image.width + 2 * pad, image.height), Image.Transform.AFFINE,
-                                    (1, k, -pad - k * foot_y, 0, 1, 0), resample=Image.Resampling.BICUBIC)
-            foot_x += pad
         iw, ih = image.size
         if rotate:
             pad = round(max(iw, ih) * .25)
@@ -858,13 +845,8 @@ class Storybook:
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
         x, ground = f.x, f.ground
         direction = 1 if f.facing == 'r' else -1
-        rotate, squash, dy, shear = 0., 0., 0., 0.
-        breath = math.sin(local * 2.6 + f.phase)
-        squash = .012 * breath
-        if pose in ('stand', 'look', 'sit', 'lie', 'sleep', 'look_up'):   # a resting figure shifts its weight
-            # as far on screen as an adult's lean (a small cub's would be too slight to see); the young fidget faster
-            amp = SWAY * min(1.6, ADULT_HEIGHT / f.height) * (.4 if pose == 'sleep' else 1.)
-            shear = direction * amp * math.sin(local * (2. if f.age in ('baby', 'young') else 1.4) + f.phase)
+        rotate, dy = 0., 0.
+        squash = BREATH * math.sin(local * 2.6 + f.phase)
         if pose in ('walk', 'run', 'carry') or (f.travel and pose != 'stand'):
             rate = 2.2 if pose == 'run' else 1.4
             step = abs(math.sin(math.pi * rate * (local + f.phase)))
@@ -889,7 +871,7 @@ class Storybook:
             x += direction * roar.dx * .0006
         reference = self._reference(f)
         self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash,
-                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0., shear=shear,
+                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0.,
                     shut=pose not in ('sleep', 'roar') and self._blinking(f, local))
         effects = []
         if f.carried is not None:

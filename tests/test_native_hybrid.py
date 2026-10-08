@@ -132,7 +132,7 @@ def test_recorded_legacy_frame_hashes(tmp_path):
     prod = render.make_production(board, tl, 'en', tmp_path)
     hashes = {
         1.: '75f409279ef112d350f1a1bc344a34ad22c51de0909ae6651732793788da0f28',      # its caption's word being said
-        4.7153: '9c77051c338e99883a4d30428c9dcccda4373348f20c0f1c7eae4a909a06e8fb',  # storybook page, word highlight
+        4.7153: '8298f08d023ccba0eac87fb25851c42510a80ceb74cefc5784eda601c57bfffe',  # storybook page, word highlight (10/8: locked camera, no lean)
         21.733333: 'f1e4fb0a0ff86825d1bef8d770ade434cfc4213f5f0bde2681ba1366276f0c6f',  # a story ends on The End
     }
     for t, expected in hashes.items():

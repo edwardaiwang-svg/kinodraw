@@ -194,6 +194,31 @@ def test_eye_line_pushes_into_the_cubs_eyes(tmp_path):
     before = prod.storybook._eye_camera(shot, shot.eyes_at - .5, [.5, .5, 1.])
     after = prod.storybook._eye_camera(shot, shot.eyes_at + 1.2, [.5, .5, 1.])
     assert after[2] > 1.8 and before[2] < 1.2
+    zooms = [prod.storybook._camera(shot, t)[2] for t in np.arange(shot.start, shot.end, 1 / 30)]
+    assert zooms[0] == 1. and all(b >= a for a, b in zip(zooms, zooms[1:]))        # one push, never back out
+
+
+def test_story_pages_hold_a_locked_camera(tmp_path):
+    """J 10/8: "it zooms in, then suddenly zooms out repeat every 2-3 seconds". Every shot pushed in from its own
+    start and the next sentence's shot began wide again. Now the camera rests on every page with no line about eyes
+    and no roar, and a held page (blinks aside) does not move: no push, no bobbing sun or moon, no drifting paper."""
+    prod, board, plan, tl = production(tmp_path)
+    book = prod.storybook
+    prod.frame(0.)
+    held = 0
+    for span in prod.spans:
+        for shot in span.story or []:
+            if shot.eyes is not None or any(f.pose == 'roar' for f in shot.figures):
+                continue
+            for t in np.linspace(shot.start, shot.end, 7):
+                assert book._camera(shot, t) == [.5, .5, 1.], (span.spec['beat_ids'], t)
+            if shot.sky and not any(f.travel or f.pose not in ('stand', 'look', 'sit', 'lie') for f in shot.figures):
+                book._blinking = lambda f, t: False
+                a, b = (np.asarray(book._draw(shot, t), np.int16) for t in (shot.start + .1, shot.end - .1))
+                del book._blinking
+                assert (np.abs(a - b).max(axis=2) > 40).mean() < .0005, span.spec['beat_ids']
+                held += 1
+    assert held
 
 
 def test_series_bible_does_not_turn_a_fresh_animal_back_into_a_human(tmp_path):
@@ -258,20 +283,26 @@ def test_a_story_ends_on_the_end_and_other_videos_on_their_title():
     assert card('explain', 'en') == title['en']
 
 
-def test_a_lone_resting_figure_never_freezes_the_picture(tmp_path):
+def test_a_lone_resting_figure_holds_still_on_a_narrated_held_page(tmp_path):
     """The QA's freezedetect (-50 dB over 1 s) flagged the jungle's lone small cub, held for 8 s while the narration
-    described him; the page now drifts with the camera push and resting figures shift their weight. Captions, whose
-    word highlight also moves, are left out here."""
-    prod, *_ = production(tmp_path)
+    described him. The fix then was a camera push and a sway; J 10/8 asked for neither ("random camera zooms",
+    "reduce character wobble heavily"). The cub now holds still apart from blinks, and the QA counts the page as a
+    narrated held page: exempt from frozen_picture while its narration speaks, for at most 8 s."""
+    from kinodraw.qa.probes import HELD_PAGE
+    prod, board, plan, tl = production(tmp_path)
     prod.frame(0.)
-    shot = next(shot for span in prod.spans if span.story for shot in span.story
-                if len(shot.figures) == 1 and shot.figures[0].age == 'baby')
-    shot.end = shot.start + 8
-    frames = [np.asarray(prod.storybook.frame([shot], shot.start + 1 + k / 4), np.float32) / 255 for k in range(25)]
-    # freezedetect keeps its reference frame until the picture moves away from it by more than -50 dB MAFD. Every
-    # second of the shot, including the turns of the weight shift, moves twice that: the encoder smooths small motion
-    # (the 3:21 jungle froze for 1.07 s at 35.8 s where an unencoded check passed).
-    assert min(np.abs(frames[k + 4] - frames[k]).mean() for k in range(21)) > 2 * 10 ** (-50 / 20)
+    span, shot = next((span, shot) for span in prod.spans if span.story for shot in span.story
+                      if len(shot.figures) == 1 and shot.figures[0].age == 'baby')
+    prod.storybook._blinking = lambda f, t: False
+    a, b = (np.asarray(prod.storybook._draw(shot, t), np.int16) for t in (shot.start + .1, shot.end - .1))
+    assert (np.abs(a - b).max(axis=2) > 40).mean() < .0005
+    cfg = {'director_v3': True, 'plan_v3': plan}
+    pages = pipeline._narrated_pages(cfg, tl)
+    t = span.start + (shot.start + shot.end) / 2
+    assert any(a <= t <= b for a, b in pages) and HELD_PAGE == 8.
+    scene = next(s for s in plan['scenes'] if set(s['beat_ids']) == set(span.spec['beat_ids']))
+    scene['treatment'] = 'whiteboard'                        # a whiteboard draws while it speaks: no held page
+    assert not any(a <= t <= b for a, b in pipeline._narrated_pages(cfg, tl))
 
 
 def _overlaid(frame, before, after, times):
@@ -497,32 +528,29 @@ def _rest(book, f, shot, local):
     return np.asarray(overlay.getchannel('A')) > 128
 
 
-def test_resting_figures_sway_with_their_feet_planted_and_blink(tmp_path):
-    """Idle life without seasickness: a standing figure shifts its weight while every paw stays on the ground line
-    (no rocking-horse tilt lifting the front or back paws), and it blinks, Claude Fables style, about every 2-4 s for
+def test_resting_figures_stand_still_and_blink(tmp_path):
+    """J 10/8: "reduce character wobble heavily". A standing figure no longer leans from side to side: its head stays
+    put to a pixel, its breath lifts it by a few pixels at most, and it blinks, Claude Fables style, about every 2-4 s for
     three frames; a blink only shuts the eyes."""
+    from kinodraw.engine import storybook
     prod, board, plan, tl = production(tmp_path)
     book = prod.storybook
     span = span_of(prod, 'Deep in the jungle')
     shot, at = shot_of(span, prod, 'Deep in the jungle')
     kojo = next(f for f in shot.figures if f.key == 'kojo')
     assert kojo.pose == 'stand'
-    ends = [t for t in ((k * math.pi + math.pi / 2 - kojo.phase) / 1.4 for k in range(-4, 12)) if t >= 0][:2]
-    lows, tops = [], []
-    for t in ends:
+    book._blinking = lambda f, t: False
+    tops, alphas = [], []
+    for t in np.arange(0., 5., .25):
         alpha = _rest(book, kojo, shot, t)
         rows = np.nonzero(alpha.any(axis=1))[0]
-        cols = np.nonzero(alpha[rows.max() - 60:].any(axis=0))[0]                       # the paws' columns
-        x0, x1 = cols.min(), cols.max()
-        third = (x1 - x0) // 3
-        low = lambda a, b: np.nonzero(alpha[:, a:b].any(axis=1))[0].max()
-        lows.append((low(x0, x0 + third), low(x1 - third, x1 + 1)))
-        rows = np.nonzero(alpha.any(axis=1))[0]
-        head = alpha[rows.min():rows.min() + 40]
-        tops.append(np.nonzero(head.any(axis=0))[0].mean())
-    (back1, front1), (back2, front2) = lows
-    assert max(back1, front1, back2, front2) - min(back1, front1, back2, front2) <= 2      # paws stay on the ground
-    assert abs(tops[0] - tops[1]) > 4                                                      # yet the body moves
+        tops.append((rows.min(), np.nonzero(alpha[rows.min():rows.min() + 40].any(axis=0))[0].mean()))
+        alphas.append(alpha)
+    breath = 2 * storybook.BREATH * kojo.height * book.size[1]                              # 3 px at 1080p
+    assert max(y for y, _ in tops) - min(y for y, _ in tops) <= breath + 1                # a breath, no bob
+    assert max(x for _, x in tops) - min(x for _, x in tops) <= 2                          # no lean (was 40 px)
+    assert max((a ^ alphas[0]).mean() for a in alphas) < .003                  # only the breath at its outline
+    del book._blinking
     frames = np.arange(0., 15., 1 / 30)
     shut = [book._blinking(kojo, t) for t in frames]
     starts = [frames[i] for i in range(len(frames)) if shut[i] and (i == 0 or not shut[i - 1])]
