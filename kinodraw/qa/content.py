@@ -331,6 +331,8 @@ def check(plan, board, timeline=None, video=None) -> dict:
                              'problem': f'The picture does not change for {count} sentences in a row '
                                         f'(from {clock(first.at)} "{_short(first.text)}" to {clock(last.at)}); '
                                         f'{len(runs)} such stretch{"es" if len(runs) > 1 else ""} in the video.'})
+    from .screens import check as blank_screens
+    findings += blank_screens(board, video)        # a message or notification read over a blank device
     return {'problems': [f['problem'] for f in findings], 'findings': findings,
             'stats': {'sentences': len(found), 'concrete': len(concrete), 'unshown': len(unshown),
                       'too_small': sum(1 for line in found if line.size is not None and
