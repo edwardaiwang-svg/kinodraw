@@ -24,7 +24,8 @@ CAPTION_TOP = .76         # ... and above this one (the caption band)
 SIDE = .05                # side margin
 LEFT_RAIL = .075          # the left side starts after the step indicator
 MAX_W = .36               # a card is at most this share of the frame width
-SHRINK = .72              # ... and shrinks to this where every spot has a picture
+SHRINK = (.72, .56)       # ... and shrinks to these where every spot has a picture or words
+GROW = 4                  # measured ink grows by this many quarter-resolution pixels (16 px at 1080p)
 MIN_HOLD, MAX_HOLD, TAIL = 2.6, 7., .9   # seconds a card stays: at least, at most, after its sentence ends
 INK = 48
 CLEAN = {'card': (252, 252, 250), 'ink': (26, 30, 38), 'soft': (96, 104, 116), 'accent': (52, 110, 200),
@@ -185,7 +186,7 @@ def card_image(card, look, W, H, progress=1.):
         if card.label and kind == 'change':
             line(card.label, 44, look.soft)
         n = len(card.items)
-        chart_h = 250 * u
+        chart_h = 210 * u
         if kind == 'change' and card.delta:
             df = look.font(46)
             label, badge_top = card.delta, y
@@ -283,6 +284,20 @@ def card_image(card, look, W, H, progress=1.):
     return img
 
 
+def _dilate(mask, steps):
+    """``mask`` grown by ``steps`` cells each way: thin letter strokes become the solid block a line of words reads
+    as, so a card never sits over writing because its strokes are thin."""
+    out = mask.copy()
+    for _ in range(steps):
+        grown = out.copy()
+        grown[1:] |= out[:-1]
+        grown[:-1] |= out[1:]
+        grown[:, 1:] |= out[:, :-1]
+        grown[:, :-1] |= out[:, 1:]
+        out = grown
+    return out
+
+
 # ------------------------------------------------------------------ the cards of a video, on the clock
 class DataCards:
     """Every data card of an episode with its time window; ``paint`` draws the live one over a finished frame."""
@@ -339,16 +354,17 @@ class DataCards:
                     paper = np.median(a.reshape(-1, 3), axis=0)
                     mask = np.abs(a - paper).max(axis=2) > INK
                     inked = mask if inked is None else inked | mask
+                inked = _dilate(inked, GROW)
                 total = np.pad(inked.astype(np.int32).cumsum(0).cumsum(1), ((1, 0), (1, 0)))
                 scores = []
-                for scale in (1., SHRINK):
+                for scale in (1.,) + SHRINK:
                     sw, sh = w * scale, h * scale
                     for i, (x, y) in enumerate(self._candidates(sw, sh)):
                         x0, y0 = max(0, int(x / 4)), max(0, int(y / 4))
                         x1, y1 = min(inked.shape[1], x0 + int(sw / 4) + 1), min(inked.shape[0], y0 + int(sh / 4) + 1)
                         count = total[y1, x1] - total[y0, x1] - total[y1, x0] + total[y0, x0]
                         covered = float(count) / max(1., w * h / 16)    # inked share of the full-size card
-                        scores.append((round(covered + (.04 if scale < 1 else 0.), 2), scale < 1, i, (x, y), scale))
+                        scores.append((round(covered + .12 * (1 - scale), 2), -scale, i, (x, y), scale))
                 _, _, _, spot, scale = min(scores)
                 best = (spot, scale)
             self._places[k] = best
