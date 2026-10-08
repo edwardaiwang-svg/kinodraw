@@ -390,6 +390,7 @@ class Figure:
     height: float = ADULT_HEIGHT
     facing: str = 'r'
     cue: float | None = None          # span-local seconds the pose starts
+    before: str | None = None         # the pose shown until then (lying awake before the words say asleep)
     travel: float = 0.                # share of the frame width moved over the shot
     carried: 'Figure | None' = None
     depth: int = 1
@@ -1079,6 +1080,8 @@ class Storybook:
             pose = 'stand'
         if pose == 'roar' and f.cue is not None and local > f.cue + ROAR_SECONDS:
             pose = 'stand'
+        if pose == 'sleep' and f.cue is not None and local < f.cue and f.before:
+            pose = f.before
         name = {'look': 'stand', 'happy': 'stand', 'nuzzle': 'stand', 'bow': 'stand'}.get(pose, pose)
         if name in ('walk', 'run') and not f.travel and f.carried is None:
             name = pose = 'stand'                       # walking nowhere is standing: no stride, no head wobble
@@ -1392,16 +1395,30 @@ class Storybook:
         if roar is not None and roar.sound > .02:
             effects.append(lambda o, fig=f, d=doodle, m=mirror, p=roar, x0=x, g=ground + dy: self._roar_effects(
                 o, fig, d, m, p, x0, g, cam, local))
-        if pose == 'sleep' and f.species == 'human':
-            # A sleeping person's Z rises from their head, wherever the lying doodle puts it.
-            hx, hy = self._point(doodle, mirror, 'head', x, ground + dy, f.height, reference)
-            effects.append(lambda o, fig=f, x0=hx, y0=hy: self._zzz(
-                o, False, x0 + .04 * fig.height / ADULT_HEIGHT, y0 - .03, fig, cam, local))
-        elif pose == 'sleep':
-            effects.append(lambda o, fig=f, x0=x: self._zzz(
-                o, fig.facing == 'l', x0 + (.06 if fig.facing == 'r' else -.06) * fig.height / ADULT_HEIGHT,
-                fig.ground - fig.height * .75, fig, cam, local))
+        if pose == 'sleep':
+            zx, zy = self._zzz_at(f, shot, local, doodle, mirror, x, ground + dy)
+            effects.append(lambda o, fig=f, x0=zx, y0=zy: self._zzz(
+                o, fig.species != 'human' and fig.facing == 'l', x0, y0, fig, cam, local))
         return effects
+
+    def _zzz_at(self, f, shot, local, doodle=None, mirror=None, x=None, ground=None):
+        """Where a sleeper's Z marks start (frame shares): above a person's head, wherever the lying doodle puts it,
+        or just ahead of an animal's; never on another figure's head (a cub asleep under its father's chin)."""
+        if doodle is None:
+            doodle, mirror, _ = self._pose_doodle(f, local)
+            x, ground = self.where(f, shot, local)
+        if f.species == 'human':
+            hx, hy = self._point(doodle, mirror, 'head', x, ground, f.height, self._reference(f))
+            zx, zy = hx + .04 * f.height / ADULT_HEIGHT, hy - .03
+        else:
+            zx, zy = x + (.06 if f.facing == 'r' else -.06) * f.height / ADULT_HEIGHT, f.ground - f.height * .75
+        heads = [head for g in shot.figures if g is not f and not g.crowd for _, head in self._shapes(g)]
+        for _ in range(3):
+            head = next((h for h in heads if h[0] - .01 <= zx <= h[2] + .01 and h[1] - .01 <= zy <= h[3] + .01), None)
+            if head is None:
+                break
+            zx = head[0] - .02 if zx - head[0] < head[2] - zx and head[0] > .05 else head[2] + .02
+        return zx, zy
 
     def _zzz(self, overlay, mirror, x, ground, f, cam, local):
         """A sleeper's Z marks: each rises ZZZ_RISE of the frame from (x, ground) over ZZZ_CYCLE seconds, drifting

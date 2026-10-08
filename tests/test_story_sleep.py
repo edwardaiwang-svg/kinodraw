@@ -14,7 +14,7 @@ from kinodraw.engine import storybook
 from kinodraw.engine.storybook import Storybook, meta, preset
 from kinodraw.library import creatures
 
-from test_story_shots import pages, shot, staged, visible
+from test_story_shots import local, pages, shot, staged, visible
 
 PRIDE = [{'id': 'pendo', 'name': 'Pendo', 'kind': 'quadruped', 'species': 'lion', 'family': 'feline', 'age': 'baby',
           'sex': 'male', 'size': .45, 'marks': []},
@@ -94,7 +94,7 @@ def test_a_name_followed_by_its_species_is_that_animal(text, species):
     assert cast and cast[0]['species'] == species and cast[0]['kind'] != 'human'
 
 
-SLEEPY = 'Sam came home late. Ada lay on the couch, fast asleep.'
+SLEEPY = 'Ada lay on the couch, fast asleep, and the long quiet evening went slowly on around them both.'
 
 
 def test_words_that_say_asleep_put_a_lying_figure_to_sleep_and_it_breathes(tmp_path):
@@ -108,7 +108,9 @@ def test_words_that_say_asleep_put_a_lying_figure_to_sleep_and_it_breathes(tmp_p
     figures = {f.key: f for f in page.figures}
     assert figures['ada'].pose == 'sleep' and figures['sam'].pose == 'stand'
     book._blinking = lambda f, t: False
-    a, b = (np.asarray(book._draw(page, page.start + t), np.int16) for t in (.3, 1.7))
+    asleep = figures['ada'].cue or page.start                    # from "fast asleep" on
+    assert asleep + 1.7 < page.end
+    a, b = (np.asarray(book._draw(page, asleep + t), np.int16) for t in (.3, 1.7))
     w = a.shape[1]
     moved = np.abs(a - b).max(axis=2) > 40
 
@@ -119,17 +121,26 @@ def test_words_that_say_asleep_put_a_lying_figure_to_sleep_and_it_breathes(tmp_p
     assert motion(figures['ada']) > 2.5 * motion(figures['sam'])   # the awake one holds still (a faint breath at most)
 
 
-def test_a_sleeper_lies_along_a_real_sofa_with_the_tv_in_every_shot_of_her(tmp_path):
-    text = ('Then Sam went downstairs, where Ada was asleep in front of the TV.\n\n'
-            '"Mine is broken," Sam said.\n\n"It is not broken," Ada said.')
+TV_TALK = ('Then Sam went downstairs, where Ada was asleep {where}.\n\n'
+           '"Mine is broken," Sam said.\n\n"It is not broken," Ada said.')
+
+
+def _tv_talk(tmp_path, where):
+    tmp_path.mkdir()
     refs = ['fl_couch_and_lamp', 'fl_television']
-    prod = staged(tmp_path, text, [
+    return staged(tmp_path, TV_TALK.format(where=where), [
         shot('b001', 'Then Sam', 'wide', [('sam', 'adult', 'walk', 'no'), ('ada', 'adult', 'sleep', 'no')],
              set_refs=refs),
         shot('b002', 'Mine is', 'two_shot', [('sam', 'adult', 'talk', 'yes'), ('ada', 'adult', 'sit', 'no')],
              lines=[('Mine is broken,', 'sam')], set_refs=refs),
         shot('b003', 'It is', 'two_shot', [('ada', 'adult', 'talk', 'yes'), ('sam', 'adult', 'look', 'no')],
              lines=[('It is not broken,', 'ada')], set_refs=refs)])
+
+
+def test_a_sleeper_lies_along_a_real_sofa_with_the_tv_beside_her_while_the_words_say_so(tmp_path):
+    """The shot whose own words put her asleep in front of the TV shows the TV beside her; the conversation after it
+    frames its speakers as tightly as a story with no TV in it (J's faces and bubbles stay big)."""
+    prod = _tv_talk(tmp_path / 'tv', 'in front of the TV')
     book = prod.storybook
     _, (asleep,) = pages(prod, 'b001')
     ada = next(f for f in asleep.figures if f.key == 'ada')
@@ -138,11 +149,35 @@ def test_a_sleeper_lies_along_a_real_sofa_with_the_tv_in_every_shot_of_her(tmp_p
     bx0, _, bx1, _ = book._shape(ada, 'sleep', ada.x)[0]
     assert ada.pose == 'sleep' and sx0 - .01 <= bx0 and bx1 <= sx1 + .01   # she lies along it, not over its arms
     assert (sx1 - sx0) > 1.8 * (sofa.height * book.size[1] / book.size[0])  # a long seat, not an armchair
-    for bid in ('b001', 'b002', 'b003'):
-        _, shots_ = pages(prod, bid)
-        for page in shots_:
-            if 'ada' not in [f.key for f in page.figures]:
-                continue
-            tv = next(p for p in page.set if p.doodle == 'fl_television')
-            box = book.stager.frame(tv.doodle, tv.x, tv.ground, tv.height, tv.mirror)[2]
-            assert visible(book, page, box) > .95, (bid, page.framing)
+    tv = next(p for p in asleep.set if p.doodle == 'fl_television')
+    box = book.stager.frame(tv.doodle, tv.x, tv.ground, tv.height, tv.mirror)[2]
+    assert visible(book, asleep, box) > .95 and box[0] - sx1 < .1           # in view, right beside her
+    plain = _tv_talk(tmp_path / 'plain', 'on the couch')
+    for bid in ('b002', 'b003'):
+        (_, (talk,)), (_, (control,)) = pages(prod, bid), pages(plain, bid)
+        assert talk.view[2] >= control.view[2] - .02, (bid, talk.view, control.view)
+
+
+def test_a_sleeper_falls_asleep_when_the_words_say_so(tmp_path):
+    """A plan shot that starts before "fast asleep" shows her lying awake until those words, then asleep."""
+    prod = staged(tmp_path, 'Ada lay down on the couch and read for a long while. Soon she was fast asleep.',
+                  [shot('b001', 'Ada lay', 'wide', [('ada', 'adult', 'lie', 'no')])])
+    book = prod.storybook
+    _, (page,) = pages(prod, 'b001')
+    ada = page.figures[0]
+    asleep_at = local(prod, 'b001', 'asleep')
+    assert book._pose_doodle(ada, page.start + .2)[2] == 'lie'
+    assert book._pose_doodle(ada, asleep_at + .1)[2] == 'sleep'
+
+
+def test_a_sleepers_zs_stay_off_another_face(tmp_path):
+    """A cub asleep under a big sleeper's chin: its Zs rise clear of the big one's head."""
+    prod = staged(tmp_path, 'Sam lay down. Mia curled up against Sam, fast asleep.',
+                  [shot('b001', 'Mia curled', 'wide', [('sam', 'adult', 'sleep', 'no'), ('mia', 'young', 'sleep', 'no')])])
+    book = prod.storybook
+    _, (page,) = pages(prod, 'b001')
+    for f in page.figures:
+        heads = [head for g in page.figures if g is not f for _, head in book._shapes(g)]
+        for t in (.2, .9, 1.6):
+            x, y = book._zzz_at(f, page, page.start + t)
+            assert not any(h[0] <= x <= h[2] and h[1] <= y <= h[3] for h in heads), (f.key, t)
