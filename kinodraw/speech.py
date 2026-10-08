@@ -43,6 +43,9 @@ MONTH_NAMES = {m[:3].lower(): m for m in ('January', 'February', 'March', 'April
 MONTH_WORDS = ('(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)(?:uary|ruary|ch|il|e|y|ust|tember|ober|'
                'ember)?')
 NUMBER_WORD = r'(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b'
+COUNT_WORD = (r'(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:-(?:one|two|three|four|five|six|'
+              r'seven|eight|nine))?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|(?:thir|four|fif|six|'
+              r'seven|eigh|nine)teen|hundred|thousand)\b')
 # A short day name is a day when a date, a time, another day or a list mark comes next ("Mon. & Tue.", "Sat., Nov. 8",
 # "party sat 6pm"); "Sun." and "Sat." on their own may be the sun or a past tense.
 DAY_NEXT = (r'(?=\s*(?:,|&|\band\b|\bor\b|\bto\b|\bthrough\b|\bthru\b|[–—-]|\d|\bat\b|\bnight\b|'
@@ -124,6 +127,9 @@ SAY_EN = [(re.compile(r'\bMr\.(?=\s)'), 'Mister'), (re.compile(r'\bMrs\.(?=\s)')
           (re.compile(r'(?<=\w)\s*&\s*(?=\w)|\s&\s'), ' and '),
           # Two addresses in a row ("pipewisebayside.com hello@pipewisebayside.com"): a pause after the first.
           (re.compile(r'\bdot (' + TLD_WORDS + r')(?= (?!dot\b|slash\b|at\b|dash\b)[\w])'), lambda m: m.group() + ','),
+          # Two counts in a row ("3 kids 2 grandkids"): a list, with a pause between its items.
+          (re.compile(r'\b' + COUNT_WORD + r'\s+(?!(?:times|equals|plus|minus|less|is|was|has|does)\b)[a-z]+s(?=\s+'
+                      + COUNT_WORD + r')'), lambda m: m.group() + ','),
           # A phone number's digit groups: a short pause between them (numbers.py joins them with hyphens).
           (re.compile(r'\b(zero|oh|one|two|three|four|five|six|seven|eight|nine)-(?=(?:zero|oh|one|two|three|'
                       r'four|five|six|seven|eight|nine)\b)'), lambda m: m.group(1) + ', '),

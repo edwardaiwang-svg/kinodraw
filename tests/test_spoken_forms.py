@@ -304,3 +304,10 @@ def test_board_text_keeps_one_as_a_pronoun():
         'Half a load uses almost the same water as a full one'
     assert pd.typeset('one drop a second over 3,000 gallons a year') == '1 drop a second over 3,000 gallons a year'
     assert pd.typeset('twelve minus one is eleven') == '12 − 1 = 11'
+
+
+def test_two_counts_in_a_row_are_said_as_a_list():
+    said = speech.said_text(numbers.normalize('3 kids 2 grandkids', 'en').spoken, 'en')[0]
+    assert said == 'three kids, two grandkids'
+    said = speech.said_text(numbers.normalize('3 times 2 is 6', 'en').spoken, 'en')[0]
+    assert ',' not in said
