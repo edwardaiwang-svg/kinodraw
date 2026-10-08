@@ -103,6 +103,7 @@ def _text_blocks(text: str) -> list[tuple[int, str]]:
     lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
     raw = list(lines)
     lines = [re.sub(r'^\s*>\s?', '', line) for line in lines]          # > quoted lines are ordinary text
+    from . import chatlog
     from .speech import labels_in, screenplay_labels
     labels = screenplay_labels(lines)
     blocks, para = [], []
@@ -141,9 +142,12 @@ def _text_blocks(text: str) -> list[tuple[int, str]]:
             blocks.append((0, (f'{number.group(1)}. ' if number else '')
                            + _clean_inline(re.sub(r'^([-*+•]|\d+[.)])\s+', '', line))))
         else:
-            if para and (labels_in(line, labels) or re.fullmatch(r'\[[^\]]*\]', line)):
+            notice = labels.chat and (chatlog.system(line) or chatlog.voice_note(line) is not None)
+            if para and (labels_in(line, labels) or re.fullmatch(r'\[[^\]]*\]', line) or notice):
                 flush()                                               # each screenplay line or direction stands alone
             para.append(line)
+            if notice or (labels.chat and not blocks and len(para) == 1 and chatlog.header(line)):
+                flush()                                               # and so does a chat's notice or its header
         i += 1
     flush()
     return [(lvl, t) for lvl, t in blocks if t]
