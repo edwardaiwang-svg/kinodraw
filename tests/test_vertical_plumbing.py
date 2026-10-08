@@ -62,6 +62,9 @@ def test_studio_creates_and_changes_format(tmp_path, monkeypatch):
     monkeypatch.setattr(server, 'CONFIG', tmp_path / 'studio.json')
     monkeypatch.setattr(providers, 'saved', lambda: set())
     monkeypatch.setattr(director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
+    # The v3 plan is stubbed too, and no cloud provider is made for it: no live cloud call, no anonymous token.
+    monkeypatch.setitem(server.STUDIO_HOOKS, 'provider', lambda body: 'rules')
+    monkeypatch.setattr(server.pipeline, 'direct_v3', lambda *a, **k: {'notes': [], 'usage': None})
     assert [f['value'] for f in server.state()['formats']] == list(pipeline.ASPECTS)
     created = server.create_project({'text': TINY.read_text(encoding='utf-8'), 'aspect': '9:16'})
     deadline = time.monotonic() + 10
