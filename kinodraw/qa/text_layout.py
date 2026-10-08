@@ -22,6 +22,13 @@ def _shared(a, b):
     return _area(box) / max(1., min(_area(a), _area(b)))
 
 
+def _collide(a, b):
+    """Two texts written over each other: they share more than OVERLAP of the smaller one, or run into each other
+    along a line (crossing by more than EDGE px over most of the shorter one's height: "start withn is")."""
+    w, h = min(a[2], b[2]) - max(a[0], b[0]), min(a[3], b[3]) - max(a[1], b[1])
+    return _shared(a, b) > OVERLAP or w > EDGE and h > .5 * min(a[3] - a[1], b[3] - b[1])
+
+
 def _words(drawing) -> str:
     lines = getattr(drawing, 'lines', None)
     if lines:
@@ -88,7 +95,7 @@ def _check(t, boxes, size, found, seen):
             seen.add(('text_clipped', words))
             found.append({'t': round(t, 2), 'defect': 'text_clipped', 'text': words, 'other': ''})
         for other, words2 in boxes[k + 1:]:
-            if words2 != words and _shared(box, other) > OVERLAP and ('text_overlap', words, words2) not in seen:
+            if words2 != words and _collide(box, other) and ('text_overlap', words, words2) not in seen:
                 seen.add(('text_overlap', words, words2))
                 found.append({'t': round(t, 2), 'defect': 'text_overlap', 'text': words, 'other': words2})
 

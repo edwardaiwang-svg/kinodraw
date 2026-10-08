@@ -430,9 +430,13 @@ class Layout:
         # 1. pictures and other steps
         if layout == 'flow':
             n = max(1, len(steps))
-            per_row = min(n, 4)
-            rows = math.ceil(n / per_row)
             gap = W * .06
+            # as many to a row as fit side by side (words wider than their share would run into each other)
+            widest = max((self.measure(it, it['kind'])[0] for it in steps if it['kind'] in ('label', 'equation')),
+                         default=0)
+            fit = int((W * .94 + gap) / (widest + gap)) if widest else 4
+            per_row = min(n, 4, max(fit, math.ceil(n / 2)))
+            rows = math.ceil(n / per_row)
             bw = min(W * .26, (W * .94 - gap * (per_row - 1)) / per_row)
             bh = min(H * (.40 if rows == 1 else .26), bw)
             for k, it in enumerate(steps):

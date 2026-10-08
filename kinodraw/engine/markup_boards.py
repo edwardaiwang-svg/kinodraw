@@ -25,7 +25,7 @@ OUTPUT_TAGS = {'output', 'console', 'terminal', 'text', 'stdout', 'shell-session
 EDITOR = {'panel': (30, 34, 44, 255), 'bar': (44, 49, 62, 255), 'gutter': (98, 106, 122, 255),
           'text': (230, 225, 214, 255), 'keyword': (198, 146, 234, 255), 'string': (166, 218, 149, 255),
           'number': (247, 168, 108, 255), 'comment': (124, 132, 150, 255), 'call': (122, 182, 245, 255),
-          'cursor': (240, 196, 92, 255)}
+          'cursor': (240, 196, 92, 255), 'line': (50, 56, 72, 255)}
 KEYWORDS = set('''and as assert async await break case catch class const continue def del do elif else except export
 extends false False final finally fn for from func function if import in interface is lambda let match new nil None
 not null or pass print private protected public raise return self static struct switch this throw true True try type
@@ -137,6 +137,11 @@ class CodeDrawing:
         img = self._base.copy()
         d = ImageDraw.Draw(img)
         x0, y0 = self.origin
+        # the line being typed is highlighted, as an editor does; the highlight steps down line by line
+        row = len(self.rows) - 1 if shown >= self._typed[-1] else \
+            max(i for i in range(len(self.rows)) if self._typed[i] <= shown)
+        d.rectangle((x0 - self.advance * .45, y0 + row * self.pitch - self.pitch * .1, img.width - 1,
+                     y0 + (row + 1) * self.pitch - self.pitch * .1), fill=EDITOR['line'])
         cursor = None
         for i, (_, indent, text) in enumerate(self.rows):
             room = shown - self._typed[i]

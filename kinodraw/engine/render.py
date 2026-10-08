@@ -773,12 +773,12 @@ class Production:
         prev = cur if cur is not None and cur.end <= t else (self.hand_els[i - 1] if i > 0 else None)
         nxt = self.hand_els[i + 1] if i + 1 < len(self.hand_els) else None
         if prev is None or nxt is None or self._new_board(prev, nxt):
-            rest = self._rest(prev, nxt, L) if prev is not None and nxt is not None and prev.stretch == nxt.stretch \
-                else None
+            pause = self._pause(prev, nxt) if prev is not None else None
+            rest = self._rest(prev, nxt, L, pause) if pause is not None and t < pause[0] else None
             if rest is None:
                 self._slide(frame, t, L, prev, nxt)
             else:
-                self.hand.paste(frame, self._resting(t, prev, nxt, rest, L), lifted=True)
+                self.hand.paste(frame, self._resting(t, prev, nxt, rest, L, pause), lifted=True)
             return
         gap = nxt.start - prev.end
         if gap <= 0:
@@ -795,36 +795,52 @@ class Production:
         y = (prev.y + p0[1]) * (1 - u) + (nxt.y + p1[1]) * u
         self.hand.paste(frame, (x, y - 10 * math.sin(math.pi * u)), lifted=True)
 
-    def _resting(self, t, prev, nxt, rest, L):
+    def _pause(self, prev, nxt):
+        """(until, back) for a pause after ``prev`` longer than PARK while its page stays on screen: until the next
+        drawing on the page (back: the hand returns to draw it), else until the camera leaves the page. None for a
+        short pause."""
+        if nxt is not None and nxt.stretch == prev.stretch:
+            until, back = nxt.start, True
+        else:
+            until = min((a for a, _, _ in self.camera.keys if a > prev.end + 1e-6), default=self.tl['duration'])
+            if nxt is not None:
+                until = min(until, nxt.start - HAND_IN)
+            back = False
+        return (until, back) if until - prev.end > PARK else None
+
+    def _resting(self, t, prev, nxt, rest, L, pause):
         """Where the pen tip is at ``t`` during a long pause on one page: it lifts off the last stroke to the rest
-        spot (_rest), drifts slowly there while the narration goes on, and goes to the next drawing's first stroke."""
-        (a, b), gap = rest, nxt.start - prev.end
-        p0, p1 = self._last_pen(prev), self._first_pen(nxt)
+        spot (_rest), drifts on while the narration goes on, and goes to the next drawing's first stroke."""
+        (a, b), (until, back) = rest, pause
+        gap = until - prev.end
+        p0 = self._last_pen(prev)
         here = (prev.x + p0[0], prev.y + p0[1]) if p0 is not None else a
+        p1 = self._first_pen(nxt) if back else None
         there = (nxt.x + p1[0], nxt.y + p1[1]) if p1 is not None else b
         go = min(.8, gap * .3)
         if t < prev.end + go:
             u, frm, to = ease((t - prev.end) / go), here, a
-        elif t > nxt.start - go:
-            u, frm, to = ease((t - nxt.start + go) / go), b, there
+        elif back and t > until - go:
+            u, frm, to = ease((t - until + go) / go), b, there
         else:
-            u, frm, to = (t - prev.end - go) / max(1e-6, gap - 2 * go), a, b
+            u, frm, to = (t - prev.end - go) / max(1e-6, gap - (2 if back else 1) * go), a, b
         return frm[0] + (to[0] - frm[0]) * u - L, frm[1] + (to[1] - frm[1]) * u
 
-    def _rest(self, prev, nxt, L):
-        """Two nearby spots (world px) for the pen tip during a long pause between ``prev`` and ``nxt`` on one page,
-        where the hand and its shadow cover none of the page's drawings and words, the caption or the step rail; the
-        hand drifts from one to the other so the picture never stands still. None when the page has no such room
-        (the hand then slides out of the frame)."""
+    def _rest(self, prev, nxt, L, pause):
+        """Two spots (world px) for the pen tip during a long pause after ``prev`` (_pause), where the hand and its
+        shadow cover none of the page's drawings and words, the caption or the step rail; the hand drifts from one to
+        the other so the picture never stands still. None when the page has no such room (the hand then slides out
+        of the frame)."""
         cache = self.__dict__.setdefault('_rests', {})
         key = (id(prev), id(nxt))
         if key not in cache:
-            cache[key] = self._find_rest(prev, nxt, L)
+            cache[key] = self._find_rest(prev, nxt, L, pause)
         return cache[key]
 
-    def _find_rest(self, prev, nxt, L):
+    def _find_rest(self, prev, nxt, L, pause):
         import numpy as np
         W, H = self.size
+        until, back = pause
         k = 8                                            # px per cell of the coarse coverage maps
         busy = np.zeros((math.ceil(H / k), math.ceil(W / k)), bool)
 
@@ -832,7 +848,7 @@ class Production:
             busy[max(0, int(y0 // k)):max(0, math.ceil(y1 / k)), max(0, int(x0 // k)):max(0, math.ceil(x1 / k))] = True
 
         for e in self.els:
-            if e.start is None or e.start > nxt.start or e.skipped:
+            if e.start is None or e.start > until or e.skipped or e.stretch != prev.stretch:
                 continue
             if e.hidden_after is not None and e.hidden_after <= prev.end:
                 continue
@@ -855,18 +871,19 @@ class Production:
             y1, x1 = min(busy.shape[0], cy + h), min(busy.shape[1], cx + w)
             return y1 <= y0 or x1 <= x0 or not (busy[y0:y1, x0:x1] & shadow[y0 - cy:y1 - cy, x0 - cx:x1 - cx]).any()
 
-        p0, p1 = self._last_pen(prev), self._first_pen(nxt)
-        if p0 is None or p1 is None:
+        p0 = self._last_pen(prev)
+        p1 = self._first_pen(nxt) if back else None
+        if p0 is None or back and p1 is None:
             return None
         here = (prev.x + p0[0] - L, prev.y + p0[1])
-        there = (nxt.x + p1[0] - L, nxt.y + p1[1])
+        there = (nxt.x + p1[0] - L, nxt.y + p1[1]) if back else here
         spots = [(x, y) for y in range(round(H * .08), round(H * .8), 24) for x in range(round(W * .1), round(W * .94), 24)]
         spots.sort(key=lambda p: math.dist(p, here) + math.dist(p, there))
         a = next((p for p in spots if free(*p)), None)
         if a is None:
             return None
-        gap = nxt.start - prev.end
-        want = min(420., DRIFT * (gap - 2 * min(.8, gap * .3)))
+        gap = until - prev.end
+        want = min(420., DRIFT * (gap - (2 if back else 1) * min(.8, gap * .3)))
 
         def clear(p, q):
             n = max(1, math.ceil(math.dist(p, q) / 24))

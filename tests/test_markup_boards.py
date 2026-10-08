@@ -193,6 +193,14 @@ def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
     assert abs(prod.hand.pasted[-1][0] - 710) < 30 and abs(prod.hand.pasted[-1][1] - 340) < 30
 
 
+def test_typing_moves_a_line_highlight_wide_enough_to_read_as_motion():
+    import numpy as np
+    d = mb.CodeDrawing(CODE, 'python', 1656, 738, 1080, 2.2)
+    luma = lambda t: np.asarray(d.state(t)[0].convert('L'), float)
+    for t in (0., .4, .8, 1.2):                     # in any half second of typing the picture changes more than
+        assert np.abs(luma(t) - luma(t + .55)).sum() / (1920 * 1080 * 255) > .006   # freezedetect's -50 dB
+
+
 def test_finished_code_keeps_a_blinking_cursor():
     d = mb.CodeDrawing(CODE, 'python', 1656, 738, 1080, 2.)
     shown = {d.state(2. + k * mb.BLINK + .1)[0].tobytes() for k in range(2)}
@@ -224,10 +232,14 @@ def test_later_board_items_are_drawn_under_the_formula_on_its_page(tmp_path):
 def test_the_probe_fails_clipped_and_overlapping_text():
     found, seen = [], set()
     text_layout._check(1., [((100, -40, 900, 60), 'Find the drip.'), ((300, 500, 900, 560), 'over 3,000 gallons'),
-                            ((320, 510, 880, 570), 'a year'), ((1000, 900, 1200, 960), 'fine')],
+                            ((320, 510, 880, 570), 'a year'), ((1000, 900, 1200, 960), 'fine'),
+                            ((100, 700, 600, 740), 'P is what you start with'),
+                            ((594, 702, 900, 742), 'n is the number of years'),
+                            ((100, 800, 500, 840), 'side by side'), ((500, 800, 800, 840), 'not touching')],
                        (1920, 1080), found, seen)
     assert [(f['defect'], f['text']) for f in found] == [('text_clipped', 'Find the drip.'),
-                                                         ('text_overlap', 'over 3,000 gallons')]
+                                                         ('text_overlap', 'over 3,000 gallons'),
+                                                         ('text_overlap', 'P is what you start with')]
 
 
 def test_a_long_kinetic_headline_over_pictures_is_measured_inside_the_frame():
@@ -268,3 +280,11 @@ def test_a_long_kinetic_headline_over_pictures_stays_inside_the_frame(tmp_path):
     assert span.motion is not None and any(e.kind == 'text' for e in span.motion.elements)
     clipped = [f for f in text_layout.problems(prod) if f['defect'] == 'text_clipped' and f['t'] < span.end]
     assert clipped == []
+
+
+def test_content_qa_does_not_count_code_lines_as_narrated_sentences():
+    from kinodraw.qa import content
+    board = script.build(ingest.read(SCRIPT), story='story')
+    code = _beat(board, 'balance = 1000')['id']
+    found = content.lines(from_rules(board), board)
+    assert found and not [line for line in found if line.beat == code]
