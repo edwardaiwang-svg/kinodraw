@@ -214,6 +214,8 @@ def figures(text: str) -> list[Figure]:
             continue                               # one group of a longer number ("482 913" without "code")
         word = WORD_AFTER.match(text, m.end())
         unit = word.group(1).lower() if word and word.start(1) - m.end() <= 1 and _unit(word.group(1)) else ''
+        if unit == 'times' and re.match(r'\s+\d', text[word.end(1):]):
+            unit = ''                              # "3 times 5": an operator, not "3 times a week"
         if not unit and _named(text, m.start()):
             continue
         end = word.end(1) if unit else m.end()
@@ -318,10 +320,15 @@ def _rows(text, figs):
     return out
 
 
+def _small(f: Figure) -> bool:
+    """A count under ten with no unit ("2 of them", "jump 3"): too small to be a headline."""
+    return f.family == 'count' and f.value is not None and f.value < 10 and f.unit not in UNITS
+
+
 def _sentence_card(text: str, a: int, b: int) -> Card | None:
     figs = [f for f in figures(text) if a <= f.start < b]
-    if not figs:
-        return None
+    if not figs or all(_small(f) for f in figs):
+        return None                                # "Jump 3, then jump 5": counting, not data
     sentence = text[a:b]
     first = figs[0].start
     when = [f for f in figs if f.family in ('time', 'date', 'day')]
@@ -382,7 +389,7 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
                                                      text[max(a, f.start - 24):f.start], re.I)):
         unit = re.match(r'\s*(each|apiece|a piece|per \w+|an? \w+|/\s?\w+)\b', text[f.end:])
         return Card('price', first, b, value=_shown(f), label=unit.group(1) if unit else '', qualifier=qualifier)
-    if f.family == 'count' and f.value is not None and f.value < 10 and f.unit not in UNITS:
+    if _small(f):
         return None                                # "2 of them", "2 friends": too small to be a headline
     label = _label(text, f.end, 4) if not f.unit else _label(text, f.end, 4)
     value = _shown(f)

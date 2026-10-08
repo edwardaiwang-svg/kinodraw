@@ -136,3 +136,35 @@ def test_a_whiteboard_page_that_writes_the_figure_gets_no_card_over_it():
     cards.paint(frame, start + 1.5, True, _Host())                     # a motion page over the same beat
     assert frame.getextrema()[0] != (246, 246)
     assert not data_cards.build(ep, tline, 'en', Skin(), (W, H)).on_board
+
+
+class _DeviceHost(_Host):
+    """A production that draws device screens (engine/ui_screens moments) over its page."""
+
+    def __init__(self, moments, vertical=False):
+        super().__init__()
+        self.ui_moments, self.vertical = moments, vertical
+
+
+def _painted(cards, t, host):
+    blank = Image.new('RGBA', (W, H), (246, 244, 238, 255))
+    frame = blank.copy()
+    cards.paint(frame, t, False, host)
+    return frame.getextrema()[0] != (246, 246)
+
+
+def test_no_card_for_a_figure_a_device_screen_draws_and_none_over_a_live_device():
+    ep, tline = _episode('A new entry appears with a code, like 482 913.',
+                         'A new entry appears with a code, like four eight two, nine one three.')
+    cards = data_cards.build(ep, tline, 'en', Skin(), (W, H))
+    start, end, card, _ = cards.entries[0]
+    assert card.value == '482 913'
+    t = start + .5
+    phone = {'start': end - .5, 'end': end + 3, 'kind': 'app', 'app': 'Authenticator',
+             'elements': [{'label': 'Harbor Mail', 'value': '482 913'}]}
+    assert not _painted(cards, t, _DeviceHost([phone])), 'the phone already shows the code: no second copy'
+    other = {'start': t - 1, 'end': t + .5, 'kind': 'app', 'app': 'Mail', 'elements': [{'label': 'Inbox'}]}
+    assert not _painted(cards, t, _DeviceHost([other])), 'a card over a live device screen'
+    assert _painted(cards, t + 1, _DeviceHost([other]))           # after that screen, the card comes back
+    assert _painted(cards, t, _DeviceHost([phone, other], vertical=True))   # a portrait frame draws no device
+    assert _painted(cards, t, _Host())

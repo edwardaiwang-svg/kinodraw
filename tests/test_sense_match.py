@@ -168,8 +168,9 @@ def test_content_qa_is_no_longer_inverted_on_the_commutative_lesson():
 
 
 def test_a_number_sentence_shown_only_by_an_icon_is_a_finding():
-    board = script.build(ingest.read('# Q3 Update\n\nRevenue grew to 4.2 million dollars, up 18 percent from last '
-                                     'year.\n\nOur trucks carried 3,100 tons of food scraps.\n\n'
+    # A number no data card shows ("4.2 million dollars, up 18 percent" gets one from the renderer: shown).
+    board = script.build(ingest.read('# Q3 Update\n\nRevenue grew for two quarters in a row.\n\n'
+                                     'Our trucks carried 3,100 tons of food scraps.\n\n'
                                      'Thank you to every driver.\n'), story='story')
     beats = board['beats']
     plan = {'storyboard': {'genre': 'explainer'}, 'cast': [], 'scenes': [

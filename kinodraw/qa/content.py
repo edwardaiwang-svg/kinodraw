@@ -65,7 +65,7 @@ class Line:
     at: float | None = None     # seconds: the sentence's middle in the video
     until: float | None = None  # seconds: its end
     numeric: bool = False       # it gives numbers or a comparison
-    by: str = ''                # what shows it: board, chart, card, text, cast, sky, picture or '' (nothing)
+    by: str = ''                # what shows it: board, chart, card, screen, text, cast, sky, picture or '' (nothing)
     size: float | None = None   # share of the frame its drawing covers (with the video)
 
 
@@ -294,6 +294,20 @@ def same_runs(video, timed: list[Line]) -> list[tuple[int, int]]:
     return runs
 
 
+def _on_screens(video, found: list[Line]) -> None:
+    """A sentence said while a device screen is drawn (the renderer's build/ui-screens.json rows; the screen is up at
+    the sentence's middle: a notification comes on with the words it quotes, after the sentence starts) is shown by
+    that screen: the phone, laptop or message thread is the picture of what it says."""
+    import json
+    from pathlib import Path
+    path = Path(video).parent / 'build' / 'ui-screens.json'
+    rows = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else []
+    for line in found:
+        middle = None if line.at is None else (line.at + (line.until if line.until is not None else line.at)) / 2
+        if middle is not None and any(r['start'] <= middle < r['end'] for r in rows):
+            line.by, line.shown = 'screen', True
+
+
 def check(plan, board, timeline=None, video=None) -> dict:
     """{'problems': [plain-word problems], 'findings': [...], 'stats': {...}} for a plan and its video."""
     from ..package import clock
@@ -303,6 +317,7 @@ def check(plan, board, timeline=None, video=None) -> dict:
     found = lines(plan, board, timeline)
     if video is not None:
         readable(video, found)
+        _on_screens(video, found)
     findings = []
     concrete = [line for line in found if line.concrete]
     unshown = [line for line in concrete if not line.shown]
