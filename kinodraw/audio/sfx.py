@@ -6,8 +6,8 @@ screen)}. It plays one hit from its kind's bank, NumPy recipes plus the bundled 
 drawn per cue. The variant, ±3 semitones of pitch and ±3 dB of gain (none for synth_sfx kinds, which come at the level
 that sets them under the narration) come from (seed, id) alone, so a video always sounds the same.
 Contact frames: a hit's transient peak lands on round(t * sr); a whoosh peaks on t and a riser builds up to t over
-dur (1.2 s by default); write, the beds (wind, rain, fog_drone) and transition_whoosh play from t for dur (a synth_sfx
-kind's own length by default). A hit less than 60 ms (35 ms for letter and type) after the last one of its kind is
+dur (1.2 s by default); write, the beds (wind, rain, fog_drone), transition_whoosh and the everyday sequences and
+textures (footsteps, typing, applause, a laugh ...) play from t for dur (a synth_sfx kind's own length by default). A hit less than 60 ms (35 ms for letter and type) after the last one of its kind is
 dropped.
 """
 from __future__ import annotations
@@ -32,7 +32,9 @@ SPACING = {'letter': .035, 'type': .035}
 MIN_SPACING = .06
 SPREAD = .6               # x = 0 (or 1) pans 60% of the way to the left (or right)
 ATTACK = .05              # a hit's transient peak is in its first 50 ms
-FROM_T = {'write', 'wind', 'rain', 'fog_drone', 'transition_whoosh'}    # play from t for dur
+FROM_T = {'write', 'wind', 'rain', 'fog_drone', 'transition_whoosh',    # play from t for dur
+          'footsteps', 'typing', 'sizzle', 'pour', 'whisk', 'cheer', 'applause', 'murmur', 'car', 'bus', 'laugh',
+          'drawer', 'cash_register', 'clock_tick'}
 VARIANTS = 3              # synthesized per kind
 
 
