@@ -47,20 +47,24 @@ def test_a_night_room_shows_its_dark_window_and_no_stars_across_the_wall(tmp_pat
 
 def test_the_sky_never_shows_what_the_words_took_away_until_they_bring_it_back(tmp_path):
     text = ('Pip woke in the dark wood.\n\n"Gran, somebody took the moon," said Pip.\n\n'
-            'The sky was dark and empty. No moon anywhere.\n\nThen the cloud slid away, and there was the moon.')
+            'The sky was dark and empty. No moon anywhere.\n\nThen the cloud slid away, and there was the moon.\n\n'
+            'Pip walked home.')
     walk = [('pip', 'young', 'stand', 'no')]
     prod = staged(tmp_path, text, [shot('b001', 'Pip woke', 'wide', walk, place='forest'),
                                    shot('b002', 'Gran,', 'wide', walk, place='forest',
                                         props=[prop('fl_crescent_moon')], focus='fl_crescent_moon'),
                                    shot('b003', 'The sky', 'wide', walk, place='forest'),
                                    shot('b004', 'Then the cloud', 'wide', walk, place='forest',
-                                        props=[prop('fl_full_moon')])],
+                                        props=[prop('fl_full_moon')]),
+                                   shot('b005', 'Pip walked', 'wide', walk, place='forest')],
                   cast=MICE, sky='night_stars')
     before, took, empty, back = (pages(prod, bid)[1][0] for bid in ('b001', 'b002', 'b003', 'b004'))
     for page in (before, took, empty):           # missing from the start: the story first speaks of it as gone
         assert 'moon' not in kinds(page) and 'fl_star' in sky(page)
         assert not any('moon' in p.doodle for p in page.set)      # nor as a picture on the ground
     assert 'fl_full_moon' in sky(back)                            # the plan's own moon, round and full
+    after = pages(prod, 'b005')[1][0]
+    assert 'fl_full_moon' in sky(after) and 'fl_crescent_moon' not in sky(after)   # and it stays that moon
 
 
 def test_a_nature_place_is_drawn_with_its_cast_on_it(tmp_path):
@@ -122,9 +126,12 @@ def test_a_page_with_room_for_its_cast_stays_whole_and_pushes_into_eyes_only_whi
     assert story[2].start == pytest.approx(local(prod, 'b001', 'Then they'), abs=.05)
 
 
-def test_a_story_staged_from_shots_shows_its_title_on_the_first_page(tmp_path):
-    text = '# The Brave Cub\n\nLeo walked across the field. Nia followed him.'
+def test_a_story_staged_from_shots_shows_its_title_on_the_first_page_clear_of_its_sky(tmp_path):
+    text = '# The Brave Little Cub Who Roared at the Morning Sun\n\nLeo walked across the field. Nia followed him.'
     prod = staged(tmp_path, text, [shot('b001', 'Leo walked', 'wide', [('leo', 'adult', 'walk', 'no')],
-                                        place='field')], cast=LIONS)
+                                        place='field')], cast=LIONS, sky='dawn')
     titled = [p for span in prod.spans if span.story for p in span.story if p.title]
-    assert len(titled) == 1 and titled[0].title == 'The Brave Cub' and titled[0].start == 0
+    assert len(titled) == 1 and titled[0].start == 0
+    assert titled[0].title == 'The Brave Little Cub Who Roared at the Morning Sun'
+    sun = next((y, h) for d, x, y, h in titled[0].sky if _sky_kind(d) == 'sun')
+    assert sun[0] > .09 + 2 * 1.2 * .07                           # below the title's two lines, not across them

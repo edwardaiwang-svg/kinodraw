@@ -305,6 +305,7 @@ class Shots:
         self.written = {}              # doodle -> the words a page of it last showed: a page keeps its writing
         self.gone = None               # sky things the words last said are not there ('moon', 'sun', 'star')
         self.read = {}                 # beat id -> the Reader's sentences
+        self.drawn = {}                # 'sun'/'moon' -> the picture of it the story last showed (its full moon)
 
     def prepare(self, spec, start, end):
         from .storybook import Shot
@@ -539,12 +540,16 @@ class Shots:
         out = []
         for doodle in wanted:
             kind = _sky_kind(doodle)
+            if doodle in ('fl_crescent_moon', 'fl_sun') and kind in self.drawn:
+                doodle = self.drawn[kind]                         # the same moon as the page before
             star = kind == doodle and 'star' in doodle
             if kind in [_sky_kind(d) for d in out] or kind in self.gone or (self.night and kind == 'sun') or \
                     (star and 'star' in self.gone):
                 continue
             out.append(doodle)
-        out = book._window_sky(shot, out[:2], place)
+        out = out[:2]
+        self.drawn.update({_sky_kind(d): d for d in out if _sky_kind(d) in ('sun', 'moon')})
+        out = book._window_sky(shot, out, place)
         for i, doodle in enumerate(out):
             shot.sky.append(doodle if isinstance(doodle, tuple) else (doodle, (.83, .2)[i], .15, .16))
         outdoors = place not in sets.INTERIOR and place != 'night_sky'

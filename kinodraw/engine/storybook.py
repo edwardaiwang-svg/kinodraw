@@ -507,7 +507,31 @@ class Storybook:
         if spec['beat_ids'][0] == self.first and (self.by_id[self.first].get('kind') == 'title'
                                                    or titled(self.title, self.by_id[self.first]['spoken'])):
             shots[0].title = self.title
+            self._clear_title(shots[0])
         return shots
+
+    def _clear_title(self, shot):
+        """The sun, moon and stars of a title page hang below its title (_title's lines), never across them; a sky
+        seen through a window stays in the window."""
+        if any(p.doodle in sets.WINDOWS for p in shot.set) or not shot.sky:
+            return
+        from . import ink
+        w, h = self.size
+        size = round(h * .07)
+        font = ImageFont.truetype(ink.EN_HAND[0], size)
+        draw = ImageDraw.Draw(Image.new('RGBA', (8, 8)))
+        lines = _wrap(shot.title, font, w * .8, draw)[:2]
+        half = max(draw.textlength(line, font=font) for line in lines) / 2 / w + .02
+        bottom = .09 + len(lines) * 1.2 * size / h + .02
+        sky = []
+        for doodle, x, y, height in shot.sky:
+            wide = height * h / w / 2
+            if y < bottom and abs(x - .5) < half + wide:
+                if doodle == 'fl_star':
+                    continue                              # a star in the title's way is left out
+                y = bottom
+            sky.append((doodle, x, y, height))
+        shot.sky = sky
 
     def _cast_figure(self, cid, line=None, **kw):
         c = self.cast[cid]
