@@ -65,6 +65,16 @@ def _table():
         f'<rect x="12" y="22" width="316" height="20" rx="5" fill="#B9875A" {INK}/>'))
 
 
+def _armchair():
+    return _svg(260, 220, (
+        f'<rect x="40" y="18" width="180" height="130" rx="34" fill="#7E57C2" {INK}/>'
+        f'<rect x="36" y="118" width="188" height="56" rx="14" fill="#9575CD" {INK}/>'
+        f'<rect x="10" y="82" width="52" height="104" rx="24" fill="#7E57C2" {INK}/>'
+        f'<rect x="198" y="82" width="52" height="104" rx="24" fill="#7E57C2" {INK}/>'
+        f'<rect x="40" y="184" width="16" height="30" fill="#5D4037" {THIN}/>'
+        f'<rect x="204" y="184" width="16" height="30" fill="#5D4037" {THIN}/>'))
+
+
 def _tv_stand():
     return _svg(300, 100, (
         f'<rect x="12" y="14" width="276" height="70" rx="6" fill="#8D6E63" {INK}/>'
@@ -265,7 +275,7 @@ def _pole():
 
 SVG = {
     'set_window': _window(False), 'set_window_night': _window(True), 'set_desk': _desk(), 'set_desk_lamp': _desk_lamp(),
-    'set_table': _table(), 'set_tv_stand': _tv_stand(), 'set_rug': _rug(), 'set_counter': _counter(),
+    'set_table': _table(), 'set_armchair': _armchair(), 'set_tv_stand': _tv_stand(), 'set_rug': _rug(), 'set_counter': _counter(),
     'set_stove': _stove(), 'set_fridge': _fridge(), 'set_bookshelf': _bookshelf(), 'set_chalkboard': _chalkboard(),
     'set_school_desk': _school_desk(), 'set_shop_shelves': _shop_shelves(), 'set_grocery_bag': _grocery_bag(),
     'set_streetlight': _streetlight(), 'set_swing': _swing(), 'set_church': _church(), 'set_bush': _bush(),
@@ -354,7 +364,7 @@ SUPPORTS = {
     'set_desk': ('top', .05, .95, .11), 'set_table': ('top', .05, .95, .12), 'set_tv_stand': ('top', .06, .94, .14),
     'set_counter': ('top', .03, .74, .14), 'set_stove': ('top', .08, .92, .17), 'set_school_desk': ('top', .06, .94, .17),
     'office_desk': ('top', .06, .5, .45), 'fl_couch_and_lamp': ('seat', .13, .7, .76), 'fl_bed': ('bed', .16, .93, .43),
-    'fl_chair': ('seat', .22, .78, .56), 'empty_bench': ('seat', .1, .86, .56), 'set_bus_seat': ('seat', .12, .62, .54),
+    'fl_chair': ('seat', .22, .78, .56), 'set_armchair': ('seat', .24, .76, .56), 'empty_bench': ('seat', .1, .86, .56), 'set_bus_seat': ('seat', .12, .62, .54),
     'set_train_seat': ('seat', .12, .62, .54),
 }
 
@@ -364,12 +374,13 @@ SUPPORTS = {
 # (doodle, 'on:<support doodle>', height[, share along its surface]) resting on an earlier piece. Wall pieces (windows, boards, clocks) hang
 # above the floor line. A window shows the page's sun or moon.
 FLOOR, BACKLINE = .785, .7
-INTERIOR = {'living_room', 'bedroom', 'study', 'kitchen', 'dining', 'bathroom', 'office', 'classroom', 'hospital',
+INTERIOR = {'room', 'living_room', 'bedroom', 'study', 'kitchen', 'dining', 'bathroom', 'office', 'classroom', 'hospital',
             'shop', 'library', 'cafe', 'bus', 'train', 'space'}
 # Nature places keep the story's own trees, rivers and hills: their set only fills a page that is otherwise empty.
 NATURE = {'forest', 'jungle', 'countryside', 'outdoors'}
 _ROOM = ('strip:floor', .725, .805)
 SETS = {
+    'room': [_ROOM, ('set_window', .5, .42, .24)],          # a room the story does not furnish (a hallway, a stage)
     'town': [('strip:road', .69, .8), ('fl_house', .1, BACKLINE, .27), ('fl_deciduous_tree', .27, BACKLINE, .3),
              ('house', .46, BACKLINE, .3), ('fl_evergreen_tree', .63, BACKLINE, .26),
              ('fl_house_with_garden', .81, BACKLINE, .27), ('set_streetlight', .96, BACKLINE, .34)],
@@ -487,7 +498,7 @@ class Support:
 # ------------------------------------------------------------------ staging a page
 # Drawn heights (frame height shares) of things a line names; a person is about .42.
 HEIGHTS = {
-    'fl_couch_and_lamp': .34, 'fl_bed': .24, 'set_desk': .21, 'office_desk': .3, 'set_table': .18, 'set_counter': .21,
+    'fl_couch_and_lamp': .34, 'set_armchair': .26, 'fl_bed': .24, 'set_desk': .21, 'office_desk': .3, 'set_table': .18, 'set_counter': .21,
     'set_stove': .22, 'fl_chair': .22, 'empty_bench': .17, 'fl_television': .17, 'set_fridge': .42,
     'set_bookshelf': .4, 'set_desk_lamp': .14, 'fl_mantelpiece_clock': .09, 'fl_potted_plant': .12,
     'fl_framed_picture': .1, 'fl_bicycle': .2, 'set_grocery_bag': .13, 'fl_tangerine': .06, 'fl_red_apple': .06,
