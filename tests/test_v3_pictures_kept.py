@@ -41,11 +41,13 @@ def test_a_saved_plan_keeps_library_pictures_its_matcher_no_longer_offers():
     _one_scene(plan, bids, treatment='whiteboard', elements=[{'kind': 'picture', 'ref': 'thermometer_hot'},
                                                              {'kind': 'picture', 'ref': 'clock_fast'},
                                                              {'kind': 'picture', 'ref': 'fl_field_hockey'}])
-    out, repairs = validate(plan, board, _offered(board, ['fl_cloud']))      # today's offer names none of them
+    kept = []
+    out, repairs = validate(plan, board, _offered(board, ['fl_cloud']), kept)      # today's offer names none of them
     refs = [e['ref'] for e in out['scenes'][0]['elements'] if e['kind'] == 'picture']
     # "heats ... hotter" names the hot thermometer, "the clock" the clock; nothing in the scene names field hockey
     assert refs == ['thermometer_hot', 'clock_fast'], repairs
     assert not [r for r in repairs if 'thermometer_hot' in r or 'clock_fast' in r], repairs
+    assert "scenes[0]: kept clock_fast, not offered: the words say 'clock'" in kept, kept     # which rule kept it
     assert any("out-of-scene picture ref 'fl_field_hockey'" in r for r in repairs), repairs
 
 
