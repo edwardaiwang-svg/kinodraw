@@ -107,6 +107,8 @@ DRAWN_AGE = {'baby': 'child', 'young': 'child', 'child': 'child', 'teen': 'teen'
              'middle': 'middle', 'old': 'elder', 'elder': 'elder'}
 PERSON_SEX = {'boy': 'male', 'man': 'male', 'girl': 'female', 'woman': 'female'}
 PERSON_BAND = {'boy': 'child', 'girl': 'child'}
+# Hair styles that read as a woman's and as a man's at any size: short curls on a woman read as a man's.
+FEMALE_STYLES, MALE_STYLES = ('long', 'bun', 'ponytail'), ('short', 'curly', 'bald')
 OUTFITS = {'adult': ('villager', 'teacher', 'explorer'), 'child': ('casual', 'explorer'), 'elder': ('villager',)}
 ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|librarian|counsel+or)\b', 'teacher'),
                 (r'\b(?:explorer|hiker|ranger|scout|adventurer)\b', 'explorer'),
@@ -249,8 +251,14 @@ def _person(age, sex, pose, facing, marks):
                                          and outfit not in ('suit', 'labcoat', 'uniform', 'worker'))) if on)
         hair = look['elder_hair'] if drawn == 'elder' else people.greying(look['hair']) if drawn == 'middle' else \
             look['hair']
-        style = 'bald' if drawn == 'elder' and sex == 'male' and look.get('style') == 'short' else \
-            'bun' if elder_woman and look['style'] in ('long', 'ponytail') else look['style']
+        style = look['style']
+        if sex == 'female':
+            # A woman keeps a woman's hair at every age: an old one's goes up in a bun; greying changes the colour.
+            style = 'bun' if elder_woman or style not in FEMALE_STYLES else style
+        elif style not in MALE_STYLES:
+            style = 'short'
+        if drawn == 'elder' and sex == 'male' and style != 'bald':
+            style = 'bald'          # an old man's hair recedes to white at the sides, never an old woman's curls
         key = people.look_key(sex, drawn, outfit, tone if tone in people.SKIN else 'tan', look['top'],
                               look['bottom'], hair, style, look.get('accent', '#C62828'), flags or 'x')
         pid = f"{key}_{info.get('pose', 'stand')}_{info.get('facing', 'r')}"
@@ -646,6 +654,11 @@ class Storybook:
         clothes and hair colours no other person on the cast wears (engine.people draws them at every age)."""
         if cid in self.looks:
             return self.looks[cid]
+        base = planned.same_person(self.cast, cid)
+        if base != cid and self._human(base):
+            # The same person at another age ("theo_old", "Old Sam"): their look, so a time jump keeps them.
+            self.looks[cid] = self._look(base)
+            return self.looks[cid]
         c = self.cast[cid]
         seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
         sex = person_sex(c, cid, self.reader, self.texts)       # the same as their voice's (speech.voice_parts)
@@ -667,9 +680,11 @@ class Storybook:
         tops = [t for t in prefer if t not in used_tops] or \
             [people.TOPS[(seed + i) % len(people.TOPS)] for i in range(len(people.TOPS))]
         top = next((t for t in tops if t not in used_tops), tops[0])
-        styles = ('long', 'bun', 'ponytail', 'curly') if sex == 'female' else ('short', 'curly')
-        hairs = [(people.HAIRS[(seed + i) % len(people.HAIRS)], styles[(seed // 7 + j) % len(styles)])
-                 for j in range(len(styles)) for i in range(len(people.HAIRS))]
+        styles = FEMALE_STYLES if sex == 'female' else MALE_STYLES[:2]
+        # Hair that stands out from the skin, so the hairstyle (a bun, a fringe) reads at a glance.
+        colours = [h for h in people.HAIRS if people.distance(h, people.SKIN[chosen[1]]) >= 60] or list(people.HAIRS)
+        hairs = [(colours[(seed + i) % len(colours)], styles[(seed // 7 + j) % len(styles)])
+                 for j in range(len(styles)) for i in range(len(colours))]
         hair, style = next((h for h in hairs if h not in used_hair), hairs[0])
         everyday = EVERYDAY[seed % len(EVERYDAY)] if role not in EVERYDAY else role
         self.looks[cid] = {
