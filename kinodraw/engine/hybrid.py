@@ -1845,7 +1845,8 @@ class HybridProduction:
         """The source whiteboard page is the picture at ``t`` (data_cards: no card over a page that writes it)."""
         if not self.spans or t < self.starts[0] or t >= self.tl['end_card']['start']:
             return True
-        return bool(self._on_board(self.spans[bisect.bisect_right(self.starts, t) - 1]))
+        span = self.spans[bisect.bisect_right(self.starts, t) - 1]
+        return span.story is None and bool(self._on_board(span))     # a story page is drawn before any board
 
     @staticmethod
     def _on_board(span):

@@ -284,3 +284,18 @@ def test_a_counter_with_no_spoken_start_does_not_roll(tmp_path):
     counters = [e for span in prod.spans for e in span.motion.elements if e.preset == 'counter']
     assert counters and all(c.value_from == c.value_to == 1200 for c in counters if c.value_to == 1200)
     assert any(c.value_to == 1200 for c in counters)
+
+
+def test_a_story_page_is_not_the_board_page():
+    """A hybrid story shot (a character scene the storybook draws) keeps its card even when the hidden whiteboard
+    writes the same figure: the board is not on screen there; a character scene with no actors shows the board."""
+    from types import SimpleNamespace
+
+    from kinodraw.engine.hybrid import HybridProduction
+
+    def host(story):
+        span = SimpleNamespace(story=story, spec={'treatment': 'character'}, actors=[], source_proof=False)
+        return SimpleNamespace(spans=[span], starts=[0.], tl={'end_card': {'start': 10.}},
+                               _on_board=HybridProduction._on_board)
+    assert not HybridProduction.board_on_screen(host(object()), 2.)
+    assert HybridProduction.board_on_screen(host(None), 2.)
