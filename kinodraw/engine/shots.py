@@ -62,6 +62,14 @@ WRITABLE = re.compile(r'page|paper|letter|note(?!book_computer)|list|scroll|clip
                       r'card|newspaper|sign|poster|receipt|ticket|map|phone|smartphone|mobile|tablet|message|'
                       r'postcard|document|menu', re.I)
 PHONE = re.compile(r'phone|smartphone|mobile|tablet|cell', re.I)
+# Words that put someone down on the ground; without them nobody lies on a road (a newborn in the street reads as an
+# accident).
+LYING = re.compile(r'\b(?:lay|lays|lie|lies|lying|laid|sleep\w*|slept|asleep|nap\w*|doz\w*|fell|fallen|falls?|'
+                   r'collaps\w*|sprawl\w*|stretch\w*\s+out|faint\w*|tripp?\w*|knocked\s+(?:down|over)|flat)\b', re.I)
+# Words that say it is daytime: a shot the plan calls "day" inside a night scene without them is that night.
+DAYTIME = re.compile(r'\b(?:day(?:time|light|break)?|morning|noon|midday|afternoon|sun\w*|dawn|breakfast|lunch)\b',
+                     re.I)
+NIGHT_SKIES = ('night_stars', 'shooting_star')
 SEAT_WORDS = {'couch': r'couch|sofa|settee', 'sofa': r'couch|sofa|settee', 'settee': r'couch|sofa|settee',
               'seat': r'seat|chair|couch|sofa|bench'}
 SIGNAL = re.compile(r'antenna|signal|reception|wifi|bars', re.I)
@@ -80,11 +88,6 @@ OFFSCREEN = re.compile(r"\b(?:off[- ]?(?:screen|stage|camera)|O\.S\.|V\.O\.|voic
                        r"another\s+room|kitchen|hall(?:way)?|bathroom|bedroom|garage|basement|attic|upstairs|"
                        r"downstairs|outside|yard|garden|porch|doorway|stairs|phone|speaker(?:phone)?)|"
                        r"(?:calls?|called|calling|shouts?|shouted|shouting|yells?|yelled|yelling)\s+from)\b", re.I)
-SAID = re.compile(r"\b(?:said|says|say|asked|asks|replied|replies|told|tells|shouted|shouts|called|calls|yelled|"
-                  r"whispered|whispers|answered|answers|added|adds|muttered|mutters|cried|laughed|snapped|sighed|"
-                  r"admitted|insisted|went\s+on)\b", re.I)
-KIN = (('mother', r'mom|mum|mother|mama|mommy|ma'), ('father', r'dad|daddy|father|papa|pa|pop'),
-       ('grandmother', r'grandma|granny|grandmother|nana|gran'), ('grandfather', r'grandpa|grandfather|gramps'))
 QUOTES = str.maketrans({'’': "'", '‘': "'", '“': '"', '”': '"', '—': '-', '–': '-', '…': '.'})
 PAPER = (252, 249, 238, 255)
 INK = (27, 27, 27, 255)
@@ -267,8 +270,6 @@ class Shots:
         self.place = None
         self.night = False
         self.last = None               # the last shot built (a heard voice keeps the listeners' page)
-        self.turn = None               # (speaker, beat id, narration since) of the last quoted line
-        self.said = []                 # who spoke each quoted line so far, in order
         self.previous = None           # the last page of the scene before
         self.rests = {}                # cast id -> (place, pose): who sat or lay where in the last shot
         self.seats = {}                # cast id -> (place, support doodle, x): their seat stays theirs
@@ -278,6 +279,7 @@ class Shots:
         self.in_car = False            # the cast is in a car: pulled over outside, they are still in it
         self.seen = {}                 # cast id -> the place they were last on the page
         self.readable = None           # the last thing in the scene with words on it (the map she unfolds)
+        self.written = {}              # doodle -> the words a page of it last showed: a page keeps its writing
 
     def prepare(self, spec, start, end):
         from .storybook import Shot
@@ -448,6 +450,10 @@ class Shots:
             self.in_car = False
         if place == 'car_inside':
             self.in_car = True
+        holder = self._still_held(plan, cast, props, place)
+        if holder is not None:
+            cast = [{'id': holder.key, 'pose': 'hold', 'speaking': 'no',
+                     'age': next((k for k, v in AGE_BAND.items() if v == holder.age), None)}]
         for c in cast[:4]:
             f = book._cast_figure(c['id'])
             if book._human(c['id']):
@@ -462,6 +468,9 @@ class Shots:
                     f.pose = 'sit'                         # whoever speaks is awake and sits up
                 if place == 'car_inside' and f.pose not in ('sleep', 'lie'):
                     f.pose = 'sit'                         # everyone in a car is in a seat
+                if f.pose in ('sleep', 'lie') and any(spec[0] == 'strip:road' for spec in sets.SETS.get(place, ())) \
+                        and not LYING.search(book.by_id[bid]['spoken']):
+                    f.pose = 'stand'                       # nobody lies in the road unless the words lay them there
             else:
                 f.pose = 'carry' if c.get('pose') == 'carry' else POSE.get(c.get('pose'), 'stand')
             figures.append(f)
@@ -487,8 +496,9 @@ class Shots:
                 f.height *= WIDE_SCALE
         book._layout(figures, SimpleNamespace())
         time = setting.get('time')
-        self.night = time in ('night', 'dusk') or (time in (None, 'unknown') and (
-            self.night or spec.get('atmosphere', {}).get('kind') in ('night_stars', 'shooting_star')))
+        night_sky = (spec.get('atmosphere') or {}).get('kind') in NIGHT_SKIES
+        self.night = time in ('night', 'dusk') or (time in (None, 'unknown') and (self.night or night_sky)) or (
+            time == 'day' and night_sky and not DAYTIME.search(text[2]))   # "day" in a night scene, nothing says so
         shot.place = self.place = place
         refs, props = self._refs(place, setting.get('set_refs') or [], props, figures, text, at)
         book.stager.stage_explicit(shot, place, props, figures, at=lambda s: s, night=self.night, set_refs=refs)
@@ -528,6 +538,21 @@ class Shots:
         self.last = shot
         self.seen.update({f.key: place for f in figures})
         return shot
+
+    def _still_held(self, plan, cast, props, place):
+        """Whoever the last shot on this set had holding the thing this shot looks at alone, resting on nothing (a
+        close-up of the envelope a moment after the boy holds it): it stays in their hands. None otherwise."""
+        focus, last = plan.get('focus_ref') or '', self.last
+        if not self.book.story or cast or not focus or last is None or last.place != place:
+            return None                                   # outside a story an off-screen hand works it (_hands)
+        prop = next((p for p in props if p.get('ref') == focus), None)
+        if prop is None or prop.get('relation') not in (None, 'none') or prop.get('motion') not in (None, 'none'):
+            return None
+        key = next((p.holder for p in last.set if p.kind == 'hand' and p.doodle == focus and p.holder), None)
+        holder = next((f for f in last.figures if f.key == key and f.key in self.book.cast), None)
+        if holder is not None:
+            prop['relation'], prop['to'] = 'held_by', holder.key
+        return holder
 
     def _hands(self, shot, plan, focus):
         """Outside a story an insert or close-up of a thing that someone off screen holds or works shows their hand
@@ -800,7 +825,9 @@ class Shots:
             shot.figures, shot.bubbles = [], []           # the phone itself, showing no bars
             return
         if kind in ('insert', 'first_person') and focus and writable(focus):
-            words = writing_for(book, plan, bid, text)
+            words = writing_for(book, plan, bid, text) or self.written.get(focus, [])   # read again: same words
+            if words:
+                self.written[focus] = list(words)
             reader = next((f for f in figures if f.pose in ('look', 'sit', 'stand')), figures[0] if figures else None)
             if words or kind == 'first_person' or PHONE.search(focus) or MAP.search(_words(focus)):
                 shot.page = self._page(focus, words, reader, text[2])
@@ -808,6 +835,13 @@ class Shots:
                 return
         if kind in ('insert', 'first_person') or (kind == 'close' and not figures):
             box = self._arrangement(shot, piece, props) if piece is not None else None
+            holder = next((f for f in figures if piece is not None and piece.kind == 'hand' and f.key == piece.holder),
+                          None)
+            if box is None and holder is not None and book.story:
+                held = self._held_box(shot, piece)        # in a story: her hands on it, in her room
+                self._look_at(shot, self._union([self._knees_up(holder)] + ([held] if held else [])), MEDIUM_FILL,
+                              MAX_ZOOM['insert'])
+                return
             if box is None:
                 if not focus:
                     return
@@ -819,11 +853,20 @@ class Shots:
             return
         subject = next((f for f in figures if f.key in speakers), figures[0])
         if kind == 'close':
+            # The thing the close-up is about stays in it: the envelope in his hands, the one on the desk he reaches
+            # for (he is brought to that desk first).
+            thing = None if piece is None else self._held_box(shot, piece) if piece.kind == 'hand' else \
+                self._arrangement(shot, piece, props)
+            if thing is not None and piece.kind != 'hand' and self._union([self._body(subject), thing])[2] - \
+                    self._union([self._body(subject), thing])[0] > .5 and self._desk(shot, subject, piece):
+                thing = self._arrangement(shot, piece, props)
             top, (x0, _, x1, _) = self._top(subject), self._body(subject)
             hx = (x0 + x1) / 2
             span = (subject.ground - top) * .42
-            self._look_at(shot, (hx - .5 * span * book.size[1] / book.size[0], top, hx + .5 * span * book.size[1] /
-                                 book.size[0], top + span), (1., CLOSE_FILL), MAX_ZOOM['close'], at=.4)
+            face = (hx - .5 * span * book.size[1] / book.size[0], top, hx + .5 * span * book.size[1] / book.size[0],
+                    top + span)
+            self._look_at(shot, self._night_sky(shot, face if thing is None else self._union([face, thing])),
+                          (1., CLOSE_FILL), MAX_ZOOM['close'], at=.4)
             return
         group = figures
         if kind == 'two_shot' and len(figures) > 2:
@@ -840,7 +883,8 @@ class Shots:
             if near[2] - near[0] > .5 and (shot.screen or self._desk(shot, subject, piece)):
                 boxes = [self._knees_up(subject)] if not shot.screen else []
             boxes.append(arrangement)
-        self._look_at(shot, self._union(boxes), MEDIUM_FILL, MAX_ZOOM[kind if kind in MAX_ZOOM else 'medium'])
+        self._look_at(shot, self._night_sky(shot, self._union(boxes)), MEDIUM_FILL,
+                      MAX_ZOOM[kind if kind in MAX_ZOOM else 'medium'])
         self._uncut(shot, [f for f in figures if f not in group or not any(b == self._knees_up(f) for b in boxes)],
                     self._union(boxes))
 
@@ -920,6 +964,26 @@ class Shots:
         shot.set = [sets.Piece(focus, .5, .74, .46, kind='thing', lone=True)]
         shot.supports, shot.figures, shot.props, shot.screen = [], [], [], []
 
+    def _night_sky(self, shot, box):
+        """At night a framing of a room keeps its dark window in view (the night is what the words say) when the
+        window hangs above what it frames, so the shot stays as close as it was meant to be."""
+        window = next((p for p in shot.set if p.doodle == 'set_window_night'), None) if self.night else None
+        if window is None:
+            return box
+        pane = self._box(window)
+        both = self._union([box, pane])
+        above = pane[0] < box[2] + .03 and box[0] - .03 < pane[2]
+        return both if above and both[2] - both[0] <= .7 and both[3] - both[1] <= .62 else box
+
+    def _held_box(self, shot, piece):
+        """The frame box of a thing in its holder's hands as the shot opens; None when the holder is not on it."""
+        held = self.book.held_at(piece, shot, shot.start)
+        if held is None:
+            return None
+        x, middle, anchor = held
+        return self.book.stager.frame(piece.doodle, x, middle + (1 - anchor) * piece.height, piece.height,
+                                      piece.mirror)[2]
+
     def _box(self, piece):
         return self.book.stager.frame(piece.doodle, piece.x, piece.ground, piece.height, piece.mirror)[2]
 
@@ -960,17 +1024,15 @@ class Shots:
 
     # ---------------- bubbles
     def _quotes(self, beats, read):
-        """Every quoted line in reading order: (beat id, line index, line, q0, lead, words, tagged, heard)."""
+        """Every quoted line in reading order: (beat id, line, q0, lead, words, heard)."""
         book = self.book
         for bid in beats:
             display = book.by_id[bid]['text']
             label = SPEAKER_LABEL.match(display)
-            for index, line in enumerate(read[bid]):
+            for line in read[bid]:
                 if not line.quotes:
-                    yield bid, index, line, None, 0, '', False, False
                     continue
                 outside = re.sub(r'["“][^"”]*["”]?', ' ', line.text)
-                tagged = bool(label) or bool(SAID.search(outside) and line.speaker)
                 direction = re.match(r'\s*[\[(]([^\])]*)[\])]', display[label.end():]) if label else None
                 heard = bool(OFFSCREEN.search(outside) or (direction and OFFSCREEN.search(direction[1])))
                 for q0, q1 in line.quotes:
@@ -978,30 +1040,23 @@ class Shots:
                     lead = len(raw) - len(raw.lstrip(' "“'))
                     words = raw.strip().strip('"“”').strip().rstrip(',;:').strip()
                     if words:
-                        yield bid, index, line, q0, lead, words, tagged, heard
+                        yield bid, line, q0, lead, words, heard
 
     def _voices(self, plans, beats, read, timers):
         """Who speaks each quoted line, worked out before the shots are staged: {(beat id, q0): (speaker, index of
-        the plan shot it falls in, the plan's speaker)}."""
+        the plan shot it falls in, the plan's speaker)}. The speaker is the one speakers.attribute gave the voice."""
         lines_by_beat = {}
         for bid, _, plan in plans:
             lines_by_beat.setdefault(bid, []).extend(plan.get('lines') or ())
         out = {}
-        for bid, index, line, q0, lead, words, tagged, heard in self._quotes(beats, read):
-            if q0 is None:
-                if self.turn:
-                    self.turn = (self.turn[0], self.turn[1], True)
-                continue
+        for bid, line, q0, lead, words, heard in self._quotes(beats, read):
             at = q0 + lead
             i = max([k for k, (b, o, _) in enumerate(plans) if (beats.index(b), o) <= (beats.index(bid), at + 1)]
                     or [0]) if plans else None
-            plan = plans[i][2] if plans else {}
-            speaker = self._speaker(words, line, lines_by_beat.get(bid, []), plan, tagged, index == 0, bid)
+            speaker = self.person(self.book.speakers.of(bid, q0))
+            speaker = speaker if speaker in self.book.cast else None
             planned = next((self.person(l.get('speaker')) for l in lines_by_beat.get(bid, [])
                             if find_words(words, l.get('quote') or '') == 0), None)
-            self.turn = (speaker, bid, False)
-            if speaker is not None:
-                self.said.append(speaker)
             out[(bid, q0)] = (speaker, i, planned, heard)
         return out
 
@@ -1037,9 +1092,7 @@ class Shots:
     def _bubbles(self, shots, beats, read, timers, plans, voices):
         from .storybook import BUBBLE_WORDS, Bubble
         book = self.book
-        for bid, index, line, q0, lead, words, tagged, heard in self._quotes(beats, read):
-            if q0 is None:
-                continue
+        for bid, line, q0, lead, words, heard in self._quotes(beats, read):
             at = timers[bid]
             speaker, _, planned, heard = voices.get((bid, q0), (None, None, None, heard))
             if speaker is None:
@@ -1073,72 +1126,9 @@ class Shots:
                 row = {'beat': bid, 'start': first, 'end': first + len(part), 'speaker': speaker, 'text': part}
                 if planned and planned != speaker:
                     row['plan_speaker'] = planned         # the text's own tag or address overruled the plan
+                if book.speakers.of(bid, q0) != speaker:
+                    row['role'] = book.speakers.of(bid, q0)   # the voice's role ('theo_old'), drawn as its person
                 book.bubbled.append(row)
-
-    def _speaker(self, words, line, planned, plan, tagged, first, bid):
-        """The plan's speaker for a quoted line when it is plausible, else the text reading's."""
-        book = self.book
-        mine = next((self.person(l.get('speaker')) for l in planned
-                     if find_words(words, l.get('quote') or '') == 0), None)
-        if mine is None:
-            talking = [self.person(c['id']) for c in plan.get('cast') or () if c.get('speaking') in ('yes', 'off_screen')]
-            mine = talking[0] if len(talking) == 1 else None
-        fallback = line.speaker if line.speaker in book.cast else None
-        if mine not in book.cast:
-            return fallback
-        if tagged and fallback and fallback != mine:
-            return fallback                               # "...," Sam said / SAM: ...
-        if self._addressed(mine, words):
-            return self._other(mine, fallback)
-        owner = self._kin_owner(words)
-        if owner and owner != mine:
-            return owner
-        if (first and not tagged and self.turn and self.turn[0] == mine and not self.turn[2]
-                and self.turn[1] != bid):
-            return self._other(mine, fallback)             # a new paragraph is a new speaker
-        return mine
-
-    def _other(self, mine, fallback):
-        """Who speaks when the plan's speaker cannot: the last other person who spoke (two people take turns),
-        else the text reading's speaker."""
-        for who in reversed(self.said):
-            if who != mine and who in self.book.cast:
-                return who
-        return fallback if fallback != mine else None
-
-    def _addressed(self, cid, words):
-        """The line speaks to this person (their name as a vocative, "your father" when they are the father's
-        child), so they are not its speaker."""
-        c = self.book.cast[cid]
-        key = name_key(c.get('name') or '').split()
-        if key and re.search(r'(?<!\w)' + re.escape(key[0]) + r'(?!\w)', words, re.I) and len(key[0]) > 1:
-            if not re.search(r"(?<!\w)" + re.escape(key[0]) + r"['’]s\b", words, re.I):
-                return True
-        for kin, cue in KIN:
-            if re.search(r'\byour\s+(?:' + cue + r')\b', words, re.I) and self._child_of(kin) == cid:
-                return True
-        return False
-
-    def _kin_owner(self, words):
-        """"Dad's map", "Mom, look": a parent called by their title is the speaker's own, so the speaker is the
-        child of the cast's "<name>'s father/mother"."""
-        for kin, cue in KIN:
-            titled = '|'.join(c.title() for c in cue.split('|'))
-            for m in re.finditer(r"(?<![\w’'])(?:" + titled + r")\b", words):
-                if not re.search(r"\b(?:your|my|his|her|their|our|the|a|an)\s+$", words[:m.start()], re.I):
-                    child = self._child_of(kin)
-                    if child:
-                        return child
-        return None
-
-    def _child_of(self, kin):
-        """The cast member whose "<name>'s <kin>" is in the cast: Mia for "Mia's father"."""
-        for c in self.book.cast.values():
-            m = re.match(r"(.+?)['’]s\s+(\w+)$", c.get('name') or '')
-            if m and m[2].lower() == kin:
-                return next((d['id'] for d in self.book.cast.values()
-                             if name_key(d.get('name') or '') == name_key(m[1])), None)
-        return None
 
     def _hear(self, shots, shot, speaker):
         """A voice from elsewhere: its speaker is not drawn; a page left with nobody keeps the listeners' page."""
