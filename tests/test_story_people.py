@@ -45,6 +45,8 @@ def test_kin_words_resolve_to_the_one_person_they_can_mean_and_strangers_are_ext
     assert smiled.subject == 'rosa' and 'mia' in smiled.present
     [waved] = read(cast, 'A stranger waved at Mia.')
     assert waved.extras == ['+stranger'] and waved.present == ['mia']
+    waved, later = read(cast, 'A stranger waved at Mia.', '"Hi," Mia said.')
+    assert later.extras == []                          # an extra is on the page for the line that mentions them
     [crowd] = read(cast, 'Every child in town had one.')
     assert crowd.extras == [] and crowd.present == []
 
@@ -161,3 +163,16 @@ def test_a_resting_person_sits_or_lies_on_a_support_the_page_shows(prop, pose, s
     shot = storybook.Shot(0., 1., figures=[f], props=[(prop, .7, .78, .3)])
     assert (storybook.Storybook.seat(f, shot) == prop) == seated
     assert (f.x, f.ground < storybook.GROUND) == ((.7, True) if seated else (.3, False))
+
+
+def test_screenplay_lines_are_their_labelled_speakers():
+    cast = [person('walt', 'Walt', 'male', 'old'), person('dana', 'Dana', 'female'),
+            person('jules', 'Jules', 'female', 'young')]
+    lines = read(cast, '[JULES is sprawled on the couch. WALT sits in the armchair.]',
+                 "JULES: Okay, I'm picking. Something good.", 'WALT: Give me that. [He takes the remote.] '
+                 "That's your mother. She wouldn't come inside.", 'DANA: Dad, turn it off.')
+    assert lines[0].poses['jules'][0] == 'lie' and lines[1].poses['walt'][0] == 'sit'
+    speakers = [line.speaker for line in lines[2:]]
+    assert speakers == ['jules', 'jules', 'walt', 'walt', 'walt', 'dana']
+    assert lines[2].quotes and all('JULES' not in lines[2].text[q0 - lines[2].start:q1 - lines[2].start]
+                                   for q0, q1 in lines[2].quotes)

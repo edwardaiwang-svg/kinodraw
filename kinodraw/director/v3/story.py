@@ -21,8 +21,8 @@ POSES = (
     ('run', r'ran|runs?|running|raced|racing|dashed|rushed|bolted|sprinted'),
     ('walk', r'walk\w*|led|leads?|leading|guided|guiding|climb\w*|march\w*|stepped|followed|crept'),
     ('sleep', r'slept|sleep\w*|asleep'),
-    ('lie', r'lie|lies|lay|lying|rested|resting'),
-    ('sit', r'sat|sits?|sitting'),
+    ('lie', r'lie|lies|lay|lying|rested|resting|sprawl\w*|reclin\w*|lounging|curled\s+up'),
+    ('sit', r'sat|sits?|sitting|seated|perched|squeez\w*\s+(?:onto|into|in|on)|plopped|plonked'),
     ('look_up', r'looked\s+up|lifted\s+(?:his|her|its)\s+(?:heavy\s+)?head'),
     ('look', r'look(?:s|ed|ing)?|watch\w*|noticed|stared?|staring|gaz\w*|saw|listen\w*'),
     ('scared', r'trembl\w*|shiver\w*|afraid|scared|frighten\w*|cower\w*'),
@@ -277,6 +277,20 @@ def _quoted(text):
     return ranges
 
 
+SPEAKER_LABEL = re.compile(r'\s*([A-Za-z][\w’\'.]*(?:\s[A-Za-z][\w’\'.]*)?)\s*:\s+')
+
+
+def _speech(body, start):
+    """Quote-like ranges (open, close) of a screenplay line's spoken words: from ``start``, outside [brackets]."""
+    ranges, at = [], start
+    for m in list(re.finditer(r'\[[^\]]*\]?', body[start:])) + [None]:
+        end = start + m.start() if m else len(body)
+        if re.search(r'\w', body[at:end]):
+            ranges.append((at - 1, end))
+        at = start + m.end() if m else end
+    return ranges
+
+
 def _inside(ranges, at):
     return any(a < at < b for a, b in ranges)
 
@@ -469,9 +483,17 @@ class Reader:
     def read(self, beat_id, text, section=None, talker=None) -> list[Sentence]:
         """``talker``: the cast member the plan says speaks in this beat, for a quotation the text does not tag."""
         out = []
+        # A screenplay line ("JULES: Okay, I'm picking. [She points.]") is that person's speech, bracketed stage
+        # directions aside.
+        label = SPEAKER_LABEL.match(text)
+        speaker = next((c['id'] for c in self.cast if label and label[1].lower() in (
+            name_key(c['name']), name_key(c['name']).split()[0])), None)
+        talker = speaker or talker
         for index, (a, b) in enumerate(sentences(text)):
             body = text[a:b]
             quotes = _quoted(body)
+            if speaker and not quotes:
+                quotes = _speech(body, max(0, label.end() - a))
             refs = self.references(body, quotes)
             s = Sentence(a, b, body)
             s.quotes = [(a + q0 + 1, a + q1) for q0, q1 in quotes]
@@ -531,7 +553,7 @@ class Reader:
                     self.mentions[cid] = self.mentions.get(cid, 0) + 1
                     if self.mentions[cid] >= self.mentions.get(self.focus, 0):
                         self.focus = cid
-            self.stage = s.present + s.extras
+            self.stage = s.present          # an extra person is on the page for the line that mentions them
             self.crowd = s.crowd
             out.append(s)
         return out
