@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
 from . import ink
+from ..director.v3.staging import tie
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
@@ -353,11 +354,13 @@ class Storybook:
         for bid in spec['beat_ids']:
             beat, timing = self.by_id[bid], self.tl['beats'][bid]
             lines = self.reader.read(bid, beat['spoken'], beat.get('section'))
+            # Each sentence shows the pictures it names (a set from where it is named on); unnamed ones stay up.
+            shares = tie([line.text for line in lines], pictures)
             times = timing['char_times']
             at = lambda char: timing['start'] - start + (times[min(char, len(times) - 1)] if times else 0.)
             for i, line in enumerate(lines):
                 begin = timing['start'] - start if i == 0 else at(line.start)
-                shot = self._shot(line, begin, at, staged, pictures, spec)
+                shot = self._shot(line, begin, at, staged, shares[i], spec)
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
@@ -835,6 +838,8 @@ class Storybook:
             image = padded.rotate(rotate, resample=Image.Resampling.BICUBIC, center=(foot_x + pad, foot_y + pad))
             foot_x, foot_y = foot_x + pad, foot_y + pad
         at = (round(sx - foot_x), round(sy - foot_y))
+        if at[0] >= overlay.width or at[1] >= overlay.height or at[0] + image.width <= 0 or at[1] + image.height <= 0:
+            return at[0], at[1], image.width, image.height      # wholly off the page (a camera push past a prop)
         overlay.alpha_composite(image, (max(0, at[0]), max(0, at[1])),
                                 (max(0, -at[0]), max(0, -at[1])))
         return at[0], at[1], image.width, image.height

@@ -10,6 +10,7 @@ from ...script import SCAFFOLD
 from .arc import cta_phrase, is_launch, proof_number
 from .schema import SCENE, SKINS
 from .semantics import actions, atmosphere, beats, candidate_ids, detect_cast, mentions
+from .staging import beat_pictures, people, read_beats as stage_beats
 from .story import STORY_PALETTE, read_beats, story_picture
 from .validate import _default, validate
 from ...engine.source_diagrams import resolve as resolve_diagram
@@ -17,12 +18,16 @@ from ...engine.source_diagrams import resolve as resolve_diagram
 
 def detect_genre(text: str) -> str:
     launch = is_launch(text)
-    text = text.lower()
+    original, text = text, text.lower()
     if re.search(r'\b(introducing|product launch|launching|sign up|try it|saas|our new app)\b', text):
         return 'launch/promo'
     if launch:
         # A product reveal and a call to action make a launch arc, even when it names lessons it can make.
         return 'launch/promo'
+    labels = re.findall(r'(?m)^\s*([A-Z]{2,}(?: [A-Z]{2,})?)\s*:', original)
+    if len(labels) >= 3 and len(set(labels)) >= 2:
+        # A screenplay: speaker labels in capitals ("WALT:", "DANA:") on three or more lines.
+        return 'story'
     if re.search(r'\b(lesson|exercise|solve|equation|learning objective|practice problem|quiz)\b', text):
         return 'lesson'
     if re.search(r'\b(news|reported|report shows|survey|latest figures|according to|quarterly|inflation)\b', text):
@@ -32,6 +37,15 @@ def detect_genre(text: str) -> str:
     if re.search(r'\b(poem|poetry|verse|stanza)\b', text):
         return 'poem'
     return 'explainer'
+
+
+def offline_candidates(board: dict) -> dict:
+    """The pictures the offline director may use per beat: the rules draft's pictures, then the places and objects
+    each sentence names (``staging``), so no beat that names something concrete is left without a picture."""
+    script = beats(board)
+    staged = stage_beats(script)
+    return {b['id']: list(dict.fromkeys(list(_doodles(b['visuals'])) + beat_pictures(staged[b['id']])))
+            for b in script}
 
 
 def from_rules(board: dict, candidates=None) -> dict:
@@ -48,9 +62,13 @@ def from_rules(board: dict, candidates=None) -> dict:
     genre = detect_genre(title + '\n' + text)
     cast = detect_cast(script)
     story = genre == 'story'
+    if story:
+        # Human stories name people the animal cues miss: Theo, "his mother", "the stranger".
+        cast += people(script, cast)
     reading = read_beats(script, cast) if story else {}
+    staged = stage_beats(script)
     if candidates is None:
-        candidates = {b['id']: list(_doodles(b['visuals'])) for b in script}
+        candidates = offline_candidates(board)
     mode = {'story': 'hybrid', 'explainer': 'hybrid', 'lesson': 'whiteboard'}.get(genre, 'motion')
     dark = mode == 'motion'
     palette = ({'background': '#0C0C0C', 'ink': '#E7E5D8', 'accent': '#E4AB55', 'accent2': '#8B9BC9'} if dark else
@@ -136,7 +154,12 @@ def from_rules(board: dict, candidates=None) -> dict:
             scene['text'] = {'kind': 'caption_only', 'ref': b['id']}
             scene['camera'] = 'static'
         if story and not diagram:
-            _story_scene(scene, b, reading[b['id']])
+            _story_scene(scene, b, reading[b['id']], [p for p in beat_pictures(staged[b['id']]) if p in offered])
+        elif not diagram and not scene['elements'] and scene['treatment'] in ('whiteboard', 'motion'):
+            # An explainer or promo beat the rules draft left empty shows the things its sentences name.
+            scene['elements'] = [{'kind': 'picture', 'ref': p} for r in staged[b['id']]
+                                 for p in ([r.place] if r.named_place else []) + r.objects if p in offered]
+            scene['elements'] = list({e['ref']: e for e in scene['elements']}.values())
         elif treatment == 'character' and not diagram:
             scene['elements'] = [{'kind': 'cast', 'ref': cid} for cid in named]
         if atmo != 'none':
@@ -156,11 +179,13 @@ def from_rules(board: dict, candidates=None) -> dict:
     return validate(plan, board, candidates)[0]
 
 
-def _story_scene(scene, beat, lines):
-    """One picture-book page: everyone on stage in the beat's sentences, its setting doodles, captions only."""
+def _story_scene(scene, beat, lines, staged=()):
+    """One picture-book page: everyone on stage in the beat's sentences, its set and the things its sentences name
+    (``staged``: the place first, then each sentence's objects), captions only."""
     cast = list(dict.fromkeys(cid for line in lines for cid in line.present))
     # Offered doodles that can stand in the story's world; setting nouns (river, moon) are drawn from the text.
     pictures = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture' and story_picture(e['ref'])]
+    pictures = list(staged) + [p for p in pictures if p not in staged]
     scene['elements'] = ([{'kind': 'cast', 'ref': cid} for cid in cast] +
                          [{'kind': 'picture', 'ref': ref} for ref in dict.fromkeys(pictures)])
     scene['treatment'] = ('character' if cast else 'atmosphere' if scene['atmosphere']['kind'] != 'none'

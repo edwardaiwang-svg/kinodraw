@@ -10,7 +10,7 @@ from kinodraw import ingest, script, styles
 from kinodraw.director.rules import RulesDirector as PictureDirector
 from kinodraw.director.v3.adapter import adapt
 from kinodraw.director.v3.prompt import SYSTEM
-from kinodraw.director.v3.rules import RulesDirector, detect_genre, from_rules
+from kinodraw.director.v3.rules import RulesDirector, detect_genre, from_rules, offline_candidates
 from kinodraw.director.v3.schema import PLAN_SCHEMA, SKINS, schema_json
 from kinodraw.director.v3.validate import contrast, validate
 from kinodraw.director.validate import _doodles, validate as validate_legacy
@@ -52,7 +52,8 @@ def plans(drafts):
 
 
 def _candidates(board):
-    return {b['id']: [{'id': p, 'desc': 'offered'} for p in _doodles(b['visuals'])] for b in board['beats']}
+    """What the offline director offers: the rules draft's pictures and the things each sentence names."""
+    return {bid: [{'id': p, 'desc': 'offered'} for p in offered] for bid, offered in offline_candidates(board).items()}
 
 
 def test_schema_is_strict_and_storyboard_first():

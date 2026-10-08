@@ -25,6 +25,14 @@ SPECIES = {
     'gorilla': ('quadruped', 'primate'), 'chimpanzee': ('quadruped', 'primate'),
     'squirrel': ('quadruped', 'rodent'), 'crocodile': ('quadruped', 'reptile'), 'turtle': ('quadruped', 'reptile'),
     'frog': ('quadruped', 'other'), 'parrot': ('bird', 'bird'), 'penguin': ('bird', 'bird'),
+    'hedgehog': ('quadruped', 'rodent'), 'porcupine': ('quadruped', 'rodent'), 'hamster': ('quadruped', 'rodent'),
+    'rat': ('quadruped', 'rodent'), 'tortoise': ('quadruped', 'reptile'), 'snake': ('quadruped', 'reptile'),
+    'duck': ('bird', 'bird'), 'goose': ('bird', 'bird'), 'swan': ('bird', 'bird'), 'chicken': ('bird', 'bird'),
+    'hen': ('bird', 'bird'), 'flamingo': ('bird', 'bird'), 'crow': ('bird', 'bird'), 'sparrow': ('bird', 'bird'),
+    'robin': ('bird', 'bird'), 'firefly': ('bird', 'other'), 'bee': ('bird', 'other'),
+    'butterfly': ('bird', 'other'), 'beetle': ('quadruped', 'other'), 'ladybug': ('quadruped', 'other'),
+    'otter': ('quadruped', 'other'), 'badger': ('quadruped', 'other'), 'raccoon': ('quadruped', 'other'),
+    'donkey': ('quadruped', 'equine'), 'whale': ('fish', 'other'), 'shark': ('fish', 'other'),
 }
 SPECIES_RE = re.compile(r'\b(' + '|'.join(SPECIES) + r')\b', re.I)
 HUMAN_SPECIES = {'human', 'boy', 'girl', 'man', 'woman'}
