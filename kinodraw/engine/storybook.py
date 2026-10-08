@@ -385,6 +385,7 @@ class Shot:
     framing: str = ''                                # a plan shot's type (engine.shots)
     page: dict | None = None                         # a first_person page, map or phone filling the frame
     screen: list = field(default_factory=list)       # (TV piece, what it shows): pictures and cast figures
+    hands: list = field(default_factory=list)        # (piece, skin tone): an off-screen worker's hand on it
 
 
 @dataclass(eq=False)
@@ -415,6 +416,7 @@ class Storybook:
         self.by_id, self.tl, self.size = by_id, timeline, size
         self.paper_image = paper
         self.title = title
+        self.story = plan['storyboard']['genre'] == 'story'   # a lesson or promo staged here gets no story furniture
         self.first = plan['scenes'][0]['beat_ids'][0] if plan['scenes'] else None
         self.scenes = [s['beat_ids'] for s in plan['scenes']]
         self.facing = {}
@@ -1038,6 +1040,8 @@ class Storybook:
         for piece in shot.set:
             if piece.front:
                 self._piece(overlay, piece, shot, local, cam)
+        if shot.hands:
+            planned.draw_hands(self, overlay, shot, cam)
         if self._raining(shot) and shot.place not in sets.INTERIOR:
             self._rain(overlay, local)                  # indoors the rain is heard, not drawn across the room
         for effect in effects:

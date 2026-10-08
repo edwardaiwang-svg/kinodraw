@@ -54,6 +54,9 @@ MIN_SHOT = .8                      # seconds: a shorter shot shares the page bef
 # Poses that are not a body position: someone sitting or lying who talks, looks or holds something stays put.
 IN_PLACE = {'talk', 'look', 'point', 'hold', 'reach', 'laugh', 'read', 'eat', 'drink', 'wave', 'shout', 'cry',
             'scared', 'write', 'stand'}
+# Poses of someone the plan keeps off screen in an insert whose hands still work the thing (a recipe's cook holding,
+# pouring, stirring): outside a story the insert shows their hand on it.
+HAND_POSES = {'hold', 'carry', 'reach', 'point', 'write', 'eat', 'drink'}
 # Things a character can read: a first_person shot of one fills the frame with its words.
 WRITABLE = re.compile(r'page|paper|letter|note(?!book_computer)|list|scroll|clipboard|memo|diary|journal|notebook|'
                       r'card|newspaper|sign|poster|receipt|ticket|map|phone|smartphone|mobile|tablet|message|'
@@ -359,6 +362,12 @@ class Shots:
         heard = {c['id'] for c in people if c.get('speaking') == 'off_screen'}
         cast = [c for c in people if c.get('id') in book.cast and c['id'] not in heard]
         props = [dict(p) for p in plan.get('props') or () if self._known(p.get('ref'))]
+        focus = plan.get('focus_ref') or ''
+        if (not book.story and shot.framing in ('insert', 'close') and self._known(focus) and not writable(focus)
+                and focus not in [p['ref'] for p in props] + list((plan.get('setting') or {}).get('set_refs') or ())):
+            # Outside a story the thing an insert looks at stands in the set (the bowl on the kitchen counter),
+            # not alone on blank paper.
+            props.append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
         figures = []
         setting = plan.get('setting') or {}
         place = place_for(setting.get('place'), self.place)
@@ -449,8 +458,22 @@ class Shots:
         if speakers and len(figures) > 1:
             book._face_speaker(figures, speakers[0])
         self._frame(shot, plan, figures, speakers, props, bid, text)
+        self._hands(shot, plan, focus)
         self.last = shot
         return shot
+
+    def _hands(self, shot, plan, focus):
+        """Outside a story an insert or close-up of a thing that someone off screen holds or works shows their hand
+        reaching in to it (the cook's hand on the bowl), in their skin tone."""
+        book = self.book
+        if book.story or shot.page or shot.figures or shot.framing not in ('insert', 'close'):
+            return
+        piece = next((p for p in shot.set if p.doodle == focus and p.kind not in ('strip', 'hand')), None)
+        worker = next((c['id'] for c in plan.get('cast') or () if c.get('pose') in HAND_POSES
+                       and self.person(c.get('id')) in book.cast and book._human(self.person(c.get('id')))), None)
+        if piece is None or worker is None:
+            return
+        shot.hands = [(piece, book._look(self.person(worker))['tone'])]
 
     def _seat(self, shot, figures, place, refs):
         """Seat everyone who sits, lies or sleeps: on the seat they had on this set before, else on a free one
@@ -1087,6 +1110,26 @@ def draw_screen(book, overlay, piece, shown, shot, local, cam):
                                    font=_font(size),
                                    fill=(255, 196, 0, 255), stroke_width=max(1, size // 10), stroke_fill=(60, 40, 0, 255))
     overlay.alpha_composite(glass, (max(0, sx0), max(0, sy0)), (max(0, -sx0), max(0, -sy0)))
+
+
+def draw_hands(book, overlay, shot, cam):
+    """The hands of an insert (Shot.hands): a right hand reaching in from the lower right to grip the thing."""
+    w, h = book.size
+    k = 2
+    layer = Image.new('RGBA', (w * k, h * k), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for piece, tone in shot.hands:
+        x0, y0, x1, y1 = book.stager.frame(piece.doodle, piece.x, piece.ground, piece.height, piece.mirror)[2]
+        gx, gy, _ = book._to_screen(x1 - .12 * (x1 - x0), y0 + .62 * (y1 - y0), cam)
+        _, top, _ = book._to_screen(x0, y0, cam)
+        _, bottom, _ = book._to_screen(x0, y1, cam)
+        s = min(h / 540, max(h / 1440, .4 * (bottom - top) / 160))
+        x, y, s = gx * k, gy * k, s * k
+        arm = [(x + 100 * s, y + 150 * s), (x + 100 * s + .45 * (h * k - y), h * k + 200 * s)]
+        draw.line(arm, fill=INK, width=round(148 * s))          # the forearm runs on out of the frame's bottom
+        draw.line(arm, fill=SLEEVE + (255,), width=round(132 * s))
+        _hand(draw, x, y, s, SKIN.get(tone, SKIN['tan']), 'front')
+    overlay.alpha_composite(layer.resize((w, h), Image.Resampling.LANCZOS))
 
 
 @lru_cache(maxsize=8)

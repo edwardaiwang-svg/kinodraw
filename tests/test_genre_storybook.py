@@ -30,15 +30,15 @@ COOKS = [{'id': 'ben', 'name': 'Ben', 'kind': 'human', 'species': 'human', 'age'
           'palette': {'body': '#4B806A', 'accent': '#C8795B', 'eye': '#302D29'}}]
 
 
-def shot(bid, kind, cast, place='kitchen', props=()):
+def shot(bid, kind, cast, place='kitchen', props=(), speaking='no', focus=None):
     return {'beat_id': bid, 'starts_at': '', 'shot': kind, 'setting': {'place': place, 'time': 'day', 'set_refs': []},
-            'cast': [{'id': c, 'age': 'adult' if c == 'ben' else 'child', 'pose': 'hold', 'speaking': 'no'}
+            'cast': [{'id': c, 'age': 'adult' if c == 'ben' else 'child', 'pose': 'hold', 'speaking': speaking}
                      for c in cast],
             'lines': [], 'props': [{'ref': p, 'relation': 'none', 'to': '', 'motion': 'none'} for p in props],
-            'focus_ref': props[0] if props else '', 'writing': ''}
+            'focus_ref': focus if focus is not None else props[0] if props else '', 'writing': ''}
 
 
-def produce(tmp_path, genre='lesson'):
+def produce(tmp_path, genre='lesson', insert=None):
     """A plan of this genre: two character scenes with kitchen shots, then a kinetic-type scene and a character
     scene whose text is a call to action."""
     board = script.build(ingest.read(TEXT), story='story')
@@ -54,7 +54,7 @@ def produce(tmp_path, genre='lesson'):
                      text={'kind': 'caption_only', 'ref': bid},
                      elements=[{'kind': 'cast', 'ref': c['id']} for c in COOKS])
     plan['scenes'][0]['shots'] = [shot(ids[0], 'wide', ['ben'])]
-    plan['scenes'][1]['shots'] = [shot(ids[1], 'insert', ['ava'], props=['fl_egg'])]
+    plan['scenes'][1]['shots'] = [insert(ids[1]) if insert else shot(ids[1], 'insert', ['ava'], props=['fl_egg'])]
     plan['scenes'][2].update(treatment='kinetic_type', text={'kind': 'kinetic', 'ref': ids[2]})
     plan['scenes'][3].update(text={'kind': 'cta', 'ref': ids[3]}, shots=[shot(ids[3], 'medium', ['ben'])])
     (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
@@ -118,3 +118,31 @@ def test_a_motion_scene_never_balloons_a_picture_or_zooms_into_the_next_scene(tm
     prod.spans[2] = span
     prod.frame(span.join + span.join_length / 2)
     assert kinds and 'zoom_through' not in kinds
+
+
+def test_a_lesson_insert_shows_the_thing_on_the_set_and_the_off_screen_cook_s_hand_on_it(tmp_path):
+    """The pancakes' bowl was a lone icon on blank paper and no hand ever worked it: the insert now looks at the bowl
+    standing on the kitchen counter, with the cook's hand (in her skin tone) reaching in to it."""
+    bowl = lambda bid: shot(bid, 'insert', ['ava'], props=['fl_spoon'], speaking='off_screen', focus='fl_bowl_with_spoon')
+    prod = produce(tmp_path, insert=bowl)
+    span = prod.spans[1]
+    page = span.story[0]
+    piece = next(p for p in page.set if p.doodle == 'fl_bowl_with_spoon')
+    assert not getattr(piece, 'lone', False) and any(p.doodle == 'set_counter' for p in page.set)
+    assert page.hands and page.hands[0][0] is piece
+    tone = prod.storybook._look('ava')['tone']
+    assert page.hands[0][1] == tone
+    with_hand = np.asarray(prod.storybook.frame(span.story, .5).convert('RGB')).astype(int)
+    page.hands = []
+    without = np.asarray(prod.storybook.frame(span.story, .5).convert('RGB')).astype(int)
+    changed = np.abs(with_hand - without).sum(axis=2) > 30
+    assert changed.mean() > .01                                   # a hand you can see, not a speck
+    skin = np.array(SKIN[tone])
+    assert ((np.abs(with_hand - skin).sum(axis=2) < 30) & changed).mean() > .003   # her skin tone, not a sleeve alone
+
+
+def test_a_story_insert_is_unchanged(tmp_path):
+    bowl = lambda bid: shot(bid, 'insert', ['ava'], props=['fl_spoon'], speaking='off_screen', focus='fl_bowl_with_spoon')
+    prod = produce(tmp_path, genre='story', insert=bowl)
+    assert not prod.spans[1].story[0].hands
+
