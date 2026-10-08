@@ -146,7 +146,8 @@ def test_the_caption_never_covers_a_figure_that_fills_the_bottom_of_the_page(tmp
     checked = 0
     for span in (s for s in prod.spans if s.story):
         for shot in span.story:
-            if not shot.figures or shot.page:
+            # A title page keeps its title clear first (test_caption_bands): the caption may then sit over a body.
+            if not shot.figures or shot.page or shot.title:
                 continue
             t = span.start + (shot.start + shot.end) / 2
             if not any(c['start'] <= t < c['end'] for c in prod.tl['captions']):

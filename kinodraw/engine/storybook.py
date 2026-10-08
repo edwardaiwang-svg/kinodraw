@@ -511,8 +511,9 @@ class Storybook:
     """Shot lists and frames for a story plan's scenes."""
 
     def __init__(self, plan, by_id, timeline, size, paper, title=''):
-        # Screen boxes (px) of the figures and of the props drawn since the frame began (the caption avoids them).
-        self.figure_boxes, self.prop_boxes = [], []
+        # Screen boxes (px) of the figures, the props (and sky objects) and the heads (faces with a crown or hat) drawn
+        # since the frame began, and the title's: the caption avoids them.
+        self.figure_boxes, self.prop_boxes, self.head_boxes, self.title_boxes = [], [], [], []
         self.reader = Reader(plan['cast'])
         self.texts = [b['spoken'] for b in by_id.values()]
         self.reader.prime(self.texts)
@@ -1336,7 +1337,7 @@ class Storybook:
         through = any(p.doodle in sets.WINDOWS for p in shot.set)
         if not through:
             for doodle, x, y, height in shot.sky:
-                self._paste(overlay, doodle, False, x, y + height / 2, height, cam, parallax=.4)
+                self._paste(overlay, doodle, False, x, y + height / 2, height, cam, parallax=.4, record=self.prop_boxes)
         for piece in shot.set:
             if not piece.front:
                 self._piece(overlay, piece, shot, local, cam)
@@ -1421,7 +1422,8 @@ class Storybook:
                 a = a if b is None else tuple(q + (p_ - q) * e for p_, q in zip(a, b))
             if a is not None:
                 x, ground, anchor_y = a
-                self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, anchor_y=anchor_y)
+                self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, anchor_y=anchor_y,
+                            record=self.prop_boxes)
                 return
         if piece.kind == 'hand':
             held = self.held_at(piece, shot, local)
@@ -1431,7 +1433,7 @@ class Storybook:
         elif piece.motion and piece.cue is not None:
             x, ground, rotate, anchor_y = self._moving(piece, local)
         self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, rotate=rotate,
-                    anchor_y=anchor_y)
+                    anchor_y=anchor_y, record=self.prop_boxes if piece.kind in ('thing', 'hand') else None)
 
     def held_at(self, piece, shot, local, holder=None):
         """(x, ground, anchor_y) of a thing in its holder's hands: in the lap of someone sitting or lying, else in
@@ -1497,13 +1499,13 @@ class Storybook:
                 h / 2 + (y - (.5 + (cam[1] - .5) * parallax)) * zoom * h, zoom)
 
     def _paste(self, overlay, doodle, mirror, x, ground, height, cam, *, parallax=1., rotate=0., squash=0.,
-               anchor_y=1., pin=None, reference=None, crown=0., shut=False, record=None):
+               anchor_y=1., pin=None, reference=None, crown=0., shut=False, record=None, heads=None):
         """Paste a doodle with its feet (alpha bottom) at (x, ground); returns its screen box.
 
         ``height`` is the drawn height of ``reference`` (the character's standing preset) when given, so all of a
         character's poses share one scale; ``pin`` is a point of the doodle box (shares) placed at (x, ground);
         ``crown`` is a crown's height (frame share) worn on the doodle's head, moving with every lean; ``shut`` closes
-        its eyes."""
+        its eyes. ``record`` and ``heads`` collect where it is drawn and where its head is (screen px)."""
         w, h = self.size
         sx, sy, zoom = self._to_screen(x, ground, cam, parallax)
         left, top, right, bottom = _bbox(doodle, mirror)
@@ -1513,17 +1515,25 @@ class Storybook:
         step = max(2, int(px * .015))
         px = round(px / step) * step        # a bounded set of cached sizes during camera pushes
         image = sprite(doodle, px, mirror, shut)
+        if heads is not None:
+            names = meta(doodle).get('anchors') or {}
+            hx, hy = anchor(doodle, 'head' if 'head' in names or 'eyes' not in names else 'eyes', mirror)
+            head = [hx * image.width, hy * image.height]                 # moved and rescaled with the image
         foot_x, foot_y = (left + right) / 2 * image.width, (top + (bottom - top) * anchor_y) * image.height
         if pin is not None:
             foot_x, foot_y = pin[0] * image.width, pin[1] * image.height
         if crown:
             image, pad = crowned(doodle, px, mirror, max(8, round(crown * h * zoom / step) * step), shut)
             foot_y += pad
+            if heads is not None:
+                head[1] += pad
         if squash:
             before = image.size
             image = image.resize((max(1, round(image.width / (1 - squash))), max(1, round(image.height * (1 - squash)))),
                                  Image.Resampling.BICUBIC)
             foot_x, foot_y = foot_x * image.width / before[0], foot_y * image.height / before[1]
+            if heads is not None:
+                head[0], head[1] = head[0] * image.width / before[0], head[1] * image.height / before[1]
         iw, ih = image.size
         if rotate:
             pad = round(max(iw, ih) * .25)
@@ -1531,6 +1541,8 @@ class Storybook:
             padded.paste(image, (pad, pad))
             image = padded.rotate(rotate, resample=Image.Resampling.BICUBIC, center=(foot_x + pad, foot_y + pad))
             foot_x, foot_y = foot_x + pad, foot_y + pad
+            if heads is not None:
+                head[0], head[1] = head[0] + pad, head[1] + pad
         at = (round(sx - foot_x), round(sy - foot_y))
         if at[0] >= overlay.width or at[1] >= overlay.height or at[0] + image.width <= 0 or at[1] + image.height <= 0:
             return at[0], at[1], image.width, image.height      # wholly off the page (a push past a prop, a closer shot)
@@ -1540,6 +1552,13 @@ class Storybook:
             drawn = image.getchannel('A').getbbox()
             if drawn:
                 record.append((at[0] + drawn[0], at[1] + drawn[1], at[0] + drawn[2], at[1] + drawn[3]))
+                if heads is not None:
+                    # The head: from the top of what is drawn (hair, mane, a crown) to a little below the head
+                    # point, as wide as it is tall either side of it.
+                    top, r = at[1] + drawn[1], max(4., at[1] + head[1] - (at[1] + drawn[1]))
+                    cx = at[0] + head[0]
+                    heads.append((max(at[0] + drawn[0], cx - 1.1 * r), top, min(at[0] + drawn[2], cx + 1.1 * r),
+                                  min(at[1] + drawn[3], at[1] + head[1] + .6 * r)))
         return at[0], at[1], image.width, image.height
 
     def where(self, f, shot, local):
@@ -1600,7 +1619,8 @@ class Storybook:
         reference = self._reference(f)
         self._paste(overlay, doodle, mirror, x, ground + dy, height, cam, rotate=rotate, squash=squash,
                     reference=reference, crown=CROWN_SIZE * height if 'crown' in f.marks else 0.,
-                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local), pin=pin, record=self.figure_boxes)
+                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local), pin=pin, record=self.figure_boxes,
+                    heads=self.head_boxes)
         effects = []
         for kind, v in (m.effects if m is not None else ()):
             effects.append(lambda o, k=kind, v=v, fig=f, d=doodle, mi=mirror, x0=x, g=ground + dy:
@@ -1835,8 +1855,12 @@ class Storybook:
         w, h = self.size
         page = self.paper(w, h).copy().convert('RGBA')
         push = 1 + .05 * min(1., (local - start) / 3)
+        boxes, heads = [], []
         self._paste(page, doodle, False, .5, .5 + .36 * push, .72 * push, [.5, .5, 1.], anchor_y=1.,
-                    crown=.2 * push if 'crown' in f.marks else 0., shut=self._blinking(f, local))
+                    crown=.2 * push if 'crown' in f.marks else 0., shut=self._blinking(f, local), record=boxes,
+                    heads=heads)
+        if alpha >= .5:                                 # the close-up is what the caption must keep clear of
+            self.figure_boxes[:], self.prop_boxes[:], self.head_boxes[:] = boxes, [], heads
         return page.convert('RGB'), alpha
 
     def faces(self, shot, view=None):
@@ -1986,11 +2010,15 @@ class Storybook:
         draw = ImageDraw.Draw(layer)
         lines = _wrap(title, font, w * .8, draw)
         y = h * .09
+        widest = 0
         for line in lines[:2]:
             width = draw.textlength(line, font=font)
+            widest = max(widest, width)
             draw.text(((w - width) / 2, y), line, font=font, fill=(27, 27, 27, int(255 * alpha)))
             y += size * 1.2
         canvas.paste(layer, (0, 0), layer)
+        # The title is kept clear like a face: the caption takes the other band (captions.caption_spot).
+        self.title_boxes.append(((w - widest) / 2 - 12, h * .09 - 8, (w + widest) / 2 + 12, y + 8))
 
     def roar_cues(self, shots, start):
         """(absolute time, sound) of on-screen roars: a cub's try is its own small 'cub_roar', an adult's the roar."""

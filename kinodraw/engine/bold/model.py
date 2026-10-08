@@ -60,6 +60,7 @@ class MotionElement:
     prefix: str = ''                  # counter: currency or other sign before the number
     ease: str = 'linear'              # counter: easing of the roll (a name in motion.EASING)
     hit: bool = False                 # counter: pulse and a burst of ticks as it lands
+    color: str | None = None          # text: its own colour where the palette's would not read on its background
 
     @staticmethod
     def word_starts(text, cues):

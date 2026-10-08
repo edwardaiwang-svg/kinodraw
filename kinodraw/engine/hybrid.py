@@ -610,6 +610,38 @@ class HybridProduction:
                 element.x, element.y = (i % cols + .5) / cols, (i // cols + .5) / rows
                 element.width = min(element.width, 1920 / cols * .8)
                 element.height = min(element.height, 1080 / rows * .65)
+        self._legible_text(span)
+
+    def _legible_text(self, span):
+        """Titles, headings and written lines read on whatever they are drawn over: where the palette's ink (or the
+        accent) falls under 4.5:1 on a tenth of the background under it (dark letters on a night gradient, light ones
+        on a pale sky), the text takes white or near-black, whichever reads better there."""
+        texts = [(i, e) for i, e in enumerate(span.motion.elements) if e.kind == 'text']
+        if not texts:
+            return
+        from .bold.render import H, W, _background, layout_position
+        from .captions import _luminance, _ratio
+        w, h = 384, 216
+        local = (span.end - span.start) / 2
+        base = np.clip(_background(span.motion, local, w, h), 0, 255).astype(np.uint8)
+        if span.atmos:
+            base = np.clip(compose(base, span.atmos, local) * 255 + .5, 0, 255).astype(np.uint8)
+        lum = _luminance(base[..., :3].astype(np.float64))
+        palette = span.motion.palette
+        for i, e in texts:
+            x, y = layout_position(span.motion, e, i)
+            half_h = max(1, (e.text.count('\n') + 1) * e.size * .6)
+            x0, x1 = max(0, int((x - e.width / 2) * w / W)), min(w, int((x + e.width / 2) * w / W) + 1)
+            y0, y1 = max(0, int((y - half_h) * h / H)), min(h, int((y + half_h) * h / H) + 1)
+            region = lum[y0:y1, x0:x1].ravel()
+            if region.size == 0:
+                continue
+            color = palette.accent if e.accent else palette.foreground
+
+            def worst(c):
+                return float(np.percentile(_ratio(region, float(_luminance(np.array(ImageColor.getrgb(c)[:3])))), 10))
+            if worst(color) < 4.5:
+                e.color = max(('#ffffff', '#181818'), key=worst)
 
     def _spoken_at(self, bid, char):
         timing = self.tl['beats'][bid]
@@ -654,10 +686,10 @@ class HybridProduction:
     def _rolled(element):
         """A clause-built text element of more than two lines as pages (captions.roll_pages), each up from its first
         clause's spoken time and gone as the next page comes; [element] when it needs no paging."""
-        from .captions import roll_pages
+        from .captions import roll_pages, unwrap
         if element.preset != 'clauses' or element.text.count('\n') < 2:
             return [element]
-        flat = ' '.join(element.text.split())
+        flat = unwrap(element.text)              # "worn-\nout" is one word again
         words, starts = flat.split(), element.word_starts(flat, element.cues)
         pages = []
         for a, b in roll_pages(flat, 36):
@@ -1753,8 +1785,10 @@ class HybridProduction:
         return self._draw_screen_text(image, t) if self.screen_notes else image
 
     def _frame_at(self, t):
+        self.whiteboard.card_box = None
         if getattr(self, 'storybook', None) is not None:
-            self.storybook.figure_boxes, self.storybook.prop_boxes = [], []   # for this frame's caption to avoid
+            sb = self.storybook
+            sb.figure_boxes, sb.prop_boxes, sb.head_boxes, sb.title_boxes = [], [], [], []
         if not self.spans or t < self.starts[0]:
             return self.whiteboard.frame(t)
         end_start = self.tl['end_card']['start']
@@ -1821,14 +1855,46 @@ class HybridProduction:
         if not self.vertical:
             self.whiteboard._steps(image, t, host=self, clean=span.story is None and not self._on_board(span))
         if not self.vertical and not self._written(span, t):
-            self.whiteboard._caption(image, t, self.caption_look, self.caption_accent, self._figures())
+            self.whiteboard._caption(image, t, self.caption_look, self.caption_accent, self._figures(span, t))
         return image.convert('RGB')
 
-    def _figures(self):
-        """The boxes of the figures on this frame's story page, then of its props (none on other scenes)."""
+    def _figures(self, span=None, t=None):
+        """What the caption keeps clear of on this frame: (figure boxes, prop boxes, head boxes) in px. A story page's
+        are recorded as it is drawn; a motion scene's pictures are its props."""
+        props = self._picture_boxes(span, t) if span is not None and span.story is None else ()
+        card = getattr(self.whiteboard, 'card_box', None)          # a data card drawn on this frame (render._steps)
+        props += (card,) if card else ()
         if getattr(self, 'storybook', None) is None:
+            return (), props, ()
+        sb = self.storybook
+        # A page's title is kept clear like a face: the caption takes the other band.
+        return tuple(sb.figure_boxes), tuple(sb.prop_boxes) + props, tuple(sb.head_boxes) + tuple(sb.title_boxes)
+
+    def _picture_boxes(self, span, t):
+        """Screen boxes (px) of what a drawn motion scene shows at time t: its pictures, charts, buttons and written
+        text."""
+        if span.motion is None or span.scientific or self._on_board(span) or span.actors:
             return ()
-        return tuple(self.storybook.figure_boxes), tuple(self.storybook.prop_boxes)
+        from .bold.render import H, W, element_pose
+        local = max(0., t - span.start)
+        w, h = self.size
+        zoom, dx, dy = self._camera(span, local)
+        out = []
+        for j, e in enumerate(span.motion.elements):
+            if e.kind not in ('picture', 'chart', 'button', 'text'):
+                continue
+            x, y, scale, alpha = element_pose(span.motion, e, j, local)
+            if alpha <= .05 or e.kind == 'text' and not e.text.strip():
+                continue
+            half_w, half_h = e.width / 2, e.height / 2
+            if e.kind == 'text':
+                half_h = (e.text.count('\n') + 1) * e.size * .6
+            boxes = []
+            for px, py in ((x - half_w * scale, y - half_h * scale), (x + half_w * scale, y + half_h * scale)):
+                px, py = px * w / W, py * h / H
+                boxes.append((w / 2 + zoom * (px - dx - w / 2), h / 2 + zoom * (py - dy - h / 2)))
+            out.append((boxes[0][0], boxes[0][1], boxes[1][0], boxes[1][1]))
+        return tuple(out)
 
     def _leave_bubbled_lines_to_the_bubbles(self):
         """Where a story page shows a line in a speech bubble (the storybook's ``bubbled`` rows: beat, start, end of

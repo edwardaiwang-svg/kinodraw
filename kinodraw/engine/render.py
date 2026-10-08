@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 import imageio_ffmpeg
+import numpy as np
 from PIL import Image, ImageChops, ImageDraw
 
 from .. import markup, script, styles
@@ -30,7 +31,7 @@ from . import ink
 from . import scenes
 from . import skin as skins
 from . import timeline as tl
-from .captions import BACKING_ALPHA, backing_color, caption_spot, needs_backing, word_at
+from .captions import BACKING_ALPHA, backing_color, caption_spot, clearance, free_margin, needs_backing, word_at
 from .storyboard import drawable, normalize
 from .board import Camera, Layout, Scheduler
 from .geometry import LANDSCAPE
@@ -977,7 +978,7 @@ class Production:
         if chrome and not self._in_title(t):
             self._chrome(frame, t)
         self._steps(frame, t)
-        self._caption(frame, t)
+        self._caption(frame, t, avoid=((), (self.card_box,) if getattr(self, 'card_box', None) else (), ()))
         return frame
 
     def _steps(self, frame, t, host=None, clean=False):
@@ -986,8 +987,13 @@ class Production:
         the viewer sees, to place it)."""
         if getattr(self, 'steps', None) is not None:
             self.steps.paint(frame, t)
+        self.card_box = None
         if getattr(self, 'data_cards', None) is not None:
+            # Where the card lands (what it changed on the frame): the caption keeps clear of it.
+            before = frame.copy() if self.data_cards.at(t) is not None else None
             self.data_cards.paint(frame, t, clean, host or self)
+            if before is not None:
+                self.card_box = ImageChops.difference(before.convert('RGB'), frame.convert('RGB')).getbbox()
 
     def cues(self):
         """Sound-effect events ({t, kind, strength, id}); the whiteboard mix has none."""
@@ -1089,12 +1095,17 @@ class Production:
         """The caption being said, its word being said in the skin's accent. A hybrid's motion scenes pass their
         palette's: ``look`` = (letters, outline, stroke) and ``accent``. ``avoid``: boxes (px) of the figures on
         the page; the caption moves off them (captions.caption_spot). An outlined caption over a busy or mid-toned
-        background gets a backing strip (captions.needs_backing)."""
+        background gets a backing strip (captions.needs_backing). ``avoid`` may add the heads (faces and what they
+        wear): where no band is clear of them the picture moves away from the caption (captions.clearance). A
+        closing card that carries the narration's own last words shows them itself: no caption over the card."""
         i = bisect.bisect_right(self.cap_starts, t) - 1
         if i < 0:
             return
         c = self.tl['captions'][i]
         if not (c['start'] <= t < c['end']):
+            return
+        end = self.tl.get('end_card') or {}
+        if end.get('narrated') and t >= end.get('appear', end.get('start', math.inf)):
             return
         said = self.cap_words[i] if self.cap_words else c.get('words')
         raw = self.skin.caption_image(c['text'], self.lang, word_at(said, t), accent, look)
@@ -1102,6 +1113,26 @@ class Production:
         bottom = 1036 if raw.width > int(self.size[0] * .92) else 1046
         x, y = caption_spot(self.size, img.size, bottom, avoid)
         self.caption_box = (round(x), round(y), round(x) + img.width, round(y) + img.height)
+        _, props, heads = (tuple(avoid) + ((), (), ()))[:3]
+        # No spot clear of every face (else of every picture): the picture moves off the caption, into the empty
+        # margin on the far side only (nothing is pushed out of the frame).
+        move = clearance(self.size, self.caption_box, heads) or clearance(self.size, self.caption_box, props, keep=heads)
+        if move:
+            move = max(0, min(move, free_margin(frame, move > 0) - 8)) if move > 0 else \
+                -max(0, min(-move, free_margin(frame, False) - 8))
+        if move:
+            # Eased in and out with the run of captions it serves, so the picture glides instead of jumping.
+            run = self._caption_run(i)
+            move = round(move * min(1., (t - run[0]) / .3, (run[1] - t) / .3))
+        if move:
+            shifted = frame.crop((0, move, frame.width, frame.height + move))
+            edge = frame.crop((0, frame.height - 1, frame.width, frame.height)) if move > 0 else \
+                frame.crop((0, 0, frame.width, 1))
+            frame.paste(shifted, (0, 0))
+            # The uncovered strip takes the edge's own background colour (a stretched row would streak any speck).
+            ground = tuple(int(v) for v in np.median(np.asarray(edge).reshape(-1, len(edge.getbands())), axis=0))
+            frame.paste(ground, (0, frame.height - move, frame.width, frame.height) if move > 0 else
+                        (0, 0, frame.width, -move))
         if look is not None or self.skin.caption_style == 'outline':
             letters, edge = (look or (self.skin.caption, self.skin.caption_edge))[:2]
             region = frame.crop(self.caption_box)
@@ -1115,6 +1146,16 @@ class Production:
                     fill=backing_color(tuple(letters), tuple(edge)) + (round(255 * BACKING_ALPHA),))
                 ink.paste(frame, strip, round(x) - pad, round(y) - pad // 2)
         ink.paste(frame, img, x, y)
+
+    def _caption_run(self, i):
+        """(start, end) of the unbroken run of captions caption i belongs to (gaps under .3 s join a run)."""
+        caps = self.tl['captions']
+        a = b = i
+        while a > 0 and caps[a]['start'] - caps[a - 1]['end'] < .3:
+            a -= 1
+        while b + 1 < len(caps) and caps[b + 1]['start'] - caps[b]['end'] < .3:
+            b += 1
+        return caps[a]['start'], caps[b]['end']
 
 
 def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16:9', portrait=None, *, size=None):
