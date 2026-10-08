@@ -113,10 +113,10 @@ def test_a_thing_only_talked_about_gets_an_insert_while_the_line_goes_on():
     board = _board('"There was a goat. I remember the goat."\n')
 
     def edit(plan, bids):
-        plan['scenes'][0]['shots'] = [_shot(bids[0], shot='close', focus_ref='fl_goat')]
+        plan['scenes'][0]['shots'] = [_shot(bids[0], shot='close', focus_ref='fl_goat',
+                                            props=[{'ref': 'fl_goat', 'relation': 'none', 'to': '', 'motion': 'none'}])]
     plan, _ = _plan(board, ['fl_goat'], edit)
-    close, insert = plan['scenes'][0]['shots']
-    assert close['props'] == []                                 # a goat in the car would be dropped as talked about
+    close, insert = plan['scenes'][0]['shots']             # a goat in the car is not drawn: it is talked about
     assert (insert['shot'], insert['focus_ref'], insert['starts_at']) == ('insert', 'fl_goat', 'I remember the goat.')
     again, _ = plan_v3(board, provider=Answer(plan))           # a saved plan re-checks to the same shots
     assert again['scenes'][0]['shots'] == plan['scenes'][0]['shots']

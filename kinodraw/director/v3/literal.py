@@ -95,27 +95,31 @@ def _focus_drawn(plan, script, repairs):
             focus = shot['focus_ref']
             if not focus or shot['shot'] in LOOKING:
                 continue
-            if focus in shot['setting']['set_refs'] or any(p['ref'] == focus for p in shot['props']):
-                continue
-            if (catalog().get(focus) or {}).get('category') in NOT_PROPS:
+            if focus in shot['setting']['set_refs'] or (catalog().get(focus) or {}).get('category') in NOT_PROPS:
                 continue                               # a person or symbol picked as a focus is no prop
-            if _talked_about(by_id.get(shot['beat_id']), focus) and any(
-                    o['beat_id'] == shot['beat_id'] and o['shot'] in LOOKING and o['focus_ref'] == focus for o in shots):
+            beat = by_id.get(shot['beat_id'])
+            talked = _talked_about(beat, focus)
+            held = [p for p in shot['props'] if p['ref'] == focus]
+            if held and not (talked and all(p['relation'] == 'none' and p['motion'] == 'none' for p in held)):
+                continue                               # drawn where the text puts it
+            if talked and any(o['beat_id'] == shot['beat_id'] and o['shot'] in LOOKING and o['focus_ref'] == focus
+                              for o in shots):
                 continue                               # not in the room, and the beat already cuts to it
             if focus not in pictures:
                 scene['elements'].append({'kind': 'picture', 'ref': focus})
                 pictures.add(focus)
-            cut = _insert_at(shot, shots, by_id.get(shot['beat_id']), focus)
+            cut = _insert_at(shot, shots, beat, focus)
             if cut:
-                # a thing only talked about is not in the room: the camera cuts to it while the line goes on
+                # a thing only talked about is not in the room (a plain prop of it is not drawn): the camera cuts
+                # to it while the line goes on
                 insert = {'beat_id': shot['beat_id'], 'starts_at': cut, 'shot': 'insert',
                           'setting': dict(shot['setting'], set_refs=[]), 'cast': [], 'lines': [], 'props': [],
                           'focus_ref': focus, 'writing': ''}
                 shots.insert(shots.index(shot) + 1, insert)
                 repairs.append(f'scenes[{i}]: {shot["beat_id"]} cuts to an insert of {focus} at {cut!r}')
-                continue
-            shot['props'].append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
-            repairs.append(f'scenes[{i}]: {shot["beat_id"]} {shot["shot"]} shot draws its focus {focus} as a prop')
+            elif not held:
+                shot['props'].append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
+                repairs.append(f'scenes[{i}]: {shot["beat_id"]} {shot["shot"]} shot draws its focus {focus} as a prop')
 
 
 QUOTED = re.compile(r'["\u201c]([^"\u201d]*)["\u201d]')
