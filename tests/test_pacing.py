@@ -107,3 +107,25 @@ def test_an_ellipsis_is_one_clause_mark_so_each_count_is_timed_from_the_voice():
     text = 'In... two... three.'
     times = voice.align(text, [T(phoneme=p, start=s) for p, s in tokens], 'en')
     assert times[text.index('two')] == 1. and times[text.index('three')] == 2.
+
+
+def test_a_scene_waiting_for_its_music_beat_keeps_the_old_scene_moving():
+    """A pause that opens a scene: until the join lands on a beat the picture is the old scene still living, never
+    a still of its last frame (the 27 guided-breathing freeze inside a pause)."""
+    from PIL import Image
+    from kinodraw.engine.hybrid import HybridProduction
+    seen = []
+    prod = HybridProduction.__new__(HybridProduction)
+    spec = {'treatment': 'atmosphere', 'transition_in': 'match'}
+    old = type('S', (), {'start': 0., 'end': 10., 'join': 0., 'join_length': .5, 'spec': spec, 'story': None,
+                         'scientific': None, 'diagram': None, 'source_proof': False})()
+    new = type('S', (), {'start': 10., 'end': 20., 'join': 11.5, 'join_length': .5, 'spec': spec, 'story': None,
+                         'scientific': None, 'diagram': None, 'source_proof': False})()
+    prod.whiteboard = type('W', (), {'vertical': True})()
+    prod.spans, prod.starts, prod.size = [old, new], [0., 10.], (8, 8)
+    prod.tl = {'end_card': {'start': 30.}}
+    prod._frame = lambda span, t, quotes=True: seen.append((span, t)) or Image.new('RGB', (8, 8))
+    prod._draw_anchor = lambda image, t: image
+    for t in (10.5, 11.0, 11.6):
+        prod._frame_at(t)
+    assert (old, 10.5) in seen and (old, 11.0) in seen and (old, 11.6) in seen
