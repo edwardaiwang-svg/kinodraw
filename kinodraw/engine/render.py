@@ -873,13 +873,18 @@ class Production:
         shadow[:alpha.shape[0], :alpha.shape[1]] |= alpha
         shadow[3:, 2:] |= alpha                          # the soft shadow falls 14 px right, 18 px down
         tx, ty = self.hand.tip
+        total = shadow.sum()
 
         def free(x, y):
             cx, cy = int((x - tx) // k), int((y - ty - 6) // k)
             h, w = shadow.shape
             y0, x0 = max(0, cy), max(0, cx)
             y1, x1 = min(busy.shape[0], cy + h), min(busy.shape[1], cx + w)
-            return y1 <= y0 or x1 <= x0 or not (busy[y0:y1, x0:x1] & shadow[y0 - cy:y1 - cy, x0 - cx:x1 - cx]).any()
+            if y1 <= y0 or x1 <= x0:
+                return False
+            seen = shadow[y0 - cy:y1 - cy, x0 - cx:x1 - cx]
+            # most of the hand in the frame (a hand mostly off the edge barely moves the picture), on nothing drawn
+            return seen.sum() >= .8 * total and not (busy[y0:y1, x0:x1] & seen).any()
 
         p0 = self._last_pen(prev)
         p1 = self._first_pen(nxt) if back else None

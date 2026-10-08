@@ -196,6 +196,7 @@ def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
         spots.append(prod.hand.pasted[-1])
     for x, y in spots:                                   # the whole hand is clear of the words and the drawings
         hand = (x - 20, y - 26, x + 180 + 14, y + 274 + 18)
+        assert hand[0] >= 0 and hand[2] <= 1920 + 40 and hand[3] <= 1080 + 70      # and (mostly) in the frame
         for e in (words, a, b):
             assert hand[2] <= e.x or e.x + e.w <= hand[0] or hand[3] <= e.y or e.y + e.h <= hand[1]
     assert min(math.dist(p, q) for p, q in zip(spots, spots[1:])) >= 40     # resting, it keeps moving, fast enough
@@ -299,3 +300,14 @@ def test_content_qa_does_not_count_code_lines_as_narrated_sentences():
     code = _beat(board, 'balance = 1000')['id']
     found = content.lines(from_rules(board), board)
     assert found and not [line for line in found if line.beat == code]
+
+
+def test_a_resting_hand_near_the_frame_edge_stays_mostly_in_the_frame():
+    a = wb_board.Element(_Pen(), 1700, 100, 0., start=0.)
+    b = wb_board.Element(_Pen(), 1860, 70, 6., start=6.)
+    prod = _resting_production([a, b], [a, b])
+    frame = Image.new('RGBA', (1920, 1080))
+    prod._hand(frame, 3., 0)
+    x, y = prod.hand.pasted[-1]
+    left, right = max(0, x - 20), min(1920, x + 180)
+    assert right - left >= .8 * 200                      # a hand mostly off the edge barely moves the picture
