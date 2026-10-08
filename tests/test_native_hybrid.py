@@ -132,7 +132,7 @@ def test_recorded_legacy_frame_hashes(tmp_path):
     prod = render.make_production(board, tl, 'en', tmp_path)
     hashes = {
         1.: '75f409279ef112d350f1a1bc344a34ad22c51de0909ae6651732793788da0f28',      # its caption's word being said
-        4.7153: '8298f08d023ccba0eac87fb25851c42510a80ceb74cefc5784eda601c57bfffe',  # storybook page, word highlight (10/8: locked camera, no lean)
+        4.7153: '75511154807ed81b76496e52c4e3d03630c35143360e2642016f237b8ac67d75',  # storybook page, word highlight; Mara steps in to nudge Pendo on "nudged" (10/8 acting)
         21.733333: 'fce746a2ca197e270ecf3a9c58108f94a449880d5be54539afefc0a251fb0293',  # The End, no stock presenter (10/8)
     }
     for t, expected in hashes.items():
