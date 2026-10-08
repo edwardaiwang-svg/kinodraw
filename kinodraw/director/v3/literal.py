@@ -99,6 +99,9 @@ def _focus_drawn(plan, script, repairs):
                 continue
             if (catalog().get(focus) or {}).get('category') in NOT_PROPS:
                 continue                               # a person or symbol picked as a focus is no prop
+            if _talked_about(by_id.get(shot['beat_id']), focus) and any(
+                    o['beat_id'] == shot['beat_id'] and o['shot'] in LOOKING and o['focus_ref'] == focus for o in shots):
+                continue                               # not in the room, and the beat already cuts to it
             if focus not in pictures:
                 scene['elements'].append({'kind': 'picture', 'ref': focus})
                 pictures.add(focus)
@@ -125,16 +128,23 @@ def _names(ref):
     return {singular(w) for word in words for w in re.findall(r'[a-z]+', word.lower()) if len(w) > 2}
 
 
+def _talked_about(beat, focus):
+    """Does the beat name this picture inside its quotes and nowhere in its narration?"""
+    if beat is None:
+        return False
+    names = _names(focus)
+    said = lambda part: bool(names & {singular(w) for w in re.findall(r'[a-z]+', part.lower())})
+    return said(' '.join(QUOTED.findall(beat['text']))) and not said(QUOTED.sub(' ', beat['text']))
+
+
 def _insert_at(shot, shots, beat, focus):
     """Where an insert of ``focus`` starts, when the beat names it only inside its quotes: the first sentence after
     the shot's own first sentence that names it, else the shot's second sentence; '' when there is none (one
     short line) or the planner already cuts there."""
-    if beat is None:
+    if not _talked_about(beat, focus):
         return ''
     text, names = beat['text'], _names(focus)
     said = lambda part: bool(names & {singular(w) for w in re.findall(r'[a-z]+', part.lower())})
-    if not said(' '.join(QUOTED.findall(text))) or said(QUOTED.sub(' ', text)):
-        return ''
     start = _find(text, shot['starts_at'])
     sentences = [(q.start(1) + m.start(), m.group()) for q in QUOTED.finditer(text) if q.end(1) > start
                  for m in re.finditer(r'[^.!?]+[.!?]*', q.group(1)) if re.search(r'\w', m.group())]

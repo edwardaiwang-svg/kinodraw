@@ -98,7 +98,7 @@ def test_an_elderly_person_stays_old():
 
 
 def test_a_shots_named_focus_is_drawn():
-    board = _board('"There was a goat in the road," she said.\n')
+    board = _board('A goat stood in the road. "Look," she said.\n')
 
     def edit(plan, bids):
         plan['scenes'][0]['shots'] = [_shot(bids[0], shot='two_shot', focus_ref='fl_goat'),
@@ -118,6 +118,8 @@ def test_a_thing_only_talked_about_gets_an_insert_while_the_line_goes_on():
     close, insert = plan['scenes'][0]['shots']
     assert close['props'] == []                                 # a goat in the car would be dropped as talked about
     assert (insert['shot'], insert['focus_ref'], insert['starts_at']) == ('insert', 'fl_goat', 'I remember the goat.')
+    again, _ = plan_v3(board, provider=Answer(plan))           # a saved plan re-checks to the same shots
+    assert again['scenes'][0]['shots'] == plan['scenes'][0]['shots']
 
 
 def test_the_person_a_greeting_addresses_and_its_writer_are_on_screen():
