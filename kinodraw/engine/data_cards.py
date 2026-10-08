@@ -380,6 +380,23 @@ class DataCards:
             self._places[k] = best
         return self._places[k]
 
+    def _on_device(self, k, t, host) -> bool:
+        """A device screen (engine/ui_screens) takes the page: no card while one is live, and none at all for a card
+        whose figures a screen during its window draws (the phone's code box already shows "482 913"). The host's
+        ``ui_moments`` are the ones it draws (a hybrid takes them over from its whiteboard); a portrait frame draws
+        no device, so its cards stay."""
+        moments = getattr(host, 'ui_moments', None)
+        if not moments or getattr(host, 'vertical', False):
+            return False
+        from .ui_screens import live
+        if live(moments, t) is not None:
+            return True
+        from ..ui_screens import drawn_strings
+        start, end, card, _ = self.entries[k]
+        keys = [_squash(key) for key in _keys(card)]
+        return any(m['start'] < end and start < m['end'] and
+                   all(key in _squash(' '.join(drawn_strings(m))) for key in keys) for m in moments)
+
     def paint(self, frame, t, clean=False, host=None):
         """Draw the card live at ``t`` over ``frame`` (RGBA, modified in place). ``host`` renders the frame the viewer
         sees (its ``frame(t)``), measured once per card to place it."""
@@ -388,6 +405,8 @@ class DataCards:
         k = self.at(t)
         if k is None or (k in self.on_board and getattr(host, 'data_cards', None) is self):
             return                          # the whiteboard page on screen already writes these figures
+        if self._on_device(k, t, host):
+            return
         start, end, card, _ = self.entries[k]
         look = 'clean' if clean else 'board'
         final = self.image(k, look)
