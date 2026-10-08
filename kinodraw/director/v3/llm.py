@@ -11,6 +11,7 @@ from ..llm import errors
 from ..llm.providers import CommandProvider, ProviderError, Usage, make_provider
 from ..rules import RulesDirector as PictureDirector
 from .offer import Offer, fit
+from .literal import repair as literal
 from .rules import from_rules
 from .semantics import beats
 from .validate import validate
@@ -67,6 +68,7 @@ def plan_v3(doc_or_script, provider=None):
             if not isinstance(answer, dict):
                 raise ProviderError('the v3 answer must be a JSON object')
             plan, repairs = validate(answer, board, candidates)
+            repairs += literal(plan, board)
             repairs = [f'{name}: {note}' for note in getattr(provider, 'served_repairs', None) or []] + repairs
         else:
             plan = from_rules(board)

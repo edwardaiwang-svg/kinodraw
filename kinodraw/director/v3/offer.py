@@ -59,7 +59,7 @@ PLACE_CUES = (
     ('street', r'street|\broad\b|sidewalk|pavement|crosswalk|\balley', r'traffic'),
     ('town', r'\btown\b|village|neighbou?rhood|\bcity\b|downtown', None),
     ('shop', r'\bshop\b|\bstore\b|supermarket|market|bakery', r'grocer\w*|checkout'),
-    ('cafe', r'\bcaf[eé]\b|restaurant|\bdiner\b', None),
+    ('cafe', r'\bcaf[eé]\b|restaurant|\bdiner\b', r'\bfries\b|burgers?|milkshakes?|waiter|waitress'),
     ('park', r'\bpark\b|playground', r'bench|\bswings?\b'),
     ('garden', r'garden|backyard|\byard\b|lawn', None),
     ('bus', r'\bbus\b|\btrain\b|subway|\btram\b|station|platform', None),
@@ -74,6 +74,24 @@ PLACE_CUES = (
     ('snow', None, r'\bsnow\w*|\bice\b|winter'),
     ('night_sky', None, r'\bstars\b|\bmoon\b|night\s+sky'),
     ('stage', r'\bstage\b|theat(?:er|re)|concert|auditorium', r'audience'),
+)
+# A place named by its kind ("Kestrel Falls", "Port Calder", "Ames Hardware", "grew up in Tulsa"): case-sensitive.
+NAMED_PLACES = (
+    ('town', re.compile(r"\b[A-Z][a-z]+\s+(?:Falls|Springs|Creek|Valley|Heights|Hills?|Harbou?r|Bay)\b|"
+                        r"\bPort\s+[A-Z][a-z]+|\b(?:grew\s+up|born|lived|moved)\s+(?:in|to)\s+[A-Z][a-z]+")),
+    ('street', re.compile(r"\b[A-Z][a-z]+\s+(?:Street|Avenue|Road|Lane|Boulevard)\b")),
+    ('shop', re.compile(r"\b[A-Z][a-z']+\s+(?:Hardware|Market|Grocery|Bakery|Books|Store|Shop|Pharmacy)\b")),
+    ('cafe', re.compile(r"\b[A-Z][a-z']+\s+(?:Diner|Cafe|Café|Grill|Restaurant|Pizza)\b")),
+)
+# An activity, trade or occasion brings its scene and gear to its own beat (fisherman: a lake, a boat, a fishing pole).
+ORDINAL = r'(?:\d+(?:st|nd|rd|th)|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|\w+teenth|\w+tieth)'
+ACTIVITIES = (
+    (re.compile(r'\bfisherm[ae]n\b|\bfishing\b|\banglers?\b', re.I), 'lake', 'fl_fishing_pole fl_canoe fl_fish lake'),
+    (re.compile(r'\bhardware\b', re.I), 'shop', 'fl_hammer fl_wrench'),
+    (re.compile(r'\bbak(?:er|ery|ing)\b', re.I), 'shop', 'fl_bread fl_birthday_cake'),
+    (re.compile(r'\bfarmer\b|\bfarming\b', re.I), 'farm', 'fl_tractor'),
+    (re.compile(r'\bbirthday\b|\bparty\b|\bturns\s+(?:\d+|\w+ty)\b', re.I), None, 'fl_birthday_cake fl_balloon fl_wrapped_gift'),
+    (re.compile(r'\banniversary\b|\bwedding\b|\b' + ORDINAL + r'\b.{0,40}\byears\b', re.I), None, 'fl_ring fl_red_heart'),
 )
 FROM = re.compile(r"\bfrom\s+(?:the\s+|a\s+|an\s+|\w+(?:'s)?\s+)?$", re.I)   # "from the kitchen": not here
 PLACE_RE = [(place, est and re.compile(est, re.I), inc and re.compile(inc, re.I)) for place, est, inc in PLACE_CUES]
@@ -99,6 +117,7 @@ KITS = {
     'beach': 'beach wave sun',
     'mountain': 'mountain tree',
     'river': 'river tree rock',
+    'lake': 'lake boat tree',
     'farm': 'barn tractor field',
     'snow': 'snowman snow tree',
     'night_sky': 'moon star',
@@ -110,7 +129,7 @@ PEOPLE = (
     (r'grand(?:mother|ma|mum|mom)|granny|nana|old\s+woman|\belderly\s+woman', 'elder', 'female'),
     (r'granddaughter|\bgirls?\b|\bdaughter\b|little\s+sister', 'child', 'female'),
     (r'grandson|\bboys?\b|\bson\b|little\s+brother', 'child', 'male'),
-    (r'\bchild(?:ren)?\b|\bkids?\b|\bbab(?:y|ies)\b|toddler', 'child', None),
+    (r'\bchild(?:ren)?\b|\bkids?\b|grand(?:kid|child)\w*|\bbab(?:y|ies)\b|toddler', 'child', None),
     (r'\bmother\b|\bmom\b|\bmum\b|\bwom[ae]n\b|\blady\b|\baunt\b|\bwife\b|\bsister\b', 'adult', 'female'),
     (r'\bfather\b|\bdad\b|\bm[ae]n\b|\buncle\b|\bhusband\b|\bbrother\b', 'adult', 'male'),
     (r'stranger|neighbou?r|\bpeople\b|\bcrowd\b|\bpersons?\b|\bfriends?\b|\bteen\w*|passer', 'adult', None),
@@ -227,7 +246,19 @@ class Offer:
                 moved.append(place)
             elif hits or (inc and inc.search(text)):
                 things.append(place)
+        moved += [place for place, cue in NAMED_PLACES if cue.search(text) and place not in moved]
+        things += [place for cue, place, _ in ACTIVITIES if place and cue.search(text) and place not in moved + things]
         return moved, things
+
+    def gear(self, text: str) -> list[str]:
+        """The things an activity or occasion in the text needs on screen (a fisherman's boat, a party's cake)."""
+        if self.lang != 'en':
+            return []
+        out = []
+        for cue, _, ids in ACTIVITIES:
+            if cue.search(text):
+                out += [did for did in ids.split() if did in self.entries]
+        return list(dict.fromkeys(out))
 
     def kit(self, place: str) -> list[str]:
         """The set pieces of a place: per word, the best drawing that shows that very thing."""
@@ -292,7 +323,8 @@ class Offer:
             groups = (
                 ([c['id'] for c in b['candidates']], QUOTA['rules']),
                 (named[b['beat_id']], QUOTA['named']),
-                ([did for place in dict.fromkeys(places) for did in self.kit(place)], QUOTA['place']),
+                (self.gear(text) + [did for place in dict.fromkeys(places) for did in self.kit(place)],
+                 QUOTA['place']),
                 (self.people(text), QUOTA['people']),
                 ([did for did in motifs if did not in named[b['beat_id']]], QUOTA['motif']),
                 (meant[b['beat_id']], CAP),
