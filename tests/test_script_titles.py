@@ -161,3 +161,31 @@ def test_the_word_being_said_stays_lit_when_the_accent_is_close_to_the_ink(tmp_p
     prod = render.make_production(board, tl, 'en', tmp_path)
     ink, paper = ImageColor.getrgb('#263238'), ImageColor.getrgb('#F7F3E9')
     assert highlight_color(prod.caption_accent, ink, paper) != ink
+
+
+def test_a_line_in_a_speech_bubble_is_not_captioned_again(tmp_path):
+    # The Envelope / Nana (r01): every bubbled line also ran in the bottom caption. The caption keeps the narrator.
+    from kinodraw.engine import render
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    board = board_of('Theo, a boy, sat by his mother.\n\n"Mine\'s broken," he said. "It\'s just random stuff."')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['storyboard']['genre'] = 'story'
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    for scene in plan['scenes']:
+        scene.update(treatment='character', actions=[], text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
+    tmp_path.joinpath('project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    if prod.storybook is None:
+        pytest.skip('story pages are off in this build')
+    quote = board['beats'][-1]
+    spoken = quote['spoken']['en']
+    prod.storybook.bubbled = [{'beat': quote['id'], 'start': spoken.index('Mine'), 'end': spoken.index(','),
+                               'speaker': 'theo', 'text': "Mine's broken"}]
+    prod._leave_bubbled_lines_to_the_bubbles()
+    shown = ' '.join(c['text'] for c in prod.whiteboard.tl['captions'])
+    assert "Mine's broken" not in shown and 'he said.' in shown and "It's just random stuff." in shown
+    assert prod.whiteboard.cap_starts == [c['start'] for c in prod.whiteboard.tl['captions']]
+    assert 'Theo, a boy, sat by his mother.' in shown                       # narration elsewhere is unchanged

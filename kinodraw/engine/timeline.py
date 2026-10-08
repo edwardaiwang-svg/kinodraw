@@ -87,6 +87,28 @@ def _cues(beat, lang, char_time, speech_end, labels, cue_options, bubbled=()):
                              speech_end, words=True, **cue_options)
 
 
+def recaption(episode, tline, lang, bubbled):
+    """The timeline's captions again, from its own beat times and character times, without the spoken ranges a
+    speech bubble shows (bubbled[beat_id] = [(start, end)]): the caption carries only the narrator there."""
+    episode = normalize(episode)
+    cue_options = _cue_options(episode, lang)
+    labels = speech.screenplay_labels(b['display'][lang] for b in episode['beats'])
+    out = []
+    for beat in episode['beats']:
+        info = tline['beats'].get(beat['id'])
+        if not info:
+            continue
+        ct, start = info.get('char_times') or [], info['start']
+
+        def char_time(pos, ct=ct):
+            return ct[min(max(pos, 0), len(ct) - 1)] if ct else 0.
+        for a, b, text, words in _cues(beat, lang, char_time, info['speech_end'] - start - .15, labels, cue_options,
+                                       bubbled.get(beat['id'], ())):
+            out.append({'start': round(start + a, 4), 'end': round(min(start + b, info['end']), 4), 'text': text,
+                        'words': [round(start + w, 4) for w in words]})
+    return out
+
+
 def take_hold(beat, lang):
     return .05            # the note is read during its narration, then pinned immediately
 

@@ -21,6 +21,7 @@ from .. import library
 from . import motion
 from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
+from . import timeline
 from .atmos import Atmosphere, compose
 from .bold import MotionElement, MotionScene, Palette, render_frame, render_transition
 from .bold.render import _SceneLayers
@@ -219,6 +220,7 @@ class HybridProduction:
                      if s.spec['transition_in'] == 'cut' or s.scientific or self.spans[i - 1].scientific]
         self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
         self.anchor_keys = self._anchor_keys()
+        self._leave_bubbled_lines_to_the_bubbles()
 
     def _prepare(self, span, project_dir):
         spec = span.spec
@@ -1551,6 +1553,21 @@ class HybridProduction:
         if not self.vertical and not self._written(span, t):
             self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')
+
+    def _leave_bubbled_lines_to_the_bubbles(self):
+        """Where a story page shows a line in a speech bubble (the storybook's ``bubbled`` rows: beat, start, end of
+        its spoken text), the burned-in caption carries only the narrator. Lines over a page without a bubble stay."""
+        rows = getattr(self.storybook, 'bubbled', None) if self.storybook is not None else None
+        if not rows:
+            return
+        bubbled = {}
+        for row in rows:
+            bubbled.setdefault(row['beat'], []).append((row['start'], row['end']))
+        self.tl = {**self.tl, 'captions': timeline.recaption(self.ep, self.tl, self.lang, bubbled)}
+        wb = self.whiteboard
+        wb.tl = {**wb.tl, 'captions': self.tl['captions']}
+        wb.cap_starts = [c['start'] for c in wb.tl['captions']]
+        wb.cap_words = [c['words'] for c in wb.tl['captions']]
 
     def _written(self, span, t):
         """The words being said are already written on screen by this scene (kinetic type, a title, a quote, a call
