@@ -14,6 +14,7 @@ import re
 
 from PIL import Image, ImageDraw
 
+from .. import markup
 from . import ink
 from .source_diagrams import NUMBERS
 
@@ -122,15 +123,27 @@ def typeset(words: str) -> str:
 def _typeset(text: str) -> str:
     toks, out, i = _tokens(text), [], 0
     letters = any(_kind(toks, k) == 'var' for k in range(len(toks)))
+    spoken = any(_kind(toks, k) in ('op', 'pair', 'eq') for k in range(len(toks)))    # "A plus B", not "A = P(1 + r)"
     while i < len(toks):
         word, kind = toks[i][0], _kind(toks, i)
         lower = word.lower()
         nxt = _kind(toks, i + 1) if i + 1 < len(toks) else None
         prev = out[-1] if out else ''
+        joined = i and toks[i][1] == toks[i - 1][2]          # written with no space before it
+        if joined and kind in (None, 'var') and out and re.fullmatch(r'[^\w\s]', toks[i - 1][0]) and \
+                out[-1].endswith(toks[i - 1][0]) and not re.fullmatch(r'[^\w\s]', word):
+            out[-1] += word                                     # a word after its symbol: "$1,000", "Ctrl+Shift", "6-digit"
+            i += 1
+            continue
+        if kind == 'num' and joined and out and re.fullmatch(r'[$€£¥#(+\-−]', toks[i - 1][0]) and \
+                out[-1].endswith(toks[i - 1][0]):
+            out[-1] += word if word[0].isdigit() else str(number(word))
+            i += 1
+            continue
         if kind == 'num':
             value = number(word)
             out.append(word if word[0].isdigit() else str(value))
-        elif kind == 'var' and (nxt in ('op', 'pair', 'eq') or prev in ('+', '−', '×', '·', '÷', '=')):
+        elif kind == 'var' and spoken and (nxt in ('op', 'pair', 'eq') or prev in ('+', '−', '×', '·', '÷', '=')):
             out.append(lower)
         elif kind == 'pair':
             out.append(PAIRED[(lower, toks[i + 1][0].lower())])
@@ -153,8 +166,12 @@ def _typeset(text: str) -> str:
         elif kind == 'approx' and (nxt == 'num' or i == len(toks) - 1 or len(toks) == 1):
             out.append('≈')
         elif re.fullmatch(r'[^\w\s]', word):
-            if out:
-                out[-1] += word
+            spaced_after = i + 1 >= len(toks) or toks[i + 1][1] > toks[i][2]
+            if out and (joined or spaced_after and not (i + 1 < len(toks) and toks[i][1] > toks[i - 1][2])):
+                out[-1] += word                                 # punctuation that closes a word ("15,", "hotter.")
+            else:
+                out.append(word)                                # a symbol opening the next word ("$", "(") or
+                                                                # standing alone between spaces ("Ctrl + Shift")
         else:
             out.append(word)
         i += 1
@@ -413,9 +430,13 @@ class Layout:
         # 1. pictures and other steps
         if layout == 'flow':
             n = max(1, len(steps))
-            per_row = min(n, 4)
-            rows = math.ceil(n / per_row)
             gap = W * .06
+            # as many to a row as fit side by side (words wider than their share would run into each other)
+            widest = max((self.measure(it, it['kind'])[0] for it in steps if it['kind'] in ('label', 'equation')),
+                         default=0)
+            fit = int((W * .94 + gap) / (widest + gap)) if widest else 4
+            per_row = min(n, 4, max(fit, math.ceil(n / 2)))
+            rows = math.ceil(n / per_row)
             bw = min(W * .26, (W * .94 - gap * (per_row - 1)) / per_row)
             bh = min(H * (.40 if rows == 1 else .26), bw)
             for k, it in enumerate(steps):
@@ -788,16 +809,21 @@ class Boards:
         return set(self.scene_of)
 
     # -- per beat
-    def draw(self, beat, not_before=0.):
-        index = self.scene_of[beat['id']]
-        if index not in self.built:
+    def prepare(self, beat, not_before=0.):
+        """Lay out the scene of ``beat`` (once), before any of its boards or markup boards is drawn."""
+        index = self.scene_of.get(beat['id'])
+        if index is not None and index not in self.built:
             self.built[index] = self._build(index, not_before)
+        return index
+
+    def draw(self, beat, not_before=0.):
+        index = self.prepare(beat, not_before)
         prod = self.prod
         for page in self.built[index]:
             for k, (bid, start, add) in enumerate(page['adds']):
                 if bid != beat['id']:
                     continue
-                if k == 0:
+                if k == 0 and not page.get('shared'):
                     prod.cut(page['start'], page['col'] * prod.g.col, 'cut')
                 add()
 
@@ -811,6 +837,18 @@ class Boards:
         scene_end = max(tl['beats'][bid]['end'] for bid in scene['beat_ids'])
         pages = []
         boards = [self.sums(b, by_id, lang) for b in scene['boards'] if b['items']]
+        marked = [k for k, bid in enumerate(scene['beat_ids']) if markup.board(by_id[bid], lang)]
+        later = []
+        if marked:
+            # From a code, formula or warning beat on, its own board (markup_boards) stays on screen for the rest of
+            # the scene: no labels restating the code, no camera trip back to this board. The items of the beats
+            # after it (up to the next markup beat) go under it on its page (share).
+            ids = scene['beat_ids']
+            keep = set(ids[:marked[0]])
+            after = set(ids[marked[0] + 1:marked[1] if len(marked) > 1 else len(ids)])
+            later = [it for b in boards for it in b['items'] if it['beat_id'] in after]
+            boards = [dict(b, items=[it for it in b['items'] if it['beat_id'] in keep]) for b in boards]
+            boards = [b for b in boards if b['items']]
         times = []
         for board in boards:
             times.append([max(scene_start, cue_time(tl, by_id[it['beat_id']], it['cue'], lang)) for it in board['items']])
@@ -819,7 +857,39 @@ class Boards:
             end = times[n + 1][0] if n + 1 < len(boards) else scene_end
             box, (col, _) = prod.layout.page()
             pages.append(self._page(board, [max(start, t) for t in times[n]], start, end, box, col, by_id))
+        if marked:
+            ids = scene['beat_ids']
+            until = tl['beats'][ids[marked[1]]]['start'] if len(marked) > 1 else scene_end
+            pages += self.share(by_id[ids[marked[0]]], later, until, by_id)
         return pages
+
+    def share(self, beat, items, end, by_id):
+        """Give a markup beat's board (markup_boards) the top of a fresh page and lay ``items`` (the scene's later
+        board items) out under it: what the narration says next is drawn while the code, formula or warning stays
+        on screen. Without such items, or room for them, the board gets the whole page."""
+        from .markup_boards import make
+        prod, lang = self.prod, self.prod.lang
+        ids = {it['id'] for it in items}
+        items = [dict(it, to=it['to'] if it['to'] in ids else '') for it in items
+                 if it['kind'] != 'link' or (it['ref'] in ids and it['to'] in ids)]
+        box, (col, _) = prod.layout.page()
+        x0, y0, w, h = box
+        mark = markup.board(beat, lang)
+        made = make(prod, beat, mark, w, h * .6) if items else None
+        room = h - made[0].size[1] - .08 * h if made else 0
+        if not items or room < .3 * h:
+            prod.markup_pages = {**getattr(prod, 'markup_pages', {}),
+                                 beat['id']: (box, col, made or make(prod, beat, mark, w, h))}
+            return []
+        top = h - room
+        prod.markup_pages = {**getattr(prod, 'markup_pages', {}), beat['id']: ((x0, y0, w, top), col, made)}
+        tl = prod.tl
+        times = [max(tl['beats'][beat['id']]['end'], cue_time(tl, by_id[it['beat_id']], it['cue'], lang))
+                 for it in items]
+        board = {'layout': 'flow', 'items': items}
+        page = self._page(board, times, times[0], end, (x0, y0 + top, w, room), col, by_id, scale=h / 738)
+        page['shared'] = True
+        return [page]
 
     def _text(self, words, size, colour, max_w, lines=3, quick=False):
         prod = self.prod
@@ -857,10 +927,10 @@ class Boards:
                             'ref': '', 'to': '', 'at': 'auto', 'text': written, 'style': 'none', 'raw': True})
         return dict(board, items=out)
 
-    def _page(self, board, times, start, end, box, col, by_id):
+    def _page(self, board, times, start, end, box, col, by_id, scale=None):
         prod = self.prod
         x0, y0, W, H = box
-        s = H / 738
+        s = scale or H / 738
         ink_c, accent, accent2 = self.colours['ink'], self.colours['accent'], self.colours['accent2']
         texts = {}
 
@@ -879,6 +949,11 @@ class Boards:
                                                            for o in board['items']):
                     size = 46 * s
                 colour = accent if kind == 'title' else ink_c
+                keys = markup.combos(it['text'].strip(' .,;:!?'))
+                if keys and keys[0][0] == 0 and keys[0][1] == len(it['text'].strip(' .,;:!?')):
+                    from .markup_boards import keycaps_drawing      # a key combo is drawn as its keys
+                    texts[key] = keycaps_drawing(keys[0][2], min(prod.size[1], H * 1.46))
+                    return texts[key].size
                 texts[key] = self._text(words(it), round(size), colour, W * (.42 if kind != 'label' else .26))
             return texts[key].size
 

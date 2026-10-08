@@ -8,11 +8,14 @@ headings are kept as short paragraphs.
 from __future__ import annotations
 
 import re
+import textwrap
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from defusedxml import ElementTree as ET
+
+from . import markup
 
 W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 CJK = re.compile(r'[㐀-䶿一-鿿豈-﫿]')
@@ -76,6 +79,7 @@ def _clean_inline(text: str) -> str:
 def _text_blocks(text: str) -> list[tuple[int, str]]:
     """[(heading level or 0 for a paragraph, text)] from Markdown or plain text."""
     lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    raw = list(lines)
     lines = [re.sub(r'^\s*>\s?', '', line) for line in lines]          # > quoted lines are ordinary text
     from .speech import labels_in, screenplay_labels
     labels = screenplay_labels(lines)
@@ -90,6 +94,16 @@ def _text_blocks(text: str) -> list[tuple[int, str]]:
         line = lines[i].strip()
         nxt = lines[i + 1].strip() if i + 1 < len(lines) else ''
         m = re.match(r'^(#{1,6})\s+(.*?)\s*#*$', line)
+        fence = markup.FENCE_LINE.match(raw[i])
+        if fence:                                                     # a fenced code block, exactly as written
+            flush()
+            j = i + 1
+            while j < len(raw) and not raw[j].strip().startswith(fence.group(1)):
+                j += 1
+            body = textwrap.dedent('\n'.join(raw[i + 1:j])).strip('\n')
+            blocks.append((0, raw[i].strip() + '\n' + body + '\n' + fence.group(1)))
+            i = j + 1
+            continue
         if m:
             flush()
             blocks.append((len(m.group(1)), _clean_inline(m.group(2))))
@@ -101,7 +115,9 @@ def _text_blocks(text: str) -> list[tuple[int, str]]:
             flush()
         elif re.match(r'^([-*+•]|\d+[.)])\s+', line):
             flush()                                                   # list items stand alone
-            blocks.append((0, _clean_inline(re.sub(r'^([-*+•]|\d+[.)])\s+', '', line))))
+            number = re.match(r'^(\d+)[.)]\s+', line)                 # a numbered step keeps its number
+            blocks.append((0, (f'{number.group(1)}. ' if number else '')
+                           + _clean_inline(re.sub(r'^([-*+•]|\d+[.)])\s+', '', line))))
         else:
             if para and (labels_in(line, labels) or re.fullmatch(r'\[[^\]]*\]', line)):
                 flush()                                               # each screenplay line or direction stands alone
@@ -141,7 +157,7 @@ def _structure(blocks, title, fallback) -> Document:
                    lang=lang, heading=body_title is not None)
     current = None
     for lvl, t in blocks:
-        t = _sentence_spacing(t, lang)
+        t = t if markup.code_block(t) else _sentence_spacing(t, lang)
         if section_level and lvl == section_level:
             current = Section(t)
             doc.sections.append(current)
