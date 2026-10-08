@@ -406,8 +406,11 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
         else:
             clip = voice.speak(spoken, todo['parts'], lang, project_dir / 'voice', cfg['speed'], lexicon, todo['hold'])
             # The voice stops where the text asks: between sentences, on a count, at a written pause.
-            clips[beat['id']] = voice.paced(clip, spoken, speech.pace(spoken, lang, labels), project_dir / 'voice') \
-                if todo['parts'] else clip
+            stops = speech.pace(spoken, lang, labels)
+            if beat.get('stanza_end'):              # the end of a stanza in verse: a longer rest
+                rest = max([speech.STANZA_GAP] + [gap for pos, gap, _, _ in stops if pos >= len(spoken)])
+                stops = [s for s in stops if s[0] < len(spoken)] + [(len(spoken), rest, None, 0.)]
+            clips[beat['id']] = voice.paced(clip, spoken, stops, project_dir / 'voice') if todo['parts'] else clip
         if progress:
             progress('voice', i + 1, len(board['beats']))
     if not server:

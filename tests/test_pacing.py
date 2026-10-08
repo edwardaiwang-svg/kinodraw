@@ -129,3 +129,33 @@ def test_a_scene_waiting_for_its_music_beat_keeps_the_old_scene_moving():
     for t in (10.5, 11.0, 11.6):
         prod._frame_at(t)
     assert (old, 10.5) in seen and (old, 11.0) in seen and (old, 11.6) in seen
+
+
+POEM = """The river does not hurry.
+It has never once been late.
+
+It carries leaves it did not ask for,
+and sets them down
+in places they did not know to want.
+
+Nothing here is lost.
+It is only on its way.
+"""
+
+
+def test_verse_rests_at_the_end_of_each_stanza_and_prose_does_not():
+    from kinodraw import ingest, script
+    assert ingest.is_verse(POEM)
+    assert not ingest.is_verse('Preheat the oven.\nMix the flour.\n\nPour the batter.\nBake it for twenty minutes.\n')
+    assert not ingest.is_verse('A long paragraph of prose that someone wrapped by hand at about seventy\n'
+                               'characters, as email clients and old editors still do for their users.\n\n'
+                               'And a second one, wrapped the same way, with a sentence that runs on\n'
+                               'across its line break before it finally ends somewhere down here.\n')
+    board = script.build(ingest.read(POEM), 'story')
+    ends = [b['display']['en'] for b in board['beats'] if b.get('stanza_end')]
+    assert ends == ['The river does not hurry. It has never once been late.',
+                    'It carries leaves it did not ask for, and sets them down in places they did not know to want.',
+                    'Nothing here is lost. It is only on its way.']
+    assert not any(b.get('stanza_end') for b in script.build(ingest.read(POEM.replace('\n\n', '\n\n\n').replace(
+        'for,\nand sets them down\nin', 'for, and sets them down in').replace('lost.\nIt', 'lost. It')
+        .replace('hurry.\nIt', 'hurry. It')), 'story')['beats'])

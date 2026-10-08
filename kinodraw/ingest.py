@@ -36,6 +36,8 @@ class Document:
     # The title is the script's own top heading (a new project shows it on a title card). Not part of the content:
     # a .docx read as a file and as the Markdown the Studio makes of it are the same document.
     heading: bool = field(default=False, compare=False)
+    # Verse (a poem, a song): its lines are short and break mid-sentence; each paragraph is a stanza.
+    verse: bool = field(default=False, compare=False)
 
 
 def detect_lang(text: str) -> str:
@@ -65,7 +67,21 @@ def read(source: str | Path, title: str | None = None) -> Document:
         fallback = stem[:1].upper() + stem[1:]
     else:
         blocks, fallback = _text_blocks(str(source)), ''
-    return _structure(blocks, title, fallback)
+    doc = _structure(blocks, title, fallback)
+    if path is None or path.suffix.lower() != '.docx':
+        doc.verse = is_verse(path.read_text(encoding='utf-8') if path is not None and path.is_file() else str(source))
+    return doc
+
+
+def is_verse(text: str) -> bool:
+    """Whether ``text`` is written in verse: two or more paragraphs of several lines, every line short (60 characters
+    or fewer), and somewhere a sentence running on across a line break into a lowercase line."""
+    stanzas = [[line.strip() for line in p.split('\n') if line.strip()]
+               for p in re.split(r'\n\s*\n', text.replace('\r\n', '\n'))]
+    stanzas = [s for s in stanzas if len(s) >= 2 and not any(line.startswith(('#', '-', '*', '>', '```', '|'))
+                                                               for line in s)]
+    runs_on = any(not re.search(r'[.!?…:;]["”’)]*$', a) and b[:1].islower() for s in stanzas for a, b in zip(s, s[1:]))
+    return len(stanzas) >= 2 and runs_on and all(len(line) <= 60 for s in stanzas for line in s)
 
 
 # ------------------------------------------------------------------ parsing

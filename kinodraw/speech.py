@@ -690,6 +690,7 @@ SENTENCE_GAP = .35        # between two sentences of a beat
 TRAIL_GAP = .6            # a thought that trails off ("the north is just... on the bottom")
 COUNT_STEP = 1.25         # a count ("in... two... three... four"): from the start of one count to the start of the next
 BEAT_GAP = 1.4            # after a line that trails off or breaks off ("Mom..."), before the next line: a dramatic beat
+STANZA_GAP = 2.0          # after the last line of a stanza in verse (the references rest about 2 s)
 PAUSE_SECONDS = 3.0       # "(pause)" with no length
 BEAT_SECONDS = 1.2        # "(beat)"
 PAUSE_WORDS = {'long': 5., 'longer': 5., 'short': 1.5, 'brief': 1.5, 'small': 1.5, 'little': 1.5, 'quick': 1.,
