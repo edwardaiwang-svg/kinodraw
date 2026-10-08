@@ -957,7 +957,7 @@ def explicit_thing(ref, relation=None, to=None, motion=None, at=0., **_):
 SETTLE = re.compile(r"\b(?:(?P<lie>sprawl\w*|stretch\w*\s+out|curl\w*\s+up|lies|lay|lying|flops?|flopped|collaps\w*)|"
                     r"(?P<sit>sits?|sat|sitting|squeez\w*|plops?|plopped|settl\w*|sinks?|sank|slump\w*|perch\w*|"
                     r"climb\w*|curls?|curled|snuggl\w*|cuddl\w*))\b[^.;!?]{0,25}?\b(?:on|onto|in|into)\s+"
-                    r"(?:the|a|an|his|her|their|our|my|its)\s+(?:\w+\s+)?(?P<what>couch|sofa|settee|armchair|chair|"
+                    r"(?:(?:the|a|an|his|her|their|our|my|its)\s+(?:\w+\s+)?)?(?P<what>couch|sofa|settee|armchair|chair|"
                     r"stool|bench|bed|seat|hammock)", re.I)
 
 
