@@ -227,6 +227,9 @@ class HybridProduction:
             build.mkdir(parents=True, exist_ok=True)
             (build / 'bubbles.json').write_text(json.dumps(self.storybook.bubbled, ensure_ascii=False, indent=1),
                                                 encoding='utf-8')
+            # Every movement verb the pages read and whether its actor moved (engine.acting), for the QA.
+            (build / 'acts.json').write_text(json.dumps(self.storybook.acted, ensure_ascii=False, indent=1),
+                                             encoding='utf-8')
         self._leave_bubbled_lines_to_the_bubbles()
 
     def _prepare(self, span, project_dir):

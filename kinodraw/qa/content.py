@@ -201,3 +201,25 @@ def _when(line, clock):
 def _short(text, words=9):
     parts = text.split()
     return ' '.join(parts[:words]) + ('…' if len(parts) > words else '')
+
+
+def motion(path, timeline=None) -> dict | None:
+    """Movement verbs whose actor shows no movement on its story page (build/acts.json from engine.acting): a
+    finding per verb ("Pip tiptoed" with Pip standing still or not on the page), never a problem. None without the
+    file (no story pages)."""
+    import json
+    from pathlib import Path
+    path = Path(path)
+    if not path.exists():
+        return None
+    acted = json.loads(path.read_text(encoding='utf-8'))
+    starts = {bid: b['start'] for bid, b in ((timeline or {}).get('beats') or {}).items()}
+    findings = []
+    for a in acted:
+        if a.get('shown'):
+            continue
+        when = starts.get(a['beat'])
+        at = f' (beat {a["beat"]}' + (f', about {when:.0f} s)' if when is not None else ')')
+        findings.append(f'"{a["word"]}": {a["actor"] or "someone"} does not move on screen{at}.')
+    return {'findings': findings, 'stats': {'verbs': len(acted), 'shown': sum(1 for a in acted if a.get('shown'))}}
+
