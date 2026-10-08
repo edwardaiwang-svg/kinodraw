@@ -12,8 +12,8 @@ storybook and the planners read those unchanged. From them this module derives:
   speaker, or the narrator) and the exact text the voice reads (``said``: abbreviations spelled out for the voice
   only, "Dr. Lee" -> "Doctor Lee"), with every said character mapped back to the spoken text.
 
-Who says a quotation in prose ("Mine's broken," he said.) comes from the story Reader (director/v3/story.py), the
-same reading that puts the speech bubble on that person: ``quote_speakers``.
+Who says a quotation in prose ("Mine's broken," he said.) comes from speakers.attribute, the one reading that the
+speech bubbles and the talking figures follow too: ``quote_speakers``.
 """
 from __future__ import annotations
 
@@ -412,30 +412,12 @@ def cast_voices(people: list[tuple[str, str | None, str]], narrator: str, lang: 
 
 def quote_speakers(board_beats: list[dict], plan: dict | None):
     """(beat id -> [(start, end, speaker id)], reader, speaker -> age band when they first speak): who says each
-    quotation, as the storybook Reader reads the story (the same reading that bubbles it), screenplay lines whose
-    label names a cast member included. Needs the plan's cast; without one every quotation stays with the narrator
-    (reader None)."""
-    cast = (plan or {}).get('cast') or []
-    if not cast:
-        return {}, None, {}
-    from .director.v3.story import Reader
-    reader = Reader(cast)
-    reader.prime([b['spoken'] for b in board_beats])
-    talkers = {}
-    for scene in (plan or {}).get('scenes') or ():
-        for a in scene.get('actions') or ():
-            if a.get('verb') == 'talk' and a.get('actor') in reader.by_id:
-                talkers.setdefault(a.get('at_beat'), []).append(a['actor'])
-    out, bands = {}, {}
-    for b in board_beats:
-        spans = []
-        for line in reader.read(b['id'], b['spoken'], b.get('section'), talker=(talkers.get(b['id']) or [None])[0]):
-            if line.speaker and line.quotes:
-                spans += [(q0, q1, line.speaker) for q0, q1 in line.quotes]
-                bands.setdefault(line.speaker, line.ages.get(line.speaker) or reader.age_band(line.speaker))
-        if spans:
-            out[b['id']] = spans
-    return out, reader, bands
+    quotation, as speakers.attribute decides it for the voices, the bubbles and the talking figures alike, screenplay
+    lines whose label names a cast member included. Needs the plan's cast; without one every quotation stays with the
+    narrator (reader None)."""
+    from .speakers import attribute
+    said = attribute(board_beats, plan)
+    return said.spans, said.reader, said.bands
 
 
 TITLE_HOLD = 2.2          # seconds a silent title card holds before the first line
@@ -461,9 +443,13 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
         key = label_key(name)
         return next((cid for cid, c in cast.items() if c.get('name') and key in (
             name_key(c['name']), name_key(c['name']).split()[0], cid.casefold())), None)
+    from .speakers import narrator_of
+    me = narrator_of(beats, (plan or {}).get('cast') or [])     # "Coach Ben here": the narration is his voice
     found, order = {}, []
     for b in beats:
         segs = [] if b['silent'] else segments(b['spoken'], lang, labels, spans.get(b['id']), label_speaker)
+        for seg in segs if me else ():
+            seg.speaker = seg.speaker or me
         found[b['id']] = segs
         for seg in segs:
             if seg.speaker and seg.speaker not in order:

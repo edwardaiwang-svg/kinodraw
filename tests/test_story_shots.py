@@ -179,15 +179,16 @@ def test_a_voice_heard_off_screen_is_not_drawn_and_its_bubble_comes_in_from_the_
 
 def test_the_plan_speaker_wins_unless_the_text_says_otherwise(tmp_path):
     both = [('sam', 'adult', 'talk', 'yes'), ('mia', 'young', 'look', 'no')]
-    prod = staged(tmp_path, '"We should go home now."\n\n"Hurry up, Mia," Sam said.',
+    # The narration between the lines ends the turns: nothing in the text says who speaks first.
+    prod = staged(tmp_path, '"We should go home now."\n\nThe rain kept on.\n\n"Hurry up, Mia," Sam said.',
                   [shot('b001', 'We should', 'two_shot', both, lines=[('We should go home now.', 'sam')]),
-                   shot('b002', 'Hurry up', 'two_shot', [('mia', 'young', 'talk', 'yes'), ('sam', 'adult', 'look', 'no')],
+                   shot('b003', 'Hurry up', 'two_shot', [('mia', 'young', 'talk', 'yes'), ('sam', 'adult', 'look', 'no')],
                         lines=[('Hurry up, Mia,', 'mia')])])
     _, (first,) = pages(prod, 'b001')
     assert [b.speaker for b in first.bubbles] == ['sam']                 # untagged: the plan's speaker
-    _, (second,) = pages(prod, 'b002')
+    _, (second,) = pages(prod, 'b003')
     assert [b.speaker for b in second.bubbles] == ['sam']                # tagged "Sam said" and addressed to Mia
-    assert [r.get('plan_speaker') for r in prod.storybook.bubbled if r['beat'] == 'b002'] == ['mia']   # reported
+    assert [r.get('plan_speaker') for r in prod.storybook.bubbled if r['beat'] == 'b003'] == ['mia']   # reported
 
 
 def test_a_speech_tag_naming_the_speaker_beats_the_plan(tmp_path):
