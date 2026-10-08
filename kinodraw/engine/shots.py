@@ -51,6 +51,9 @@ MAX_ZOOM = {'medium': 2.4, 'two_shot': 2.4, 'close': 4.2, 'insert': 5.5}
 EYE_LINE = .44                     # where a framed subject's middle sits on screen, clear of the caption band
 WIDE_SCALE = .86                   # a wide shot shows the whole set, its people a little smaller
 MIN_SHOT = .8                      # seconds: a shorter shot shares the page before it
+# A story page whose cast only fits the page drawn smaller than this (storybook._fit) shows, sentence by sentence,
+# only the cast each sentence is about, each at a readable size.
+READABLE = .7
 # Poses that are not a body position: someone sitting or lying who talks, looks or holds something stays put.
 IN_PLACE = {'talk', 'look', 'point', 'hold', 'reach', 'laugh', 'read', 'eat', 'drink', 'wave', 'shout', 'cry',
             'scared', 'write', 'stand'}
@@ -70,6 +73,26 @@ LYING = re.compile(r'\b(?:lay|lays|lie|lies|lying|laid|sleep\w*|slept|asleep|nap
 DAYTIME = re.compile(r'\b(?:day(?:time|light|break)?|morning|noon|midday|afternoon|sun\w*|dawn|breakfast|lunch)\b',
                      re.I)
 NIGHT_SKIES = ('night_stars', 'shooting_star')
+# The scene's atmosphere in its sky (as on a page read from the text, storybook.Storybook._shot): a night one hangs a
+# moon, a dawn one a sun, rain its cloud. A night page outdoors also shows a few stars.
+MOON_SKIES = ('night_stars', 'shooting_star', 'fog_with_shooting_star')
+SUN_SKIES = ('dawn', 'rays')
+STARS = ((.42, .1, .04), (.6, .2, .032), (.3, .2, .032), (.7, .08, .028))
+FOGS = ('fog', 'fog_with_shooting_star')
+# Sky things the words can take away ("No moon anywhere", "somebody took the moon") or bring back ("there was the
+# moon"): what the sky shows follows the last thing the story said about them.
+SKY_WORDS = {'moon': r'moon\w*', 'sun': r'sun(?:light|shine|rise|set)?(?![\w-])', 'star': r'stars?(?![\w-])|starlight'}
+TAKEN = re.compile(r"\b(?:took|take|takes|taking|taken|stole|steal|steals|stealing|stolen|hid|hide|hides|hidden|"
+                   r"swallowed|swallows|ate|eaten|covered|covers|covering|blocked|blocks|blocking)\s+(?:away\s+)?"
+                   r"(?:the|a|an|our|my|his|her|their|that|its)?\s*$", re.I)
+BEHIND = re.compile(r"\s+(?:had\s+|has\s+|is\s+|was\s+)?(?:\w+\s+)?(?:went|goes|go|gone|slipped|slips|hid|hides|"
+                    r"hiding|disappeared|disappears|vanished)\s+(?:away|behind)\b", re.I)
+# A grassland the plan's places have no name for: a nature place the plan picks (a jungle, a forest) is drawn as the
+# savanna when the story's words name a grassland and never the plan's own kind of place.
+GRASSLAND = re.compile(r'\b(?:savann?ah?s?|grasslands?|plains|prairies?|velds?|steppes?)\b', re.I)
+NATURE_WORDS = {'jungle': r'jungles?|rain\s*forests?', 'forest': r'forests?|woods|woodlands?',
+                'countryside': r'countryside|meadows?|fields?|hills?|valleys?|mountains?|farmland',
+                'outdoors': r'outdoors'}
 SEAT_WORDS = {'couch': r'couch|sofa|settee', 'sofa': r'couch|sofa|settee', 'settee': r'couch|sofa|settee',
               'seat': r'seat|chair|couch|sofa|bench'}
 SIGNAL = re.compile(r'antenna|signal|reception|wifi|bars', re.I)
@@ -287,6 +310,8 @@ class Shots:
         self.seen = {}                 # cast id -> the place they were last on the page
         self.readable = None           # the last thing in the scene with words on it (the map she unfolds)
         self.written = {}              # doodle -> the words a page of it last showed: a page keeps its writing
+        self.gone = set()              # sky things the words last said are not there ('moon', 'sun', 'star')
+        self.read = {}                 # beat id -> the Reader's sentences
 
     def prepare(self, spec, start, end):
         from .storybook import Shot
@@ -294,6 +319,7 @@ class Shots:
         beats = [b for b in spec['beat_ids'] if b in book.by_id]
         read = {bid: book.reader.read(bid, book.by_id[bid]['spoken'], book.by_id[bid].get('section'))
                 for bid in beats}
+        self.read.update(read)
         timers = {bid: self._timer(bid, start) for bid in beats}
         plans = []
         for plan in spec.get('shots') or ():
@@ -309,7 +335,7 @@ class Shots:
         voices = self._voices(plans, beats, read, timers)
         plans = [(bid, offset, self._recast(plan, [v for v in voices.values() if v[1] == i]))
                  for i, (bid, offset, plan) in enumerate(plans)]
-        shots = []
+        shots, owner = [], {}
         for i, (bid, offset, plan) in enumerate(plans):
             begin = timers[bid](offset)
             nxt = next(((b, o) for b, o, _ in plans[i + 1:] if (b, o) != (bid, offset)), None)
@@ -317,21 +343,39 @@ class Shots:
             # The narration's actions on this page (engine.acting): from its sentences, the plan's as a fallback.
             spoken = [(bid, s) for s in read[bid] if s.start < text[1] and text[0] < s.end]
             acts = [a for a in spec.get('actions') or () if a.get('at_beat') == bid]
+            self._sky_words(text[2])
             if shots and begin - shots[-1].start < MIN_SHOT:
                 acting.direct(book, shots[-1], spoken, timers[bid], acts, bid, window=text[:2])
+                self._roars(shots[-1], spoken, timers[bid], text)
                 continue
             shot = self._stage(plan, begin, timers[bid], spec, bid, text)
-            acting.direct(book, shot, spoken, timers[bid], acts, bid, window=text[:2])
-            shots.append(shot)
+            for part, window in self._parts(shot, plan, bid, text, spoken) or [(None, text)]:
+                if part is not None:
+                    begin = timers[bid](window[0])
+                    lines = [(bid, s) for s in read[bid] if s.start < window[1] and window[0] < s.end]
+                    if shots and begin - shots[-1].start < MIN_SHOT:
+                        acting.direct(book, shots[-1], lines, timers[bid], acts, bid, window=window[:2])
+                        self._roars(shots[-1], lines, timers[bid], window)
+                        continue
+                    shot = self._stage(part, begin, timers[bid], spec, bid, window)
+                else:
+                    lines = spoken
+                acting.direct(book, shot, lines, timers[bid], acts, bid, window=window[:2])
+                self._roars(shot, lines, timers[bid], window)
+                owner[id(shot)] = plan
+                shots.append(shot)
         if not shots:
             shots.append(Shot(0., end - start))
         for shot, following in zip(shots, shots[1:]):
             shot.end = following.start
         shots[0].start = 0.
         shots[-1].end = end - start
-        self._bubbles(shots, beats, read, timers, {id(s): p for s, (_, _, p) in zip(shots, plans)}, voices)
+        self._bubbles(shots, beats, read, timers, owner, voices)
         if not book.story:
             shots = self._vary(shots, sorted(timers[bid](line.start) for bid in beats for line in read[bid]))
+        else:
+            shots = self._follow(shots, [(timers[bid](line.start), timers[bid], line) for bid in beats
+                                         for line in read[bid]])
         for shot in shots:
             for b in shot.bubbles:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
@@ -392,6 +436,133 @@ class Shots:
         half = .5 / zoom
         return min(1 - half, max(half, cx)), min(1 - half, max(half, cy)), zoom
 
+    def _follow(self, shots, lines):
+        """In a story, a sentence about someone's eyes on a page that holds several sentences gets its own cut of
+        that page, which pushes into those eyes (Storybook._eye_camera) and then shows the face; the next sentence
+        cuts back to the page's own framing. ``lines``: (span-local start, beat timer, Reader sentence)."""
+        lines = sorted(lines, key=lambda l: l[0])
+        out = []
+        for shot in shots:
+            out.append(shot)
+            figures = [f for f in shot.figures if not f.crowd]
+            if shot.page or shot.screen or shot.hands or shot.eyes is not None or not figures:
+                continue
+            start, end = shot.start, shot.end
+            for t, timer, line in lines:
+                current = out[-1]
+                eyes = next((f for f in figures if f.key == line.eyes), None)
+                if not start <= t <= end - MIN_SHOT or (eyes is None and current.eyes is None):
+                    continue
+                if t - current.start < MIN_SHOT:
+                    if eyes is not None and current is shot and t - start < MIN_SHOT:
+                        shot.eyes, shot.eyes_at = eyes, timer(line.eyes_at)     # the page opens on the eyes
+                    continue
+                cut = copy.copy(current)
+                cut.start, current.end = t, t
+                cut.eyes, cut.eyes_at = eyes, (timer(line.eyes_at) if eyes is not None else 0.)
+                cut.bubbles = [copy.copy(b) for b in current.bubbles]
+                out.append(cut)
+        return out
+
+    def _parts(self, shot, plan, bid, text, spoken):
+        """A story page whose plan cast is drawn too small to read (READABLE), split at its sentences into pages
+        that each show only the cast the sentence is about: who it names, who speaks and whom an act of theirs
+        reaches (the hyena a swipe sends flying), at their full size, in the same place, poses and framing type. A
+        sentence about nobody keeps the page before it; one about everyone shows the whole cast. [(plan, (start,
+        end, words))], or None when the page stays whole."""
+        book = self.book
+        keys = [f.key for f in shot.figures if not f.crowd]
+        if not book.story or getattr(shot, 'scale', 1.) >= READABLE or shot.page or shot.screen or len(keys) < 2 \
+                or shot.framing in ('insert', 'first_person', 'close'):
+            return None
+        groups = []
+        for _, line in spoken:
+            named = set(line.present) | {line.speaker}
+            for _, actor, target, *_ in acting.read(book, line, keys):
+                named |= {actor, target}
+            who = [k for k in keys if k in named] or (groups[-1][0] if groups else keys)
+            if not groups or groups[-1][0] != who:
+                groups.append((who, max(line.start, text[0])))
+        if len(groups) < 2 and (not groups or groups[0][0] == keys):
+            return None
+        words = book.by_id[bid]['spoken']
+        out = []
+        for i, (who, start) in enumerate(groups):
+            stop = groups[i + 1][1] if i + 1 < len(groups) else text[1]
+            part = plan if who == keys else dict(plan, cast=[c for c in plan.get('cast') or ()
+                                                             if self.person(c.get('id')) in who])
+            out.append((part, (start, stop, words[start:stop])))
+        return out
+
+    # ---------------- sky
+    def _sky_words(self, text):
+        """Follow what the words say about the moon, the sun and the stars, in reading order: "No moon anywhere",
+        "the moon is gone", "somebody took the moon" or "the moon went behind a cloud" take it out of the sky; any
+        other mention ("there was the moon") puts it back."""
+        from ..director.v3.staging import absent
+        hits = sorted((m.start(), m.end(), kind) for kind, cue in SKY_WORDS.items()
+                      for m in re.finditer(r'(?<![\w-])(?:' + cue + r')', text, re.I))
+        for start, end, kind in hits:
+            if absent(text, start, end) or TAKEN.search(text[max(0, start - 40):start]) or BEHIND.match(text, end):
+                self.gone.add(kind)
+            else:
+                self.gone.discard(kind)
+
+    def _sky(self, shot, spec, place, sky, bid, text):
+        """The page's sky (shot.sky) and weather (shot.atmosphere): the sky things its words name (the Reader's), the
+        plan's own sky pictures, and its scene's atmosphere; at night no sun and a few stars outdoors; nothing the
+        words took away; indoors only the sun or moon through a window (a dark one at night)."""
+        from .storybook import _sky_kind
+        book = self.book
+        atmosphere = (spec.get('atmosphere') or {}).get('kind') or 'none'
+        words = [d for line in self.read.get(bid, ()) if line.start < text[1] and text[0] < line.end
+                 for d in line.sky]
+        wanted = words + list(sky)
+        if self.night or atmosphere in MOON_SKIES:
+            wanted.append('fl_crescent_moon')
+        if atmosphere in SUN_SKIES:
+            wanted.append('fl_sun')
+        if atmosphere == 'rain':
+            wanted.append('fl_cloud_with_rain')
+        out = []
+        for doodle in wanted:
+            kind = _sky_kind(doodle)
+            star = kind == doodle and 'star' in doodle
+            if kind in [_sky_kind(d) for d in out] or kind in self.gone or (self.night and kind == 'sun') or \
+                    (star and 'star' in self.gone):
+                continue
+            out.append(doodle)
+        out = book._window_sky(shot, out[:2], place)
+        for i, doodle in enumerate(out):
+            shot.sky.append(doodle if isinstance(doodle, tuple) else (doodle, (.83, .2)[i], .15, .16))
+        outdoors = place not in sets.INTERIOR and place != 'night_sky'
+        if self.night and outdoors and 'star' not in self.gone:
+            shot.sky += [('fl_star', x, y, h) for x, y, h in STARS]
+        shot.atmosphere = 'none' if place in sets.INTERIOR and atmosphere in FOGS else atmosphere
+
+    def _landscape(self, place):
+        """The savanna for a nature place the story's words never name when they name a grassland (see
+        GRASSLAND); the place itself otherwise."""
+        own = NATURE_WORDS.get(place)
+        if own is None:
+            return place
+        story = ' '.join(b['spoken'] for b in self.book.by_id.values())
+        if GRASSLAND.search(story) and not re.search(r'\b(?:' + own + r')\b', story, re.I):
+            return 'savanna'
+        return place
+
+    def _roars(self, shot, spoken, timer, text):
+        """A roar the words give someone on the page ("unleashing a roar", a cub's try that "came out as a tiny
+        squeak") opens their mouth when its word is spoken, as on a page read from the text; someone lying down or
+        asleep stays down."""
+        for _, line in spoken:
+            for cid, (pose, char) in line.poses.items():
+                f = next((g for g in shot.figures if g.key == cid and not g.crowd), None)
+                if pose != 'roar' or f is None or not text[0] <= char < text[1] or \
+                        f.pose in ('sleep', 'lie', 'sit', 'carry'):
+                    continue
+                f.pose, f.cue = 'roar', timer(char)
+
     # ---------------- time
     def _timer(self, bid, start):
         timing = self.book.tl['beats'][bid]
@@ -433,7 +604,12 @@ class Shots:
                 people.append(c)                          # an age variant of someone is that person, once a page
         heard = {c['id'] for c in people if c.get('speaking') == 'off_screen'}
         cast = [c for c in people if c.get('id') in book.cast and c['id'] not in heard]
+        from .storybook import _sky, _sky_kind
         props = [dict(p) for p in plan.get('props') or () if self._known(p.get('ref'))]
+        sky = [p['ref'] for p in props if _sky(p['ref'])]          # a moon or a cloud hangs in the sky
+        props = [p for p in props if not _sky(p['ref'])]
+        if _sky(plan.get('focus_ref') or '') and _sky_kind(plan['focus_ref']) in self.gone:
+            plan = dict(plan, focus_ref='')                       # "The moon is gone": no close-up of the moon
         focus = plan.get('focus_ref') or ''
         if (not book.story and shot.framing in ('insert', 'close') and self._known(focus) and not writable(focus)
                 and focus not in [p['ref'] for p in props] + list((plan.get('setting') or {}).get('set_refs') or ())):
@@ -442,7 +618,7 @@ class Shots:
             props.append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
         figures = []
         setting = plan.get('setting') or {}
-        place = place_for(setting.get('place'), self.place)
+        place = self._landscape(place_for(setting.get('place'), self.place))
         if place_for(setting.get('place')) is None and cast and self.last is not None and not (
                 {c['id'] for c in cast} & {f.key for f in self.last.figures}):
             place = next((self.seen[c['id']] for c in cast if c['id'] in self.seen), None)   # her own kitchen
@@ -501,7 +677,9 @@ class Shots:
         if shot.framing == 'wide':
             for f in figures:
                 f.height *= WIDE_SCALE
+        natural = [f.height for f in figures]
         book._layout(figures, SimpleNamespace())
+        shot.scale = min([f.height / h for f, h in zip(figures, natural) if h] or [1.])   # how much _fit shrank them
         time = setting.get('time')
         night_sky = (spec.get('atmosphere') or {}).get('kind') in NIGHT_SKIES
         self.night = time in ('night', 'dusk') or (time in (None, 'unknown') and (self.night or night_sky)) or (
@@ -510,6 +688,7 @@ class Shots:
         refs, props = self._refs(place, setting.get('set_refs') or [], props, figures, text, at)
         book.stager.stage_explicit(shot, place, props, figures, at=lambda s: s, night=self.night, set_refs=refs)
         shot.figures = figures
+        self._sky(shot, spec, place, sky, bid, text)
         if place is None and not shot.set and not figures:
             shot.set = []
         for p in shot.set:

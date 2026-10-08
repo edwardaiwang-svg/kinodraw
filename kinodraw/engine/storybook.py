@@ -440,7 +440,7 @@ class Storybook:
         """Shots for one scene span (local seconds), from its beats' sentences and the plan's cast; a scene whose plan
         gives shots is staged from them (engine.shots)."""
         if spec.get('shots'):
-            return self.planned.prepare(spec, start, end)
+            return self._titled(spec, self.planned.prepare(spec, start, end))
         shots = []
         staged = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
         pictures = [e['ref'] for e in spec['elements'] if e['kind'] == 'picture' and story_picture(e['ref'])]
@@ -493,9 +493,13 @@ class Storybook:
             for b in shot.bubbles:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
             shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
+        return self._titled(spec, shots)
+
+    def _titled(self, spec, shots):
+        """The story's title once, on the first page (a page read from the text or one staged from plan shots)."""
         if spec['beat_ids'][0] == self.first and (self.by_id[self.first].get('kind') == 'title'
                                                    or titled(self.title, self.by_id[self.first]['spoken'])):
-            shots[0].title = self.title         # the title once, on the first page
+            shots[0].title = self.title
         return shots
 
     def _cast_figure(self, cid, line=None, **kw):
