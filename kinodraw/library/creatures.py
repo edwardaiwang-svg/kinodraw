@@ -145,8 +145,73 @@ FAMILY_OF = {
 }
 
 
+# Words for a young animal (alone: the species they usually name) and an animal's female (alone: her species). After a
+# species word they only set the age or sex: "lion cubs", "elephant calf", "elephant cow", "wolf pup".
+YOUNG_WORDS = {'cub': None, 'pup': 'dog', 'puppy': 'dog', 'kit': 'fox', 'kitten': 'cat', 'calf': 'cow',
+               'foal': 'horse', 'colt': 'horse', 'filly': 'horse', 'chick': 'chicken', 'duckling': 'duck',
+               'gosling': 'duck', 'cygnet': 'duck', 'joey': None, 'lamb': 'sheep', 'piglet': 'pig', 'fawn': 'deer',
+               'baby': None, 'hatchling': None, 'owlet': 'owl', 'eaglet': 'eagle', 'hoglet': 'hedgehog',
+               'tadpole': 'frog', 'young': None, 'youngster': None}
+FEMALE_WORDS = {'lioness': 'lion', 'tigress': 'tiger', 'hen': 'chicken', 'mare': 'horse', 'cow': 'cow', 'doe': 'deer',
+                'ewe': 'sheep', 'vixen': 'fox', 'sow': 'pig', 'nanny': 'goat', 'jenny': 'horse', 'bitch': 'dog',
+                'she wolf': 'wolf', 'female': None, 'mother': None, 'mama': None, 'mom': None}
+IRREGULAR_PLURALS = {'mice': 'mouse', 'geese': 'goose', 'oxen': 'ox', 'children': 'child', 'people': 'person',
+                     'men': 'man', 'women': 'woman', 'teeth': 'tooth', 'feet': 'foot', 'calves': 'calf',
+                     'wolves': 'wolf', 'halves': 'half', 'lice': 'louse', 'fungi': 'fungus', 'cacti': 'cactus'}
+
+
 def _norm(word) -> str:
     return str(word or '').strip().lower().replace('-', ' ').replace('_', ' ')
+
+
+def _known(word) -> bool:
+    by_species, families = _index()
+    return any(word in table for table in (by_species, families, SPECIES_WORDS, VARIANT_WORDS, RELATED, YOUNG_WORDS,
+                                           FEMALE_WORDS, AGES))
+
+
+def singular(word) -> str:
+    """One of a plural animal word: "lionesses" -> lioness, "puppies" -> puppy, "foxes" -> fox, "wolves" -> wolf,
+    "mice" -> mouse, "sheep" -> sheep; each word of a phrase ("spotted hyenas" -> spotted hyena)."""
+    out = []
+    for w in _norm(word).split():
+        if w in IRREGULAR_PLURALS:
+            w = IRREGULAR_PLURALS[w]
+        elif not _known(w) and len(w) > 3 and w.endswith('s') and not w.endswith('ss'):
+            options = [w[:-3] + 'y', w[:-3] + 'f', w[:-3] + 'fe', w[:-2], w[:-1]] if w.endswith(('ies', 'ves')) else \
+                [w[:-2], w[:-1]] if w.endswith(('sses', 'xes', 'ches', 'shes', 'zes', 'oes')) else [w[:-1]]
+            w = next((o for o in options if _known(o)), w[:-3] + 'y' if w.endswith('ies') else w[:-1]
+                     if w.endswith('ves') or len(options) == 1 else w[:-2])
+        out.append(w)
+    return ' '.join(out)
+
+
+def species_word(word):
+    """(species word, sex, age) a cast member's species word implies, in the plural or singular: "lion cubs" ->
+    ('lion', None, 'young'), "lionesses" -> ('lion', 'female', None), "kittens" -> ('cat', None, 'young'),
+    "elephant cow" -> ('elephant', 'female', None), "spotted hyenas" -> ('spotted hyena', None, None). A word it
+    does not know comes back singular with no sex or age."""
+    word = singular(word)
+    sex = age = None
+    words = word.split()
+    while len(words) > 1 and words[0] in ('baby', 'young', 'little', 'female', 'male', 'mother', 'father', 'mama',
+                                          'papa', 'she', 'he'):
+        lead = words.pop(0)
+        age = 'young' if lead in ('baby', 'young', 'little') else age
+        sex = 'female' if lead in ('female', 'mother', 'mama', 'she') else 'male' if lead in (
+            'male', 'father', 'papa', 'he') else sex
+    word = ' '.join(words)
+    if word in FEMALE_WORDS:                                              # alone: "cow" is the species
+        return FEMALE_WORDS[word] or word, 'female' if word != 'cow' else sex, age
+    if word in YOUNG_WORDS:                                               # "cubs" alone: young, species unknown
+        return YOUNG_WORDS[word] or word, sex, 'young'
+    if len(words) > 1 and words[-1] in YOUNG_WORDS:                       # "lion cub", "elephant calf"
+        return ' '.join(words[:-1]), sex, 'young'
+    if len(words) > 1 and words[-1] in FEMALE_WORDS:                      # "elephant cow", "deer doe"
+        return ' '.join(words[:-1]), 'female', age
+    if word.endswith('ess') and word[:-3] in _index()[0]:                 # any "-ess" of a drawn species
+        return word[:-3], 'female', age
+    return word, sex, age
 
 
 @lru_cache(maxsize=1)
@@ -185,7 +250,8 @@ def _canonical_pose(pose) -> str:
 
 
 def _resolve_species(species, sex, age):
-    word = _norm(species)
+    word, implied_sex, implied_age = species_word(species)
+    sex, age = sex or implied_sex, age or implied_age
     by_species, families = _index()
     role = None
     if word in VARIANT_WORDS:

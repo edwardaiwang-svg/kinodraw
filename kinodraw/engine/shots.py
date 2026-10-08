@@ -95,6 +95,11 @@ NATURE_WORDS = {'jungle': r'jungles?|rain\s*forests?', 'forest': r'forests?|wood
                 'outdoors': r'outdoors'}
 SEAT_WORDS = {'couch': r'couch|sofa|settee', 'sofa': r'couch|sofa|settee', 'settee': r'couch|sofa|settee',
               'seat': r'seat|chair|couch|sofa|bench'}
+# "asleep in front of the TV", "watching television": whoever the words put there keeps the TV beside them and in
+# every framing of them in that place.
+BY_TV = re.compile(r'\b(?:in\s+front\s+of|before|facing|watching|watches|watched)\s+(?:the\s+|a\s+|an\s+|his\s+|'
+                   r'her\s+|their\s+|our\s+|my\s+)?(?:tv|television|telly)\b', re.I)
+TV_GAP = .03
 SIGNAL = re.compile(r'antenna|signal|reception|wifi|bars', re.I)
 MAP = re.compile(r'\bmap\b|map_|_map|atlas', re.I)
 NO_SIGNAL = re.compile(r'\bno\s+(?:bars|signal|service|reception|connection|network)\b|out\s+of\s+range|'
@@ -568,6 +573,20 @@ class Shots:
             return 'savanna'
         return place
 
+    def _asleep(self, bid, text):
+        """Who the words of this shot say is asleep ("fast asleep", "dozed off", "snoring"), with whoever lies down
+        in that sentence ("curled up against his father, fast asleep"): cast id -> beat character offset of the
+        words that put them to sleep. Plan poses never wake them."""
+        out = {}
+        for line in self.read.get(bid, ()):
+            if not (line.start < text[1] and text[0] < line.end):
+                continue
+            asleep = [char for pose, char in line.poses.values() if pose == 'sleep']
+            for cid, (pose, char) in line.poses.items():
+                if pose in ('sleep', 'lie') and asleep:
+                    out.setdefault(cid, min(asleep))
+        return out
+
     def _roars(self, shot, spoken, timer, text):
         """A roar the words give someone on the page ("unleashing a roar", a cub's try that "came out as a tiny
         squeak") opens their mouth when its word is spoken, as on a page read from the text; someone lying down or
@@ -674,6 +693,15 @@ class Shots:
             else:
                 f.pose = 'carry' if c.get('pose') == 'carry' else POSE.get(c.get('pose'), 'stand')
             figures.append(f)
+        sleepers = self._asleep(bid, text)
+        speaking = {c['id'] for c in cast if c.get('speaking') == 'yes'}
+        for f in figures:
+            if f.key in speaking or f.key not in sleepers and not (sleepers and f.pose == 'lie') or f.pose == 'sleep':
+                continue
+            char = sleepers.get(f.key, min(sleepers.values()))
+            if char > text[0]:                            # awake (lying, else lying down) until the words say so
+                f.before, f.cue = f.pose if f.pose in ('lie', 'sit') else 'lie', at(char)
+            f.pose = 'sleep'                              # "fast asleep", "snoring": the words put them to sleep
         focus = plan.get('focus_ref') or ''
         if SCREEN.search(focus) and any(p.get('relation') == 'in' for p in props):
             for p in props:                               # the puddles the girl on the video jumps in are on it too
@@ -716,6 +744,7 @@ class Shots:
             if prop and prop.get('motion') == 'slide' and p.kind != 'hand':
                 p.motion, p.cue, p.to = 'slide', prop['at'], (.6 if p.x < .5 else -.6, 0.)
         seated = self._seat(shot, figures, place, refs, (text[2], book.by_id[bid]['spoken']))
+        self._by_tv(shot, figures, seated, bid, text)
         for f in figures:
             if f in seated:
                 self.rests[f.key] = (place, f.pose)
@@ -882,14 +911,59 @@ class Shots:
             shot.supports.append(support)
         return support
 
+    def _by_tv(self, shot, figures, seated, bid, text):
+        """A shot whose own words put someone in front of the TV ("half-asleep in front of the TV") has it right
+        beside them and keeps it in its framing (shot.keep); a chair in its way moves along with whoever sits on it.
+        Later shots of them there are framed on their own words (a conversation keeps its speakers close)."""
+        keys = [f.key for f in figures]
+        watchers = []
+        for line in self.read.get(bid, ()):
+            m = BY_TV.search(line.text) if line.start < text[1] and text[0] < line.end else None
+            refs = [r for r in line.refs if r[0] < m.start() and r[2] != 'of' and r[1] in keys] if m else []
+            if refs:
+                watchers.append(figures[keys.index(max(refs)[1])])
+        tv = [p for p in shot.set if p.kind not in ('hand', 'strip') and re.search(r'televis|\btv\b', _words(p.doodle))]
+        if not watchers or not tv:
+            return
+        stands = [s.piece for s in shot.supports if s.kind == 'top' and any(
+            abs(p.ground - s.y) < .02 and s.x0 <= p.x <= s.x1 for p in tv)]
+        group = tv + [p for p in stands if p not in tv]
+        boxes = [self._box(p) for p in group]
+        gx0, gx1 = min(b[0] for b in boxes), max(b[2] for b in boxes)
+        on = lambda s, f: abs(f.ground - s.y) < .02 and s.x0 - .02 <= f.x <= s.x1 + .02
+        seat = next((s for s in shot.supports if s.kind in ('seat', 'bed') and any(
+            on(s, f) for f in watchers if f in seated)), None)
+        wx0, wx1 = (self._box(seat.piece)[0], self._box(seat.piece)[2]) if seat else \
+            (min(self._body(f)[0] for f in watchers), max(self._body(f)[2] for f in watchers))
+        dx = wx1 + TV_GAP - gx0 if gx0 >= wx1 else wx0 - TV_GAP - gx1 if gx1 <= wx0 else 0.
+        if gx0 + dx < 0 or gx1 + dx > 1:
+            dx = 0.
+        for p in group:
+            p.x += dx
+        lo, hi = gx0 + dx, gx1 + dx
+        for s in shot.supports:
+            if s.piece in group:
+                s.x0, s.x1 = s.x0 + dx, s.x1 + dx
+            elif s is not seat and s.kind == 'seat' and s.piece.kind == 'set':
+                b = self._box(s.piece)
+                if not (b[0] < hi and lo < b[2]):
+                    continue
+                move = (hi + TV_GAP - b[0]) if hi + TV_GAP + b[2] - b[0] <= 1 else (lo - TV_GAP - b[2])
+                for f in seated:
+                    if on(s, f):
+                        f.x += move
+                s.piece.x, s.x0, s.x1 = s.piece.x + move, s.x0 + move, s.x1 + move
+        shot.keep = group
+
     def _clear_of_furniture(self, shot, standing, seated):
         """Standing and walking people keep off the couch and the bed: each stands where the page is free, as near
         its own spot as it can."""
         book = self.book
-        if not standing or not shot.supports:
+        if not standing or not (shot.supports or shot.keep):
             return
         boxes = [(s.x0, s.x1) for s in shot.supports if s.kind in ('seat', 'bed')]
         boxes += [(f.x - book._half(f) * .8, f.x + book._half(f) * .8) for f in seated]
+        boxes += [(b[0], b[2]) for b in map(self._box, shot.keep)]     # nobody stands in front of the TV she watches
         for f in standing:
             half = book._half(f)
             lo, hi = half + .01, 1 - half - .01 - f.travel
@@ -1086,6 +1160,7 @@ class Shots:
             if near[2] - near[0] > .5 and (shot.screen or self._desk(shot, subject, piece)):
                 boxes = [self._knees_up(subject)] if not shot.screen else []
             boxes.append(arrangement)
+        boxes += [self._box(p) for p in shot.keep]       # the TV she sleeps in front of stays in the shot
         self._look_at(shot, self._night_sky(shot, self._union(boxes)), MEDIUM_FILL,
                       MAX_ZOOM[kind if kind in MAX_ZOOM else 'medium'])
         self._uncut(shot, [f for f in figures if f not in group or not any(b == self._knees_up(f) for b in boxes)],
@@ -1169,13 +1244,13 @@ class Shots:
 
     def _night_sky(self, shot, box):
         """At night a framing of a room keeps its dark window in view (the night is what the words say) when the
-        window hangs above what it frames, so the shot stays as close as it was meant to be."""
+        window hangs above what it frames (its middle over it), so the shot stays as close as it was meant to be."""
         window = next((p for p in shot.set if p.doodle == 'set_window_night'), None) if self.night else None
         if window is None:
             return box
         pane = self._box(window)
         both = self._union([box, pane])
-        above = pane[0] < box[2] + .03 and box[0] - .03 < pane[2]
+        above = box[0] - .03 < (pane[0] + pane[2]) / 2 < box[2] + .03     # over it, not just at a shoulder's edge
         return both if above and both[2] - both[0] <= .7 and both[3] - both[1] <= .62 else box
 
     def _held_box(self, shot, piece):

@@ -325,3 +325,11 @@ def test_a_raised_voice_sounds_higher_at_the_same_pace(tmp_path):
     assert abs(high.duration - low.duration) < .12 * low.duration
     assert len(high.char_times) == len(line) and high.char_times[-1] <= high.duration
     assert voice.base_voice('af_jessica+4') == ('af_jessica', 4.0) and voice.base_voice('af_heart') == ('af_heart', 0.)
+
+
+def test_a_plural_or_young_species_word_gives_its_sex():
+    # One cast id for every word, so the id pick (the last resort) cannot give the right answer for all of them.
+    from kinodraw.speech import person_sex
+    for species, sex in (('girls', 'female'), ('boys', 'male'), ('hens', 'female'), ('kings', 'male'),
+                         ('queens', 'female'), ('lionesses', 'female')):
+        assert person_sex({'species': species, 'name': ''}, 'flock_a', None) == sex, species

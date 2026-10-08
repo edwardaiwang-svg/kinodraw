@@ -909,9 +909,11 @@ def person_sex(c: dict, cid: str, reader, texts=(), told: str | None = None) -> 
     if sex not in ('male', 'female'):
         sex = reader.sex(cid) if reader is not None and cid in reader.by_id else c.get('sex')
     if sex not in ('male', 'female'):
-        from .engine.storybook import PERSON_SEX
+        from .engine.storybook import PERSON_SEX, species_base
         species = str(c.get('species') or '')
-        sex = PERSON_SEX.get(species) or _sex_of_words(species) or name_sex(c.get('name') or '')
+        base, implied, _ = species_base(species)              # plural or young words: "hens", "kings", "girls"
+        sex = (PERSON_SEX.get(base) or implied or PERSON_SEX.get(species) or _sex_of_words(species)
+               or _sex_of_words(base) or name_sex(c.get('name') or ''))
     if sex not in ('male', 'female'):
         seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
         sex = 'female' if seed % 2 else 'male'

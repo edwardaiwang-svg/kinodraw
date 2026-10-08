@@ -68,6 +68,10 @@ BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
 # its height, and blinks for BLINK seconds (3 frames) every 2.4-3.9 s. The camera is locked on every page: the only
 # moves are the push into the eyes a line is about and a roar's shake (J 10/8: no "random camera zooms").
 BREATH = .003
+# Sleep is motivated motion, not idle wobble: a sleeper's body rises and falls by SLEEP_BREATH of its height every
+# SLEEP_CYCLE seconds, and Z marks drift up from the head and fade, a new one every half ZZZ_CYCLE.
+SLEEP_BREATH, SLEEP_CYCLE = .022, 3.4
+ZZZ_CYCLE, ZZZ_RISE = 2.8, .1
 BLINK = .1
 TREMBLE, LAUGH = 2.2, 2.4         # seconds a trembling or laughing pose shakes from its word, then it holds still
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
@@ -114,8 +118,21 @@ SUPPORTS = {'sit': ('sofa', 'couch', 'armchair', 'chair', 'bench', 'stool', 'sea
             'lie': ('bed', 'sofa', 'couch', 'hammock', 'bench'), 'sleep': ('bed', 'sofa', 'couch', 'hammock', 'bench')}
 SEAT = {'bed': .45, 'hammock': .5, 'stool': .6, 'bench': .45, 'chair': .45, 'armchair': .4, 'sofa': .4, 'couch': .4}
 JUNGLE = ('monkey', 'elephant', 'antelope', 'warthog', 'frog', 'bird')
-SPECIES_BASE = {'lioness': ('lion', 'female'), 'tigress': ('tiger', 'female'), 'kitten': ('cat', None),
-                'puppy': ('dog', None)}
+# A creature whose species word names nothing the library draws is drawn as the plan's family's (or kind's) everyday
+# animal, never as an unrelated icon.
+FAMILY_ANIMAL = {'feline': 'cat', 'canine': 'dog', 'ursine': 'bear', 'equine': 'horse', 'bovine': 'cow',
+                 'rodent': 'mouse', 'bird': 'songbird', 'reptile': 'turtle', 'primate': 'monkey'}
+KIND_ANIMAL = {'bird': 'songbird', 'fish': 'fish', 'quadruped': 'dog'}
+
+
+@lru_cache(maxsize=512)
+def species_base(species):
+    """(species, sex, age) a cast member's species word implies, plural or singular: "lionesses" -> ('lion',
+    'female', None), "lion cubs" -> ('lion', None, 'young'), "women" -> ('woman', None, None)."""
+    mod = _creatures()
+    if mod is None or not hasattr(mod, 'species_word'):
+        return species, None, None
+    return mod.species_word(species)
 
 
 # ------------------------------------------------------------------ doodles
@@ -137,8 +154,9 @@ def meta(doodle_id) -> dict:
 def preset(species, age='adult', sex=None, pose='stand', facing='r', marks=()):
     """(doodle id, mirror) for a cast member's pose. Presets first; then a full-body library doodle of the same
     species. An animal never resolves to a human figure; a person resolves to a person."""
-    base, implied = SPECIES_BASE.get(species, (species, None))
+    base, implied, young = species_base(species)
     sex = implied or (sex if sex in ('male', 'female') else None)
+    age = 'young' if young and age in (None, 'adult') else age
     if base in HUMAN:
         chosen = _person(PERSON_BAND.get(base, age), sex or PERSON_SEX.get(base), pose, facing, marks)
         return chosen or HUMAN_FIGURE.get(base, 'fl_person_standing'), False
@@ -149,11 +167,22 @@ def preset(species, age='adult', sex=None, pose='stand', facing='r', marks=()):
         chosen = _choose(base, age, sex, 'stand', facing, marks)
         if chosen:
             return chosen, False
-    doodle = FALLBACK.get(base) or FALLBACK.get(species)
-    if doodle is None or library.resolve(doodle) is None:
-        doodle = 'fl_paw_prints'
+    doodle = _animal_doodle(base) or _animal_doodle(species) or 'fl_paw_prints'
     native = 'r' if doodle in NATIVE_RIGHT else 'f' if doodle in FRONT else 'l'
     return doodle, native not in ('f', facing)
+
+
+def _animal_doodle(word):
+    """The library's own full-body doodle of this animal (FALLBACK, else its Fluent animal of that name: a
+    dragon, a kangaroo), or None."""
+    word = str(word or '').lower()
+    for did in (FALLBACK.get(word), FALLBACK.get(word.split(' ')[-1]), 'fl_' + word.replace(' ', '_'),
+                'fl_' + word.split(' ')[-1]):
+        entry = library.catalog().get(did) if did else None
+        if entry and (did in FALLBACK.values() or entry.get('category') in ('Animals & Nature', 'animals')) \
+                and library.resolve(did) is not None:
+            return did
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -210,7 +239,7 @@ def _choose(species, age, sex, pose, facing, marks):
 @lru_cache(maxsize=64)
 def face(species, age='adult', sex=None, marks=()):
     """A head close-up doodle for an eye shot, or None."""
-    base, implied = SPECIES_BASE.get(species, (species, None))
+    base, implied, _ = species_base(species)
     if base in HUMAN:
         did = _person(age, sex, 'face', 'f', marks)
         return did if did and meta(did).get('pose', '').startswith('face_') else None
@@ -362,6 +391,7 @@ class Figure:
     height: float = ADULT_HEIGHT
     facing: str = 'r'
     cue: float | None = None          # span-local seconds the pose starts
+    before: str | None = None         # the pose shown until then (lying awake before the words say asleep)
     travel: float = 0.                # share of the frame width moved over the shot
     carried: 'Figure | None' = None
     depth: int = 1
@@ -389,6 +419,7 @@ class Shot:
     framing: str = ''                                # a plan shot's type (engine.shots)
     page: dict | None = None                         # a first_person page, map or phone filling the frame
     screen: list = field(default_factory=list)       # (TV piece, what it shows): pictures and cast figures
+    keep: list = field(default_factory=list)         # sets.Piece a framing keeps in view (the TV she sleeps before)
     hands: list = field(default_factory=list)        # (piece, skin tone): an off-screen worker's hand on it
 
 
@@ -543,13 +574,26 @@ class Storybook:
             marks = tuple(m for m in c.get('marks') or () if m in MARKS) + tuple(f'{k}:{v}' for k, v in look.items())
             return Figure(cid, 'human', age, look['sex'], marks, height=ADULT_HEIGHT * PERSON_HEIGHT.get(age, 1.),
                           phase=_seed(cid), **kw)
-        return Figure(cid, c['species'], c['age'], c['sex'], tuple(c.get('marks') or ()),
-                      height=min(.6, ADULT_HEIGHT * max(.45, min(1.4, c.get('size', 1.)))),
-                      phase=_seed(cid), **kw)
+        species, age, size = self._species(cid), c['age'], c.get('size', 1.)
+        if species_base(c['species'])[2] == 'young' and age in (None, 'adult'):
+            age, size = 'baby', min(size, .45)            # "lion cubs": the species at a cub's size
+        return Figure(cid, species, age, c['sex'], tuple(c.get('marks') or ()),
+                      height=min(.6, ADULT_HEIGHT * max(.45, min(1.4, size))), phase=_seed(cid), **kw)
+
+    def _species(self, cid):
+        """The cast member's species word when the library draws its kind, else its family's or kind's everyday
+        animal ("cubs" of the cat family: a kitten)."""
+        c = self.cast[cid]
+        word = c['species']
+        mod = _creatures()
+        base = species_base(word)[0]
+        if mod is None or base in HUMAN or mod.drawn_species(base) or _animal_doodle(base):
+            return word
+        return FAMILY_ANIMAL.get(c.get('family')) or KIND_ANIMAL.get(c.get('kind')) or word
 
     def _human(self, cid):
         c = self.cast[cid]
-        return c.get('kind') == 'human' or SPECIES_BASE.get(c['species'], (c['species'],))[0] in HUMAN
+        return c.get('kind') == 'human' or species_base(c['species'])[0] in HUMAN
 
     def _look(self, cid):
         """A person's look for the whole video, chosen from their name, marks and id alone: sex (the plan's, the
@@ -1038,6 +1082,8 @@ class Storybook:
             pose = 'stand'
         if pose == 'roar' and f.cue is not None and local > f.cue + ROAR_SECONDS:
             pose = 'stand'
+        if pose == 'sleep' and f.cue is not None and local < f.cue and f.before:
+            pose = f.before
         name = {'look': 'stand', 'happy': 'stand', 'nuzzle': 'stand', 'bow': 'stand'}.get(pose, pose)
         if name in ('walk', 'run') and not f.travel and f.carried is None:
             name = pose = 'stand'                       # walking nowhere is standing: no stride, no head wobble
@@ -1298,6 +1344,8 @@ class Storybook:
         direction = 1 if f.facing == 'r' else -1
         rotate, dy, height, pin = 0., 0., f.height, None
         squash = BREATH * math.sin(local * 2.6 + f.phase)
+        if pose == 'sleep' or (f.pose == 'sleep' and pose == f.before):     # lying awake until the words: same breath
+            squash = SLEEP_BREATH * math.sin(2 * math.pi * local / SLEEP_CYCLE + f.phase)
         moving = (m.moving if m is not None else None) or (f.travel and pose in ('walk', 'run', 'carry'))
         if moving and moving != 'fly':
             # A stride's bounce while the figure goes somewhere; no sway, and nothing at all while it stands
@@ -1349,17 +1397,47 @@ class Storybook:
         if roar is not None and roar.sound > .02:
             effects.append(lambda o, fig=f, d=doodle, m=mirror, p=roar, x0=x, g=ground + dy: self._roar_effects(
                 o, fig, d, m, p, x0, g, cam, local))
-        if pose == 'sleep' and f.species == 'human':
-            # A sleeping person's Z rises from their head, wherever the lying doodle puts it.
-            hx, hy = self._point(doodle, mirror, 'head', x, ground + dy, f.height, reference)
-            effects.append(lambda o, fig=f, x0=hx, y0=hy: self._paste(
-                o, 'fl_zzz', False, x0 + .04 * fig.height / ADULT_HEIGHT,
-                y0 - .03 + .01 * math.sin(local * 2), fig.height * .3, cam))
-        elif pose == 'sleep':
-            effects.append(lambda o, fig=f, x0=x: self._paste(
-                o, 'fl_zzz', fig.facing == 'l', x0 + (.06 if fig.facing == 'r' else -.06) * fig.height / ADULT_HEIGHT,
-                fig.ground - fig.height * .75 + .01 * math.sin(local * 2), fig.height * .3, cam))
+        if pose == 'sleep':
+            zx, zy = self._zzz_at(f, shot, local, doodle, mirror, x, ground + dy)
+            effects.append(lambda o, fig=f, x0=zx, y0=zy: self._zzz(
+                o, fig.species != 'human' and fig.facing == 'l', x0, y0, fig, cam, local))
         return effects
+
+    def _zzz_at(self, f, shot, local, doodle=None, mirror=None, x=None, ground=None):
+        """Where a sleeper's Z marks start (frame shares): above a person's head, wherever the lying doodle puts it,
+        or just ahead of an animal's; never on another figure's head (a cub asleep under its father's chin)."""
+        if doodle is None:
+            doodle, mirror, _ = self._pose_doodle(f, local)
+            x, ground = self.where(f, shot, local)
+        if f.species == 'human':
+            hx, hy = self._point(doodle, mirror, 'head', x, ground, f.height, self._reference(f))
+            zx, zy = hx + .04 * f.height / ADULT_HEIGHT, hy - .03
+        else:
+            zx, zy = x + (.06 if f.facing == 'r' else -.06) * f.height / ADULT_HEIGHT, f.ground - f.height * .75
+        heads = [head for g in shot.figures if g is not f and not g.crowd for _, head in self._shapes(g)]
+        for _ in range(3):
+            head = next((h for h in heads if h[0] - .01 <= zx <= h[2] + .01 and h[1] - .01 <= zy <= h[3] + .01), None)
+            if head is None:
+                break
+            zx = head[0] - .02 if zx - head[0] < head[2] - zx and head[0] > .05 else head[2] + .02
+        return zx, zy
+
+    def _zzz(self, overlay, mirror, x, ground, f, cam, local):
+        """A sleeper's Z marks: each rises ZZZ_RISE of the frame from (x, ground) over ZZZ_CYCLE seconds, drifting
+        away from the face, growing and fading in and out; two are on their way at any time."""
+        w, h = self.size
+        away = -1 if mirror else 1
+        for k in (0, .5):
+            t = ((local + f.phase) / ZZZ_CYCLE + k) % 1.
+            size = f.height * (.18 + .14 * t)
+            sx, sy, zoom = self._to_screen(x + away * .025 * t * f.height / ADULT_HEIGHT, ground - ZZZ_RISE * t,
+                                           cam)
+            px = max(8, round(size * h * zoom / 4) * 4)
+            image = sprite('fl_zzz', px, mirror, False).copy()
+            image.putalpha(image.getchannel('A').point(lambda a, v=math.sin(math.pi * t): round(a * v)))
+            at = (round(sx - image.width / 2), round(sy - image.height))
+            if at[0] < overlay.width and at[1] < overlay.height and at[0] + image.width > 0 and at[1] + image.height > 0:
+                overlay.alpha_composite(image, (max(0, at[0]), max(0, at[1])), (max(0, -at[0]), max(0, -at[1])))
 
     def _rear(self, doodle, mirror, x, f, height):
         """(pin, x) that rotate a figure about its back feet instead of its middle (a head lowered to the ground)."""

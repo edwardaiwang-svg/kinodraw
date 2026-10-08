@@ -75,6 +75,20 @@ def _armchair():
         f'<rect x="204" y="184" width="16" height="30" fill="#5D4037" {THIN}/>'))
 
 
+def _sofa():
+    """A three-seat sofa: a long seat someone can lie along, arms at both ends. A story's couch is drawn as this
+    (the library's couch picture is an armchair)."""
+    return _svg(560, 230, (
+        f'<rect x="50" y="34" width="460" height="116" rx="36" fill="#5C8DD6" {INK}/>'
+        f'<path d="M203 50V132M357 50V132" fill="none" {THIN}/>'
+        f'<rect x="46" y="128" width="468" height="54" rx="14" fill="#7FA9E6" {INK}/>'
+        f'<path d="M203 132V178M357 132V178" fill="none" {THIN}/>'
+        f'<rect x="8" y="94" width="64" height="106" rx="26" fill="#5C8DD6" {INK}/>'
+        f'<rect x="488" y="94" width="64" height="106" rx="26" fill="#5C8DD6" {INK}/>'
+        f'<rect x="54" y="198" width="18" height="26" fill="#5D4037" {THIN}/>'
+        f'<rect x="488" y="198" width="18" height="26" fill="#5D4037" {THIN}/>'))
+
+
 def _tv_stand():
     return _svg(300, 100, (
         f'<rect x="12" y="14" width="276" height="70" rx="6" fill="#8D6E63" {INK}/>'
@@ -325,7 +339,7 @@ SVG = {    'set_window': _window(False), 'set_window_night': _window(True), 'set
     'set_porthole': _porthole(), 'set_acacia': _acacia(), 'set_wall_clock': _wall_clock(), 'set_remote': _remote(),
     'set_bus_seat': _bus_seat('#E53935'), 'set_train_seat': _bus_seat('#3F6FB5'), 'set_pole': _pole(),
     'set_windscreen': _windscreen(False), 'set_windscreen_night': _windscreen(True), 'set_car_seat': _car_seat('#8D6E63'),
-    'set_dashboard': _dashboard(),
+    'set_dashboard': _dashboard(), 'fl_couch_and_lamp': _sofa(),
 }
 
 
@@ -415,7 +429,7 @@ def svg(doodle_id):
 SUPPORTS = {
     'set_desk': ('top', .05, .95, .11), 'set_table': ('top', .05, .95, .12), 'set_tv_stand': ('top', .06, .94, .14),
     'set_counter': ('top', .03, .74, .14), 'set_stove': ('top', .08, .92, .17), 'set_school_desk': ('top', .06, .94, .17),
-    'office_desk': ('top', .06, .5, .45), 'fl_couch_and_lamp': ('seat', .13, .7, .76), 'fl_bed': ('bed', .16, .93, .43),
+    'office_desk': ('top', .06, .5, .45), 'fl_couch_and_lamp': ('seat', .13, .87, .56), 'fl_bed': ('bed', .16, .93, .43),
     'fl_chair': ('seat', .22, .78, .56), 'set_armchair': ('seat', .24, .76, .56), 'empty_bench': ('seat', .1, .86, .56), 'set_bus_seat': ('seat', .12, .62, .54),
     'set_train_seat': ('seat', .12, .62, .54), 'set_car_seat': ('seat', .12, .88, .68),
 }
@@ -445,7 +459,7 @@ SETS = {
              ('fl_convenience_store', .91, BACKLINE, .26)],
     'house': [('strip:grass', .7, .805), ('fl_deciduous_tree', .12, .76, .36), ('fl_house_with_garden', .72, .76, .44)],
     'living_room': [_ROOM, ('set_window', .64, .42, .24), ('fl_framed_picture', .2, .34, .1),
-                    ('fl_couch_and_lamp', .2, FLOOR, .34), ('set_rug', .47, .8, .045),
+                    ('fl_couch_and_lamp', .2, FLOOR, .21), ('set_rug', .47, .8, .045),
                     ('set_tv_stand', .82, FLOOR, .1), ('fl_television', 'on:set_tv_stand', .17)],
     'bedroom': [_ROOM, ('set_window', .58, .42, .24), ('fl_bed', .2, FLOOR, .24), ('set_desk', .8, FLOOR, .21),
                 ('set_desk_lamp', 'on:set_desk', .14, .8)],
@@ -556,7 +570,7 @@ class Support:
 # ------------------------------------------------------------------ staging a page
 # Drawn heights (frame height shares) of things a line names; a person is about .42.
 HEIGHTS = {
-    'fl_couch_and_lamp': .34, 'set_armchair': .26, 'fl_bed': .24, 'set_desk': .21, 'office_desk': .3, 'set_table': .18, 'set_counter': .21,
+    'fl_couch_and_lamp': .21, 'set_armchair': .26, 'fl_bed': .24, 'set_desk': .21, 'office_desk': .3, 'set_table': .18, 'set_counter': .21,
     'set_stove': .22, 'fl_chair': .22, 'empty_bench': .17, 'fl_television': .17, 'set_fridge': .42,
     'set_bookshelf': .4, 'set_desk_lamp': .14, 'fl_mantelpiece_clock': .09, 'fl_potted_plant': .12,
     'fl_framed_picture': .1, 'fl_bicycle': .2, 'set_grocery_bag': .13, 'fl_tangerine': .06, 'fl_red_apple': .06,

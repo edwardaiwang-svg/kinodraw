@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ...library.creatures import RELATED
+from ...library.creatures import RELATED, singular
 from .semantics import mentions, name_key
 
 NEGATED = re.compile(r"\b(?:not|never|no|nobody|cannot|without)\b|\b\w+n['’]t\b", re.I)
@@ -21,7 +21,7 @@ POSES = (
     ('bow', r'bow(?:s|ed|ing)?'),
     ('run', r'ran|runs?|running|raced|racing|dashed|rushed|bolted|sprinted'),
     ('walk', r'walk\w*|led|leads?|leading|guided|guiding|climb\w*|march\w*|stepped|followed|crept'),
-    ('sleep', r'slept|sleep\w*|asleep'),
+    ('sleep', r'slept|sleep\w*|asleep|snor(?:e|es|ed|ing)|doz(?:e|es|ed|ing)\s+off|nodd(?:ed|ing)\s+off|napp(?:ed|ing)'),
     ('lie', r'lie|lies|lay|lying|rested|resting|sprawl\w*|reclin\w*|lounging|curled\s+up'),
     ('sit', r'sat|sits?|sitting|seated|perched|squeez\w*\s+(?:onto|into|in|on)|plopped|plonked'),
     ('look_up', r'looked\s+up|lifted\s+(?:his|her|its)\s+(?:heavy\s+)?head'),
@@ -454,6 +454,15 @@ def _inside(ranges, at):
     return any(a < at < b for a, b in ranges)
 
 
+def _group(c):
+    """True for a cast member that is a group of animals: a plural species or name ("lionesses", "Spotted
+    hyenas", "Other cubs")."""
+    if c.get('kind') == 'human':
+        return False
+    words = [str(c.get('species') or ''), str(c.get('name') or '').split(' ')[-1]]
+    return any(w and singular(w) != w.lower().replace('-', ' ').replace('_', ' ').strip() for w in words)
+
+
 class Reader:
     """Reads a story's beats in order, carrying who is on stage across sentences and beats."""
 
@@ -499,8 +508,11 @@ class Reader:
         return c.get('band') or PLAN_BAND.get(c.get('age'), 'adult')
 
     def _kin(self, kind):
-        adults = [c['id'] for c in self.cast if c['age'] != 'baby' and c['kind'] != 'human']
-        babies = [c['id'] for c in self.cast if c['age'] == 'baby']
+        """The animal cast member a kin word means ("his mother", "the cub's father"): the only one who fits. A
+        group ("Other lionesses", "lion cubs") is nobody's mother or cub."""
+        one = [c for c in self.cast if not _group(c)]
+        adults = [c['id'] for c in one if c['age'] != 'baby' and c['kind'] != 'human']
+        babies = [c['id'] for c in one if c['age'] == 'baby']
         crowned = [c['id'] for c in self.cast if 'crown' in c.get('marks', [])]
         if kind == 'baby':
             return babies[:1] if len(babies) == 1 else []
