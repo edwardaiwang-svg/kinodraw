@@ -1,15 +1,17 @@
 """Data cards: the figures a script states (kinodraw/figures.py), drawn over the picture while they are said.
 
-A card shows the script's own text ("$4.2M", "2,300 cars", "7 a.m."): a big number (a count counts up to its value),
-a price tag, an A->B change as two bars with the stated change, a bar comparison, a short stat list, or a when/where
-card. On a whiteboard or storybook page it is hand-lettered on paper and draws in from the left; on a motion page it
-is a clean card that eases in. It goes where the picture has the least ink at that sentence (beside the planned
-picture, never over the caption band below CAPTION_TOP or the title strip above TOP), measured once per card on the
-frame the viewer sees, so a speaking character or a picture keeps its place.
+A card shows the script's own text ("$4.2M", "2,300 cars", "7 a.m."): a big number (always the stated value, never a
+count-up through numbers nobody says), a price tag, an A->B change as two bars with the stated change and the text's
+own periods, a bar comparison, a short stat list, or a when/where card. Growth gets "+" and an up arrow; an overrun, a
+loss or a delay gets an amber warning sign. On a whiteboard or storybook page it is hand-lettered on paper; on a motion
+page it is a clean card. Either fades in whole, inside the safe margins, and leaves with its sentence. It goes where the
+picture has the least ink while it is up, with air around it (never against a picture it is not about, never over the
+caption band below CAPTION_TOP or the title strip above TOP), measured once per card on the frames the viewer sees.
 """
 from __future__ import annotations
 
 import bisect
+import copy
 import math
 import re
 from functools import lru_cache
@@ -31,6 +33,10 @@ MIN_HOLD, MAX_HOLD, TAIL = 2.6, 7., .9   # seconds a card stays: at least, at mo
 INK = 48
 CLEAN = {'card': (252, 252, 250), 'ink': (26, 30, 38), 'soft': (96, 104, 116), 'accent': (52, 110, 200),
          'shadow': (0, 0, 0)}
+WARN = (214, 134, 18)     # amber: an overrun, a loss or a delay (figures.Card.tone 'warn'), never the growth colour
+CLEAR = 3                 # cards keep this many more quarter-resolution cells (48 px at 1080p) of air around them ...
+CLEAR_WEIGHT = .35        # ... weighed at this share of covered ink: a card never hugs a picture it is not about
+ENTER = .35               # seconds a card takes to fade in whole (never wiped in through its own edge)
 BOLD = ink.ASSETS / 'fonts' / 'Arimo-Bold.ttf'
 
 
@@ -103,7 +109,15 @@ def _frame_box(d, box, look, unit):
         d.rectangle((x0 + 6 * unit, y0, x0 + 12 * unit, y1), fill=look.fill)
 
 
-def _arrow(d, cx, cy, size, direction, fill):
+def _arrow(d, cx, cy, size, direction, fill, tone=''):
+    if tone == 'warn':
+        # a warning sign, never the growth arrow: a triangle with an exclamation mark
+        pts = [(cx - size * .55, cy + size * .45), (cx + size * .55, cy + size * .45), (cx, cy - size * .55)]
+        d.polygon(pts, fill=fill)
+        d.rounded_rectangle((cx - size * .06, cy - size * .25, cx + size * .06, cy + size * .12), size * .05,
+                            fill=(255, 255, 255, 255))
+        d.ellipse((cx - size * .07, cy + size * .2, cx + size * .07, cy + size * .34), fill=(255, 255, 255, 255))
+        return
     if direction == 'down':
         pts = [(cx - size * .5, cy - size * .35), (cx + size * .5, cy - size * .35), (cx, cy + size * .45)]
     else:
@@ -112,19 +126,10 @@ def _arrow(d, cx, cy, size, direction, fill):
 
 
 def _counted(text, progress):
-    """``text`` with its number counted ``progress`` of the way up, keeping the script's format ("3,100 tons" ->
-    "1,550 tons" half way); the exact text at the end."""
-    if progress >= 1:
-        return text
-    m = re.search(figures.NUM, text)
-    if not m:
-        return text
-    raw = m.group()
-    target = float(raw.replace(',', ''))
-    decimals = len(raw.split('.')[1]) if '.' in raw else 0
-    now = target * (1 - (1 - max(0., progress)) ** 3)
-    shown = f'{now:,.{decimals}f}' if ',' in raw else f'{now:.{decimals}f}'
-    return text[:m.start()] + shown + text[m.end():]
+    """The text a counter shows at ``progress``: always the stated value, exactly as written. A count-up would show
+    numbers the narration never says while it says the real one, so the counter only pops in (its card fades in)."""
+    return text
+
 
 
 # ------------------------------------------------------------------ one card as an image
@@ -132,6 +137,9 @@ def card_image(card, look, W, H, progress=1., fit=None):
     """The card drawn at ``progress`` (0..1: a counter's count, the bars' growth); RGBA, sized to its content and
     at most MAX_W of the frame wide (``fit``: the box width of the finished card, kept while a counter counts)."""
     u = look.unit
+    if card.tone == 'warn':
+        look = copy.copy(look)
+        look.accent = WARN + (255,)
     pad = 30 * u
     width = round(min(MAX_W * W, 640 * u))
     if card.kind in ('change', 'bars'):
@@ -155,13 +163,15 @@ def card_image(card, look, W, H, progress=1., fit=None):
         if card.qualifier:
             line(card.qualifier, 40, look.soft)
             y += 8 * u
-        value = _counted(card.value, progress) if kind == 'counter' else card.value
-        f = look.fit(card.value, 120, inner - (70 * u if card.direction else 0), 40)
+        shown = figures.signed(card.value, card.direction, card.tone)      # growth: "+18%"
+        value = _counted(shown, progress) if kind == 'counter' else shown
+        mark = card.direction or card.tone
+        f = look.fit(shown, 120, inner - (70 * u if mark else 0), 40)
         top = y
-        if card.direction:
+        if mark:
             ops.append(lambda d, top=top, f=f: _arrow(d, left + 26 * u, top + f.size * .55, 52 * u, card.direction,
-                                                      look.accent))
-        x = left + (70 * u if card.direction else 0)
+                                                      look.accent, card.tone))
+        x = left + (70 * u if mark else 0)
         if kind == 'price':
             # a price tag: a pointed end and a hole, the price inside
             tag_w, tag_h = min(inner, f.getlength(card.value) + 120 * u), f.size * 1.5
@@ -192,13 +202,13 @@ def card_image(card, look, W, H, progress=1., fit=None):
         chart_h = 210 * u
         if kind == 'change' and card.delta:
             df = look.font(46)
-            label, badge_top = card.delta, y
+            label, badge_top = figures.signed(card.delta, card.direction, card.tone), y
             def delta(d, label=label, df=df, badge_top=badge_top):
                 w = df.getlength(label) + 70 * u
                 x1 = left + inner
                 d.rounded_rectangle((x1 - w, badge_top, x1, badge_top + df.size * 1.35), 14 * u, outline=look.ink,
                                     width=max(2, round(3 * u)), fill=look.fill)
-                _arrow(d, x1 - w + 28 * u, badge_top + df.size * .68, 30 * u, card.direction, look.accent)
+                _arrow(d, x1 - w + 28 * u, badge_top + df.size * .68, 30 * u, card.direction, look.accent, card.tone)
                 _text(d, (x1 - 14 * u, badge_top + df.size * .68), label, df, look.ink, 'rm')
             ops.append(delta)
             y += df.size * 1.35 + 6 * u
@@ -364,8 +374,10 @@ class DataCards:
                     paper = np.median(a.reshape(-1, 3), axis=0)
                     mask = np.abs(a - paper).max(axis=2) > INK
                     inked = mask if inked is None else inked | mask
+                near = _dilate(inked, GROW + CLEAR)
                 inked = _dilate(inked, GROW)
                 total = np.pad(inked.astype(np.int32).cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+                ring = np.pad(near.astype(np.int32).cumsum(0).cumsum(1), ((1, 0), (1, 0)))
                 scores = []
                 for scale in (1.,) + SHRINK:
                     sw, sh = w * scale, h * scale
@@ -373,7 +385,9 @@ class DataCards:
                         x0, y0 = max(0, int(x / 4)), max(0, int(y / 4))
                         x1, y1 = min(inked.shape[1], x0 + int(sw / 4) + 1), min(inked.shape[0], y0 + int(sh / 4) + 1)
                         count = total[y1, x1] - total[y0, x1] - total[y1, x0] + total[y0, x0]
-                        covered = float(count) / max(1., w * h / 16)    # inked share of the full-size card
+                        close = ring[y1, x1] - ring[y0, x1] - ring[y1, x0] + ring[y0, x0] - count
+                        # inked share of the full-size card, plus the pictures it would sit right against
+                        covered = float(count + CLEAR_WEIGHT * close) / max(1., w * h / 16)
                         scores.append((round(covered + .12 * (1 - scale), 2), -scale, i, (x, y), scale))
                 _, _, _, spot, scale = min(scores)
                 best = (spot, scale)
@@ -403,7 +417,7 @@ class DataCards:
         if self._measuring:
             return
         k = self.at(t)
-        if k is None or (k in self.on_board and getattr(host, 'data_cards', None) is self):
+        if k is None or (k in self.on_board and _board_on_screen(self, host, t)):
             return                          # the whiteboard page on screen already writes these figures
         if self._on_device(k, t, host):
             return
@@ -415,7 +429,8 @@ class DataCards:
             if host is not None:
                 self._measuring = True
                 try:
-                    measures = [host.frame(start + (end - start) * f) for f in (.2, .55, .92)]
+                    # every picture the card is up over, from its first frame to its last
+                    measures = [host.frame(start + (end - start) * f) for f in (.05, .3, .55, .8, .97)]
                 finally:
                     self._measuring = False
             self.place(k, final.size, measures)
@@ -424,21 +439,31 @@ class DataCards:
         img = self.image(k, look, min(1., local / 1.1))
         if scale < 1:
             img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
-        fade = min(1., (end - t) / .25)
+        # whole from its first frame (a fade, never wiped in through its own edge), inside the safe margins
+        fade = min(1., (end - t) / .25, local / ENTER)
         if clean:
-            fade = min(fade, local / .25)
-            y += (1 - min(1., local / .25)) * 18 * self.unit
+            y -= (1 - min(1., local / ENTER)) * 18 * self.unit
+        x, y = self.inside(x, y, img.width, img.height)
         if fade < 1:
             img = img.copy()
             img.putalpha(img.getchannel('A').point(lambda v: int(v * max(0., fade))))
-        if not clean and local < .55:
-            # drawn in from the left, as the pen would
-            img = img.copy()
-            cut = round(img.width * max(0., local / .55))
-            alpha = img.getchannel('A')
-            alpha.paste(0, (cut, 0, img.width, img.height))
-            img.putalpha(alpha)
         ink.paste(frame, img, x, y)
+
+    def inside(self, x, y, w, h):
+        """(x, y) moved so a ``w`` x ``h`` card sits wholly inside the safe area (SIDE margins, TOP, CAPTION_TOP)."""
+        W, H = self.W, self.H
+        x = min(max(x, W * SIDE), W * (1 - SIDE) - w)
+        y = min(max(y, H * TOP), H * CAPTION_TOP - h)
+        return round(x), round(y)
+
+
+def _board_on_screen(cards, host, t) -> bool:
+    """The whiteboard page is the picture at ``t``: the host is the whiteboard that owns these cards, or a host (a
+    hybrid) whose ``board_on_screen(t)`` says its scene shows that page."""
+    if getattr(host, 'data_cards', None) is cards:
+        return True
+    check = getattr(host, 'board_on_screen', None)
+    return bool(check and check(t))
 
 
 def _keys(card) -> list[str]:
@@ -468,8 +493,11 @@ def _written(entry, written, cuts=()) -> bool:
 
 def entries(episode, tline, lang) -> list:
     """(start, end, card, beat id) of every card: from the first figure's word to its sentence's end plus TAIL (at
-    least MIN_HOLD, at most MAX_HOLD), never past the next card or the end card."""
+    least MIN_HOLD, at most MAX_HOLD), never past the start of the next sentence (of its beat, else the next beat),
+    the next card or the end card."""
     found = []
+    timed = sorted((t['start'], bid) for bid, t in tline['beats'].items() if t.get('start') is not None)
+    next_beat = {bid: timed[k + 1][0] for k, (_, bid) in enumerate(timed[:-1])}
     for beat in episode['beats']:
         timing = tline['beats'].get(beat['id'])
         if not timing or not timing.get('char_times'):
@@ -478,12 +506,21 @@ def entries(episode, tline, lang) -> list:
         text = display.get(lang, '') if isinstance(display, dict) else str(display or '')
         spoken = beat['spoken'][lang] if isinstance(beat.get('spoken'), dict) else str(beat.get('spoken') or '')
         ct = timing['char_times']
+        starts = [a for a, _ in figures.sentences(text)]
         for card in figures.beat_cards(beat, lang):
             a = figures.spoken_offset(text, spoken, card.start, lang)
             b = figures.spoken_offset(text, spoken, max(card.start, card.end - 1), lang)
             start = timing['start'] + ct[min(a, len(ct) - 1)] - .1
             said = timing['start'] + ct[min(b, len(ct) - 1)]
-            found.append([start, min(start + MAX_HOLD, max(said + TAIL, start + MIN_HOLD)), card, beat['id']])
+            # it leaves with its sentence: never over the next sentence of its beat, or the next beat's picture
+            following = next((x for x in starts if x >= card.end), None)
+            if following is not None:
+                n = figures.spoken_offset(text, spoken, following, lang)
+                leave = timing['start'] + ct[min(n, len(ct) - 1)] - .05
+            else:
+                leave = next_beat.get(beat['id'], math.inf) - .05
+            hold = min(start + MAX_HOLD, max(said + TAIL, start + MIN_HOLD))
+            found.append([start, min(hold, leave), card, beat['id']])
     found.sort(key=lambda e: e[0])
     stop = (tline.get('end_card') or {}).get('start', math.inf)
     for k, e in enumerate(found):

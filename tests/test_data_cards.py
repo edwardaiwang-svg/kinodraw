@@ -27,7 +27,7 @@ def _drawn(monkeypatch, sentence, look='board'):
 
 def test_each_card_draws_the_script_text_exactly(monkeypatch):
     for sentence, wanted in [
-            ('Revenue hit $4.2M, up 18% from $3.56M last year.', {'$4.2M', '$3.56M', '18%', 'last year'}),
+            ('Revenue hit $4.2M, up 18% from $3.56M last year.', {'$4.2M', '$3.56M', '+18%', 'last year'}),
             ('Just $3.50 each, until they are gone.', {'$3.50', 'each'}),
             ('About 2,300 cars a day used the old bridge.', {'2,300 cars', 'About'}),
             ('Fresh rolls every Saturday at 7 a.m.', {'Every Saturday', '7 a.m.'}),
@@ -41,12 +41,11 @@ def test_each_card_draws_the_script_text_exactly(monkeypatch):
                                                                              data_cards.TOP) * H
 
 
-def test_a_counter_counts_up_in_the_script_format_and_ends_exact():
-    assert data_cards._counted('3,100 tons', 1.) == '3,100 tons'
-    assert data_cards._counted('3,100 tons', 0.) == '0 tons'
-    half = data_cards._counted('3,100 tons', .5)
-    assert half.endswith(' tons') and ',' in half
-    assert data_cards._counted('$4.2M', .5).startswith('$') and data_cards._counted('$4.2M', .5).endswith('M')
+def test_a_counter_shows_the_script_text_exactly_at_every_moment():
+    # a count-up showed numbers nobody says while the real one was said (rounds r05b 09 critic): never
+    for progress in (0., .5, 1.):
+        assert data_cards._counted('3,100 tons', progress) == '3,100 tons'
+        assert data_cards._counted('$4.2M', progress) == '$4.2M'
 
 
 def _episode(text, spoken):
@@ -96,7 +95,7 @@ def test_the_card_stays_in_the_safe_area_beside_the_picture():
         assert ys.min() >= data_cards.TOP * H - 1 and ys.max() <= data_cards.CAPTION_TOP * H + 1
         assert xs.max() < W * .6, 'the card covers the picture'
         assert xs.min() >= 0 and xs.max() < W
-    assert host.calls == 6                         # measured once per card (three moments), never per frame
+    assert host.calls == 10                        # measured once per card (five moments), never per frame
     frame = Image.new('RGBA', (W, H), (246, 244, 238, 255))
     cards.paint(frame, end + .1, False, host)
     assert frame.getextrema()[0] == (246, 246)    # gone after its window
