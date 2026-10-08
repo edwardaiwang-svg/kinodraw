@@ -35,6 +35,7 @@ READABLE = .03
 # Written words read smaller: the lesson's board line "a + b = b + a" boxes 1.5% of the frame and reads at 1080p,
 # while the three starting dots of its dot array (0.4% each) show no sentence yet.
 READABLE_TEXT = .01
+HAND_SKIN = .002          # the drawing hand's skin is one solid blob of at least this share of the picture area
 HAND_REACH = .04          # the pen reaches this share of the frame width beyond the drawing hand's skin
 TITLE_STRIP = .12         # a mark on nearly every frame within this top share of the frame is the video's title tag
 INK = 48                  # a pixel is drawn when a colour channel differs from the paper by more than this
@@ -228,8 +229,14 @@ def _ink(frame, band):
     drawn = np.abs(region - paper).max(axis=2) > INK
     r, g, b = region[..., 0], region[..., 1], region[..., 2]
     skin = drawn & (r > g) & (g > b) & (r > 150) & (b > 90) & (r - b > 25)
-    if skin.sum() >= 50:
-        drawn &= ~ndimage.binary_dilation(skin, iterations=round(HAND_REACH * frame.shape[1]))
+    # Solid only: the soft edges of a red, orange or yellow drawing blend to skin tones in thin rings.
+    skin = ndimage.binary_opening(skin, iterations=2)
+    labels, count = ndimage.label(skin)
+    if count:
+        sizes = ndimage.sum(skin, labels, range(1, count + 1))
+        hand = np.isin(labels, 1 + np.flatnonzero(sizes >= HAND_SKIN * skin.size))
+        if hand.any():
+            drawn &= ~ndimage.binary_dilation(hand, iterations=round(HAND_REACH * frame.shape[1]))
     return drawn
 
 

@@ -198,7 +198,11 @@ def _icon_video(path, tl, side, size=(320, 180), extra=None):
     for f in range(int(10 * tl['duration']) + 10):
         frame = np.full((size[1], size[0], 3), 236, np.uint8)
         x = 20 + (sum(f / 10 >= s for s in starts) % 4) * 70
-        frame[40:40 + side, x:x + side] = (60, 40, 30)
+        if extra == 'red':                                       # a red icon whose soft edge blends to pink
+            frame[38:42 + side, x - 2:x + side + 2] = (228, 140, 138)
+            frame[40:40 + side, x:x + side] = (224, 48, 48)
+        else:
+            frame[40:40 + side, x:x + side] = (60, 40, 30)
         if extra == 'tag':
             frame[3:15, 10:200] = (40, 40, 40)                  # 6% of the frame, on every frame
         if extra == 'hand':
@@ -211,7 +215,7 @@ def _icon_video(path, tl, side, size=(320, 180), extra=None):
 
 
 @pytest.mark.parametrize('side,shown,extra', [(28, False, None), (60, True, None),     # 1.4% and 6.3% of the frame
-                                              (28, False, 'tag'), (28, False, 'hand')])
+                                              (28, False, 'tag'), (28, False, 'hand'), (60, True, 'red')])
 def test_an_icon_too_small_to_read_does_not_show_its_sentence(tmp_path, side, shown, extra):
     board = script.build(ingest.read(HOWTO), story='story')
     plan = {'storyboard': {'genre': 'how-to'}, 'cast': [], 'scenes': [
