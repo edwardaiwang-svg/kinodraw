@@ -13,7 +13,7 @@ from __future__ import annotations
 import io
 import math
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 
 import numpy as np
@@ -22,7 +22,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
-from . import ink, sets, shots as planned
+from . import acting, ink, sets, shots as planned
 from ..director.v3.staging import tie
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
@@ -66,6 +66,7 @@ BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
 # moves are the push into the eyes a line is about and a roar's shake (J 10/8: no "random camera zooms").
 BREATH = .003
 BLINK = .1
+TREMBLE, LAUGH = 2.2, 2.4         # seconds a trembling or laughing pose shakes from its word, then it holds still
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -427,6 +428,9 @@ class Storybook:
         # Every quoted span drawn in a bubble: {beat, start, end (char offsets in the beat's spoken text), speaker,
         # text}. The captions leave these to the bubbles (build/bubbles.json).
         self.bubbled = []
+        # Every movement verb the pages read (engine.acting): {beat, char, word, actor, kind, at, shown}, for the
+        # content QA's motion findings (build/acts.json).
+        self.acted = []
 
     # ---------------- planning
     def prepare(self, spec, start, end):
@@ -462,7 +466,9 @@ class Storybook:
                 joined += [cid for cid in staged if cid in line.present + line.extras and cid not in joined]
                 begin = timing['start'] - start if i == 0 else at(line.start)
                 shot = self._shot(line, begin, at, joined, shares[i], spec, scene, bid)
+                plan_acts = [a for a in spec.get('actions') or () if a.get('at_beat') == bid]
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
+                    acting.direct(self, shots[-1], [(bid, line)], at, plan_acts, bid)
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
                     previous.bubbles += [b for b in shot.bubbles if b.speaker in [g.key for g in previous.figures]]
@@ -472,6 +478,7 @@ class Storybook:
                             if match and match.pose == 'stand':
                                 match.pose, match.cue = f.pose, f.cue
                     continue
+                acting.direct(self, shot, [(bid, line)], at, plan_acts, bid)
                 shots.append(shot)
         if not shots:
             shots.append(Shot(0., end - start))
@@ -972,7 +979,19 @@ class Storybook:
         return Image.composite(after, before, wipe_mask(self.size, p, WIPE_ANGLE, soft=4))
 
     def _pose_doodle(self, f, local):
-        """(doodle, mirror) for the figure's pose at this time."""
+        """(doodle, mirror) for the figure's pose at this time: an act's picture (a gesture, a stride while it goes
+        somewhere, wings while it flies) over its own pose."""
+        m = acting.motion(self, f, None, local) if getattr(f, 'acts', None) else None
+        if m is not None and (m.pose or m.facing or m.moving):
+            f = replace(f, pose=m.pose or f.pose, facing=m.facing or f.facing, cue=None if m.pose else f.cue)
+            f.travel = 1. if m.moving else 0.
+            if m.moving == 'fly':
+                for name in (('fly2', 'fly') if int(local * 8) % 2 else ('fly', 'fly2')):
+                    doodle, mirror = preset(f.species, f.age, f.sex, name, f.facing, f.marks)
+                    if meta(doodle).get('pose') == name:
+                        return doodle, mirror, 'fly'
+            if m.moving == 'tiptoe':
+                f.phase -= local * .5                   # careful steps: two strides a second, not four
         pose = f.pose
         if f.cue is not None and local < f.cue and pose in ('roar', 'look_up', 'scared', 'bow', 'happy', 'nuzzle'):
             pose = 'stand'
@@ -1084,6 +1103,21 @@ class Storybook:
                                     (max(0, -round(x0)), max(0, -round(y0))))
             return
         x, ground, rotate, anchor_y = piece.x, piece.ground, piece.rotate, 1.
+        moved = acting.held(piece, local)
+        if moved is not None:
+            # Grabbed or handed over (engine.acting): in its new holder's hand from then on, and on the way
+            # from one hand to the other while it is passed.
+            who, share = moved
+            a = self.held_at(piece, shot, local, who)
+            if a is not None and 0. < share < 1.:
+                giver = piece.__dict__['passed'][2]
+                b = self.held_at(piece, shot, local, giver)
+                e = share * share * (3 - 2 * share)
+                a = a if b is None else tuple(q + (p_ - q) * e for p_, q in zip(a, b))
+            if a is not None:
+                x, ground, anchor_y = a
+                self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, anchor_y=anchor_y)
+                return
         if piece.kind == 'hand':
             held = self.held_at(piece, shot, local)
             if held is None:
@@ -1094,15 +1128,15 @@ class Storybook:
         self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, rotate=rotate,
                     anchor_y=anchor_y)
 
-    def held_at(self, piece, shot, local):
+    def held_at(self, piece, shot, local, holder=None):
         """(x, ground, anchor_y) of a thing in its holder's hands: in the lap of someone sitting or lying, else in
         the hand and never above the chin, so it never covers the face. None when the holder is not on the page."""
-        f = next((f for f in shot.figures if f.key == piece.holder), None)
+        holder = holder or piece.holder
+        f = next((f for f in shot.figures if f.key == holder), None)
         if f is None:
             return None
         doodle, mirror, _ = self._pose_doodle(f, local)
-        u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
-        fx = f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u))
+        fx, _ = self.where(f, shot, local)
         x, ground = self._point(doodle, mirror, 'carry', fx, f.ground, f.height, self._reference(f))
         if f.pose in ('sit', 'lie', 'sleep'):              # in the lap of someone sitting, by their hands
             return fx + (1 if f.facing == 'r' else -1) * .12 * f.height, f.ground - .02 * f.height, 1.
@@ -1199,27 +1233,49 @@ class Storybook:
                                 (max(0, -at[0]), max(0, -at[1])))
         return at[0], at[1], image.width, image.height
 
+    def where(self, f, shot, local):
+        """(x, ground) of the figure's feet at this time: where its acts have taken it, or along its travel."""
+        if getattr(f, 'acts', None):
+            m = acting.motion(self, f, shot, local)
+            if m.placed or not f.travel:
+                return m.x + m.dx, f.ground + m.dy
+        u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
+        return f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u)), f.ground
+
     def _figure(self, overlay, f, shot, local, cam):
         w, h = self.size
+        m = acting.motion(self, f, shot, local) if getattr(f, 'acts', None) else None
+        if m is not None and m.gone:
+            return []
         doodle, mirror, pose = self._pose_doodle(f, local)
+        if m is not None and m.facing:
+            f = replace(f, facing=m.facing)
         u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
         x, ground = f.x, f.ground
         direction = 1 if f.facing == 'r' else -1
-        rotate, dy = 0., 0.
+        rotate, dy, height, pin = 0., 0., f.height, None
         squash = BREATH * math.sin(local * 2.6 + f.phase)
-        if pose in ('walk', 'run', 'carry') or (f.travel and pose != 'stand'):
-            if f.travel:
-                # A stride's bounce while the figure goes somewhere; no sway, and nothing at all while it stands
-                # (holding something is not walking: J's no-wobble rule, the 'idle head tilt' of r01).
-                rate = 2.2 if pose == 'run' else 1.4
-                dy -= (.012 if pose == 'run' else .007) * abs(math.sin(math.pi * rate * (local + f.phase)))
+        moving = (m.moving if m is not None else None) or (f.travel and pose in ('walk', 'run', 'carry'))
+        if moving and moving != 'fly':
+            # A stride's bounce while the figure goes somewhere; no sway, and nothing at all while it stands
+            # (holding something is not walking: J's no-wobble rule, the 'idle head tilt' of r01).
+            rate = 2.2 if pose == 'run' else 1.4
+            dy -= (.012 if pose == 'run' else .007) * abs(math.sin(math.pi * rate * (local + f.phase)))
+        if m is not None:
+            x, ground = m.x + m.dx, ground + m.dy
+            rotate, height = m.rotate, f.height * m.scale
+            squash += m.squash
+            if m.pivot == 'rear':
+                pin, x = self._rear(doodle, mirror, x, f, height)
+        if (m is None or not m.placed) and f.travel and pose != 'stand':
             x += direction * f.travel * (u * u * (3 - 2 * u))
-        if pose == 'scared':
+        if pose == 'scared' and local < (f.cue if f.cue is not None else shot.start) + TREMBLE:
             x += .004 * math.sin(local * 44 + f.phase)
         if pose == 'bow':
             rotate = direction * -9 * min(1., max(0., (local - (f.cue or shot.start)) / .6))
         if pose == 'happy':
-            dy -= .02 * abs(math.sin(local * 5 + f.phase)) * (local > (f.cue or 0))
+            since = local - (f.cue if f.cue is not None else shot.start)
+            dy -= .02 * abs(math.sin(local * 5 + f.phase)) * (0 < since < LAUGH)
         if pose == 'nuzzle':
             rotate = direction * -6 * min(1., max(0., (local - (f.cue or shot.start)) / .7))
         if pose == 'look_up' and not meta(doodle).get('pose') == 'look_up':
@@ -1231,10 +1287,13 @@ class Storybook:
             squash += roar.squash
             x += direction * roar.dx * .0006
         reference = self._reference(f)
-        self._paste(overlay, doodle, mirror, x, ground + dy, f.height, cam, rotate=rotate, squash=squash,
-                    reference=reference, crown=CROWN_SIZE * f.height if 'crown' in f.marks else 0.,
-                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local))
+        self._paste(overlay, doodle, mirror, x, ground + dy, height, cam, rotate=rotate, squash=squash,
+                    reference=reference, crown=CROWN_SIZE * height if 'crown' in f.marks else 0.,
+                    shut=pose not in ('sleep', 'roar') and self._blinking(f, local), pin=pin)
         effects = []
+        for kind, v in (m.effects if m is not None else ()):
+            effects.append(lambda o, k=kind, v=v, fig=f, d=doodle, mi=mirror, x0=x, g=ground + dy:
+                           self._act_effect(o, k, v, fig, d, mi, x0, g, cam))
         if f.carried is not None:
             c = f.carried
             carried, cm = preset(c.species, c.age, c.sex, c.pose, f.facing, c.marks)
@@ -1258,6 +1317,43 @@ class Storybook:
                 o, 'fl_zzz', fig.facing == 'l', x0 + (.06 if fig.facing == 'r' else -.06) * fig.height / ADULT_HEIGHT,
                 fig.ground - fig.height * .75 + .01 * math.sin(local * 2), fig.height * .3, cam))
         return effects
+
+    def _rear(self, doodle, mirror, x, f, height):
+        """(pin, x) that rotate a figure about its back feet instead of its middle (a head lowered to the ground)."""
+        left, _, right, bottom = _bbox(doodle, mirror)
+        rear = left + .12 * (right - left) if f.facing == 'r' else right - .12 * (right - left)
+        box = _box(doodle, height, self._reference(f))
+        _, sw, sh = _svg(doodle)
+        w, h = self.size
+        return (rear, bottom), x + (rear - (left + right) / 2) * box * sw / sh * h / w
+
+    def _act_effect(self, overlay, kind, v, f, doodle, mirror, x, ground, cam):
+        """An act's marks: a swipe's motion arcs in front of the paw, a heavy breath's puff from the mouth."""
+        w, h = self.size
+        ax, ay = self._point(doodle, mirror, 'mouth', x, ground, f.height, self._reference(f))
+        sx, sy, zoom = self._to_screen(ax, ay, cam)
+        scale = f.height * h * zoom / 330
+        direction = 1 if f.facing == 'r' else -1
+        draw = ImageDraw.Draw(overlay)
+        if kind == 'arcs':                              # the paw's path, swept from high in front down to the ground
+            cy = sy + 40 * scale
+            for i in range(3):
+                r = (80 + 30 * i) * scale
+                cx = sx - direction * (10 + 12 * i) * scale
+                sweep = 110 * min(1., v * 1.8)
+                a0 = -80 if direction > 0 else 260 - sweep
+                alpha = int(255 * (1 - .7 * v) * (1 - .22 * i))
+                draw.arc((cx - r, cy - r, cx + r, cy + r), a0, a0 + sweep, fill=(27, 27, 27, alpha),
+                         width=max(3, round((9 - 2 * i) * scale)))
+        elif kind == 'puff':
+            for i in range(2):
+                t = (v + i * .5) % 1.
+                px = sx + direction * (18 + t * 80) * scale
+                py = sy - t * 16 * scale
+                r = (8 + 22 * t) * scale
+                alpha = int(220 * (1 - t))
+                draw.ellipse((px - r, py - r * .7, px + r, py + r * .7), fill=(214, 230, 238, alpha),
+                             outline=(96, 128, 146, alpha), width=max(2, round(3 * scale)))
 
     @staticmethod
     def _blinking(f, local):
@@ -1312,8 +1408,11 @@ class Storybook:
                 continue
             if f.pose in ('sit', 'lie', 'sleep') and f.ground < sets.FLOOR - .02:
                 continue                                # resting on a seat or bed: its shadow is the furniture's
-            u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
-            x = f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u))
+            if getattr(f, 'acts', None):
+                m = acting.motion(self, f, shot, local)
+                if m.gone or m.dy < -.03 or m.scale < .9:
+                    continue                            # in the air: its shadow would sit on the ground alone
+            x, _ = self.where(f, shot, local)
             sx, sy, zoom = self._to_screen(x, f.ground, cam)
             rx, ry = f.height * h * zoom * .55, f.height * h * zoom * .06
             draw.ellipse((sx - rx, sy - ry, sx + rx, sy + ry), fill=(60, 60, 50, 34))

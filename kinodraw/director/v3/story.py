@@ -378,6 +378,7 @@ class Sentence:
     things: list = field(default_factory=list)         # everyday things it names, see Reader._things
     extras: list = field(default_factory=list)         # people the story mentions who are not in the cast
     ages: dict = field(default_factory=dict)           # person id -> age band (baby/child/teen/adult/elder) now
+    refs: list = field(default_factory=list)           # (offset in text, cast id, how, end): who it points at
 
 
 def sentences(text: str) -> list[tuple[int, int]]:
@@ -654,6 +655,7 @@ class Reader:
                 quotes = _speech(body, max(0, label.end() - a))
             refs = self.references(body, quotes)
             s = Sentence(a, b, body)
+            s.refs = refs
             s.quotes = [(a + q0 + 1, a + q1) for q0, q1 in quotes]
             named = list(dict.fromkeys(cid for _, cid, _, _ in refs))
             outside = [r for r in refs if not _inside(quotes, r[0])]

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
-from . import ink, sets
+from . import acting, ink, sets
 from ..director.v3 import arc
 from ..director.v3.semantics import name_key
 from ..director.v3.story import SPEAKER_LABEL, places_in, sentences
@@ -297,11 +297,16 @@ class Shots:
         shots = []
         for i, (bid, offset, plan) in enumerate(plans):
             begin = timers[bid](offset)
-            if shots and begin - shots[-1].start < MIN_SHOT:
-                continue
             nxt = next(((b, o) for b, o, _ in plans[i + 1:] if (b, o) != (bid, offset)), None)
             text = self._span_text(bid, offset, nxt)
+            # The narration's actions on this page (engine.acting): from its sentences, the plan's as a fallback.
+            spoken = [(bid, s) for s in read[bid] if s.start < text[1] and text[0] < s.end]
+            acts = [a for a in spec.get('actions') or () if a.get('at_beat') == bid]
+            if shots and begin - shots[-1].start < MIN_SHOT:
+                acting.direct(book, shots[-1], spoken, timers[bid], acts, bid, window=text[:2])
+                continue
             shot = self._stage(plan, begin, timers[bid], spec, bid, text)
+            acting.direct(book, shot, spoken, timers[bid], acts, bid, window=text[:2])
             shots.append(shot)
         if not shots:
             shots.append(Shot(0., end - start))
