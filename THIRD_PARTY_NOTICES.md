@@ -18,6 +18,8 @@ The packaged apps on the Releases page also contain GPL components (FFmpeg built
 | Noto Sans SC Bold | `assets/fonts/` | SIL OFL 1.1, © Adobe / Google |
 | Silkscreen Regular | `assets/fonts/` | SIL OFL 1.1, © The Silkscreen Project Authors; see `fonts/OFL-Silkscreen.txt` and `LICENSES/OFL-Silkscreen.txt` |
 | Cinzel Bold (static instance of the variable font) | `assets/fonts/` | SIL OFL 1.1, © The Cinzel Project Authors; see `fonts/OFL-Cinzel.txt` and `LICENSES/OFL-Cinzel.txt` |
+| JetBrains Mono Medium (static instance of the variable font; code boards) | `assets/fonts/` | SIL OFL 1.1, © The JetBrains Mono Project Authors; see `fonts/OFL-JetBrainsMono.txt` and `LICENSES/OFL-JetBrainsMono.txt` |
+| STIX Two Text Regular and Italic (static instances of the variable fonts; typeset formulas) | `assets/fonts/` | SIL OFL 1.1, © The STIX Fonts Project Authors; see `fonts/OFL-STIXTwo.txt` and `LICENSES/OFL-STIXTwo.txt` |
 | Music: *Fresh Focus* and *Natural Vibes* (Kevin MacLeod), *Inventing Flight* (Bryan Teoh) | `assets/music/` | CC0 / public domain, via FreePD.com; see `music/NOTICE.md` |
 | Sound effects from Kenney's *Interface Sounds*, *RPG Audio* and *Casino Audio*, and OwlishMedia's *202 More Sound Effects* (OpenGameArt) | `assets/sfx/` | CC0 1.0; see `sfx/NOTICE.md` |
 

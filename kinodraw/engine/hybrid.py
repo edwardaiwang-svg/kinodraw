@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageOps
 
-from .. import library
+from .. import markup, library
 from . import motion
 from ..director.v3 import arc
 from ..director.v3.semantics import ACTION_CUES, beats, mentions, name_key
@@ -167,6 +167,7 @@ class HybridProduction:
         from .. import speech
         self.labels = speech.screenplay_labels(b['text'] for b in self.by_id.values())
         self._shown_text = {}
+        self.marked = {b['id'] for b in episode['beats'] if markup.board(b, lang)}     # code, formula, warning
         self.cast = {c['id']: cast_genome(c) for c in plan['cast']}
         for c in plan['cast']:
             if c['family'] not in ('feline', 'canine', 'human', 'other'):
@@ -285,6 +286,11 @@ class HybridProduction:
         spec = span.spec
         duration = span.end - span.start
         treatment = spec['treatment']
+        if self.marked.intersection(spec['beat_ids']):
+            # Code, a formula or a warning card (markup.py) is drawn on its own whiteboard page, whatever the plan
+            # chose for the scene: never a storybook page, kinetic type or a caption over a picture.
+            span.source_proof = True
+            return
         if self.storybook is not None and (self._staged(spec) if not self.story_genre else (
                 treatment not in ('whiteboard', 'chart') and not any(e['kind'] == 'diagram' for e in spec['elements']))):
             # A story page: preset doodles on the whiteboard paper, one shot per narrated sentence.
@@ -527,6 +533,19 @@ class HybridProduction:
                     e.width, e.height = min(e.width, 1920 * step * .85), min(e.height, 1080 * .4)
                 order = iter(pictures)
                 elements[:] = [next(order) if e.kind == 'picture' else e for e in elements]
+            for e in copy_elements:
+                # The whole copy stays inside the frame, through its drift and entrance rise, and above the
+                # pictures under it (or above the captions): a long headline gets smaller, never clipped.
+                top = 84 * .7 + 18 + .05 * 1080
+                under = [q.y * 1080 - q.height / 2 for q in pictures if q.y is not None and e.y is not None
+                         and q.y > e.y]
+                bottom = min(under) - 24 if under else 1080 * .80
+                height = (e.text.count('\n') + 1) * e.size * 1.15
+                if height > bottom - top:
+                    e.size *= (bottom - top) / height
+                    height = bottom - top
+                centre = (e.y if e.y is not None else .5) * 1080
+                e.y = min(max(centre, top + height / 2), bottom - height / 2) / 1080
         camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
         transition = spec['transition_in']
         # A full-bleed scene is laid out like a centred one: a library picture is an object, never the whole frame,
@@ -1730,6 +1749,8 @@ class HybridProduction:
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)
         image = self._draw_anchor(image.convert('RGBA'), t)
+        if not self.vertical:
+            self.whiteboard._steps(image, t)
         if not self.vertical and not self._written(span, t):
             self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')
