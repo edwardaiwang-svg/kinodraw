@@ -382,31 +382,8 @@ class Shots:
             for b in shot.bubbles:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
             shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
-        self._same_picture(shots)
         self.previous = shots[-1]
         return shots
-
-    def _same_picture(self, shots):
-        """A framing that reads as the same picture as the one before it (one backdrop, the camera within NEAR of
-        itself) keeps that framing: the change is dropped instead of cut to as a jump, here and across a scene join.
-        A close-up's own push and the page after it keep theirs, a wide keeps its whole set, and so does a framing
-        that shows someone (where they start or end up) the one before would cut."""
-        book = self.book
-        before = self.previous
-        for shot in shots:
-            if before is not None and before.view != shot.view and before.eyes is None and shot.framing != 'wide' \
-                    and book.near(before, shot) and all(
-                        self._inside(box, before.view) for f in shot.figures if not f.crowd
-                        for box in [book.head_box(f)] + [b for pair in book._shapes(f) for b in pair]):
-                shot.view = before.view
-            before = shot
-
-    def _inside(self, box, view):
-        """Whether a frame-share box is wholly on screen under a framing."""
-        (a, b, _), (c, d, _) = self.book._to_screen(box[0], box[1], list(view)), \
-            self.book._to_screen(box[2], box[3], list(view))
-        w, h = self.book.size
-        return a >= 0 and b >= 0 and c <= w and d <= h
 
     # ---------------- editing
     VARY_EVERY = 2                 # sentences one framing holds outside a story before the next sentence cuts
