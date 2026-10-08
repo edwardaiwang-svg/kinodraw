@@ -77,7 +77,7 @@ def _probe(video: Path) -> dict:
             'chapters': re.findall(r'Chapter #\d+:\d+: start [\d.]+, end [\d.]+\s+Metadata:\s+title\s+:\s*(.*)', head)}
 
 
-def encoded_qa(tl: dict, video: Path, mix: Path, size=(1920, 1080)) -> dict:
+def encoded_qa(tl: dict, video: Path, mix: Path, size=(1920, 1080), narrated_pages=None) -> dict:
     info = _probe(video)
     expected = round(tl['duration'] * FPS)
     actual_size = info['size'].groups() if info['size'] else None
@@ -105,7 +105,7 @@ def encoded_qa(tl: dict, video: Path, mix: Path, size=(1920, 1080)) -> dict:
         if corr < .95:
             problems.append(f'encoded audio differs from the mix at {off}s ({corr:.3f})')
     from .qa.probes import probe
-    probes = probe(video, timeline=tl).to_dict()
+    probes = probe(video, timeline=tl, narrated_pages=narrated_pages).to_dict()
     problems += [f"{f['defect']} at {f['start']:.3f}-{f['end']:.3f}s: {f['note']}"
                  for f in probes['findings'] if f['defect'] in ('dead_air', 'frozen_picture')]
     return {'ok': not problems, 'problems': problems, 'probes': probes,

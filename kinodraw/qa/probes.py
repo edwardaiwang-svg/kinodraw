@@ -15,6 +15,10 @@ ProbeDefect = Literal['dead_air', 'frozen_picture', 'blank_opening', 'flash_safe
                       'motion_floor', 'loudness', 'cut_timing']
 
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+# A story or motion page holds still while its narration speaks (J 10/8: no camera push or idle sway to keep the
+# picture moving); freezedetect sees such a page as frozen. It is exempt for up to HELD_PAGE seconds; a page held
+# longer than that, or a freeze outside its narration, is still a frozen_picture.
+HELD_PAGE = 8.
 REPAIRS = {
     'dead_air': 'Shorten the silent transition to less than 1.5 seconds; advance the next narration.',
     'frozen_picture': 'Raise motion_floor; add breathing or camera drift outside declared reading holds.',
@@ -54,6 +58,7 @@ class QAReport:
     freezes: list[Span] = field(default_factory=list)
     black: list[Span] = field(default_factory=list)
     exemptions: list[Span] = field(default_factory=list)
+    held_pages: list[Span] = field(default_factory=list)     # freezes exempt as narrated held pages
     motion_static_share: float = 0.0
     motion_windows: int = 0
     flash_ok: bool = True
@@ -127,7 +132,10 @@ def _run(args: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run([FFMPEG, '-hide_banner', '-nostdin', *args], capture_output=True, check=True)
 
 
-def probe(video: Path | str, timeline: dict | None = None, beat_grid: list[float] | None = None) -> QAReport:
+def probe(video: Path | str, timeline: dict | None = None, beat_grid: list[float] | None = None,
+          narrated_pages: list[tuple[float, float]] | None = None) -> QAReport:
+    """``narrated_pages`` are (start, end) stretches where a story or motion page is shown while its narration
+    speaks; a freeze inside one of them lasting at most HELD_PAGE seconds is a held page, not a frozen picture."""
     video = Path(video)
     log = _run(['-i', str(video), '-map', '0:v:0', '-vf',
                 'freezedetect=n=-50dB:d=1,blackdetect=d=0.1:pix_th=0.1', '-an', '-f', 'null', '-']).stderr.decode('utf-8', 'replace')
@@ -159,8 +167,13 @@ def probe(video: Path | str, timeline: dict | None = None, beat_grid: list[float
             [] if defect == 'dead_air' else report.exemptions
         for span in spans:
             for part in _outside(span, exemptions):
-                if part.duration >= threshold - 1e-6:
-                    add(defect, part.start, part.end, f'{part.duration:.3f}s outside permitted exemptions')
+                if part.duration < threshold - 1e-6:
+                    continue
+                if defect == 'frozen_picture' and part.duration <= HELD_PAGE + 1e-6 and any(
+                        a - 1 / 30 <= part.start and part.end <= b + 1 / 30 for a, b in narrated_pages or ()):
+                    report.held_pages.append(part)
+                    continue
+                add(defect, part.start, part.end, f'{part.duration:.3f}s outside permitted exemptions')
     if report.integrated_lufs is None or not -20 <= report.integrated_lufs <= -12:
         add('loudness', 0, duration, f'integrated loudness: {report.integrated_lufs} LUFS')
 

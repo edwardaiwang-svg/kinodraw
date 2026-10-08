@@ -58,6 +58,25 @@ def test_freeze_and_hold_boundaries(movies):
     assert probe(movies['frozen'], {'end_card': {'start': 0, 'end': 4}}).package_ok
 
 
+def test_a_narrated_held_page_is_exempt_for_8_seconds(movies, tmp_path):
+    """J 10/8 locked the story camera and stopped idle sway, so a story or motion page holds still while its
+    narration speaks. Such a page is exempt from frozen_picture for at most 8 s; a longer hold, or a freeze reaching
+    outside the narrated page, still fails."""
+    from kinodraw.qa.probes import probe
+    assert not probe(movies['frozen']).package_ok
+    held = probe(movies['frozen'], narrated_pages=[(0, 4)])
+    assert held.package_ok and held.held_pages and held.held_pages[0].duration >= 3.8
+    assert not probe(movies['frozen'], narrated_pages=[(1, 4)]).package_ok
+    assert not probe(movies['frozen'], narrated_pages=[(0, 2), (2, 4)]).package_ok    # one page at a time
+    long = tmp_path / 'frozen-9s.mp4'
+    subprocess.run([FFMPEG, '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:size=160x90:rate=30:duration=9',
+                    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=9', '-c:v', 'libx264',
+                    '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', str(long)], check=True, capture_output=True)
+    report = probe(long, narrated_pages=[(0, 9)])
+    assert not report.package_ok and not report.held_pages
+    assert any(f.defect == 'frozen_picture' and f.end - f.start > 8 for f in report.findings)
+
+
 def test_silent_end_card_and_explicit_holds(movies):
     from kinodraw.qa.probes import probe
     assert not probe(movies['silent']).package_ok
