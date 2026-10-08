@@ -255,6 +255,26 @@ def test_age_variants_of_one_person_are_that_person_once_at_the_shots_age(tmp_pa
     assert keys(page) == ['sam'] and page.figures[0].age == 'elder'
 
 
+def test_a_thing_put_in_an_age_variant_is_in_that_persons_hands(tmp_path):
+    cast = PEOPLE + [{'id': 'sam_old', 'name': 'Old Sam', 'kind': 'human', 'species': 'human', 'age': 'old',
+                      'sex': 'male'}]
+    prod = staged(tmp_path, 'Sixty years later, Sam found the envelope.',
+                  [shot('b001', 'Sixty years', 'medium', [('sam_old', 'old', 'stand', 'no')], place='bedroom',
+                        props=[prop('fl_envelope', 'in', 'sam_old')], set_refs=['office_desk'])],
+                  cast=cast)
+    _, (page,) = pages(prod, 'b001')
+    held = next(p for p in page.set if p.doodle == 'fl_envelope')
+    assert keys(page) == ['sam'] and held.kind == 'hand' and held.holder == 'sam'
+
+
+def test_a_thing_beside_someone_off_the_page_is_still_drawn(tmp_path):
+    prod = staged(tmp_path, 'Sam found the envelope.',
+                  [shot('b001', 'Sam found', 'medium', [('sam', 'adult', 'stand', 'no')], place='bedroom',
+                        props=[prop('fl_envelope', 'beside', 'ada')])])
+    _, (page,) = pages(prod, 'b001')
+    assert 'fl_envelope' in [p.doodle for p in page.set] and 'ada' not in [p.doodle for p in page.set]
+
+
 def test_seated_people_keep_their_own_seat_and_never_overlap(tmp_path):
     sitting = [('sam', 'old', 'sit', 'no'), ('mia', 'teen', 'sit', 'no'), ('ada', 'adult', 'sit', 'no')]
     prod = staged(tmp_path, 'Sam sat in the armchair. Mia and Ada sat down too. They all watched the TV.',
