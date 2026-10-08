@@ -140,8 +140,8 @@ def test_content_findings_are_reported_beside_the_qa_and_never_fail_the_finish(t
 
 
 def test_a_sentence_said_while_a_device_screen_is_drawn_is_shown_by_that_screen(tmp_path):
-    """03 at ~35 s: the phone's lock screen shows "Your spinach has two days left." (build/ui-screens.json); the
-    sentence is shown by the screen, not by an icon and not missing."""
+    """03 at ~35 s: the phone's lock screen shows "Your spinach has two days left." (build/ui-screens.json) from
+    the quote on, after the sentence starts; the sentence is shown by the screen, not by an icon and not missing."""
     import json
     board = script.build(ingest.read('# Fresh Food\n\nWe planted trees in the park.\n\nWhen the spinach is about to '
                                      'turn, you get a nudge: your spinach has two days left.\n\nThe nudge comes once.'),
@@ -160,7 +160,7 @@ def test_a_sentence_said_while_a_device_screen_is_drawn_is_shown_by_that_screen(
     _video(video, [200] * int(tl['duration'] + 1))
     (tmp_path / 'build').mkdir()
     (tmp_path / 'build' / 'ui-screens.json').write_text(json.dumps([
-        {'start': nudge.at - 1, 'end': nudge.until + .5, 'kind': 'notification', 'device': 'phone', 'beat': nudge.beat,
+        {'start': nudge.at + .3 * (nudge.until - nudge.at), 'end': nudge.until + .5, 'kind': 'notification', 'device': 'phone', 'beat': nudge.beat,
          'text': 'Your spinach has two days left.', 'strings': ['Your spinach has two days left.']}]), encoding='utf-8')
     report = content.check(plan, board, tl, video)
     [line] = [line for line in report['lines'] if 'two days' in line['text']]
