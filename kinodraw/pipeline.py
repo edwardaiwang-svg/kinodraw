@@ -589,12 +589,12 @@ def _finish(project_dir):
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
-    if cfg.get('plan_v3'):                            # a video that shows nothing its script says never passes
-        from .qa.content import check as content_check
-        content = content_check(cfg['plan_v3'], board, tl, video)
-        qa['content'] = {'findings': content['findings'], 'stats': content['stats']}
-        qa['problems'] += content['problems']
-        qa['ok'] = not qa['problems']
+    if cfg.get('plan_v3'):
+        # Does the video show what its script says? Heuristic findings for review (the gauntlet reads them); they
+        # are not problems a customer can fix, so they never change qa['ok'] or qa['problems'].
+        from .qa import content as content_qa
+        content = content_qa.check(cfg['plan_v3'], board, tl, video)
+        qa['content'] = {'problems': content['problems'], 'findings': content['findings'], 'stats': content['stats']}
     publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
             voice_source=voice_server.describe(cfg['voice_server'], lang)
             if cfg.get('voice_server') and not cfg.get('recording') else None,

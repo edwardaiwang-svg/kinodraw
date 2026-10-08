@@ -1,4 +1,4 @@
-"""Content QA: a video that shows nothing its script says never passes (gauntlet r1, 2026-10-08)."""
+"""Content QA: findings on whether a video shows what its script says (gauntlet r1, 2026-10-08)."""
 import copy
 
 import imageio_ffmpeg
@@ -105,3 +105,32 @@ def test_finish_reports_a_frozen_composition_as_a_problem(tmp_path):
     report = content.check(plan, board, tl, video)
     assert [f['check'] for f in report['findings']] == ['same_picture']
     assert 'does not change for' in report['problems'][0]
+
+
+def test_content_findings_are_reported_beside_the_qa_and_never_fail_the_finish(tmp_path, monkeypatch):
+    """They are heuristics the customer cannot act on: kept in qa['content'], never in qa['problems'] or qa['ok']."""
+    import json
+    from types import SimpleNamespace
+    from kinodraw import pipeline
+    plan, board = _story()
+    board = {**board, 'title': {'en': 'The Bus Home'}}
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    folder = tmp_path / 'p'
+    (folder / 'build').mkdir(parents=True)
+    (folder / 'build' / 'timeline.json').write_text(json.dumps(tl), encoding='utf-8')
+    saved = {'settings': {'lang': 'en', 'plan_v3': plan}, 'storyboard': board}
+    monkeypatch.setattr(pipeline, 'ProjectStore', lambda d: SimpleNamespace(load=lambda: saved))
+    monkeypatch.setattr(pipeline, '_check_render_size', lambda *a: (1280, 720))
+    monkeypatch.setattr(pipeline, '_narrated_pages', lambda *a: None)
+    monkeypatch.setattr(pipeline.audio, 'mix', lambda *a: None)
+    for name in ('mux', 'publish', 'contact_sheet'):
+        monkeypatch.setattr(pipeline, name, lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, 'encoded_qa', lambda *a, **k: {'ok': True, 'problems': []})
+    monkeypatch.setattr(pipeline.subprocess, 'run', lambda args, **k: SimpleNamespace(returncode=0, stderr=b''))
+    found = {'problems': ['The picture does not change for 7 sentences in a row.'],
+             'findings': [{'check': 'same_picture', 'problem': 'The picture does not change for 7 sentences in a row.'}],
+             'stats': {'sentences': 9}, 'lines': []}
+    monkeypatch.setattr(content, 'check', lambda *a, **k: found)
+    qa = pipeline._finish(folder)
+    assert qa['ok'] is True and qa['problems'] == []
+    assert qa['content'] == {'problems': found['problems'], 'findings': found['findings'], 'stats': found['stats']}

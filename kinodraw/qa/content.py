@@ -1,7 +1,7 @@
 """Content QA: does the video show what its script says?
 
-Four checks on a v3 plan (and, for the frozen composition, the finished video), reported in plain words next to
-the other QA problems:
+Four checks on a v3 plan (and, for the frozen composition, the finished video), reported in plain words in
+qa.json's ``content`` (never in its problems or ok: they are heuristics for review, not customer problems):
 
 - ``unshown``: more than UNSHOWN of the sentences that name something concrete (a person, place, object or sky)
   have nothing in their scene that matches it.
