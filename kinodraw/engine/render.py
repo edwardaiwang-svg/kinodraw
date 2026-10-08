@@ -1062,6 +1062,9 @@ def make_production(episode, tline, lang, project_dir, relaxed=False, aspect='16
     plan = config.get('plan_v3') if config.get('director_v3') else None
     if plan and plan.get('storyboard', {}).get('genre'):
         episode = {**episode, 'genre': plan['storyboard']['genre']}    # what the planner read it as (the end card)
+    if plan:
+        # The stock presenter is no one in the plan's cast: a planned video's title and end cards draw no stranger.
+        episode = {**episode, 'narrator': 'none'}
     if size is not None:
         from .geometry import geometry_for_size, PORTRAIT
         size = geometry_for_size(size, aspect).size
