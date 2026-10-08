@@ -74,6 +74,8 @@ class Clip:
     wav: Path
     duration: float              # seconds of audio (the timeline adds GAP after it)
     char_times: list
+    speakers: tuple = ()         # who speaks first and last (None = the narrator); empty for one plain read
+    cut_off: bool = False        # the beat's last line breaks off ("Dad, turn it off—"): the next one overlaps it
 
 
 # ------------------------------------------------------------------ models
@@ -283,6 +285,80 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
                                 'text': spoken, **({'said': said} if said != spoken else {})},
                                ensure_ascii=False), encoding='utf-8')
     return Clip(wav, duration, char_times)
+
+
+# ------------------------------------------------------ several voices in one beat
+PART_GAP = .15           # silence between two speakers inside one beat
+EDGE_KEEP = (.03, .06)   # silence kept before and after a part where it meets another part
+CUT_FADE = .015          # a line that breaks off ends this fast
+
+
+def _voiced(audio: np.ndarray, rate: int, floor: float = .01) -> tuple[int, int]:
+    loud = np.nonzero(np.abs(audio) > floor)[0]
+    return (int(loud[0]), int(loud[-1]) + 1) if len(loud) else (0, len(audio))
+
+
+def silence(seconds: float, chars: int, cache_dir: Path) -> Clip:
+    """A beat with nothing to say (a title card, a stage direction): ``seconds`` of quiet."""
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    wav = cache_dir / f'silence-{round(seconds * 1000)}.wav'
+    if not wav.exists():
+        _write_wav(wav, np.zeros(round(seconds * SR), np.float32))
+    return Clip(wav, round(seconds, 3), [0.0] * chars)
+
+
+def speak(spoken: str, parts, lang: str, cache_dir: Path, speed: float = 1.0, lexicon: dict | None = None,
+          hold: float | None = None) -> Clip:
+    """One beat's clip from its voice parts (speech.voice_parts): [(Segment, voice, speed factor)], each read by its
+    own voice and joined in order, with char_times for every character of ``spoken`` (labels and directions the
+    voice skips take the time of the next word said). A plain beat (one narrator part reading the spoken text as it
+    is) is exactly synthesize()'s clip."""
+    from .speech import spoken_times
+    if not parts:
+        return silence(hold or .8, len(spoken), cache_dir)
+    if len(parts) == 1 and parts[0][0].said == spoken and parts[0][0].speaker is None:
+        seg, name, factor = parts[0]
+        return synthesize(spoken, lang, cache_dir, name, round(speed * factor, 3), lexicon)
+    cut = parts[-1][0].cut_off
+    content = [VERSION, 'parts', LANGS[lang]['model'], speed, spoken, sorted((lexicon or {}).items()),
+               [[seg.said, seg.index, name, factor] for seg, name, factor in parts], PART_GAP, EDGE_KEEP, cut]
+    key = hashlib.sha256(json.dumps(content).encode()).hexdigest()[:16]
+    cache_dir = Path(cache_dir)
+    wav, meta = cache_dir / f'{key}.wav', cache_dir / f'{key}.json'
+    speakers = (parts[0][0].speaker, parts[-1][0].speaker)
+    if wav.exists() and meta.exists():
+        info = json.loads(meta.read_text(encoding='utf-8'))
+        return Clip(wav, info['duration'], info['char_times'], speakers, cut)
+    pieces, times, index, at = [], [], [], 0.
+    for k, (seg, name, factor) in enumerate(parts):
+        clip = synthesize(seg.said, lang, cache_dir, name, round(speed * factor, 3), lexicon)
+        audio = _read_wav(clip.wav)
+        a, b = _voiced(audio, SR)
+        first, last = k == 0, k == len(parts) - 1
+        a = 0 if first else max(0, a - round(EDGE_KEEP[0] * SR))
+        b = (b if cut else len(audio)) if last else min(len(audio), b + round(EDGE_KEEP[1] * SR))
+        piece = audio[a:b].copy()
+        if last and cut:
+            n = min(len(piece), round(CUT_FADE * SR))
+            piece[len(piece) - n:] *= np.linspace(1, 0, n, dtype=np.float32)
+        if pieces:
+            pieces.append(np.zeros(round(PART_GAP * SR), np.float32))
+            at += PART_GAP
+        pieces.append(piece)
+        times += [max(0., t - a / SR) + at for t in clip.char_times]
+        index += seg.index
+        at += len(piece) / SR
+    audio = np.concatenate(pieces)
+    char_times = spoken_times(spoken, index, times)
+    duration = round(len(audio) / SR, 3)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    _write_wav(wav, audio)
+    meta.write_text(json.dumps({'duration': duration, 'char_times': char_times, 'text': spoken,
+                                'parts': [{'speaker': seg.speaker, 'voice': name, 'speed': round(speed * factor, 3),
+                                           'said': seg.said} for seg, name, factor in parts], 'cut_off': cut},
+                               ensure_ascii=False), encoding='utf-8')
+    return Clip(wav, duration, char_times, speakers, cut)
 
 
 # ------------------------------------------------------ your own recording

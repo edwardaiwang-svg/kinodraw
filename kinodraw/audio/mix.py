@@ -86,7 +86,10 @@ def write_captions(captions, out_dir: Path):
 
 def timing(clips: dict) -> dict:
     """What the timeline needs from each voice.Clip: speech length (with the gap after it) and character times."""
-    return {bid: {'speech': c.duration + voice.GAP, 'char_times': c.char_times} for bid, c in clips.items()}
+    return {bid: {'speech': c.duration + voice.GAP, 'char_times': c.char_times,
+                  **({'speakers': list(c.speakers), 'cut_off': c.cut_off, 'duration': c.duration}
+                     if getattr(c, 'speakers', ()) else {})}
+            for bid, c in clips.items()}
 
 
 def assemble(storyboard: dict, lang: str, clips: dict, out_dir: Path, pauses: dict | None = None,

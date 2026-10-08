@@ -308,17 +308,18 @@ def test_real_byok_plan_saved_and_reused(tmp_path, monkeypatch, mode):
     elif mode == 'timeout':
         answers.append(TimeoutError('synthetic transport timeout'))
     answers.append(json.dumps({'svg': svg}))
+    answers.append(json.dumps({'svg': svg.replace('r="30"', 'r="40"')}))     # the heading's title card asks for one too
     provider, calls = openai_fake(answers, prop_metered=mode != 'unmetered',
                                   prop_model='unpriced-prop-model' if mode == 'unknown_model' else None)
     report = pipeline.direct_v3(project, provider=provider)
     saved = pipeline.settings(project)
     assert not report['fallback'] and saved['plan_v3_report'] == report
     generated = list((project / 'doodles').glob('gen-*.svg'))
-    assert len(generated) == 1 and not answers
-    ref = generated[0].stem
-    assert any(e.get('ref') == ref for scene in saved['plan_v3']['scenes'] for e in scene['elements'])
-    attempts = 3 if mode in ('repair', 'timeout') else 2
-    metered = 3 if mode == 'repair' else 1 if mode == 'unmetered' else 2
+    assert len(generated) == 2 and not answers
+    for ref in (g.stem for g in generated):
+        assert any(e.get('ref') == ref for scene in saved['plan_v3']['scenes'] for e in scene['elements'])
+    attempts = 4 if mode in ('repair', 'timeout') else 3
+    metered = 4 if mode == 'repair' else 1 if mode == 'unmetered' else 3
     assert [c['response_format']['json_schema']['name'] for c in calls] == ['video_plan'] + ['svg_prop'] * (attempts - 1)
     assert report['usage']['calls'] == len(calls) == attempts
     assert report['usage']['input_tokens'] == metered * 60
@@ -328,7 +329,7 @@ def test_real_byok_plan_saved_and_reused(tmp_path, monkeypatch, mode):
         assert report['usage']['cost_usd'] is None
     else:
         assert report['usage']['cost_usd'] == pytest.approx(metered * (60 * .1 + 20 * .5 + 40 * .01) / 1e6)
-    assert report['usage']['by_model'] == ({'gpt-6-luna': 1, 'unpriced-prop-model': 1}
+    assert report['usage']['by_model'] == ({'gpt-6-luna': 1, 'unpriced-prop-model': 2}
                                          if mode == 'unknown_model' else {'gpt-6-luna': attempts})
     from kinodraw.director.llm.props import make_prop_llm
     from kinodraw.engine.hybrid import prepare_props
