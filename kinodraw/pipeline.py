@@ -589,6 +589,12 @@ def _finish(project_dir):
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
         qa['ok'] = not qa['problems']
+    if cfg.get('plan_v3'):                            # a video that shows nothing its script says never passes
+        from .qa.content import check as content_check
+        content = content_check(cfg['plan_v3'], board, tl, video)
+        qa['content'] = {'findings': content['findings'], 'stats': content['stats']}
+        qa['problems'] += content['problems']
+        qa['ok'] = not qa['problems']
     publish(board, tl, lang, build, project_dir, stem, project_dir, own_voice=bool(cfg.get('recording')),
             voice_source=voice_server.describe(cfg['voice_server'], lang)
             if cfg.get('voice_server') and not cfg.get('recording') else None,
