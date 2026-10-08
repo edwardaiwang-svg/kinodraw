@@ -97,3 +97,11 @@ def test_a_cast_tortoise_named_by_her_species_gets_no_second_tortoise_beside_her
     assert line.crowd == []
     line = reader.read('b2', 'Lupita had a jar full of fireflies and two snails.')[0]
     assert dict(line.crowd) == {'firefly': 3, 'snail': 2}
+
+
+@pytest.mark.parametrize('word,species', [('frogs', 'frog'), ('fireflies', 'firefly'), ('panda', 'bear'),
+                                          ('lightning bug', 'firefly'), ('hedgehogs', 'hedgehog')])
+def test_a_plural_or_look_word_from_the_planner_draws_that_animal(word, species):
+    """Luna writes cast species such as "frogs" (the pond frogs) or "panda"; they used to fall to paw prints."""
+    doodle, _ = storybook.preset(word, 'adult', None, 'stand', 'r')
+    assert creatures.presets().get(doodle, {}).get('species') == species, (word, doodle)

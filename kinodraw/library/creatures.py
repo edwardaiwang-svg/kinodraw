@@ -195,7 +195,9 @@ def _resolve_species(species, sex, age):
         sp, s, a = SPECIES_WORDS[word]
         role = HUMAN_ROLES.get(word)
         return sp, sex or s, age or a, role
-    if word.endswith('s') and word[:-1] in by_species:
+    if word.endswith('ies') and word[:-3] + 'y' in by_species:      # "fireflies"
+        word = word[:-3] + 'y'
+    elif word.endswith('s') and word[:-1] in by_species:            # "frogs"
         word = word[:-1]
     if word in by_species:
         return word, sex, age, role
@@ -212,6 +214,12 @@ def _resolve_species(species, sex, age):
     if last != word:
         return _resolve_species(last, sex, age)
     return None, sex, age, role
+
+
+def drawn_species(word) -> str | None:
+    """The drawn species a species word names: itself, its singular ("frogs"), a look of it ("panda") or its
+    nearest drawn relative ("lightning bug" -> firefly); None when nothing of its kind is drawn."""
+    return _resolve_species(word, None, None)[0]
 
 
 def best_preset(species: str, age: str | None = None, sex: str | None = None, pose: str = 'stand',

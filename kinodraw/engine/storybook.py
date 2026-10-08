@@ -197,7 +197,7 @@ def _choose(species, age, sex, pose, facing, marks):
     except Exception:  # noqa: BLE001 - an unknown species falls back to the library's own doodle
         return None
     info = mod.presets().get(did) or {}
-    if not did or info.get('species') not in (species, mod.RELATED.get(species)) or library.resolve(did) is None:
+    if not did or info.get('species') not in (species, mod.drawn_species(species)) or library.resolve(did) is None:
         return None
     return did
 
