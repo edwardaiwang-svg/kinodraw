@@ -24,7 +24,7 @@ from pathlib import Path
 import imageio_ffmpeg
 from PIL import Image, ImageChops
 
-from .. import script, styles
+from .. import markup, script, styles
 from . import auto_scenes as auto
 from . import ink
 from . import scenes
@@ -55,6 +55,7 @@ def ease(u):
 
 HANDS = ('right', 'left', 'none')     # storyboard "hand": which hand draws, or none
 HAND_IN, HAND_OUT = .45, .35           # seconds the hand takes to slide in before a board, and out after it
+PARK = 2.0                             # a pause longer than this between drawings: the hand leaves the text it wrote
 HAND_EDGE = .55                        # ...half across the frame edge this far into the slide
 
 
@@ -136,6 +137,8 @@ class Production:
                 element.drawing.bind(element.start, element.rate)
         self._pin_notes()
         self._index()
+        from .markup_boards import step_rail
+        self.steps = step_rail(self.ep, tline, lang, (46, 157, 79), self.size)
 
     # ------------------------------------------------------------ building
     def _beats(self, cid):
@@ -162,6 +165,11 @@ class Production:
         ctx.beat = beat
         if beat['id'] in self._diagrams:
             self._proof(beat)
+            return
+        mark = markup.board(beat, self.lang)
+        if mark is not None:                         # code, a formula or a warning: its own board (markup_boards)
+            from .markup_boards import draw
+            draw(self, beat, mark)
             return
         if self._board_plan is not None:
             from .process_diagrams import Boards
@@ -779,8 +787,10 @@ class Production:
 
     @staticmethod
     def _new_board(prev, nxt):
-        """A new board is a separate hand session, not a trip across the old page."""
-        return nxt.start - prev.end > 1.4 and getattr(prev, 'stretch', 0) != getattr(nxt, 'stretch', 0)
+        """A new board is a separate hand session, not a trip across the old page; so is a long pause on one page:
+        the hand slides off the words it has written instead of resting on (or creeping across) them."""
+        gap = nxt.start - prev.end
+        return gap > PARK or gap > 1.4 and getattr(prev, 'stretch', 0) != getattr(nxt, 'stretch', 0)
 
     def _slide(self, frame, t, L, prev, nxt):
         """Between hand sessions: over HAND_OUT after the last stroke the hand slides out of the frame, and over
@@ -938,8 +948,14 @@ class Production:
             return frame
         if chrome and not self._in_title(t):
             self._chrome(frame, t)
+        self._steps(frame, t)
         self._caption(frame, t)
         return frame
+
+    def _steps(self, frame, t):
+        """The step indicator while a numbered list is read (markup_boards.StepRail)."""
+        if getattr(self, 'steps', None) is not None:
+            self.steps.paint(frame, t)
 
     def cues(self):
         """Sound-effect events ({t, kind, strength, id}); the whiteboard mix has none."""

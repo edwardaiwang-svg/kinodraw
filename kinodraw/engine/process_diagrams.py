@@ -14,6 +14,7 @@ import re
 
 from PIL import Image, ImageDraw
 
+from .. import markup
 from . import ink
 from .source_diagrams import NUMBERS
 
@@ -122,15 +123,27 @@ def typeset(words: str) -> str:
 def _typeset(text: str) -> str:
     toks, out, i = _tokens(text), [], 0
     letters = any(_kind(toks, k) == 'var' for k in range(len(toks)))
+    spoken = any(_kind(toks, k) in ('op', 'pair', 'eq') for k in range(len(toks)))    # "A plus B", not "A = P(1 + r)"
     while i < len(toks):
         word, kind = toks[i][0], _kind(toks, i)
         lower = word.lower()
         nxt = _kind(toks, i + 1) if i + 1 < len(toks) else None
         prev = out[-1] if out else ''
+        joined = i and toks[i][1] == toks[i - 1][2]          # written with no space before it
+        if joined and kind in (None, 'var') and out and re.fullmatch(r'[^\w\s]', toks[i - 1][0]) and \
+                out[-1].endswith(toks[i - 1][0]) and not re.fullmatch(r'[^\w\s]', word):
+            out[-1] += word                                     # a word after its symbol: "$1,000", "Ctrl+Shift", "6-digit"
+            i += 1
+            continue
+        if kind == 'num' and joined and out and re.fullmatch(r'[$€£¥#(+\-−]', toks[i - 1][0]) and \
+                out[-1].endswith(toks[i - 1][0]):
+            out[-1] += word if word[0].isdigit() else str(number(word))
+            i += 1
+            continue
         if kind == 'num':
             value = number(word)
             out.append(word if word[0].isdigit() else str(value))
-        elif kind == 'var' and (nxt in ('op', 'pair', 'eq') or prev in ('+', '−', '×', '·', '÷', '=')):
+        elif kind == 'var' and spoken and (nxt in ('op', 'pair', 'eq') or prev in ('+', '−', '×', '·', '÷', '=')):
             out.append(lower)
         elif kind == 'pair':
             out.append(PAIRED[(lower, toks[i + 1][0].lower())])
@@ -153,8 +166,12 @@ def _typeset(text: str) -> str:
         elif kind == 'approx' and (nxt == 'num' or i == len(toks) - 1 or len(toks) == 1):
             out.append('≈')
         elif re.fullmatch(r'[^\w\s]', word):
-            if out:
-                out[-1] += word
+            spaced_after = i + 1 >= len(toks) or toks[i + 1][1] > toks[i][2]
+            if out and (joined or spaced_after and not (i + 1 < len(toks) and toks[i][1] > toks[i - 1][2])):
+                out[-1] += word                                 # punctuation that closes a word ("15,", "hotter.")
+            else:
+                out.append(word)                                # a symbol opening the next word ("$", "(") or
+                                                                # standing alone between spaces ("Ctrl + Shift")
         else:
             out.append(word)
         i += 1
@@ -811,6 +828,13 @@ class Boards:
         scene_end = max(tl['beats'][bid]['end'] for bid in scene['beat_ids'])
         pages = []
         boards = [self.sums(b, by_id, lang) for b in scene['boards'] if b['items']]
+        marked = [k for k, bid in enumerate(scene['beat_ids']) if markup.board(by_id[bid], lang)]
+        if marked:
+            # From a code, formula or warning beat on, its own board (markup_boards) stays on screen for the rest of
+            # the scene: no labels restating the code, no camera trip back to this board.
+            keep = set(scene['beat_ids'][:marked[0]])
+            boards = [dict(b, items=[it for it in b['items'] if it['beat_id'] in keep]) for b in boards]
+            boards = [b for b in boards if b['items']]
         times = []
         for board in boards:
             times.append([max(scene_start, cue_time(tl, by_id[it['beat_id']], it['cue'], lang)) for it in board['items']])
@@ -879,6 +903,11 @@ class Boards:
                                                            for o in board['items']):
                     size = 46 * s
                 colour = accent if kind == 'title' else ink_c
+                keys = markup.combos(it['text'].strip(' .,;:!?'))
+                if keys and keys[0][0] == 0 and keys[0][1] == len(it['text'].strip(' .,;:!?')):
+                    from .markup_boards import keycaps_drawing      # a key combo is drawn as its keys
+                    texts[key] = keycaps_drawing(keys[0][2], min(prod.size[1], H * 1.46))
+                    return texts[key].size
                 texts[key] = self._text(words(it), round(size), colour, W * (.42 if kind != 'label' else .26))
             return texts[key].size
 
