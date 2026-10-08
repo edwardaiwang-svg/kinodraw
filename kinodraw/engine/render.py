@@ -108,6 +108,10 @@ class Production:
                               for scene in plan['scenes'] for e in scene['elements']
                               if e['kind'] == 'diagram'} if plan else {}
         self._source_beats -= set(self._diagrams)
+        from .process_diagrams import board_beats
+        self._board_plan = plan if plan and board_beats(plan) else None
+        self._source_beats -= board_beats(plan)
+        self._boards = None
         self.skin = skins.for_board(self.ep)                  # paper, ink, fills, fonts, hand and chrome
         scenes.load_page_plugins()
         self.layout = Layout(self.g)
@@ -159,6 +163,12 @@ class Production:
         if beat['id'] in self._diagrams:
             self._proof(beat)
             return
+        if self._board_plan is not None:
+            from .process_diagrams import Boards
+            self._boards = self._boards or Boards(self, self._board_plan)
+            if beat['id'] in self._boards.scene_of:
+                self._boards.draw(beat, not_before)
+                return
         deferred = []
         first_new = len(ctx.elements)
         for k, v in enumerate(beat.get('visuals', [])):

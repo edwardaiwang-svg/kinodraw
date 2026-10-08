@@ -45,8 +45,8 @@ breathe_heavy animates the being. Do not turn "armor" as a metaphor into a helme
 
 Elements are {kind, ref}: picture uses an id offered for one of the scene's beats; cast uses a cast id;
 atmosphere uses the scene's atmosphere kind; text uses a supplied beat_id.
-Diagram uses a scene beat_id, never SVG/code/numbers/labels supplied by you. Its closed source-grounded
-vocabulary is English equal-group dot arrays (explicit rows of dots, up to 10 per dimension and 64 dots),
+A diagram element is only for this closed vocabulary (any other diagram is a board, below); it uses a scene
+beat_id, never SVG/code/numbers/labels supplied by you. Its closed source-grounded vocabulary is English equal-group dot arrays (explicit rows of dots, up to 10 per dimension and 64 dots),
 matching multiplication equations, rotating the same dots to swapped rows/columns, and counting them;
 or panels/cards that glide/slide while organizing source-named notes, tasks, drawings, files, sketches,
 ideas or calendars (2-4 labels). Use diagram instead of symbolic pictures for these literal instructions.
@@ -63,6 +63,36 @@ transitions. atmosphere density is 0-1; fog and a shooting star together are fog
 Actions use a cast id, an allowed verb, a scene beat_id and intensity 1-3. The actor is someone present in
 that scene (named in the beat, or a cast element of the scene); do not bring off-screen beings in to act. Use [] for no actions or elements, and
 {kind: "none", density: 0} for no atmosphere. Explain the style choice in one short reason.
+
+Boards: an explainer, lesson or how-to whose sentences describe a process, a structure, a cause and effect, a
+comparison or a calculation is drawn as boards, never as one keyword icon per noun. Give one scene to each idea
+(several consecutive beats) and one board that every beat of it adds to, the way a teacher builds a diagram on a
+whiteboard; start a new scene when the idea changes ("Multiplication works the same way") and a further board
+(at most 3 per scene; it replaces the one before on its first cue) for a close-up or cutaway (heat, sound, a race,
+a formula). A board scene's treatment is whiteboard; story, character and atmosphere scenes use boards [].
+Layout: parts = a central picture with labelled callouts, + and - charges and a ground line (things standing on
+the ground take at ground); flow = steps left to right joined by arrows; compare = two things side by side (at
+left, at right) with a value or ratio between (at center). Items appear in order, each on its cue (words copied
+from its beat_id, "" for the beat's start); later items point at earlier items by id; KinoDraw places everything.
+- picture: ref = a picture id offered for one of the scene's beats; the subject goes at center.
+- label: text copied word for word from its beat; to = the item it names (drawn as a callout); style box = a rule
+  box (at top_right) whose equations (to = the box id) are written inside it.
+- equation: text = the spoken math copied from the beat ("3 times 5 is 15", "A plus B equals B plus A", "about five
+  times hotter"), or pieces of the beat joined by " ... " ("seconds ... divide by five ... roughly ... miles away");
+  KinoDraw writes it as math (3 × 5 = 15, a + b = b + a, ≈ 5× hotter, seconds ÷ 5 ≈ miles away).
+- charges: + or - badges (style plus or minus) on region at (top, bottom, left, right, center) of item to; text =
+  an optional label copied from the beat ("ice crystals").
+- link: from item ref to item to; style straight, curved or dashed (an arrow) or zigzag (a spark, a leader). Two
+  links between the same two items in opposite directions meet in the middle; text = an optional label.
+- rings: rings spread out from item to (a shock wave, a sound); highlight: item to lights up (a path completes).
+- number_line (text such as "Start at 0") and hop (text such as "Jump 3"; to = the line; style restart = start
+  again from the line's start, dimming the earlier hops); dots (text such as "3 rows of 5"); rotate (to = the
+  dots; a quarter turn of the same dots).
+"The picture", "it" and "this" mean what is already on the board: change that item (rotate, highlight, label it),
+never add a picture for the word. Every sentence that names a term ("called X", "Scientists call it X", "This is
+the X") gets a label or rule box in that beat, and every number, ratio or rule it states gets an equation in that
+beat. Draw no person on a board unless the script names one. Fields an item does not use are "" (at auto, style
+none).
 
 Shots stage what each beat literally shows; give every story, character and scene-setting beat at least one
 shot (a new shot where a sentence moves to a new place, person or object, with starts_at = that sentence's

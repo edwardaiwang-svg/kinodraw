@@ -8,6 +8,7 @@ import re
 from .arc import cta_phrase, proof_number
 from .schema import OPTIONAL, PLAN_SCHEMA, SCENE
 from ...engine.source_diagrams import resolve as resolve_diagram
+from ...engine import process_diagrams as pd
 from ...library import catalog
 from ..match import singular
 from .offer import ALIASES
@@ -308,6 +309,278 @@ def _shots(scene, path, by_id, cast_by_id, offered, repairs):
     scene['shots'] = ordered
 
 
+MAIN = ('picture', 'number_line', 'dots')         # a board's subject; the other kinds label or change it
+TARGETED = ('charges', 'link', 'rings', 'highlight', 'hop', 'rotate')
+LINK_STYLES = ('straight', 'curved', 'dashed', 'zigzag')
+
+
+def _position(item, order, by_id):
+    beat = by_id[item['beat_id']]
+    at = pd.find(beat['spoken'], item['cue']) if item['cue'] else 0
+    if at is None:
+        at = pd.find(beat['text'], item['cue']) or 0
+    return order[item['beat_id']], at
+
+
+def _item(beat_id, kind, text='', cue=None, to='', ref='', at='auto', style='none', iid=''):
+    return {'id': iid, 'beat_id': beat_id, 'cue': text if cue is None else cue, 'kind': kind, 'ref': ref, 'to': to,
+            'at': at, 'text': text, 'style': style}
+
+
+def _board_items(board, where, scene, by_id, offered, repairs):
+    """Keep the items whose words come from their beat, whose pictures were offered and whose targets are earlier
+    items of the same board; repair what has one reading (a missing id, an unheard cue, a lone number line)."""
+    bids = scene['beat_ids']
+    order = {bid: k for k, bid in enumerate(bids)}
+    items, ids = [], set()
+    for k, it in enumerate(board['items'][:40]):
+        w = f'{where}.items[{k}]'
+        if it['beat_id'] not in bids:
+            repairs.append(f'{w}: dropped {it["kind"]} for beat {it["beat_id"]!r} outside the scene')
+            continue
+        beat = by_id[it['beat_id']]
+        if it['cue'] and not _verbatim(it['cue'], beat):
+            repairs.append(f'{w}.cue: {it["cue"]!r} is not in {it["beat_id"]}; it appears as the beat starts')
+            it['cue'] = ''
+        if not re.fullmatch(r'[\w-]{1,40}', it['id']) or it['id'] in ids:
+            fresh = f'{it["kind"]}_{k + 1}'
+            repairs.append(f'{w}.id: named {fresh} (missing or repeated id {it["id"]!r})')
+            it['id'] = fresh
+        kind = it['kind']
+        if kind == 'equation':
+            parts = [p for p in re.split(r'\s*(?:\.\.\.|…)\s*', it['text']) if p.strip(' ,.;:!?')]
+            ok = bool(parts) and all(_verbatim(p, beat) for p in parts)
+        elif kind in ('label', 'dots', 'hop'):
+            ok = _verbatim(it['text'], beat) and (
+                kind == 'label' or (pd.dots_of(it['text']) if kind == 'dots' else pd.hop_of(it['text'])) is not None)
+        else:
+            ok = True
+            if it['text'] and not _verbatim(it['text'], beat):
+                repairs.append(f'{w}.text: {it["text"]!r} is not in {it["beat_id"]}; cleared')
+                it['text'] = ''
+        if not ok:
+            repairs.append(f'{w}: dropped {kind} {it["text"]!r}: its words must be in {it["beat_id"]}'
+                           + (' as "N rows of M"' if kind == 'dots' else ' with a number' if kind == 'hop' else ''))
+            continue
+        if kind == 'picture' and it['ref'] not in offered:
+            repairs.append(f'{w}: dropped picture {it["ref"]!r}, not offered for this scene')
+            continue
+        if kind == 'charges' and it['style'] not in ('plus', 'minus'):
+            repairs.append(f'{w}: dropped charges without a plus or minus style')
+            continue
+        if kind == 'link' and it['style'] not in LINK_STYLES:
+            it['style'] = 'straight'
+        if kind == 'hop' and it['style'] != 'restart':
+            it['style'] = 'none'
+        if it['style'] == 'box' and kind != 'label':
+            it['style'] = 'none'
+        if kind not in ('picture', 'link'):
+            it['ref'] = ''
+        ids.add(it['id'])
+        items.append(it)
+    items.sort(key=lambda it: _position(it, order, by_id))
+    # an item cued before the item it points at waits for that item's cue ("drops to the ground" before "ground")
+    ids_at = {it['id']: k for k, it in enumerate(items)}
+    for it in list(items):
+        refs = [r for r in (it['to'], it['ref'] if it['kind'] == 'link' else '') if r in ids_at]
+        later = [items[ids_at[r]] for r in refs if ids_at[r] > items.index(it)]
+        if later and it['kind'] != 'picture':
+            target = max(later, key=items.index)
+            items.remove(it)
+            items.insert(items.index(target) + 1, it)
+            it['beat_id'], it['cue'] = target['beat_id'], target['cue']
+            repairs.append(f'{where}: {it["kind"]} {it["id"]} now appears with {target["id"]}, which it points at')
+            ids_at = {i['id']: k for k, i in enumerate(items)}
+    seen, kept = {}, []
+    for it in items:
+        kind, target = it['kind'], it['to']
+        if kind == 'hop' and not target:
+            lines = [i for i, k in seen.items() if k == 'number_line']
+            target = it['to'] = lines[-1] if lines else ''
+        if kind == 'rotate' and not target:
+            arrays = [i for i, k in seen.items() if k == 'dots']
+            target = it['to'] = arrays[-1] if arrays else ''
+        need = {'hop': ('number_line',), 'rotate': ('dots',)}.get(kind)
+        missing = (kind in TARGETED and target not in seen) or (need and seen.get(target) not in need) or (
+            kind == 'link' and (it['ref'] not in seen or it['ref'] == target))
+        if missing:
+            repairs.append(f'{where}: dropped {kind} {it["id"]}: it points at {target or it["ref"]!r}, '
+                           'not an earlier item of this board')
+            continue
+        if kind in ('label', 'equation') and target and target not in seen:
+            repairs.append(f'{where}: {kind} {it["id"]} points at {target!r}, not an earlier item; written on its own')
+            it['to'] = ''
+        seen[it['id']] = kind
+        kept.append(it)
+    board['items'] = kept
+    return kept
+
+
+def _auto_items(scene, by_id, board_items, constructs):
+    """Source-bound items read from the beats: a named term gets a label, spoken math an equation; with
+    ``constructs``, a lesson's number line and hops ('Start at 0', 'Jump 3'), dot arrays ('3 rows of 5') and
+    quarter turns. Returns [(beat_id, item)] in script order."""
+    out, line, hops, arrays, turned, n = [], None, 0, None, False, 0
+    for bid in scene['beat_ids']:
+        text = by_id[bid]['text']
+        for sentence in re.split(r'(?<=[.!?])\s+', text):
+            if constructs:
+                start = re.search(r'\bstart(?:ing)?\s+(?:at|from)\s+' + pd._NUM + r'\b', sentence, re.I)
+                if start and line is None:
+                    n += 1
+                    line = f'line_{n}'
+                    out.append((bid, _item(bid, 'number_line', start.group(), iid=line)))
+                jumps = list(re.finditer(r'\b(?:jump|hop|step|then)\s+(?:back\s+)?' + pd._NUM + r'\b', sentence, re.I))
+                if jumps and re.search(r'\b(?:jump|hop)', sentence, re.I):
+                    if line is None:
+                        n += 1
+                        line = f'line_{n}'
+                        out.append((bid, _item(bid, 'number_line', '', cue=jumps[0].group(), iid=line)))
+                    restart = hops and sentence_restarts(scene, by_id, bid, sentence)
+                    for k, m in enumerate(jumps):
+                        hops += 1
+                        out.append((bid, _item(bid, 'hop', m.group(), to=line,
+                                               style='restart' if restart and k == 0 else 'none')))
+                rows = pd.ROWS.search(sentence)
+                if rows and pd.dots_of(rows.group()):
+                    if arrays is None or not turned:
+                        if arrays is None:
+                            n += 1
+                            arrays = f'dots_{n}'
+                            out.append((bid, _item(bid, 'dots', rows.group(), iid=arrays)))
+                    else:
+                        out.append((bid, _item(bid, 'label', rows.group(), to=arrays)))
+                if arrays and re.search(r'\b(?:quarter\s+turn|rotate|turn\s+(?:it|the\s+\w+))', sentence, re.I):
+                    m = re.search(r'quarter\s+turn|rotate|turn\s+(?:it|the\s+\w+)', sentence, re.I)
+                    turned = True
+                    out.append((bid, _item(bid, 'rotate', '', cue=m.group(), to=arrays)))
+            for a, b in pd.math_runs(sentence):
+                phrase = sentence[a:b]
+                said = pd.typeset(phrase).replace(' ', '')
+                if not any(it['kind'] == 'equation' and it['beat_id'] == bid and (
+                        said in pd.typeset(it['text']).replace(' ', '') or
+                        pd.typeset(it['text']).replace(' ', '') in said) for it in board_items):
+                    out.append((bid, _item(bid, 'equation', phrase)))
+            for term in pd.terms(sentence):
+                if not any(term.casefold() in it['text'].casefold() for it in board_items + [i for _, i in out]):
+                    out.append((bid, _item(bid, 'label', term)))
+    return out
+
+
+def sentence_restarts(scene, by_id, bid, sentence):
+    """A hop sentence starts again from the line's start when the narration has just landed or swapped."""
+    text = ' '.join(by_id[b]['text'] for b in scene['beat_ids'][:scene['beat_ids'].index(bid) + 1])
+    before = text[:text.rfind(sentence)] if sentence in text else text
+    last = before[-160:]
+    return bool(re.search(r'\b(?:land(?:s|ed)?\s+on|again|swap|first)\b', last + ' ' + sentence, re.I))
+
+
+def _boards(scene, path, by_id, offered, intent, repairs):
+    """Validate the scene's boards; build one from the beats when the planner asked for a diagram (``intent``)
+    without giving one; add each named term and spoken equation the boards leave out."""
+    boards = []
+    for n, board in enumerate(scene.get('boards') or []):
+        where = f'{path}.boards[{n}]'
+        if n >= 3:
+            repairs.append(f'{where}: dropped; at most 3 boards per scene')
+            continue
+        items = _board_items(board, where, scene, by_id, offered, repairs)
+        if not any(it['kind'] in MAIN + ('label', 'equation') for it in items):
+            repairs.append(f'{where}: dropped a board with nothing source-bound to draw')
+            continue
+        boards.append(board)
+    auto = not boards and bool(intent)
+    if auto:
+        items = []
+        pictures = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture']
+        for k, ref in enumerate(pictures[:3]):
+            bid = next((b for b in scene['beat_ids'] if b in intent), scene['beat_ids'][0])
+            items.append(_item(bid, 'picture', '', cue='', ref=ref, iid=f'picture_{k + 1}'))
+        boards = [{'layout': 'parts', 'items': items}]
+    if not boards:
+        scene['boards'] = []
+        return
+    all_items = [it for b in boards for it in b['items']]
+    order = {bid: k for k, bid in enumerate(scene['beat_ids'])}
+    added = _auto_items(scene, by_id, all_items, constructs=auto)
+    taken = {it['id'] for it in all_items}
+    for _, it in added:
+        k = 1
+        while f'{it["kind"]}_{k}' in taken:
+            k += 1
+        it['id'] = it['id'] or f'{it["kind"]}_{k}'
+        taken.add(it['id'])
+    if auto and any(it['kind'] in ('number_line', 'dots') for _, it in added):
+        # a lesson board: its constructs and words (no keyword icons), one board per idea: a new board where a new
+        # construct begins ("Multiplication works the same way. Here are 3 rows of 5 dots.")
+        boards, kinds, home = [{'layout': 'parts', 'items': []}], set(), {}
+        for _, it in added:
+            if it['kind'] in ('number_line', 'dots') and kinds & {'number_line', 'dots'}:
+                boards.append({'layout': 'parts', 'items': []})
+                kinds = set()
+            kinds.add(it['kind'])
+            home[it['id']] = boards[-1]
+    else:
+        home = {}
+    rules = {}
+    for bid, it in added:
+        here = _position(it, order, by_id)
+        board = home.get(it['id']) or next(
+            (b for b in reversed(boards) if b['items'] and _position(b['items'][0], order, by_id) <= here), boards[0])
+        if it['kind'] == 'label' and not it['to'] and pd.is_rule(it['text']):
+            it['style'], it['at'] = 'box', 'top_right'          # a named rule heads a rule box
+            rules[bid] = it['id']
+        elif it['kind'] == 'equation' and bid in rules and not it['to']:
+            it['to'] = rules[bid]                               # the rule's equation is written inside its box
+        elif it['kind'] == 'label' and not it['to']:
+            host = next((h for h in reversed(board['items']) if h['beat_id'] == bid and not h['text']
+                         and h['kind'] in ('link', 'charges', 'rings')), None)
+            if host is not None:
+                host['text'] = it['text']
+                repairs.append(f'{path}: labelled {host["id"]} {it["text"]!r}, the term {bid} names')
+                continue
+            named = next((h for h in reversed(board['items']) if h['beat_id'] == bid
+                          and h['kind'] not in ('label', 'equation', 'hop', 'rotate', 'highlight')), None)
+            it['to'] = named['id'] if named is not None else ''
+        board['items'].append(it)
+        board['items'].sort(key=lambda i: _position(i, order, by_id))
+        if not auto or not any(i['kind'] in ('number_line', 'dots') for _, i in added):
+            repairs.append(f'{path}: added {it["kind"]} {it["text"]!r} that {bid} says')
+    for b in boards:
+        for it in b['items']:
+            if it['kind'] in ('label', 'equation') and it['to'] and not any(o['id'] == it['to'] for o in b['items']):
+                it['to'] = ''
+    scene['boards'] = [b for b in boards if b['items']]
+    if auto:
+        repairs.append(f'{path}: diagram {", ".join(sorted(intent))}: built a board from the scene\'s pictures and '
+                       'the words the beats say')
+
+
+def _merge_diagram_scenes(scenes, script_beats, repairs):
+    """Consecutive scenes that each ask for a diagram of their own beat (and give no board) are one build-up:
+    merge them so a single board grows across their beats instead of restarting every beat."""
+    def wants(scene):
+        return not scene.get('boards') and any(
+            e['kind'] == 'diagram' and e['ref'] in scene['beat_ids'] and resolve_diagram(script_beats, e['ref']) is None
+            for e in scene['elements'])
+    out = []
+    for scene in scenes:
+        if out and wants(scene) and wants(out[-1]):
+            last = out[-1]
+            repairs.append(f'scenes: merged the diagram scene of {", ".join(scene["beat_ids"])} into the one before '
+                           'so its board builds up')
+            last['beat_ids'] = last['beat_ids'] + scene['beat_ids']
+            last['elements'] = last['elements'] + [e for e in scene['elements'] if e not in last['elements']]
+            last['actions'] = last['actions'] + scene['actions']
+            last['shots'] = (last.get('shots') or []) + (scene.get('shots') or [])
+            last['hold_s'] = last['hold_s'] + scene['hold_s']
+            if last['text']['kind'] == 'none':
+                last['text'] = scene['text']
+            continue
+        out.append(scene)
+    return out
+
+
 def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
     """Return (repaired plan, repairs). Invalid script ids raise ValueError rather than inventing coverage.
 
@@ -370,22 +643,37 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
     out['storyboard']['sections'] = [intents[sid] for sid in sections]
 
     default_treatment = 'motion' if style['mode'] == 'motion' else 'whiteboard'
-    out['scenes'] = _cover(out['scenes'], list(by_id), default_treatment, repairs)
+    out['scenes'] = _merge_diagram_scenes(_cover(out['scenes'], list(by_id), default_treatment, repairs),
+                                          script_beats, repairs)
     for i, scene in enumerate(out['scenes']):
         path = f'scenes[{i}]'
         bids = scene['beat_ids']
         offered = set().union(*(candidate_ids(candidates, bid) for bid in bids))
-        elements = []
+        elements, intent = [], set()
         for e in scene['elements']:
             allowed = (offered if e['kind'] == 'picture' else set(cast_by_id) if e['kind'] == 'cast' else
                        {scene['atmosphere']['kind']} - {'none'} if e['kind'] == 'atmosphere' else set(bids))
             if e['kind'] == 'diagram':
                 allowed = {bid for bid in bids if resolve_diagram(script_beats, bid) is not None}
+                if e['ref'] in set(bids) - allowed:
+                    # not a closed dot-array/panel beat: the planner's diagram intent becomes a board (below)
+                    intent.add(e['ref'])
+                    repairs.append(f'{path}: diagram ref {e["ref"]!r} is not a dot-array or panel beat; '
+                                   'drawn as a board')
+                    continue
             if e['ref'] in allowed:
                 elements.append(e)
             else:
                 repairs.append(f'{path}: dropped unknown or out-of-scene {e["kind"]} ref {e["ref"]!r}')
         scene['elements'] = elements
+        _boards(scene, path, by_id, offered, intent, repairs)
+        if scene['boards']:
+            if style['mode'] == 'motion':
+                style['mode'] = 'hybrid'
+                repairs.append(f'style.mode: motion -> hybrid; {path} draws a board on the whiteboard')
+            if scene['treatment'] != 'whiteboard':
+                repairs.append(f'{path}: {scene["treatment"]} -> whiteboard; its board is drawn on the whiteboard')
+                scene['treatment'] = 'whiteboard'
         kept, staged = [], {e['ref'] for e in elements if e['kind'] == 'cast'}
         for action in scene['actions']:
             ref, bid = resolve_actor(action['actor'], cast_by_id), action['at_beat']

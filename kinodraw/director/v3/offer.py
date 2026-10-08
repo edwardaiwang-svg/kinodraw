@@ -310,6 +310,19 @@ class Offer:
                         faces += face
             old = {c['id']: c for c in b['candidates']}
             b['candidates'] = [old.get(did) or {'id': did, 'desc': self.desc(did)} for did in chosen]
+            if self.lang == 'en':
+                hints = board_hints(b['text'])
+                if hints:
+                    b['board_hints'] = hints
+
+
+def board_hints(text: str) -> list[str]:
+    """What a board can write for this beat, as the planner should copy it: each term the beat names and each piece
+    of spoken math with how KinoDraw writes it ('3 times 5 is 15 -> 3 × 5 = 15'). At most 6, each short."""
+    from ...engine import process_diagrams as pd
+    out = [f'term: {term}' for term in pd.terms(text)]
+    out += [f'math: {text[a:b]} -> {pd.typeset(text[a:b])}' for a, b in pd.math_runs(text)]
+    return [hint[:100] for hint in out[:6]]
 
 
 def fit(payload: dict, limit: int = REQUEST_LIMIT) -> None:
