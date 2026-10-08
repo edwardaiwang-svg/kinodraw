@@ -261,6 +261,11 @@ def _name_word_before(before: str) -> str | None:
     return m.group('name') if m else None
 
 
+def _next_street():
+    words = '|'.join(sorted((k for k in PLACES if k not in TITLES), key=len, reverse=True))
+    return re.compile(r'\s+[A-Z][\w\'’-]*\s+(?:' + words + r')\b')
+
+
 def _place_sense(before: str, after: str) -> bool:
     """For a word that is a title before a name and a street after one (St., Dr., Mt., Ft.): the street when a name
     or a number comes before it, unless that name only starts the sentence and a name follows ("Meet Dr. Patel")."""
@@ -270,7 +275,10 @@ def _place_sense(before: str, after: str) -> bool:
     name = _name_word_before(before)
     if not name:
         return False
-    starts = _sentence_start(before[:before.rstrip().rfind(name)])
+    head = before[:before.rstrip().rfind(name)]
+    if _NEXT_STREET.match(after) and not re.search(r'(?:^|[.!?\n]["”’)]*)[\s“‘"\'(]*$', head):
+        return True                     # a run of streets: "stops: Elm St. Harbor Rd. Pine Ave." (list lines joined)
+    starts = _sentence_start(head)
     return not (starts and _NEXT_CAPITAL.match(after) and not _LINE_END.match(after))
 
 
@@ -293,6 +301,9 @@ def _org_goes_on(after: str) -> bool:
     """After an organisation's shorthand: does a capitalised word that goes on with its name follow?"""
     m = re.match(r'[ \t]+([A-Z][\w\'’-]*)', after)
     return bool(m and m.group(1).lower() in ORG_NOUNS)
+
+
+_NEXT_STREET = _next_street()     # the next name is a street of its own ("... Elm St. Harbor Rd.")
 
 
 def ends_sentence(after: str) -> bool:

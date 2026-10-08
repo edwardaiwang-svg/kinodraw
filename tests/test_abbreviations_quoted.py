@@ -145,6 +145,10 @@ def test_circa_captions_keep_the_writing():
     ('A V8 engine.', 'A V eight engine.'),
     ('Stops:\nElm St.\nOak Ave.\nPine Rd.', 'Stops: Elm Street. Oak Avenue. Pine Road.'),
     ('Venue:\nGrace Hall\nSt. Mary Church', 'Venue: Grace Hall, Saint Mary Church'),
+    ('Three stops: Elm St. Harbor Rd. Pine Ave.', 'Three stops: Elm Street. Harbor Road. Pine Avenue.'),
+    ('Meet at Elm St. Mary Lane is closed.', 'Meet at Elm Street. Mary Lane is closed.'),
+    ('Then Dr. Patel came.', 'Then Doctor Patel came.'),
+    ('Visit St. Mary Ln. today.', 'Visit Saint Mary Lane today.'),
     ('Detour via Main St.\nDr. Patel will guide you.', 'Detour via Main Street. Doctor Patel will guide you.'),
     ('In 1903, a storm.', 'In nineteen oh-three, a storm.'),
 ])
