@@ -1,7 +1,8 @@
 """Caption cues from display text, timed by the spoken text's measured char times.
 
-``spoken`` and ``display`` share the same clause punctuation sequence (validated),
-so clause k of the display text is timed by clause k of the spoken text. Cues
+``spoken`` and ``display`` normally share the same clause punctuation sequence, so clause k of the display text is
+timed by clause k of the spoken text. When they do not (a mark one text has and the other lacks), the marks are paired
+by alignment (``shared_marks``): only the marks both texts share split clauses, and a warning is logged. Cues
 group whole clauses, never run on past a sentence end, and by default fit in <= 2 balanced lines at 70 px
 (never shrunk).
 A look may supply its own two-line fit check.
@@ -14,6 +15,8 @@ from __future__ import annotations
 
 import bisect
 import colorsys
+import difflib
+import logging
 import re
 import textwrap
 from functools import lru_cache
@@ -57,9 +60,27 @@ def _unit_dot(text, end):
     return bool(re.search(r'\d[\s-]?(?:' + units + r')\.$', text[:end]) and re.match(r'[ \t]+[a-z(]|,', text[end:]))
 
 
-def clause_spans(text, lang):
+log = logging.getLogger(__name__)
+
+
+def shared_marks(display, spoken, lang):
+    """The clause marks of ``display`` and of ``spoken``, paired: equal-length lists, the k-th of each the same mark.
+    When the two texts' marks differ, they are aligned in order and a mark only one text has is dropped (its clause
+    joins the next one), so captions stay in step with the voice at every mark both share."""
+    md, ms = clause_marks(display, lang), clause_marks(spoken, lang)
+    a, b = [m.group() for m in md], [m.group() for m in ms]
+    if a == b:
+        return md, ms
+    pairs = [(i, j) for blk in difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks()
+             for i, j in zip(range(blk.a, blk.a + blk.size), range(blk.b, blk.b + blk.size))]
+    log.warning('caption clause marks differ between display %r and spoken %r; paired %d of %d/%d',
+                display[:60], spoken[:60], len(pairs), len(a), len(b))
+    return [md[i] for i, _ in pairs], [ms[j] for _, j in pairs]
+
+
+def clause_spans(text, lang, marks=None):
     spans, start = [], 0
-    for m in clause_marks(text, lang):
+    for m in clause_marks(text, lang) if marks is None else marks:
         end = m.end()
         spans.append((start, end))
         start = end
@@ -156,11 +177,13 @@ def split_long(text, lang, fits=fits):
 
 
 # Periods that end an abbreviation, not a sentence: titles, "a.m."/"p.m.", and initialisms such as "U.S.".
-_ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m|ext)\.|'
+# An abbreviation keeps its meaning right after an opening quotation mark, bracket or dash ('“Jan. 3', '(Dept. of').
+_OPENING = r'(?:^|[\s(\[{“‘"\'«—–])'
+_ABBREVIATIONS = re.compile(_OPENING + r'(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m|ext)\.|'
                             r'(?:[A-Z]\.){2,})$', re.I)
 # Capitalised only, so a sentence ending "in the sun." or "she sat." still ends: months, weekdays, streets, offices.
 _CAPITAL_ABBREVIATIONS = re.compile(
-    r'(?:^|[\s(])(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun|'
+    _OPENING + r'(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun|'
     r'Rd|Ave|Blvd|Ln|Hwy|Rte|Dept|Gov|Sen|Rep|Gen|Capt|Lt|Sgt|Col|Inc|Corp|Ltd|Co|Bros|Univ|Assn|Fig|Vol|Ch)\.$')
 
 
@@ -187,7 +210,8 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
     ``verse``: the words of ``display`` (indices) that start a new line of a poem; each caption line is then one
     script line (cut only when it is wider than the caption), and a caption shows at most two of them."""
     display = _sentence_spacing(display, lang)
-    sd, ss = clause_spans(display, lang), clause_spans(spoken, lang)
+    md, ms = shared_marks(display, spoken, lang)
+    sd, ss = clause_spans(display, lang, md), clause_spans(spoken, lang, ms)
     # Captions include closing marks; spoken spans still index the original character times.
     for text, spans in ((display, sd), (spoken, ss)):
         joined, start = [], 0
@@ -203,7 +227,7 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
             start = end
         spans[:] = joined
     if len(sd) != len(ss):
-        # Fallback: proportional mapping (validator should prevent this).
+        # Fallback: proportional mapping (only when one text has words after its last shared mark and the other not).
         ss = [(round(a * len(spoken) / len(display)), round(b * len(spoken) / len(display))) for a, b in sd]
     # Expand each clause into fitting pieces with proportional spoken offsets.
     atoms = []

@@ -121,8 +121,12 @@ _phone = (r'(?P<phone>(?<![\w+$#.,/-])(?:\+?1[ .-]?)?(?:\(\d{3}\)[ .-]?|\d{3}[ .
           r'|(?<![\w+$#.,/-])\d{3}-\d{4}(?![\w-]|[.,]\d))')
 _ext = r'(?P<extw>\b(?:[Ee]xt|EXT)\.?|\b[Ee]xtension)[ \t]?(?P<ext>\d{1,6})(?!\d)'
 _tag = r'(?<![\w&#])#(?P<tag>[A-Za-z][A-Za-z0-9_]*[A-Za-z0-9]|[A-Za-z])'
+# A version: "v7", "v2.1", "V2.1.3" (a capital V only with a point: "V8" is an engine) said "version two point one".
+_ver = r'(?<![\w.])(?:v(?P<ver>\d+(?:\.\d+)*)|V(?P<verc>\d+(?:\.\d+)+))(?![\w-]|\.\d)'
+# A year straight after "c." or "ca." (circa) with no space: "c.1900", "ca.1850s".
+_circa = r'(?<=\b[cC]\.)|(?<=\b[cC]a\.)'
 EN_PATTERN = re.compile(
-    rf'{_email}|{_url}|{_phone}|{_ext}|{_tag}'
+    rf'{_email}|{_url}|{_phone}|{_ext}|{_tag}|{_ver}'
     rf'|(?P<tr1>\d{{1,2}})(?::(?P<trm1>\d{{2}}))?\s?(?:{_ampm1.format("tra1")})?\s?[–-]\s?'
     rf'(?P<tr2>\d{{1,2}})(?::(?P<trm2>\d{{2}}))?\s?{_ampm.format("tra2")}'
     rf'|(?P<inch>{NUM})\s?in\.(?=[ \t]+[a-z(]|,)'
@@ -149,7 +153,7 @@ EN_PATTERN = re.compile(
     rf'|(?P<ra2>{NUM})\s?(?:–|-(?=\d{{1,3}}(?![\d,.]\d)\s?(?:{_unit}|[a-z])))\s?(?P<rb2>{NUM})'
     rf'(?:\s?(?P<runit>{_unit})(?![A-Za-z]){_udot})?'
     rf'|(?<![\w./-])(?P<sr1>\d{{1,2}})-(?P<sr2>\d{{1,2}})(?![\d/-]|[.,]\d)'
-    rf'|(?P<year>(?<![\d.,$])(?:1[1-9]\d{{2}}|20\d{{2}})(?![\d%]|\.\d|,\d))'
+    rf'|(?P<year>(?:(?<![\d.,$])|{_circa})(?:1[1-9]\d{{2}}|20\d{{2}})(?![\d%]|\.\d|,\d))'
     rf'|(?P<neg>(?<![\w.])-)?(?P<num>{NUM})'
 )
 
@@ -342,6 +346,14 @@ def _en_speak(m: re.Match) -> str:
         return _phone(g['phone'])
     if g['ext']:
         return 'extension ' + digits(g['ext'], 'oh' if len(g['ext']) > 1 else 'zero')
+    if g['ver'] or g['verc']:
+        parts = ' point '.join(en_number(p) for p in (g['ver'] or g['verc']).split('.'))
+        return parts if re.search(r'\bversion\s+$', m.string[:m.start()], re.I) else 'version ' + parts
+    if (g['year'] or g['decade']) and re.search(r'\b[cC]a?\.$', m.string[:m.start()]):
+        words = en_year(g['year'] or g['decade'])     # "c.1900": the year is a word of its own after circa's period
+        if g['decade']:
+            words = words[:-1] + 'ies' if words.endswith('y') else words + 's'
+        return ' ' + words
     if g['tag']:
         return 'hashtag ' + ' '.join(split_words(p) if not p.isdigit() else en_number(p)
                                      for p in g['tag'].split('_') if p)
