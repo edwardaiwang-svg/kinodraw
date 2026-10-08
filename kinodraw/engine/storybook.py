@@ -1264,7 +1264,7 @@ class Storybook:
         moving = (m.moving if m is not None else None) or (f.travel and pose in ('walk', 'run', 'carry'))
         if moving and moving != 'fly':
             # A stride's bounce while the figure goes somewhere; no sway, and nothing at all while it stands
-            # (holding something is not walking: J's no-wobble rule, the 'idle head tilt' of r01).
+            # (holding something is not walking: no wobble, no idle head tilt).
             rate = 2.2 if pose == 'run' else 1.4
             dy -= (.012 if pose == 'run' else .007) * abs(math.sin(math.pi * rate * (local + f.phase)))
         if m is not None:
