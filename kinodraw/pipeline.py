@@ -499,7 +499,12 @@ def build_audio(project_dir: Path, clips: dict) -> dict:
     build.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.audio-', dir=build) as folder:
         stage = Path(folder)
-        tl = audio.assemble(board, cfg['lang'], clips, stage, pauses, credit=cfg.get('credit', True))
+        # The closing card's length depends on what it shows, which depends on what the planner read the script as
+        # (make_production gives the renderer the same genre).
+        plan = cfg.get('plan_v3') if cfg.get('director_v3') else None
+        genre = ((plan or {}).get('storyboard') or {}).get('genre')
+        tl = audio.assemble({**board, 'genre': genre} if genre else board, cfg['lang'], clips, stage, pauses,
+                            credit=cfg.get('credit', True))
         tl['storyboard_sha256'] = source_hash
         tl['layout'] = renderer.pace_layout(board, _pace_aspect(aspect))
         _save(stage / 'timeline.json', tl)

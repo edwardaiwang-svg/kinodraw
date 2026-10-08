@@ -42,8 +42,9 @@ def production(tmp_path, paragraphs, names=('Nia', 'Sora', 'Taro'), floor='drift
                 if other is not entry and other['start'] >= at:
                     for k in ('start', 'end', 'speech_end'):
                         other[k] += shift
-            for k in ('start', 'end'):
-                tl['end_card'][k] += shift
+            for k in ('start', 'end', 'appear', 'ready'):         # the closing card's clock moves with it
+                if k in tl['end_card']:
+                    tl['end_card'][k] += shift
             tl['duration'] += shift
     settings = {'director_v3': True, 'plan_v3': plan}
     (tmp_path / 'project.json').write_text(json.dumps(settings))

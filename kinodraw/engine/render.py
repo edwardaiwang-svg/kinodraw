@@ -466,22 +466,25 @@ class Production:
         lay.reserve(col, col + self.g.cols_on_screen - 1)
         ctx.chapter, ctx.color = None, ink.NEUTRAL
         self.scene_marks.append((col * self.g.col, 'end'))
-        # A short closing card (a short video's) cuts to its page and shows its words at once; a longer one pans
-        # there and the hand writes them. "Made with ..." goes on the same card, after its own words.
-        quick = end['end'] - end['start'] < QUICK_CARD
-        self.cut(end['start'], col * self.g.col, 'cut' if quick else 'pan')
+        # The camera cuts to the card's blank page (never a pan across the old pages); its words appear once the old
+        # scene has cleared, at once in a short piece or written by the hand, and are complete by end['ready'] so
+        # the finished card stays for its reading time (closing.card_timing). "Made with ..." is on the same card.
+        quick = end.get('quick', end['end'] - end['start'] < QUICK_CARD)
+        self.cut(end['start'], col * self.g.col, 'cut')
         n0 = len(ctx.elements)
-        at = end['start'] + (.05 if quick else self.g.pan_seconds)
+        at = end.get('appear', end['start'] + .05)
+        if at > end['start']:                          # the old page gives way to the blank card page first
+            self.modes.append((end['start'], at, 'clear', {}))
         auto.SCENES[self.g.name]['end_card'](ctx, col * self.g.col, at)
-        # Its own words are up by 60% of the card (the credit after them), so the card is read, not watched being written.
-        span = end['end'] - end['start']
-        ready = end['start'] + .6 if quick else end['start'] + max(self.g.pan_seconds + .8, min(span - .5, .6 * span))
-        self._tag(n0, 'endcard', essential=True, deadline=ready, **({'hand': False} if quick else {}))
-        if self.tl.get('credit'):                      # "Made with ...", written under it while it is read
+        ready = end.get('ready', end['start'] + .6)
+        # the hand's travel and the credit after it fit before end['ready']
+        self._tag(n0, 'endcard', essential=True, deadline=ready if quick else ready - .4,
+                  **({'hand': False} if quick else {}))
+        if self.tl.get('credit'):                      # "Made with ...", under it, complete with it
             n0 = len(ctx.elements)
-            auto.SCENES[self.g.name]['credit'](ctx, col * self.g.col, max(at + .01, self.tl['credit']['start'] - .8))
-            self._tag(n0, 'credit', essential=True, deadline=ready if quick else self.tl['credit']['end'] - .3,
-                      **({'hand': False, 'trigger': at + .01} if quick else {}))
+            auto.SCENES[self.g.name]['credit'](ctx, col * self.g.col, at + .01)
+            self._tag(n0, 'credit', essential=True, deadline=ready, hand=False, trigger=ready - .3 if not quick
+                      else at + .01)
         self._transitions()
         # Supplementary sentences must release the hand before the existing
         # camera departure, including its settle, so the next page keeps its art.
@@ -953,6 +956,11 @@ class Production:
                                    (t - a) / (b - a), self.skin)
             else:
                 frame = self._zoom(t, p, a, b)
+        elif kind == 'clear':                          # the old page gives way to the closing card's blank page
+            src = self.view(a - 1e-3, self.camera.at(a - 1e-3), hand=False)
+            dst = self.board_frame(t)
+            frame = (skins.wipe(src, dst, (t - a) / (b - a), self.skin) if self.camera.locked
+                     else Image.blend(src, dst, ease((t - a) / (b - a))))
         elif kind == 'fade_in':
             u = ease((t - a) / (b - a))
             src = self.view(t, self.agenda_x, hand=False)

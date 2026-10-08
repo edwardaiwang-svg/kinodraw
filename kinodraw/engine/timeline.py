@@ -22,8 +22,8 @@ from .. import speech
 FPS = 30
 CHAPTER_GAP = .6
 TRANSITION = .35         # quick pullback, pin and agenda settle
-# The closing card holds about a tenth of the video (closing.tail_seconds); "Made with ..." is written on it while it
-# holds (the project's credit setting can turn it off), not on a second card after it.
+# The closing card holds for its reading time once it is complete (closing.card_timing); "Made with ..." is on it
+# (the project's credit setting can turn it off), not on a second card after it.
 ZH_DWELL = .5             # extra reading pause per Mandarin paragraph (9/19 precedent)
 ZOOM_IN = .35             # first part of each section: zoom into its agenda card
 TAKE_PREROLL = .15        # start the note's camera move just before its words
@@ -185,9 +185,22 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
             capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text,
                           'words': [round(start + w, 4) for w in words]})
         cursor = end
-    tail = closing.tail_seconds(cursor)
-    duration = cursor + tail
+    # The closing card (closing.card_timing): the old scene clears, the words appear (written in a longer piece),
+    # and the finished card stays for its reading time; a card made of the script's own last lines starts on them.
+    close = closing.closing(episode, lang)
+    card = closing.card_timing(closing.card_words(episode, lang, close), cursor)
+    card_start = cursor
+    if close['items'] and order:
+        last = beats[-1] if beats and beats[-1]['id'] == order[-1] else None
+        info = out_beats[order[-1]]
+        at = closing.narrated_from(close, last, info, lang, info['speech_end']) if last else None
+        if at is not None:
+            card_start = at
+    appear = card_start + card['clear']
+    ready = appear + card['draw']
+    duration = max(ready + card['read'], cursor + (closing.AFTER_VOICE if card_start < cursor else 0.))
     duration = round(-(-duration * FPS // 1) / FPS, 6)
+    tail = duration - card_start
     chaps = []
     for c in episode['chapters']:
         ids = [b['id'] for b in beats if b['chapter'] == c['id']]
@@ -216,7 +229,9 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
             'pauses': used_pauses,
             'captions': capts, 'chapters': chaps, 'transitions': transitions,
             'music': [{'start': round(a, 4), 'end': round(b, 4)} for a, b in merged],
-            'end_card': {'start': round(duration - tail, 4), 'end': duration},
+            'end_card': {'start': round(card_start, 4), 'end': duration, 'appear': round(appear, 4),
+                         'ready': round(ready, 4), 'read': card['read'], 'quick': card['quick'],
+                         'narrated': card_start < cursor},
             'credit': {'start': round(duration - tail, 4), 'end': duration} if credit else None}
 
 
