@@ -152,7 +152,8 @@ def test_qa_names_roles_that_share_one_voice():
 
 def test_label_words_tell_sex_and_age():
     assert speech.guess_person('GRANDPA') == ('male', 'elder')
-    assert speech.guess_person('Little Girl') == ('female', 'young')
+    assert speech.guess_person('Little Girl') == ('female', 'child')
+    assert speech.guess_person('Teenage Boy') == ('male', 'young')
     voices = speech.cast_voices([('a', 'male', 'elder'), ('b', 'female', 'young'), ('c', None, 'adult'),
                                  ('d', None, 'adult')], 'am_michael', 'en')
     assert len({v for v, _ in voices.values()}) == 4 and 'am_michael' not in {v for v, _ in voices.values()}

@@ -34,7 +34,19 @@ TAG_AFTER = re.compile(r"^\W*(?:[\w’']+\W+){0,3}?(?:\w+ly\s+)?(?:" + SAY + r")
 INTRO = re.compile(r"(?:\b(?:" + SAY + r")(?:\s+(?:it|this|that|so|softly|quietly|slowly|aloud|out\s+loud))?\s*[.!]|:)"
                    r"\s*$", re.I)
 # The narrator tells it as one of the cast: "Coach Ben here", "I'm Ava", "My name is Theo" (with I/my/me around).
-INTRODUCES = r"(?:\b(?:i['’]m|i\s+am|this\s+is|it['’]s|my\s+name\s+is|name['’]s|call\s+me)\s+{0}\b|\b{0},?\s+here\b)"
+# "Tom from Pipewise Plumbing here" too.
+INTRODUCES = r"(?:\b(?:i['’]m|i\s+am|this\s+is|it['’]s|my\s+name\s+is|name['’]s|call\s+me)\s+{0}\b|" \
+             r"\b{0}(?:,?\s+(?:from|at|with|of)\s+[^.!?,;\n]{{1,40}}?)?,?\s+here\b)"
+# A name the speaker gives themselves when they are not in the cast: capitalised, after an optional title.
+SELF_TITLE = r"(?:(?:Coach|Chef|Dr|Doctor|Mr|Mrs|Ms|Miss|Captain|Professor|Prof|Aunt|Auntie|Uncle|Grandma|Grandpa|" \
+             r"Nana|Officer|Pastor|Nurse|Sister|Brother|Sir|Dame|Lady|Lord|Mama|Papa)\.?\s+)"
+SELF_NAME = SELF_TITLE + r"?[A-Z][a-z’'-]+(?:\s+[A-Z][a-z’'-]+)?"
+SELF_NAMED = re.compile(r"\b(?:I['’]m|I\s+am|[Mm]y\s+name\s+is|[Nn]ame['’]s|[Cc]all\s+me|[Tt]his\s+is)\s+(?P<a>" +
+                        SELF_NAME + r")\b|(?:^|[.!?,]\s+)(?P<b>" + SELF_NAME +
+                        r")(?:,?\s+(?:from|at|with|of)\s+[^.!?,;\n]{1,40}?)?,?\s+here\b")
+# A broadcast sign-off closing a speaker's lines: "Jenna Ruiz, Millbrook Community News."
+SIGN_OFF = re.compile(r"(?:^|[.!?]\s+)(?P<name>[A-Z][\w’'-]+(?:\s+[A-Z][\w’'-]+){0,2}),\s+(?:[A-Z0-9][\w’'&.-]*\s*)"
+                      r"{1,6}[.!]?\s*$")
 FIRST_PERSON = re.compile(r"\b(?:i|i['’]m|i['’]ve|i['’]ll|i['’]d|my|me|mine)\b", re.I)
 I_SAID = re.compile(r"\bI\s+(?:\w+ly\s+)?(?:" + SAY + r")\b|\b(?:" + SAY + r")\s+I\b")
 THEY = re.compile(r"\b(?:they|they[’']d|them)\b", re.I)
@@ -195,6 +207,30 @@ def narrator_of(beats: list[dict], cast: list[dict]) -> str | None:
                 if k and re.search(INTRODUCES.format(re.escape(k)), text, re.I):
                     return c['id']
     return None
+
+
+def introduced(text: str, cast: list[dict], sign_off: bool = False) -> str | None:
+    """Who ``text`` (a narration or one speaker's lines, quotations left out) says its speaker is: the cast id of a
+    cast member it introduces in the first person ("I'm Ava", "Tom from Pipewise Plumbing here") or, with
+    ``sign_off``, signs off as ("Jenna Ruiz, Millbrook Community News."); else a name outside the cast that
+    tells its sex by itself ("Coach Ben here": a title or a known given name, speech.guess_person); else None."""
+    from .speech import guess_person
+    text = re.sub(r'["“][^"”]*["”]?', ' ', text)
+    first = bool(FIRST_PERSON.search(text))
+    for c in cast:
+        key = name_key(c.get('name') or '')
+        for k in dict.fromkeys([key] + [t for t in key.split() if len(t) > 2]):
+            if not k:
+                continue
+            if first and re.search(INTRODUCES.format(re.escape(k)), text, re.I):
+                return c['id']
+            m = SIGN_OFF.search(text) if sign_off else None
+            if m and name_key(m['name']) in (key, k):
+                return c['id']
+    names = [m['a'] or m['b'] for m in SELF_NAMED.finditer(text)] if first else []
+    if sign_off and SIGN_OFF.search(text):
+        names.append(SIGN_OFF.search(text)['name'])
+    return next((n for n in names if guess_person(n)[0]), None)
 
 
 def _line(reader, beat, at, s, text) -> Line:

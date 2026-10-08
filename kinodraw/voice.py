@@ -261,6 +261,26 @@ def preview(voice_id: str, lang: str, speed: float = 1.0) -> Path:
     return synthesize(text[lang], lang, paths.cache_dir() / 'voice-samples', voice_id, speed).wav
 
 
+# A character voice raised in pitch: "af_jessica+4" is af_jessica four semitones higher at the same pace (a child's
+# voice where the engine has none). Kokoro reads it slower by the pitch ratio and the audio is played back faster by
+# the same ratio, so the words keep their timing.
+PITCHED = re.compile(r'^(?P<base>.+?)\+(?P<semitones>\d+(?:\.\d+)?)$')
+
+
+def base_voice(voice_id: str) -> tuple[str, float]:
+    """(installed voice, semitones raised): "af_jessica+4" -> ("af_jessica", 4.0), "af_heart" -> ("af_heart", 0.0)."""
+    m = PITCHED.match(voice_id or '')
+    return (m['base'], float(m['semitones'])) if m else (voice_id, 0.)
+
+
+def _raised(audio: np.ndarray, semitones: float) -> tuple[np.ndarray, float]:
+    """``audio`` played back faster by the ratio of ``semitones`` (pitch up, shorter): (audio, ratio used)."""
+    from fractions import Fraction
+    from scipy.signal import resample_poly
+    ratio = Fraction(2 ** (semitones / 12)).limit_denominator(64)
+    return resample_poly(audio, ratio.denominator, ratio.numerator).astype(np.float32), float(ratio)
+
+
 def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None, speed: float = 1.0,
                lexicon: dict | None = None) -> Clip:
     voice = voice or LANGS[lang]['voice']
@@ -272,8 +292,14 @@ def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None
     if wav.exists() and meta.exists():
         info = json.loads(meta.read_text(encoding='utf-8'))
         return Clip(wav, info['duration'], info['char_times'])
-    audio, sr, timings = _engine(lang).create_timed(phonemes(said, lang), voice, speed=speed, is_phonemes=True)
+    base, semitones = base_voice(voice)
+    ratio = 2 ** (semitones / 12)
+    audio, sr, timings = _engine(lang).create_timed(phonemes(said, lang), base, speed=speed / ratio,
+                                                    is_phonemes=True)
     char_times = align(spoken, timings, lang)
+    if semitones:
+        audio, ratio = _raised(audio, semitones)
+        char_times = [round(t / ratio, 3) for t in char_times]
     cache_dir.mkdir(parents=True, exist_ok=True)
     with wave.open(str(wav), 'wb') as w:
         w.setnchannels(1)

@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
 from ..speakers import attribute
+from ..speech import person_sex
 from ..speech import drawn
 from . import acting, ink, sets, shots as planned
 from ..director.v3.staging import tie
@@ -410,7 +411,8 @@ class Storybook:
 
     def __init__(self, plan, by_id, timeline, size, paper, title=''):
         self.reader = Reader(plan['cast'])
-        self.reader.prime([b['spoken'] for b in by_id.values()])
+        self.texts = [b['spoken'] for b in by_id.values()]
+        self.reader.prime(self.texts)
         self.cast = self.reader.by_id          # the plan's cast and the extra people the story mentions
         # Who says each quoted line: the same attribution the voices follow (speech.quote_speakers).
         self.speakers = attribute(list(by_id.values()), plan)
@@ -558,7 +560,7 @@ class Storybook:
             return self.looks[cid]
         c = self.cast[cid]
         seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
-        sex = self.reader.sex(cid) or PERSON_SEX.get(c['species']) or ('female' if seed % 2 else 'male')
+        sex = person_sex(c, cid, self.reader, self.texts)       # the same as their voice's (speech.voice_parts)
         words = f"{c.get('name', '')} {cid} {c['species']}".lower().replace('_', ' ')
         marks = {str(m).lower() for m in c.get('marks') or ()}
         outfit = next((o for cue, o in ROLE_OUTFITS if re.search(cue, words)), None)
