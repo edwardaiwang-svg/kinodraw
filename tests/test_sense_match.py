@@ -18,7 +18,8 @@ BIRTHDAY = 'Uncle Dev turns fifty!!\n\ngrew up in Kestrel Falls\n\nran Bramwell 
 PLUMBER = ('[SHOW: Sam standing in front of the white plumbing van, arms crossed]\n\n'
            'Find the drip. (cut to close up of a dripping kitchen faucet) A faucet leaking one drop a second wastes over three thousand gallons a year.\n\n'
            'Do all five and you could save up to twenty percent. And if that drip turns out to be bigger than a '
-           'washer, you know who to call.\n')
+           'washer, you know who to call.\n\n'
+           '[SHOW: end card with logo] www.pipewisebayside.com hello@pipewisebayside.com\n')
 LESSON = ('Start at 0. Jump 3, then jump 5. You land on 8.\n\n'
           'Now swap the order. Jump 5 first, then 3. 8 again.\n\n'
           'When you add, the order does not matter. This is the commutative property of addition. '
@@ -48,6 +49,7 @@ WRONG = [
     (PLUMBER, 'white plumbing van', 'white', {'fl_white_heart', 'fl_man_with_white_cane_facing_right', 'fl_man_white_hair'}),
     (PLUMBER, 'arms crossed', 'crossed', {'fl_hand_with_index_finger_and_thumb_crossed'}),
     (PLUMBER, 'cut to close up', 'cut', {'fl_cut_of_meat'}),
+    (PLUMBER, 'end card with logo', 'email', {'fl_red_envelope'}),
     (LESSON, 'Jump 3', 'jump', {'fl_kangaroo'}),
     (LESSON, 'swap the order', 'order', {'tb_menu_order'}),
     (LESSON, 'quarter turn', 'picture', {'fl_framed_picture', 'camera'}),

@@ -247,6 +247,17 @@ def _drawing(did: str) -> tuple[tuple[str, ...], str]:
     return words, next((w for w in reversed(words) if w in tags), words[-1])
 
 
+@lru_cache(maxsize=1)
+def _plain() -> dict:
+    """The things drawn plain, by a one-word name ("envelope", "sign", "heart"): name -> drawings."""
+    out: dict = {}
+    for did in catalog():
+        words, _ = _drawing(did)
+        if len(words) == 1:
+            out.setdefault(words[0], []).append(did)
+    return out
+
+
 def _animals(texts) -> tuple[list[str], bool]:
     """The names of the story's animal characters ("Pendo", "Kojo"), as the offline director casts them, and whether
     it casts any person."""
@@ -367,7 +378,31 @@ class Sense:
         if self.no_people and _person(did):
             return False
         verdict = self.judge(did, text)
-        return not self.math if verdict is None else verdict
+        if verdict is None:
+            return not self.math and not self._kind_unsaid(did, text)
+        return verdict
+
+    def _kind_unsaid(self, did: str, text: str) -> bool:
+        """A kind of a thing that has a plain drawing of its own ("red envelope" beside "envelope"), close by
+        meaning only: when the text says neither its kind nor a name of its own and means the plain thing more,
+        the plain thing is meant."""
+        words, head = _drawing(did)
+        kinds = [w for w in words if w != head and w in self._tags(did)]
+        if not kinds or head not in _plain():
+            return False
+        said = {singular(w) for w in re.findall(r'[a-z]+', text.lower())}
+        if any(w in said for w in kinds) or self._called(did, text, head):
+            return False
+        ids, vecs = catalog_vectors(self.lang, 'picture')
+        if self._rows is None:
+            self._rows = {i: k for k, i in enumerate(ids)}
+        plain = [self._rows[i] for i in _plain()[head] if i in self._rows]
+        if did not in self._rows or not plain:
+            return False
+        if text not in self._vectors:
+            self._vectors[text] = _normalize(np.array(list(_model(self.lang).embed([text])), np.float32))[0]
+        sims = vecs @ self._vectors[text]
+        return float(sims[self._rows[did]]) < float(sims[plain].max())
 
     def _tags(self, did: str) -> set:
         return {w for tag in self.entries.get(did, {}).get('en') or [] for w in _key(tag).split()}
