@@ -293,7 +293,7 @@ def _solve(run, done, parents, children, reader) -> list:
             line.who, line.why = same.who, 'same paragraph'
             continue
         again = next((other.who for other in done + run[:k] if other.who and _norm(other.words) == _norm(line.words)),
-                     None)
+                     None) if len(_norm(line.words).split()) >= 3 else None     # never "Fine." or "Yes."
         for who, why in ((again, 'said before'), (line.plan, 'plan'), (line.guess, 'reading')):
             if who and who not in excluded:
                 line.who, line.why = who, why
