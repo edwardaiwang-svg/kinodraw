@@ -310,6 +310,36 @@ def _sex_cue(cue):
             'male' if re.search(r'\b(he|his|male|father|king)\b', cue) else 'unknown')
 
 
+# Kin words and endearments a character is called to their face ("Mom, ...", "Thanks, Nana"): only inside quotes,
+# such a word is the person spoken to, never a new character.
+VOCATIVES = set('''mom mum mommy mummy mama ma momma dad daddy papa pa pop nana grandma grandpa granny gran grandad
+gramps grammy auntie aunty aunt uncle sis bro son sonny honey sweetie sweetheart darling dear buddy kiddo boss sir
+madam ma'am doc coach'''.split())
+
+
+# Months, weekdays, seasons and holidays: in a story they are dates unless the word acts or speaks.
+CALENDAR = set('''January February March April May June July August September October November December Monday
+Tuesday Wednesday Thursday Friday Saturday Sunday Christmas Easter Halloween Thanksgiving Hanukkah Diwali Ramadan
+Eid Passover Spring Summer Autumn Fall Winter Weekend Noon Midnight'''.split())
+
+
+def _acts(text, end):
+    """Whether the word ending at ``end`` is the subject of a verb ("May said", "June laughed", "April's eyes")."""
+    from .staging import VERBS
+    after = re.match(r"(?:[’']s\s+\w+|\s+(?:never\s+|always\s+|just\s+|then\s+|quietly\s+|softly\s+)?([a-z]+))",
+                     text[end:])
+    if not after:
+        return False
+    verb = after[1]
+    return verb is None or verb in VERBS or verb.endswith('ed') and len(verb) > 3
+
+
+def _quoted(text, at):
+    """Whether ``at`` lies inside a quotation in ``text`` (straight or curly quotes, within its paragraph)."""
+    para = text[text.rfind('\n\n', 0, at) + 1:at]
+    return para.count('"') % 2 == 1 or para.rfind('“') > para.rfind('”')
+
+
 def _detect_cast(script_beats):
     text = '\n'.join(b['spoken'] for b in script_beats)
     found = []
@@ -328,6 +358,10 @@ def _detect_cast(script_beats):
     evidence = {}
     named_contexts = []
     for name in names:
+        if name.lower() in VOCATIVES and all(_quoted(text, start) for n, start, _ in found if n == name):
+            continue      # "Mom, what's that turtle?": said to someone already in the story, not a new person
+        if CALENDAR & set(name.split()) and not any(n == name and _acts(text, end) for n, _, end in found):
+            continue      # "the 14th of March, when you ...": a date; "May said hello" is still a person
         contexts = []
         named = False
         for i, (n, start, end) in enumerate(found):

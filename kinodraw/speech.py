@@ -1043,7 +1043,8 @@ def _person(c: dict, cid: str, reader, texts=(), bands=None) -> tuple[str | None
     told_sex, told_band = described(c.get('name') or '', texts)
     sex = person_sex(c, cid, reader, texts, told_sex)
     species = str(c.get('species') or '')
-    stated = reader is not None and cid in reader.by_id and (cid in reader.first_years or c.get('band'))
+    stated = reader is not None and cid in reader.by_id and (cid in reader.first_years or c.get('band') or
+                                                              reader.told(cid))     # "Uncle Dev": as drawn
     if stated:
         band = BANDS.get((bands or {}).get(cid) or reader.age_band(cid), 'adult')
     elif told_band:

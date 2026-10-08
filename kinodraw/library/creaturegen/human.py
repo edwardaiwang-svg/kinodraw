@@ -18,12 +18,12 @@ GOLD = '#F2C230'
 
 @dataclass
 class Person:
-    age: str = 'adult'          # child adult elder
+    age: str = 'adult'          # child teen adult middle elder
     sex: str = 'male'
     skin: str = '#E8B48F'
     hair: str = '#3B2B24'
     hair_style: str = 'short'   # short long bun bald curly ponytail
-    outfit: str = 'villager'    # king queen villager teacher explorer casual princess
+    outfit: str = 'villager'    # king queen villager teacher explorer casual princess apron suit labcoat uniform worker
     top: str = '#5B8DD6'
     bottom: str = '#3D4A5C'
     shoes: str = '#4A3A30'
@@ -37,11 +37,16 @@ class Person:
 
 POSES = ('stand', 'walk1', 'walk2', 'run', 'sit', 'lie', 'sleep', 'shout', 'wave', 'look_up', 'scared', 'carry')
 
+# Heads shrink and legs lengthen with age, so a child (about two heads tall), a teenager, a grown-up and a
+# middle-aged or old person read apart at any drawn height: a grown-up is never drawn with a child's build.
 PROPORTIONS = {   # head_r, torso, leg, shoulder half-width, hip half-width, upper arm, forearm, limb radius
-    'adult': (.2, .27, .34, .13, .075, .13, .12, .045),
     'child': (.19, .18, .2, .1, .065, .09, .09, .04),
-    'elder': (.19, .26, .32, .125, .075, .13, .12, .044),
+    'teen': (.165, .25, .36, .118, .07, .125, .115, .04),
+    'adult': (.155, .29, .41, .135, .078, .145, .135, .043),
+    'middle': (.155, .29, .4, .142, .092, .145, .135, .045),
+    'elder': (.155, .27, .37, .132, .085, .14, .13, .043),
 }
+GREY = '#B8B4AC'      # a middle-aged person's grey temples
 
 
 class _Build:
@@ -160,7 +165,7 @@ class _Build:
         g, f = self.g, self.f
         long_gown = g.dress and g.outfit in ('queen', 'princess', 'king') or (g.dress and g.age == 'elder')
         leg_c = g.bottom if not g.dress else g.skin
-        if g.outfit in ('explorer', 'casual') and not g.dress:
+        if g.outfit in ('explorer', 'casual') and not g.dress and g.age == 'child':
             leg_c = g.skin                  # shorts
         for s in (-1, 1):
             hipj, knee, foot = self.hipj[s], self.knees[s], self.feet[s]
@@ -180,7 +185,7 @@ class _Build:
         g = self.g
         h, c, up = self.hip, self.chest, self.up
         side = unit(self.lean)
-        w_sh, w_h = self.sw + .01, self.hw + .045
+        w_sh, w_h = self.sw + .01, self.hw + (.06 if g.age == 'middle' else .045)     # a fuller middle age
         pts = [h - side * w_h - up * .02, h + side * w_h - up * .02, c + side * w_sh, c - side * w_sh]
         return pts
 
@@ -223,7 +228,7 @@ class _Build:
         out = []
         for s in (-1, 1):
             root, elbow, hand = self.sh[s], self.elbows[s], self.hands[s]
-            short = g.outfit in ('explorer', 'casual')
+            short = g.outfit in ('explorer', 'casual', 'apron')
             arm = Union([self.cone(root, elbow, self.lr * 1.1, self.lr), self.cone(elbow, hand, self.lr, self.lr * .9)],
                         k=.02)
             out.append((s, arm, root, elbow, hand, short))
@@ -280,6 +285,10 @@ class _Build:
         elif hs == 'bald':
             f.patch(Union([self.ellipse(hc + V(s * r * .95, r * .05), r * .25, r * .35) for s in (-1, 1)]), g.hair, head,
                     'hair_sides')
+
+        if g.age == 'middle' and hs != 'bald':        # grey at the temples, over any curls
+            f.fill(Union([self.ellipse(hc + V(s * r * .93, r * .12), r * .17, r * .34) for s in (-1, 1)]), GREY,
+                   SW_DETAIL, 'grey_temples')
         if g.beard:
             beard = Union([self.ellipse(hc + V(lx * .5, -r * .8), r * .66, r * .36),
                            self.circle(hc + V(lx * .5, -r * 1.06), r * .26)], k=.06)
@@ -295,6 +304,13 @@ class _Build:
             crown = self.poly(pts, r=.008)
             f.fill(crown, GOLD, SW_DETAIL, 'crown')
             f.dot(self.T(V(hc[0], base + r * .18)), r * .1, '#E53935', 'jewel', SW_FINE)
+        elif g.outfit in ('uniform', 'worker'):        # a peaked cap: a uniform's dark one, a worker's coloured one
+            cap_c = C.shade(g.top, .45) if g.outfit == 'uniform' else (g.accent or '#C62828')
+            dome = self.ellipse(hc + V(0, r * .78), r * 1.0, r * .42)
+            f.fill(self.ellipse(hc + V(r * .55, r * .6), r * .62, r * .12), C.shade(cap_c, .2), SW_DETAIL, 'cap_peak')
+            f.fill(dome, cap_c, SW_DETAIL, 'cap')
+            if g.outfit == 'uniform':
+                f.dot(self.T(hc + V(0, r * .82)), r * .1, GOLD, 'cap_badge', SW_FINE)
         elif g.outfit == 'explorer':
             dome = self.ellipse(hc + V(0, r * .9), r * .95, r * .5)
             brim = self.ellipse(hc + V(0, r * .66), r * 1.35, r * .16)
@@ -430,6 +446,29 @@ class _Build:
             f.patch(self.cone(c + V(-self.sw * .8, 0), h + V(self.hw, up[1] * .04), .018, .018), '#7A5230', torso,
                     'strap')
             f.patch(self.ellipse(h + up * .03, self.hw * 2, .022), '#7A5230', torso, 'belt')
+        elif o == 'apron':          # a cook's or shopkeeper's apron over the top, tied at the waist
+            f.patch(self.poly([c + V(-self.sw * .62, -.04), c + V(self.sw * .62, -.04), h + V(self.hw + .05, -.06),
+                               h + V(-self.hw - .05, -.06)], r=.01), g.accent or '#FAFAF7', torso, 'apron')
+            f.patch(self.ellipse(h + up * .08, self.hw * 2.2, .016), C.shade(g.accent or '#FAFAF7', .25), torso,
+                    'apron_tie')
+        elif o == 'suit':           # a jacket open on a white shirt and a tie
+            f.patch(self.poly([c + V(-.05, .01), c + V(.05, .01), c + V(0, -self.torso * .62)], r=.004), '#FAFAF7',
+                    torso, 'shirt')
+            f.patch(self.poly([c + V(-.012, -.02), c + V(.012, -.02), c + V(.015, -self.torso * .5),
+                               c + V(0, -self.torso * .58), c + V(-.015, -self.torso * .5)], r=.004),
+                    g.accent or '#C62828', torso, 'tie')
+        elif o == 'labcoat':        # a white coat open on a coloured shirt
+            f.patch(self.poly([c + V(-.035, .01), c + V(.035, .01), c + V(.02, -self.torso * .95),
+                               c + V(-.02, -self.torso * .95)], r=.004), g.accent or '#5B8DD6', torso, 'shirt')
+            f.patch(self.ellipse(c + V(self.sw * .5, -self.torso * .35), .022, .014), C.shade(g.top, .2), torso,
+                    'pocket')
+        elif o == 'uniform':        # a badge and buttons
+            f.dot(self.T(c + V(-self.sw * .45, -self.torso * .25)), .018, GOLD, 'badge', SW_FINE)
+            for k in range(3):
+                f.dot(self.T(c + V(0, -.04 - k * self.torso * .22)), .008, GOLD, 'button', SW_FINE)
+        elif o == 'worker':         # overall straps and bib
+            f.patch(self.poly([h + V(-self.hw - .02, -.02), h + V(self.hw + .02, -.02), c + V(self.sw * .5, -.07),
+                               c + V(-self.sw * .5, -.07)], r=.01), g.accent or '#2F5FA8', torso, 'overalls')
         elif o == 'villager' and not g.dress:
             f.patch(self.ellipse(h + up * .04, self.hw * 2, .025), g.accent or '#7A5230', torso, 'belt')
         elif g.accent:
