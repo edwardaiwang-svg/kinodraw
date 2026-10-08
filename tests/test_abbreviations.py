@@ -132,7 +132,7 @@ CASES = [
     ('Unit on the 2nd fl., 1st mo. free, lg closets.', 'Unit on the second floor, first month free, large closets.'),
     ('Grease a 10-in. skillet.', 'Grease a ten-inch skillet.'),
     ('A woman in her 50s waits 3 s.', 'A woman in her fifties waits three seconds.'),
-    ('Press Ctrl + Shift + N, then tap the + button.', 'Press Ctrl plus Shift plus N, then tap the plus button.'),
+    ('Press Ctrl + Shift + N, then tap the + button.', 'Press control plus Shift plus N, then tap the plus button.'),
     ('It is at 418 W. Linden Ave., Apt 2C.', 'It is at four hundred eighteen West Linden Avenue, apartment two C.'),
     ('Notes: - first item - second item', 'Notes: - first item, second item'),
 ]

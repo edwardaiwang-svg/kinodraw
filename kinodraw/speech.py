@@ -95,9 +95,43 @@ def _tld_words():
 TLD_WORDS = _tld_words()
 ARROW = re.compile(r'\s*(?:→|->|⟶|➔|➡️?|=>)\s*')
 
+# Key names written as keys are said as words; the captions keep the writing. A key is written as one when it is
+# joined to another by "+" or "plus" ("Ctrl + Shift + N", "Cmd+Opt+Esc"), after press/hold/hit/tap ("hit Esc",
+# "hold Fn and press Del") or before "key"; Ctrl, Cmd, PgUp and the like are keys anywhere.
+KEY_WORDS = {'ctrl': 'control', 'cmd': 'command', 'opt': 'option', 'alt': 'alt', 'esc': 'escape', 'del': 'delete',
+             'fn': 'function', 'pgup': 'page up', 'pgdn': 'page down', 'pgdown': 'page down', 'ins': 'insert',
+             'bksp': 'backspace', 'prtsc': 'print screen', 'prtscn': 'print screen', 'win': 'Windows',
+             'caps': 'caps lock'}
+KEYS_ANYWHERE = {'ctrl', 'cmd', 'pgup', 'pgdn', 'pgdown', 'bksp', 'prtsc', 'prtscn'}
+_KEY_ABBR = r'(?:(?i:ctrl|cmd|opt|alt|esc|del|fn|pgup|pgdn|pgdown|ins|bksp|prtsc|prtscn|win|caps)\b)'
+_KEY_NAMED = r'(?i:shift|control|command|option|tab|enter|escape|delete|backspace|insert|windows|super|meta)|F\d{1,2}'
+_KEY = (_KEY_ABBR + r'|(?i:shift|control|command|option|tab|enter|return|space|home|end|delete|backspace|escape|'
+        r'insert|windows|super|meta|up|down|left|right)\b|F\d{1,2}\b|[A-Za-z0-9](?![\w])|'
+        r'(?:zero|one|two|three|four|five|six|seven|eight|nine)\b')
+KEY_COMBO = re.compile(r'(?<![\w+])(?:' + _KEY + r')(?:\s*(?:\+|\bplus\b)\s*(?:' + _KEY + r'))+')
+KEY_ALONE = re.compile(r'(?<![\w+])' + _KEY_ABBR + r'(?![\w+])')
+_KEY_VERB = re.compile(r'\b(?:press|presses|pressed|pressing|hold|holds|held|holding|hit|hits|hitting|tap|taps|'
+                       r'tapped|tapping|push|pushes|release|releases)\s+(?:(?:the|down)\s+)?$', re.I)
+
+
+def _key_said(m: re.Match) -> str:
+    parts = re.split(r'\s*(?:\+|\bplus\b)\s*', m.group())
+    if not any(re.fullmatch(_KEY_ABBR + '|' + _KEY_NAMED, p) for p in parts):
+        return m.group()                        # "2 + 2", "A + B", "up + down": no modifier, not keys
+    return ' plus '.join(KEY_WORDS.get(p.lower(), p) for p in parts)
+
+
+def _key_alone(text: str):
+    for m in KEY_ALONE.finditer(text):
+        key = m.group().lower()
+        if key in KEYS_ANYWHERE or _KEY_VERB.search(text[:m.start()]) or re.match(r'\s+keys?\b', text[m.end():]):
+            yield m.start(), m.end(), KEY_WORDS[key]
+
+
 # Abbreviations spelled out for the voice only (captions keep the written form).
 # The abbreviation lexicon (lexicon.py: titles, streets, offices, listings, kitchen, Latin, states) comes first.
-SAY_EN = [(lexicon.say, None),
+SAY_EN = [(KEY_COMBO, _key_said), (_key_alone, None),
+          (lexicon.say, None),
           (re.compile(r'\b(Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri)\.'), _day),
           (re.compile(r'\b(Sat|Sun)\.' + DAY_NEXT), _day),
           (re.compile(r'\b(Mon|Tues?|Wed|Thu|Thurs?|Fri|Sat|Sun|mon|tues?|wed|thu|thurs?|fri|sat|sun)\b(?!\.)' + DAY_NEXT),

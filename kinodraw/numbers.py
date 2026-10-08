@@ -48,21 +48,28 @@ def _latin(ch: str) -> bool:
     return ch.isascii() and ch.isalnum()
 
 
-def _rewrite(text: str, pattern: re.Pattern, speak) -> Normalized:
+def _rewrite(text: str, pattern: re.Pattern, speak, fixed=()) -> Normalized:
+    """``fixed``: (start, end, words) rewrites found beforehand (codes); the pattern runs on the text between them."""
+    found, pos = [], 0
+    for a, b, said in sorted(fixed) + [(len(text), len(text), None)]:
+        found += [(m.start(), m.end(), m) for m in pattern.finditer(text, pos, a)]
+        if said is not None:
+            found.append((a, b, said))
+        pos = b
     out, spans, last = [], [], 0
-    for m in pattern.finditer(text):
-        words = speak(m)
+    for start, end, m in found:
+        words = m if isinstance(m, str) else speak(m)
         if words is None:
             continue
-        if _latin(text[m.start() - 1:m.start()]) and _latin(words[:1]):     # keep words apart: B2B -> B two B
+        if _latin(text[start - 1:start]) and _latin(words[:1]):     # keep words apart: B2B -> B two B
             words = ' ' + words
-        if _latin(text[m.end():m.end() + 1]) and _latin(words[-1:]):
+        if _latin(text[end:end + 1]) and _latin(words[-1:]):
             words += ' '
-        out.append(text[last:m.start()])
+        out.append(text[last:start])
         s0 = sum(map(len, out))
         out.append(words)
-        spans.append((m.start(), m.end(), s0, s0 + len(words)))
-        last = m.end()
+        spans.append((start, end, s0, s0 + len(words)))
+        last = end
     out.append(text[last:])
     return Normalized(text, ''.join(out), spans)
 
@@ -207,6 +214,38 @@ CODE_BEFORE = re.compile(r'\b(?:code|codes|pin|otp|passcode|password|verificatio
                          r'order|reference|ref|account|acct|ticket|serial|booking|member|membership|policy|invoice|'
                          r'case|claim|id|room|rm|flight|gate|seat|unit|apt|apartment|suite|ste|extension|ext)\b'
                          r'(?:\s*(?:number|no\.?|num|#|is|was|:|=))*\s*[:#]?\s*$', re.I)
+# A number the text introduces as a code, said digit by digit in its written groups, zero as "zero" ("a 6-digit code,
+# like 482 913": "four eight two, nine one three"; "order #10023"; "confirmation number is 7731 4410"). The groups
+# are joined by hyphens, which the voice turns into short pauses (speech.SAY_EN) and which are no clause break.
+# Words that are also verbs ("order 300 pizzas", "pin 120 photos") count only after "your", "the" ... or with
+# "number"/"#" after them.
+_CODE_NOUN = r'(?i:orders?|tickets?|bookings?|reservations?|references?|pins?)'
+_CODE_DET = r'\b(?i:your|the|my|our|their|his|her|this|that|its)\s+'
+_CODE_NAMED = r'\s*(?i:numbers?\b|no\.|#)'
+CODE_RUN = re.compile(
+    r'(?P<intro>(?P<det>' + _CODE_DET + r')?'
+    r'\b(?:(?i:passcodes?|codes?|otps?|verification|confirmation|tracking|flights?)|PINs?|(?P<noun>' + _CODE_NOUN +
+    r'))\b(?P<named>(?=' + _CODE_NAMED + r'))?)'
+    r'(?P<gap>(?:\s*(?:[,:#=—–]|\b(?:numbers?|no\.|num|is|was|are|were|reads?|like|such as|e\.g\.|for example)(?![\w-])))*\s*)'
+    r'(?P<code>(?<![\w.,$])\d+(?:[ -]\d+)*)(?![\w%]|[.,:]\d)')
+
+
+def code_runs(text: str) -> list[re.Match]:
+    """The codes in English ``text`` (CODE_RUN) with three digits or more: group 'code' is the number as written,
+    'intro' and 'gap' the words that introduce it."""
+    out = []
+    for m in CODE_RUN.finditer(text):
+        if m['noun'] and not m['det'] and m['named'] is None:
+            continue
+        if len(re.sub(r'\D', '', m['code'])) >= 3:
+            out.append(m)
+    return out
+
+
+def _code(token: str) -> str:
+    return '-'.join(digits(g) for g in re.findall(r'\d+', token))
+
+
 PHONE_BEFORE = re.compile(r'\b(?:call|calls|phone|tel|telephone|text|txt|fax|dial|number|mobile|cell|reach|ring|'
                           r'hotline|line|whatsapp)\b[^.!?\d]{0,24}$', re.I)
 # How a web address's pieces sound: "pipewisebayside.com/tips" is "pipewise bayside dot com slash tips".
@@ -299,7 +338,11 @@ def _phone(text: str) -> str:
 
 def _code_before(m: re.Match) -> bool:
     before = m.string[max(0, m.start() - 40):m.start()]
-    return bool(CODE_BEFORE.search(before) or re.search(r'[A-Za-z],\s*[A-Z]{2}\s+$', before))   # "Austin, TX 78701"
+    word = CODE_BEFORE.search(before)
+    if word and re.match(_CODE_NOUN + r'\b', word.group()) and not re.match(r'\w+' + _CODE_NAMED, word.group()) \
+            and not re.search(_CODE_DET + r'$', before[:word.start()]):
+        word = None                                 # "order 300 pizzas": a verb and a count
+    return bool(word or re.search(r'[A-Za-z],\s*[A-Z]{2}\s+$', before))   # "Austin, TX 78701"
 
 
 def _unit_said(key: str, one: bool = False) -> str:
@@ -450,7 +493,9 @@ def _en_speak(m: re.Match) -> str:
 
 
 def normalize_en(display: str) -> Normalized:
-    return _rewrite(display, EN_PATTERN, _en_speak)
+    codes = [(m.start('code') - 1, m.end('code'), 'number ' + _code(m['code'])) if m['gap'].endswith('#') else
+             (m.start('code'), m.end('code'), _code(m['code'])) for m in code_runs(display)]     # "order #10023"
+    return _rewrite(display, EN_PATTERN, _en_speak, codes)
 
 
 # ============================================================== Spanish
