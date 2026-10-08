@@ -217,10 +217,12 @@ def ambient_pad(duration, music_mood='calm', sr=SR, seed=20260927) -> np.ndarray
 
 
 def _fades(n, sr):
+    """In over mix.FADE_IN (the music is there from the first word), out over mix.FADE."""
     gain = np.ones(n, np.float32)
-    f = min(round(mix.FADE * sr), n // 2)
+    f, g = min(round(mix.FADE * sr), n // 2), min(round(mix.FADE_IN * sr), n // 2)
+    if g:
+        gain[:g] = np.linspace(0, 1, g) ** 1.5
     if f:
-        gain[:f] = np.linspace(0, 1, f) ** 1.5
         gain[-f:] = np.linspace(1, 0, f) ** 1.5
     return gain
 

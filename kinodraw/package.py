@@ -13,7 +13,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from . import PRODUCT
-from .audio.mix import SR, read_wav
+from .audio.mix import CEILING_DBTP, SR, read_wav, write_wav
 from .engine import auto_scenes, ink, skin as skins
 from .engine.storyboard import normalize
 from .library import resolve
@@ -52,10 +52,36 @@ def mux(tl: dict, silent: Path, mix: Path, output: Path, lang: str, title: str, 
     meta = build / 'chapters.ffmetadata'
     meta.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     partial = output.with_name(output.stem + '.partial.mp4')
-    _run([FFMPEG, '-y', '-v', 'error', '-i', str(silent), '-i', str(mix), '-f', 'ffmetadata', '-i', str(meta),
-          '-map', '0:v:0', '-map', '1:a:0', '-map_metadata', '2', '-map_chapters', '2', '-c:v', 'copy', '-c:a', 'aac',
-          '-b:a', '192k', '-t', str(tl['duration']), '-movflags', '+faststart', str(partial)])
+
+    def encode():
+        _run([FFMPEG, '-y', '-v', 'error', '-i', str(silent), '-i', str(mix), '-f', 'ffmetadata', '-i', str(meta),
+              '-map', '0:v:0', '-map', '1:a:0', '-map_metadata', '2', '-map_chapters', '2', '-c:v', 'copy',
+              '-c:a', 'aac', '-b:a', '192k', '-t', str(tl['duration']), '-movflags', '+faststart', str(partial)])
+    encode()
+    # AAC adds peaks of its own (about 0.5 dB on a mix limited to -1 dBTP). The ceiling holds for the file people get:
+    # measured on the encoded audio, the mix is limited lower by what the encoder added, at the loudness it had,
+    # and encoded again.
+    ceiling = CEILING_DBTP
+    for _ in range(3):
+        over = encoded_true_peak(partial) - (CEILING_DBTP - .05)       # a reading of -1.0 (to 0.1 dB) holds
+        if over <= 0:
+            break
+        from .audio import master
+        ceiling -= over + .1
+        x, rate = read_wav(mix)
+        write_wav(mix, master.master(x, rate, master.loudness(x, rate), ceiling), rate)
+        encode()
     partial.replace(output)
+
+
+def encoded_true_peak(video: Path) -> float:
+    """The true peak (dBTP, 4x oversampled as BS.1770 and FFmpeg's ebur128 measure it, at full precision) of a file's
+    first audio stream as it decodes; -inf when it is silent or has no audio (encoded_qa reports a missing stream)."""
+    from .audio import master
+    raw = subprocess.run([FFMPEG, '-v', 'error', '-i', str(video), '-map', '0:a:0', '-f', 'f32le', '-ac', '2', '-ar', str(SR),
+                          '-'], capture_output=True).stdout
+    x = np.frombuffer(raw, np.float32).reshape(-1, 2)
+    return master.true_peak(x, SR) if len(x) else float('-inf')
 
 
 def video_size(video: Path):
