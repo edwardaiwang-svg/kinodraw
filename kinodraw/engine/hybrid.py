@@ -12,7 +12,7 @@ import json
 import math
 import re
 import textwrap
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 import numpy as np
@@ -173,11 +173,22 @@ class HybridProduction:
         palette = {k: ImageColor.getrgb(v)[:3] for k, v in self.style['palette'].items()}
         self.caption_look, self.caption_accent = (palette['ink'], palette['background'], 4), palette['accent']
         self.storybook = None
-        if STORY_DOODLES and plan['storyboard']['genre'] == 'story':
+        self.story_genre = plan['storyboard']['genre'] == 'story'
+        if STORY_DOODLES and (self.story_genre or any(self._staged(s) for s in plan['scenes'])):
+            # Stories, and the people and animals of every other genre (a recipe's cook, a promo's customer), are
+            # staged by the storybook: sets for places, people presets, the plan's shots. Only a story gets its
+            # picture-book title page.
             from .storybook import Storybook
             title = episode.get('title', '')
             title = title.get(lang, next(iter(title.values()), '')) if isinstance(title, dict) else str(title or '')
-            self.storybook = Storybook(plan, self.by_id, tline, self.size, whiteboard.skin.background, title)
+            self.storybook = Storybook(plan, self.by_id, tline, self.size, whiteboard.skin.background,
+                                       title if self.story_genre else '')
+        for c in plan['cast']:
+            if c['id'] in self.cast and self.cast[c['id']].family == 'human':
+                # A person's skin is a skin tone, never the plan palette's body colour (a green Marcus); the palette
+                # still dresses them.
+                self.cast[c['id']] = replace(self.cast[c['id']], palette=replace(
+                    self.cast[c['id']].palette, body=self._skin(c)))
         # Same score selection as finish; the procedural score and every recording start on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
@@ -220,12 +231,34 @@ class HybridProduction:
             (build / 'bubbles.json').write_text(json.dumps(self.storybook.bubbled, ensure_ascii=False, indent=1),
                                                 encoding='utf-8')
 
+    @staticmethod
+    def _staged(spec):
+        """A scene of a genre other than story that the storybook stages from its plan shots: a character scene, or
+        any scene with cast on stage, that is not a board, chart, diagram or kinetic type and whose on-screen text is
+        at most a caption or a quote (a title, call to action, counter or kinetic text stays a motion scene)."""
+        return bool(spec.get('shots')) and spec['treatment'] not in ('whiteboard', 'chart', 'kinetic_type') and (
+            spec['text']['kind'] in ('none', 'caption_only', 'quote')) and not any(
+            e['kind'] == 'diagram' for e in spec['elements']) and (
+            spec['treatment'] == 'character' or any(e['kind'] == 'cast' for e in spec['elements']))
+
+    def _skin(self, entry):
+        """A person's skin colour: the tone the storybook dresses them in, else their tone mark, else one of the
+        people presets' tones chosen from their id."""
+        from .storybook import TONE_MARKS, TONES
+        from .shots import SKIN
+        tone = None
+        if self.storybook is not None and entry['id'] in self.storybook.cast and self.storybook._human(entry['id']):
+            tone = self.storybook._look(entry['id'])['tone']
+        tone = tone or next((TONE_MARKS[m] for m in map(str.lower, entry.get('marks') or ()) if m in TONE_MARKS),
+                            TONES[sum((i + 1) * ord(ch) for i, ch in enumerate(entry['id'])) % 3])
+        return '#%02X%02X%02X' % SKIN[tone]
+
     def _prepare(self, span, project_dir):
         spec = span.spec
         duration = span.end - span.start
         treatment = spec['treatment']
-        if (self.storybook is not None and treatment not in ('whiteboard', 'chart')
-                and not any(e['kind'] == 'diagram' for e in spec['elements'])):
+        if self.storybook is not None and (self._staged(spec) if not self.story_genre else (
+                treatment not in ('whiteboard', 'chart') and not any(e['kind'] == 'diagram' for e in spec['elements']))):
             # A story page: preset doodles on the whiteboard paper, one shot per narrated sentence.
             span.story = self.storybook.prepare(spec, span.start, span.end)
             return
@@ -1495,7 +1528,7 @@ class HybridProduction:
                 card_t = max(t, end_start + last.join_length) if last.story is not None else t
                 current = self.whiteboard.frame(card_t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start, *self.size,
-                                          kind='page' if last.story is not None else 'match',
+                                          kind='page' if last.story is not None and self.story_genre else 'match',
                                           duration=last.join_length)      # a picture book turns to its last page
                 image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
