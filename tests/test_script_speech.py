@@ -85,6 +85,18 @@ def test_emoji_and_markdown_marks_are_neither_said_nor_captioned():
     assert said[1] == 'Come early and bring a friend.'
 
 
+@pytest.mark.parametrize('preset', ['word_pop', 'type_on', 'corner_caption', 'clauses'])
+def test_emoji_never_reach_text_drawn_in_the_picture(preset):
+    # The fonts have no emoji glyphs: "7 a.m. 🔥" and "slow 🐢" drew empty boxes in the headline and the bubble.
+    from kinodraw.engine.bold.model import MotionElement, MotionScene
+    from kinodraw.engine.bold.render import _text
+    element = MotionElement(text='Fresh rolls 🔥 at 7 a.m.\nType slow 🐢', preset=preset, width=1400, size=72,
+                            cues=(0., 1.) if preset == 'clauses' else ())
+    svg = _text(element, MotionScene([element], duration=6), 5., '#000')
+    assert 'rolls' in svg and not speech.EMOJI.search(svg)
+    assert speech.drawn('Fresh rolls 🔥 at 7 a.m.\nType slow 🐢') == 'Fresh rolls at 7 a.m.\nType slow'
+
+
 # ------------------------------------------------------------------ 2. speech respelling
 @pytest.mark.parametrize('text,said', [
     ('Mr. Smith met Dr. Lee on Main St. today.', 'Mister Smith met Doctor Lee on Main Street today.'),
@@ -128,6 +140,14 @@ def test_each_screenplay_speaker_has_their_own_voice_and_the_narrator_keeps_the_
     names = {seg.speaker: name for todo in loose.values() for seg, name, _ in todo['parts']}
     assert len({names['label:jules'], names['label:walt'], names['label:dana']}) == 3
     assert 'af_heart' not in {names['label:jules'], names['label:walt'], names['label:dana']}
+
+
+def test_qa_names_roles_that_share_one_voice():
+    board = board_of(SCREENPLAY)
+    parts = speech.voice_parts(board, None, 'af_heart')
+    assert speech.shared_voices(speech.cast_of(parts)) == []                  # four roles, four voices
+    one = speech.shared_voices(speech.cast_of(parts, 'the voice server'))
+    assert one[0]['defect'] == 'shared_voice' and set(one[0]['roles']) == {'narrator', 'label:jules', 'label:walt', 'label:dana'}
 
 
 def test_label_words_tell_sex_and_age():
@@ -219,3 +239,20 @@ def test_timeline_captions_have_no_labels_directions_or_emoji_and_keep_word_time
                    for c in tl['captions'])                    # the direction-only line has no caption
     for c in tl['captions']:
         assert len(c['words']) == len(c['text'].split())
+
+
+def test_a_bubbled_line_leaves_the_caption_to_the_narrator():
+    board = board_of('"Mine\'s broken," he said. "It\'s just a bunch of random stuff."\n\n'
+                     'At 7:15, Nana said, "good morning sunshine 🐢" and smiled.')
+    one, two = board['beats']
+    s1, s2 = one['spoken']['en'], two['spoken']['en']
+    bubbled = {one['id']: [(s1.index('Mine'), s1.index(','))],
+               two['id']: [(s2.index('good'), s2.rindex('"'))]}
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'), bubbled=bubbled)
+    text = ' '.join(c['text'] for c in tl['captions'])
+    assert "Mine's broken" not in text and 'good morning' not in text and '""' not in text
+    assert 'he said.' in text and "It's just a bunch of random stuff." in text
+    assert 'At 7:15, Nana said and smiled.' in text
+    assert all(len(c['words']) == len(c['text'].split()) for c in tl['captions'])
+    plain = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    assert "Mine's broken" in ' '.join(c['text'] for c in plain['captions'])         # no bubbles, no change

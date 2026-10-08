@@ -25,6 +25,11 @@ def board_of(text, story='story', title=None):
     ('Bake at 350°F for 3-4 minutes.', 'Bake at three hundred fifty degrees Fahrenheit for three to four minutes.'),
     ('Use 2 tbsp butter, walk 5 km.', 'Use two tablespoons butter, walk five kilometers.'),
     ('The 3rd try was 5x faster and 50% cheaper.', 'The third try was five times faster and fifty percent cheaper.'),
+    # Script 09 (r01b): "$4.2M" was "four point two dollars M" and "$3.56M" "three dollars and fifty-six cents M".
+    ('Revenue hit $4.2M, costs $3.56M.', 'Revenue hit four point two million dollars, costs three point five six million dollars.'),
+    ('We raised $12K, then $1.5B.', 'We raised twelve thousand dollars, then one point five billion dollars.'),
+    ('It cost $4.2 M, or €3M, or £2 bn.', 'It cost four point two million dollars, or three million euros, or two billion pounds.'),
+    ('Margins rose 9%.', 'Margins rose nine percent.'),
 ])
 def test_spoken_respelling(display, spoken):
     n = numbers.normalize(display, 'en')
@@ -38,3 +43,11 @@ def test_a_m_and_p_m_mid_sentence_keep_spoken_and_display_clause_marks_equal():
                      'At 10:56 p.m., a picture appeared. Dr. Lee and Mr. Smith watched in the U.S. that night.')
     report = validate(board)
     assert not [e for e in report['errors'] if 'punctuation' in e], report['errors']
+
+
+def test_money_with_a_scale_keeps_its_written_form_in_the_captions():
+    board = board_of('Q3 revenue hit $4.2M. Costs were $3.56M.')
+    from kinodraw.engine import timeline
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    assert ' '.join(c['text'] for c in tl['captions']) == 'Q3 revenue hit $4.2M. Costs were $3.56M.'
+    assert not [e for e in validate(board)['errors'] if 'punctuation' in e]

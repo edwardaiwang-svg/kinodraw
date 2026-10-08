@@ -190,17 +190,65 @@ def _keep(text: str, spans, start: int = 0, end: int | None = None) -> tuple[str
     return ''.join(chars), index
 
 
-def captions(spoken: str, display: str, labels: set | None = None) -> tuple[str, str, list[int]]:
+QUOTE_EDGE = '"“”‘’\'«»「」『』,，、;；:： \t'
+
+
+def _bubble_spans(text: str, spans) -> list[tuple[int, int]]:
+    """Each (start, end) of ``text`` grown over the quote marks, commas and spaces around it."""
+    out = []
+    for a, b in spans:
+        a, b = max(0, a), min(len(text), b)
+        while a > 0 and text[a - 1] in QUOTE_EDGE:
+            a -= 1
+        while b < len(text) and text[b] in QUOTE_EDGE:
+            b += 1
+        while a > 0 and b < len(text) and b > a and text[b - 1] in ' \t':
+            b -= 1                                  # words on both sides keep a space between them
+        out.append((a, b))
+    return out
+
+
+def captions(spoken: str, display: str, labels: set | None = None, bubbled=(), lang: str = 'en'
+             ) -> tuple[str, str, list[int]]:
     """(spoken, display, index) for the captions: both texts without their hidden parts, and the offset in the full
-    spoken text of each character of the caption's spoken text (its words keep their measured times)."""
-    said, index = _keep(spoken, hidden(spoken, labels))
-    shown, _ = _keep(display, hidden(display, labels))
+    spoken text of each character of the caption's spoken text (its words keep their measured times). ``bubbled``
+    is the (start, end) ranges of the spoken text a speech bubble shows: the caption leaves them (and their quote
+    marks) out and carries only the narrator."""
+    hide_said = hidden(spoken, labels)
+    hide_shown = hidden(display, labels)
+    if bubbled:
+        from .numbers import normalize
+        said_spans = _bubble_spans(spoken, bubbled)
+        hide_said = _merge(hide_said + said_spans)
+        to_spoken = normalize(display, lang).to_spoken
+        inside = [any(a <= to_spoken(i) < b for a, b in said_spans) for i in range(len(display))]
+        runs, i = [], 0
+        while i < len(display):
+            if inside[i]:
+                j = i
+                while j < len(display) and inside[j]:
+                    j += 1
+                runs.append((i, j))
+                i = j
+            else:
+                i += 1
+        hide_shown = _merge(hide_shown + _bubble_spans(display, runs))
+    said, index = _keep(spoken, hide_said)
+    shown, _ = _keep(display, hide_shown)
     return said, shown, index
 
 
 def caption_text(display: str, labels: set | None = None) -> str:
     """The written text as a caption, transcript or subtitle shows it."""
     return _keep(display, hidden(display, labels))[0]
+
+
+def drawn(text: str) -> str:
+    """Text as a picture writes it (a headline, a bubble, a quote card): no emoji, which the drawing fonts have no
+    glyphs for and would show as empty boxes. Line breaks are kept."""
+    if not EMOJI.search(text):
+        return text
+    return '\n'.join(re.sub(r'[ \t]{2,}', ' ', EMOJI.sub('', line)).strip() for line in text.split('\n'))
 
 
 # ------------------------------------------------------------------ voice parts
@@ -436,6 +484,21 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
         hold = None if parts else TITLE_HOLD if b['silent'] else DIRECTION_HOLD
         out[b['id']] = {'parts': parts, 'hold': hold}
     return out
+
+
+def cast_of(parts: dict, one_voice: str | None = None) -> dict:
+    """role -> voice for every role that speaks (the narrator as 'narrator'), from voice_parts; ``one_voice`` names
+    the single voice that reads every part (a voice server, your recording)."""
+    return {seg.speaker or 'narrator': one_voice or v for todo in parts.values() for seg, v, _ in todo['parts']}
+
+
+def shared_voices(cast: dict) -> list[dict]:
+    """Non-blocking QA findings: two speaking roles that share one voice sound like one person."""
+    by_voice = {}
+    for role, v in cast.items():
+        by_voice.setdefault(v, []).append(role)
+    return [{'defect': 'shared_voice', 'voice': v, 'roles': roles,
+             'note': f"{', '.join(roles)} all speak in the voice {v}"} for v, roles in by_voice.items() if len(roles) > 1]
 
 
 def _person(c: dict, cid: str, reader) -> tuple[str | None, str]:

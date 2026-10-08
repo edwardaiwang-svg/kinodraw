@@ -317,12 +317,12 @@ def test_explicit_text_grid_and_cast_slots(tmp_path):
     board, plan, tl = fixture(tmp_path)
     scene = plan['scenes'][1]
     scene.update(composition='grid', treatment='motion', text={'kind': 'none', 'ref': ''},
-                 elements=[{'kind': 'text', 'ref': scene['beat_ids'][0]},
+                 elements=[{'kind': 'text', 'ref': board['beats'][0]['id']},      # not this scene's narration
                            {'kind': 'cast', 'ref': 'mara'}, {'kind': 'cast', 'ref': 'pendo'}])
     prod = save_production(tmp_path, board, plan, tl)
     span = prod.spans[1]
     e = span.motion.elements[0]
-    assert e.text == board['beats'][1]['display']['en']
+    assert e.text == board['beats'][0]['display']['en']
     assert (e.x, e.y) == (.25, .5)
     slots = [prod._actor_slot(span, a) for a in span.actors]
     assert len(set(slots)) == len(span.actors)
@@ -448,6 +448,9 @@ def test_caption_only_does_not_invent_foreground_text(tmp_path):
     prod = save_production(tmp_path, board, plan, tl)
     assert not prod.spans[1].motion.elements
     scene['elements'] = [{'kind': 'text', 'ref': scene['beat_ids'][0]}]
+    # The narration the caption shows is never written out a second time (script 02, r01).
+    assert not save_production(tmp_path, board, plan, tl).spans[1].motion.elements
+    scene['elements'] = [{'kind': 'text', 'ref': board['beats'][0]['id']}]     # another scene's words may be
     assert len(save_production(tmp_path, board, plan, tl).spans[1].motion.elements) == 1
 
 

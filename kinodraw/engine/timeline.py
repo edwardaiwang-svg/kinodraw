@@ -74,12 +74,13 @@ def word_times(episode, tline, lang):
                                    None) for c in tline['captions']]
 
 
-def _cues(beat, lang, char_time, speech_end, labels, cue_options):
+def _cues(beat, lang, char_time, speech_end, labels, cue_options, bubbled=()):
     """A beat's caption cues: its written words without speaker labels, stage directions, emoji or Markdown, each
-    word timed by its spoken characters. A silent beat (a title card, a direction) has none."""
+    word timed by its spoken characters. A silent beat (a title card, a direction) has none. ``bubbled``: the spoken
+    ranges a speech bubble shows, which the caption leaves to the bubble."""
     if beat.get('silent'):
         return []
-    said, shown, index = speech.captions(beat['spoken'][lang], beat['display'][lang], labels)
+    said, shown, index = speech.captions(beat['spoken'][lang], beat['display'][lang], labels, bubbled, lang)
     if not said.strip() or not shown.strip():
         return []
     return cap.cues_for_beat(said, shown, lang, lambda pos: char_time(index[min(max(pos, 0), len(index) - 1)]),
@@ -90,9 +91,10 @@ def take_hold(beat, lang):
     return .05            # the note is read during its narration, then pinned immediately
 
 
-def layout(episode, lang, clips, pauses=None, credit=True):
+def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
     """clips[beat_id] = {'speech': seconds of speech incl. trailing clip gap, 'char_times': [...]};
-    pauses[beat_id] = seconds of silence after that beat (pacing)."""
+    pauses[beat_id] = seconds of silence after that beat (pacing); bubbled[beat_id] = [(start, end)] of its spoken
+    text that a speech bubble shows (left out of the caption)."""
     pauses = {} if pauses is None else pauses
     takeaways = getattr(pauses, "takeaways", {})
     episode = normalize(episode)
@@ -147,7 +149,8 @@ def layout(episode, lang, clips, pauses=None, credit=True):
 
         def char_time(pos, ct=ct):
             return ct[min(max(pos, 0), len(ct) - 1)] if ct else 0.
-        for a, b, text, words in _cues(beat, lang, char_time, clip['speech'] - .15, labels, cue_options):
+        for a, b, text, words in _cues(beat, lang, char_time, clip['speech'] - .15, labels, cue_options,
+                                       (bubbled or {}).get(beat['id'], ())):
             capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text,
                           'words': [round(start + w, 4) for w in words]})
         cursor = end

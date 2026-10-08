@@ -30,6 +30,9 @@ class Document:
     lang: str                                   # 'en', 'zh' or 'es'
     preamble: list[str] = field(default_factory=list)
     sections: list[Section] = field(default_factory=list)
+    # The title is the script's own top heading (a new project shows it on a title card). Not part of the content:
+    # a .docx read as a file and as the Markdown the Studio makes of it are the same document.
+    heading: bool = field(default=False, compare=False)
 
 
 def detect_lang(text: str) -> str:
@@ -135,7 +138,7 @@ def _structure(blocks, title, fallback) -> Document:
     text = ' '.join(t for _, t in blocks)
     lang = detect_lang(text)
     doc = Document(title=_sentence_spacing(title or body_title or (_first_words(blocks) if blocks else fallback or 'Untitled'), lang),
-                   lang=lang)
+                   lang=lang, heading=body_title is not None)
     current = None
     for lvl, t in blocks:
         t = _sentence_spacing(t, lang)

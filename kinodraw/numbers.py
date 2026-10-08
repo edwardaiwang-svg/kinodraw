@@ -114,7 +114,7 @@ _ampm = r'(?P<{0}>[aApP])(?:\.[mM]\.?|[mM](?![\w-]))'          # a.m., am, AM (a
 EN_PATTERN = re.compile(
     rf'(?P<mixw>\d+)(?:\s+(?P<mixf>{_frac})|\s?(?P<mixv>{_vulgar}))(?:\s?(?P<munit>{_unit})(?![A-Za-z]))?'
     rf'|(?P<vul>{_vulgar})(?:\s?(?P<vunit>{_unit})(?![A-Za-z]))?'
-    rf'|(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>{_scale})\b)?'
+    rf'|(?P<cur>{_cur})\s?(?P<camt>{NUM})(?:\s?(?P<cscale>(?i:{_scale}))\b)?'      # $4.2M, $12K, $1.5 bn
     rf'|(?P<ra>{NUM})\s?(?:-|–|to)\s?(?P<rb>{NUM})\s?(?P<rpct>%)'
     rf'|(?P<pct>-?(?:{NUM}))\s?%'
     rf'|(?P<month>{_month})\s(?P<day>\d{{1,2}})(?!\d|,\d)(?:st|nd|rd|th)?'

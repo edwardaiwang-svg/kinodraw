@@ -65,7 +65,7 @@ def check_tokens(actual, expected, lang, context):
 
 
 def check_caption_words(board, tl, lang, source, context):
-    display = ' '.join(b['display'][lang] for b in board['beats'])
+    display = ' '.join(b['display'][lang] for b in board['beats'] if not b.get('silent'))   # a title card is shown
     check_tokens(' '.join(c['text'] for c in tl['captions']), display, lang, context + ' caption words')
     for beat in board['beats']:
         text = beat['display'][lang]

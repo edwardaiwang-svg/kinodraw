@@ -128,6 +128,7 @@ class Span:
     source_proof: bool = False
     story: list | None = None
     stacked: bool = False       # a proof counter or a call to action owns the frame's centre column
+    on_screen: tuple = ()       # beats whose own words the scene writes on screen (no caption repeats them)
 
 
 class HybridProduction:
@@ -170,7 +171,13 @@ class HybridProduction:
         # said in its accent) instead of the whiteboard's dark letters in a thick white outline, which smear on a
         # dark palette. Whiteboard scenes keep the whiteboard's own captions.
         palette = {k: ImageColor.getrgb(v)[:3] for k, v in self.style['palette'].items()}
-        self.caption_look, self.caption_accent = (palette['ink'], palette['background'], 4), palette['accent']
+        self.caption_look = (palette['ink'], palette['background'], 4)
+        # The word being said takes the accent, or the second accent when the first can't stand apart from the
+        # letters on this background (a dark green next to dark slate letters: no word lit at all).
+        from .captions import highlight_color
+        self.caption_accent = next((palette[k] for k in ('accent', 'accent2') if k in palette and
+                                    highlight_color(palette[k], palette['ink'], palette['background']) != palette['ink']),
+                                   palette['accent'])
         self.storybook = None
         if STORY_DOODLES and plan['storyboard']['genre'] == 'story':
             from .storybook import Storybook
@@ -351,18 +358,27 @@ class HybridProduction:
             value = quotes[0] if quotes else {}
             body = self._label(value.get('text')) or (source['text'] if source else text)
             who = self._label(value.get('who'))
-            atomic = '“' + body + '”'
+            atomic = '“' + body.strip().strip('"“”').strip() + '”'      # the script's own quote marks, once
             if not span.source_character:
                 atomic = '\n'.join(textwrap.wrap(atomic, 48))
             atomic += '\n— ' + who if who else ''
             elements.append(MotionElement(text=atomic, preset='corner_caption', width=1450, size=64))
+            if source and body == source['text']:
+                span.on_screen += (ref,)
             if span.source_character and source:
                 elements[-1].start = self._source_text_start(span, source, body)
                 elements[-1]._quote_source = (source, body)
         for e in spec['elements']:
-            if not span.diagram and not numeric_chart and e['kind'] == 'text' and e['ref'] in self.by_id and (e['ref'] != ref or text_kind in ('none', 'caption_only')):
+            # A text element never writes out the narration the caption is already showing: in a scene whose own
+            # words are only captioned (caption_only, none, quote), the beats it narrates draw no second copy. A
+            # character scene's source text is laid out beside the cast instead, and the caption gives way to it.
+            said_here = e['ref'] in spec['beat_ids'] and text_kind in ('none', 'caption_only', 'quote') \
+                and not span.source_character
+            if not span.diagram and not numeric_chart and e['kind'] == 'text' and e['ref'] in self.by_id and \
+                    (e['ref'] != ref or text_kind in ('none', 'caption_only')) and not said_here:
                 elements.append(MotionElement(text=self.by_id[e['ref']]['text'], width=1450, size=72,
                                               preset='type_on' if treatment == 'kinetic_type' else 'word_pop'))
+                span.on_screen += (e['ref'],)
                 if span.source_character:
                     elements[-1].start = self._source_text_start(span, self.by_id[e['ref']])
                 else:
@@ -374,6 +390,8 @@ class HybridProduction:
                 y=.25 if elements and spec['composition'] not in ('grid', 'split') else None))
             if text_kind != 'counter' and source and not span.source_character:
                 self._clause_build(span, elements[-1], ref)
+            if text_kind != 'counter' and source:
+                span.on_screen += (ref,)
             if text_kind == 'counter':
                 proof = arc.proof_number(words)
                 if proof:
@@ -1530,9 +1548,16 @@ class HybridProduction:
                                           kind=kind, duration=span.join_length)
                 image = Image.fromarray(array)
         image = self._draw_anchor(image.convert('RGBA'), t)
-        if not self.vertical:
+        if not self.vertical and not self._written(span, t):
             self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')
+
+    def _written(self, span, t):
+        """The words being said are already written on screen by this scene (kinetic type, a title, a quote, a call
+        to action): no caption repeats them underneath."""
+        beat = next((b for b in span.spec['beat_ids'] if self.tl['beats'][b]['start'] <= t < self.tl['beats'][b]['end']),
+                    None)
+        return beat in span.on_screen
 
     def cues(self):
         from .bold.model import TYPE_CPS

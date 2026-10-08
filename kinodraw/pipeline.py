@@ -100,7 +100,7 @@ def new_project(source, project_dir: Path, title: str | None = None, lang: str |
         doc = ingest.read(str(source), title=title)
     if lang:
         doc.lang = lang
-    board = script.build(doc, (direction or {}).get('story') or 'explain')
+    board = script.build(doc, (direction or {}).get('story') or 'explain', title_card=True)
     board.update({k: v for k, v in (direction or {}).items() if v})
     config = {'script': target.name, 'lang': doc.lang, 'voice': voice.LANGS[doc.lang]['voice'], 'speed': 1.0,
               'director': 'rules', 'director_v3': False, 'series_bible': {'cast': []}, 'workers': 2, **settings}
@@ -389,6 +389,9 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
     # their own voice (a voice server or your recording reads every part in its one voice).
     plan = cfg.get('plan_v3') if cfg.get('director_v3') else None
     parts = speech.voice_parts(board, plan, cfg['voice'], None if server else (lambda: voice.voices(lang)))
+    (project_dir / 'voice').mkdir(parents=True, exist_ok=True)
+    (project_dir / 'voice' / 'cast.json').write_text(json.dumps(speech.cast_of(
+        parts, 'your recording' if cfg.get('recording') else 'the voice server' if server else None)), encoding='utf-8')
     for i, beat in enumerate(board['beats']):
         if progress and hasattr(progress, 'check_cancelled'):
             progress.check_cancelled()
@@ -619,6 +622,8 @@ def _finish(project_dir):
     if decoded.returncode or decoded.stderr.strip():
         raise RuntimeError(f'finished media decode failed ({decoded.returncode}): {decoded.stderr.decode(errors="replace")}')
     qa = encoded_qa(tl, video, mixed, size=size, narrated_pages=_narrated_pages(cfg, tl))
+    cast = project_dir / 'voice' / 'cast.json'
+    qa['voices'] = speech.shared_voices(json.loads(cast.read_text(encoding='utf-8'))) if cast.is_file() else []
     if board.get('look') == 'collage':                # words written over other words never pass
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]
