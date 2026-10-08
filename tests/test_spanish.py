@@ -227,7 +227,8 @@ def test_validate_minimal_spanish_storyboard():
                         'spoken': {'es': '¿Hay tres abejas?'}, 'visuals': []}]}
     assert validate(board)['ok']
     board['beats'][0]['spoken']['es'] = '¿Hay tres abejas!'
-    assert not validate(board)['ok']
+    report = validate(board)        # a clause-mark mismatch warns; captions pair the marks both texts share
+    assert report['ok'] and any('clause punctuation differs' in w for w in report['warnings'])
 
 
 @pytest.mark.parametrize('look', ['whiteboard', 'chalkboard', 'notebook'])
