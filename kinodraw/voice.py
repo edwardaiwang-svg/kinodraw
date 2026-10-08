@@ -283,7 +283,9 @@ def _raised(audio: np.ndarray, semitones: float) -> tuple[np.ndarray, float]:
 
 
 SPEECH_LUFS = -24.0      # every clip's speech, whoever says it (Kokoro's voices measured -27.6 to -19.6 LUFS)
-SPEECH_DBTP = -1.0       # ...with its peaks limited to this after the gain
+SPEECH_DBTP = SPEECH_LUFS + 13  # ...its peaks at most 13 dB over it, the master's own headroom (-14 LUFS, -1 dBTP):
+                                # its limiter then leaves every voice's level alone (a peakier voice lost up to 1.2 LU
+                                # more there, script 28 on 10/8)
 GATED = 1.0              # speech at least this long (s) is measured gated (BS.1770); shorter, by its short-term level
 
 
@@ -310,8 +312,14 @@ def level(audio: np.ndarray, rate: int) -> np.ndarray:
     now = speech_loudness(audio, rate)
     if not np.isfinite(now):
         return audio
-    out = np.asarray(audio, np.float32) * np.float32(10 ** ((SPEECH_LUFS - now) / 20))
-    return master.limit(out, rate, SPEECH_DBTP) if master.true_peak(out, rate) > SPEECH_DBTP else out
+    audio, gain = np.asarray(audio, np.float32), SPEECH_LUFS - now
+    for _ in range(8):                                       # what the limiter takes is given back (a peaky
+        out = master.limit(audio * np.float32(10 ** (gain / 20)), rate, SPEECH_DBTP)    # voice needs a few passes)
+        lost = SPEECH_LUFS - speech_loudness(out, rate)
+        if abs(lost) <= .1:
+            break
+        gain += 1.5 * lost
+    return out
 
 
 def synthesize(spoken: str, lang: str, cache_dir: Path, voice: str | None = None, speed: float = 1.0,

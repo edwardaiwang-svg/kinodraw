@@ -100,3 +100,16 @@ def test_a_voice_server_clip_is_level_matched_too(tmp_path, monkeypatch):
     server = voice_server.Server('http://127.0.0.1:9', 'tts-1', 'alloy')
     clip = voice_server.synthesize('A line from the server.', 'en', tmp_path, server)
     assert abs(_measured(clip.wav) - voice.SPEECH_LUFS) <= .75
+
+
+def test_a_peaky_voice_keeps_its_level_through_the_master():
+    """Kokoro's voices peak 13-20 dB over their loudness; the -14 LUFS / -1 dBTP master would limit the peakier ones
+    more and leave them up to 1.2 LU quieter (script 28, 10/8). Level-matched clips peak at most 13 dB over."""
+    smooth = _speech(6.0, 1) * np.float32(.1)
+    peaky = smooth.copy()
+    peaky[::SR // 8] += np.float32(.5)                  # a click every 1/8 s: 20 dB of crest
+    a, b = voice.level(smooth, SR), voice.level(peaky, SR)
+    gain = np.float32(10 ** ((-14 - voice.SPEECH_LUFS) / 20))
+    a, b = (master.limit(x * gain, SR, -1.0) for x in (a, b))
+    assert abs(master.loudness(a, SR) - master.loudness(b, SR)) <= .3
+    assert abs(master.loudness(b, SR) + 14) <= .5
