@@ -20,7 +20,8 @@ from .source_diagrams import NUMBERS
 
 # ------------------------------------------------------------------ spoken math and named terms (English)
 _NUM = r'(?:\d+(?:[.,]\d+)*|' + '|'.join(sorted(NUMBERS, key=len, reverse=True)) + r')'
-TOKEN = re.compile(r"\d+(?:[.,]\d+)*|[A-Za-z]+(?:['’][A-Za-z]+)?|[^\sA-Za-z\d]")
+SCRIPTS = '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻₀₁₂₃₄₅₆₇₈₉₊₋'           # super/subscripts stay on their word: 10⁸, x², H₂O
+TOKEN = re.compile(rf"\d+(?:[.,]\d+)*[{SCRIPTS}]*|[A-Za-z]+(?:['’][A-Za-z]+)?(?:[{SCRIPTS}]+[A-Za-z]*)*|[^\sA-Za-z\d]")
 BINARY = {'plus': '+', 'minus': '−', 'times': '×', 'x': '×'}
 PAIRED = {('multiplied', 'by'): '×', ('divided', 'by'): '÷', ('divide', 'by'): '÷', ('over', None): None}
 EQUALS = {'equals', 'is', 'equal', 'makes', 'gives'}

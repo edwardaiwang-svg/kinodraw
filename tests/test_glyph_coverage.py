@@ -168,3 +168,10 @@ def test_render_reports_and_qa_fails_on_an_uncovered_character(tmp_path):
     pipeline._save(out.parent / 'render-warnings.json', ['skipped 1 visual(s)'])
     pipeline._glyph_qa(clean, out.parent)
     assert clean == {'ok': True, 'problems': []}
+
+
+def test_board_typesetting_keeps_sub_and_superscripts_on_their_word():
+    from kinodraw.engine.process_diagrams import _typeset
+    assert _typeset('about 3.0 × 10⁸ m/s') == '≈ 3.0 × 10⁸ m/s'
+    assert _typeset('x² + y² = r²') == 'x² + y² = r²'
+    assert _typeset('H₂O and CO₂') == 'H₂O and CO₂'
