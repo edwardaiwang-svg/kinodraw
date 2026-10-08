@@ -5,7 +5,8 @@
 - Stated ages: someone the text gives an adult age ("Dev turns 50", "a 40-year-old") is never drawn old, unless the
   text also calls them old (grandma, elderly).
 - Named focus: a shot's focus_ref is drawn. Outside an insert or first_person shot the camera does not look at it,
-  so a focus that is a thing (not a person, face, symbol or place) becomes a prop of the shot.
+  so a focus that is a thing (not a person, face, symbol or place) becomes a prop of the shot; a thing the beat
+  names only inside its quotes is not in the room, so the camera cuts to an insert of it at a later sentence.
 - Named people: in a story, a cast member the beat names is on screen in that beat's scene.
 """
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 import re
 
 from ...library import catalog
+from ..match import singular
 from .offer import FACES, UI_CATEGORIES
 from .semantics import beats, mentions
 
@@ -31,7 +33,7 @@ def repair(plan: dict, script_beats) -> list[str]:
     repairs: list[str] = []
     _carry_time(plan, repairs)
     _stated_ages(plan, script, repairs)
-    _focus_drawn(plan, repairs)
+    _focus_drawn(plan, script, repairs)
     _named_on_screen(plan, script, repairs)
     return repairs
 
@@ -84,10 +86,12 @@ def _stated_ages(plan, script, repairs):
             repairs.append(f'cast.{c["id"]}: the text gives age {ages[0]}; drawn as an adult, not old')
 
 
-def _focus_drawn(plan, repairs):
+def _focus_drawn(plan, script, repairs):
+    by_id = {b['id']: b for b in script}
     for i, scene in enumerate(plan['scenes']):
         pictures = {e['ref'] for e in scene['elements'] if e['kind'] == 'picture'}
-        for shot in scene.get('shots') or []:
+        shots = scene.get('shots') or []
+        for shot in list(shots):
             focus = shot['focus_ref']
             if not focus or shot['shot'] in LOOKING:
                 continue
@@ -95,29 +99,109 @@ def _focus_drawn(plan, repairs):
                 continue
             if (catalog().get(focus) or {}).get('category') in NOT_PROPS:
                 continue                               # a person or symbol picked as a focus is no prop
-            shot['props'].append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
             if focus not in pictures:
                 scene['elements'].append({'kind': 'picture', 'ref': focus})
                 pictures.add(focus)
+            cut = _insert_at(shot, shots, by_id.get(shot['beat_id']), focus)
+            if cut:
+                # a thing only talked about is not in the room: the camera cuts to it while the line goes on
+                insert = {'beat_id': shot['beat_id'], 'starts_at': cut, 'shot': 'insert',
+                          'setting': dict(shot['setting'], set_refs=[]), 'cast': [], 'lines': [], 'props': [],
+                          'focus_ref': focus, 'writing': ''}
+                shots.insert(shots.index(shot) + 1, insert)
+                repairs.append(f'scenes[{i}]: {shot["beat_id"]} cuts to an insert of {focus} at {cut!r}')
+                continue
+            shot['props'].append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
             repairs.append(f'scenes[{i}]: {shot["beat_id"]} {shot["shot"]} shot draws its focus {focus} as a prop')
 
 
+QUOTED = re.compile(r'["\u201c]([^"\u201d]*)["\u201d]')
+
+
+def _names(ref):
+    """The words that name a picture: its first keywords and the last word of its description."""
+    entry = catalog().get(ref) or {}
+    words = list(entry.get('en') or [])[:3] + (entry.get('desc') or '').split()[-1:]
+    return {singular(w) for word in words for w in re.findall(r'[a-z]+', word.lower()) if len(w) > 2}
+
+
+def _insert_at(shot, shots, beat, focus):
+    """Where an insert of ``focus`` starts, when the beat names it only inside its quotes: the first sentence after
+    the shot's own first sentence that names it, else the shot's second sentence; '' when there is none (one
+    short line) or the planner already cuts there."""
+    if beat is None:
+        return ''
+    text, names = beat['text'], _names(focus)
+    said = lambda part: bool(names & {singular(w) for w in re.findall(r'[a-z]+', part.lower())})
+    if not said(' '.join(QUOTED.findall(text))) or said(QUOTED.sub(' ', text)):
+        return ''
+    start = _find(text, shot['starts_at'])
+    sentences = [(q.start(1) + m.start(), m.group()) for q in QUOTED.finditer(text) if q.end(1) > start
+                 for m in re.finditer(r'[^.!?]+[.!?]*', q.group(1)) if re.search(r'\w', m.group())]
+    sentences = [(at, part) for at, part in sentences if at + len(part) > start]       # the quoted sentences spoken
+    if len(sentences) < 2:
+        return ''
+    later = next((at for at, part in sentences[1:] if said(part)), None)
+    if later is None and said(sentences[0][1]):
+        later = sentences[1][0]
+    if later is None:
+        return ''
+    at = later + len(text[later:]) - len(text[later:].lstrip())
+    if any(other is not shot and other['beat_id'] == shot['beat_id'] and _find(text, other['starts_at']) >= at
+           for other in shots):
+        return ''
+    return ' '.join(re.findall(r"\S+", text[at:])[:4]).strip(' "\u201c\u201d')
+
+
+def _find(text, words):
+    if not words:
+        return 0
+    m = re.search(r'\W+'.join(re.escape(w) for w in re.findall(r"\w+(?:['\u2019]\w+)?", words)), text, re.I)
+    return m.start() if m else 0
+
+
+FIRST_PERSON = re.compile(r"\b(?:I|I'm|I've|my|me|mine)\b")
+SPEAKER = {'id': 'speaker', 'name': 'Speaker', 'kind': 'human', 'species': 'human', 'family': 'human', 'age': 'adult',
+           'sex': 'unknown', 'size': 1, 'palette': {'body': '#DCA45C', 'accent': '#F2D4A4', 'eye': '#202020'},
+           'marks': ['none'], 'temperament': 'gentle'}
+BIBLE_AGE = {'baby': 'baby', 'young': 'child', 'adult': 'adult', 'old': 'old'}
+
+
 def _named_on_screen(plan, script, repairs):
+    """In a story, a scene the planner left without people shows the people its beats name; a first-person message
+    to one person ("Happy 25th Jo, ... my fries") shows its writer beside them."""
     if plan['storyboard']['genre'] != 'story':
         return
     humans = [c for c in plan['cast'] if c.get('kind') == 'human']
     by_id = {b['id']: b for b in script}
+    narration = QUOTED.sub(' ', ' '.join(b['text'] for b in script))
+    if len(humans) == 1 and FIRST_PERSON.search(narration) and not any(c['id'] == SPEAKER['id'] for c in plan['cast']):
+        writer = dict(SPEAKER, palette=dict(SPEAKER['palette']), marks=['none'])
+        plan['cast'].append(writer)
+        repairs.append('cast: added the first-person speaker of the message')
+    else:
+        writer = None
     for i, scene in enumerate(plan['scenes']):
         if scene.get('boards') or scene['treatment'] in ('chart', 'whiteboard'):
             continue
         staged = {e['ref'] for e in scene['elements'] if e['kind'] == 'cast'}
-        if staged or any(shot['cast'] for shot in scene.get('shots') or []):
+        shots = scene.get('shots') or []
+        if writer is None and (staged or any(shot['cast'] for shot in shots)):
             continue                                   # the planner chose who is on screen here
-        named = [c['id'] for c in humans
+        named = [c for c in humans
                  if any(mentions(c['name'], by_id[bid]['spoken']) for bid in scene['beat_ids'] if bid in by_id)]
-        for cid in named:
-            scene['elements'].append({'kind': 'cast', 'ref': cid})
-        if named:
+        if writer is not None and named:
+            named.append(writer)
+        added = [c for c in named if c['id'] not in staged]
+        for c in added:
+            scene['elements'].append({'kind': 'cast', 'ref': c['id']})
+        for shot in shots:
+            if shot['shot'] in LOOKING or shot['cast'] and writer is None:
+                continue
+            here = {m['id'] for m in shot['cast']}
+            shot['cast'] += [{'id': c['id'], 'age': BIBLE_AGE[c['age']], 'pose': 'stand', 'speaking': 'no'}
+                             for c in named if c['id'] not in here]
+        if added:
             if scene['treatment'] in ('motion', 'atmosphere'):
                 scene['treatment'], scene['composition'] = 'character', 'stage'
-            repairs.append(f'scenes[{i}]: {", ".join(named)} named in the scene and now on screen')
+            repairs.append(f'scenes[{i}]: {", ".join(c["id"] for c in added)} named in the scene and now on screen')
