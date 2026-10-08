@@ -39,10 +39,17 @@ def cap_font(lang, fonts=ink.FONTS):
     return ink.font('en_caption' if lang in ('en', 'es') else 'zh_caption', SIZE, fonts)
 
 
-def clause_spans(text, lang):
+def clause_marks(text, lang):
+    """The clause punctuation of ``text`` (matches): the marks that split captions and that spoken and display text
+    must share. A period that ends an abbreviation ("p.m.", "Dr.", "U.S.") is not one."""
     pat = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
+    return [m for m in pat.finditer(text)
+            if not (lang != 'zh' and m.group() == '.' and ABBREVIATIONS.search(text[:m.end()]))]
+
+
+def clause_spans(text, lang):
     spans, start = [], 0
-    for m in pat.finditer(text):
+    for m in clause_marks(text, lang):
         end = m.end()
         spans.append((start, end))
         start = end

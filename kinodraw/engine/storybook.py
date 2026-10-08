@@ -22,6 +22,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
+from ..speech import drawn
 from . import ink, sets, shots as planned
 from ..director.v3.staging import tie
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
@@ -483,7 +484,8 @@ class Storybook:
             for b in shot.bubbles:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
             shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
-        if spec['beat_ids'][0] == self.first and titled(self.title, self.by_id[self.first]['spoken']):
+        if spec['beat_ids'][0] == self.first and (self.by_id[self.first].get('kind') == 'title'
+                                                   or titled(self.title, self.by_id[self.first]['spoken'])):
             shots[0].title = self.title         # the title once, on the first page
         return shots
 
@@ -617,7 +619,7 @@ class Storybook:
         self._crowd(shot, line, figures)
         if line.speaker in [f.key for f in figures] and shot.eyes is None:
             for q0, q1 in line.quotes:
-                text = line.text[q0 - line.start:q1 - line.start].strip().rstrip(',;:').strip()
+                text = drawn(line.text[q0 - line.start:q1 - line.start]).strip().rstrip(',;:').strip()
                 cjk = sum(1 for ch in text if ink.is_cjk(ch))
                 if text and (cjk / 2 if cjk else len(text.split())) <= BUBBLE_WORDS:
                     lead = q0 + len(line.text[q0 - line.start:]) - len(line.text[q0 - line.start:].lstrip(' "“'))
