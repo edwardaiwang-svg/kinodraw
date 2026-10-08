@@ -72,6 +72,9 @@ def test_several_figures_are_a_stat_list_of_exact_text():
     'Tip 1: check the drip first.',
     'I sat down with 2 friends.',
     'May I come in?',
+    'Start at 0. Jump 3, then jump 5. You land on 8.',             # counting on a number line, not data
+    'Now swap the order. Jump 5 first, then 3. 8 again.',
+    'Here are 3 rows of 5 dots. 3 times 5 is 15.',
 ])
 def test_never_a_figure(sentence):
     assert figures.cards(sentence) == []
