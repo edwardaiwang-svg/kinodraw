@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 
 from . import captions as cap
+from . import closing
 from . import skin
 from .storyboard import normalize
 from .. import speech
@@ -21,8 +22,8 @@ from .. import speech
 FPS = 30
 CHAPTER_GAP = .6
 TRANSITION = .35         # quick pullback, pin and agenda settle
-END_CARD = 5.0            # pan to the closing page, write it, and let it be read
-CREDIT = 2.0              # then "Made with ..." under it (the project's credit setting can turn it off)
+# The closing card holds about a tenth of the video (closing.tail_seconds); "Made with ..." is written on it while it
+# holds (the project's credit setting can turn it off), not on a second card after it.
 ZH_DWELL = .5             # extra reading pause per Mandarin paragraph (9/19 precedent)
 ZOOM_IN = .35             # first part of each section: zoom into its agenda card
 TAKE_PREROLL = .15        # start the note's camera move just before its words
@@ -182,7 +183,7 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
             capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text,
                           'words': [round(start + w, 4) for w in words]})
         cursor = end
-    tail = END_CARD + (CREDIT if credit else 0.)
+    tail = closing.tail_seconds(cursor)
     duration = cursor + tail
     duration = round(-(-duration * FPS // 1) / FPS, 6)
     chaps = []
@@ -214,7 +215,7 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
             'captions': capts, 'chapters': chaps, 'transitions': transitions,
             'music': [{'start': round(a, 4), 'end': round(b, 4)} for a, b in merged],
             'end_card': {'start': round(duration - tail, 4), 'end': duration},
-            'credit': {'start': round(duration - CREDIT, 4), 'end': duration} if credit else None}
+            'credit': {'start': round(duration - tail, 4), 'end': duration} if credit else None}
 
 
 def synthetic_clips(episode, lang):

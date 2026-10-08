@@ -42,6 +42,7 @@ FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 NOTE_READ = .05          # the note is read during narration; pin it without a silent reading hold
 PAUSE_MAX = .1           # catch up by compressing strokes, with only a breath between beats
 PACE_MARGIN = .3         # a beat's drawings finish this long before the next beat's words start
+QUICK_CARD = 2.5         # a closing card shorter than this (seconds) is shown at once rather than written
 
 
 def sha(path):
@@ -462,14 +463,20 @@ class Production:
         lay.reserve(col, col + self.g.cols_on_screen - 1)
         ctx.chapter, ctx.color = None, ink.NEUTRAL
         self.scene_marks.append((col * self.g.col, 'end'))
-        self.cut(end['start'], col * self.g.col, 'pan')
+        # A short closing card (a short video's) cuts to its page and shows its words at once; a longer one pans
+        # there and the hand writes them. "Made with ..." goes on the same card, after its own words.
+        quick = end['end'] - end['start'] < QUICK_CARD
+        self.cut(end['start'], col * self.g.col, 'cut' if quick else 'pan')
         n0 = len(ctx.elements)
-        auto.SCENES[self.g.name]['end_card'](ctx, col * self.g.col, end['start'] + self.g.pan_seconds)
-        self._tag(n0, 'endcard', essential=True, deadline=end['end'] - .5)
+        at = end['start'] + (.05 if quick else self.g.pan_seconds)
+        auto.SCENES[self.g.name]['end_card'](ctx, col * self.g.col, at)
+        ready = end['start'] + .6 if quick else end['end'] - .5
+        self._tag(n0, 'endcard', essential=True, deadline=ready, **({'hand': False} if quick else {}))
         if self.tl.get('credit'):                      # "Made with ...", written under it while it is read
             n0 = len(ctx.elements)
-            auto.SCENES[self.g.name]['credit'](ctx, col * self.g.col, self.tl['credit']['start'] - .8)
-            self._tag(n0, 'credit', essential=True, deadline=self.tl['credit']['end'] - .3)
+            auto.SCENES[self.g.name]['credit'](ctx, col * self.g.col, max(at + .01, self.tl['credit']['start'] - .8))
+            self._tag(n0, 'credit', essential=True, deadline=ready if quick else self.tl['credit']['end'] - .3,
+                      **({'hand': False, 'trigger': at + .01} if quick else {}))
         self._transitions()
         # Supplementary sentences must release the hand before the existing
         # camera departure, including its settle, so the next page keeps its art.
