@@ -54,6 +54,9 @@ MIN_SHOT = .8                      # seconds: a shorter shot shares the page bef
 # Poses that are not a body position: someone sitting or lying who talks, looks or holds something stays put.
 IN_PLACE = {'talk', 'look', 'point', 'hold', 'reach', 'laugh', 'read', 'eat', 'drink', 'wave', 'shout', 'cry',
             'scared', 'write', 'stand'}
+# Poses of someone the plan keeps off screen in an insert whose hands still work the thing (a recipe's cook holding,
+# pouring, stirring): outside a story the insert shows their hand on it.
+HAND_POSES = {'hold', 'carry', 'reach', 'point', 'write', 'eat', 'drink'}
 # Things a character can read: a first_person shot of one fills the frame with its words.
 WRITABLE = re.compile(r'page|paper|letter|note(?!book_computer)|list|scroll|clipboard|memo|diary|journal|notebook|'
                       r'card|newspaper|sign|poster|receipt|ticket|map|phone|smartphone|mobile|tablet|message|'
@@ -311,12 +314,67 @@ class Shots:
         shots[0].start = 0.
         shots[-1].end = end - start
         self._bubbles(shots, beats, read, timers, {id(s): p for s, (_, _, p) in zip(shots, plans)}, voices)
+        if not book.story:
+            shots = self._vary(shots, sorted(timers[bid](line.start) for bid in beats for line in read[bid]))
         for shot in shots:
             for b in shot.bubbles:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
             shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
         self.previous = shots[-1]
         return shots
+
+    # ---------------- editing
+    VARY_EVERY = 2                 # sentences one framing holds outside a story before the next sentence cuts
+
+    def _vary(self, shots, starts):
+        """Outside a story no picture holds more than VARY_EVERY sentences: on the next sentence it cuts to a
+        closer or a wider framing of the same page (the coach's wide kitchen to a medium on him, two inserts of one
+        bowl to a wider look at the counter), a cut on a new sentence, never a camera move."""
+        out, run, look = [], 0, None
+        for shot in shots:
+            if shot.page:                                 # a page read fills the frame: it has no other framing
+                out.append(shot)
+                run, look = 0, None
+                continue
+            inside = [t for t in starts if shot.start + .05 < t < shot.end - MIN_SHOT]
+            same = self._look(shot) == look
+            run = run + 1 if same else 1                  # the sentence this shot opens on
+            if same and run > self.VARY_EVERY and out and out[-1].view == shot.view:
+                shot.view, run = self._other_view(shot), 1
+            look = self._look(shot)
+            out.append(shot)
+            for t in inside:
+                run += 1
+                if run <= self.VARY_EVERY:
+                    continue
+                cut = copy.copy(out[-1])
+                cut.start, out[-1].end = t, t
+                cut.bubbles = [copy.copy(b) for b in out[-1].bubbles]
+                cut.view, run = self._other_view(out[-1]), 1
+                out.append(cut)
+        return out
+
+    def _look(self, shot):
+        """What a page looks like at a glance: its framing, where the camera is and who is in it (a spoon added
+        out of frame is the same picture)."""
+        return (shot.framing, tuple(round(v, 2) for v in shot.view), tuple((f.key, f.pose) for f in shot.figures),
+                bool(shot.page))
+
+    def _other_view(self, shot):
+        """A different framing of the same page: a medium on its people from a wide, else a wider look."""
+        cx, cy, zoom = shot.view
+        if zoom <= 1.05:
+            if shot.figures:
+                probe = SimpleNamespace(view=shot.view)
+                self._look_at(probe, self._union([self._knees_up(f) for f in shot.figures[:2]]), MEDIUM_FILL,
+                              MAX_ZOOM['medium'])
+                if probe.view[2] > 1.2:
+                    return probe.view
+            zoom = 1.6
+        else:
+            zoom = max(1., zoom * .6)
+        half = .5 / zoom
+        return min(1 - half, max(half, cx)), min(1 - half, max(half, cy)), zoom
 
     # ---------------- time
     def _timer(self, bid, start):
@@ -360,6 +418,12 @@ class Shots:
         heard = {c['id'] for c in people if c.get('speaking') == 'off_screen'}
         cast = [c for c in people if c.get('id') in book.cast and c['id'] not in heard]
         props = [dict(p) for p in plan.get('props') or () if self._known(p.get('ref'))]
+        focus = plan.get('focus_ref') or ''
+        if (not book.story and shot.framing in ('insert', 'close') and self._known(focus) and not writable(focus)
+                and focus not in [p['ref'] for p in props] + list((plan.get('setting') or {}).get('set_refs') or ())):
+            # Outside a story the thing an insert looks at stands in the set (the bowl on the kitchen counter),
+            # not alone on blank paper.
+            props.append({'ref': focus, 'relation': 'none', 'to': '', 'motion': 'none'})
         figures = []
         setting = plan.get('setting') or {}
         place = place_for(setting.get('place'), self.place)
@@ -453,9 +517,23 @@ class Shots:
         if speakers and len(figures) > 1:
             book._face_speaker(figures, speakers[0])
         self._frame(shot, plan, figures, speakers, props, bid, text)
+        self._hands(shot, plan, focus)
         self.last = shot
         self.seen.update({f.key: place for f in figures})
         return shot
+
+    def _hands(self, shot, plan, focus):
+        """Outside a story an insert or close-up of a thing that someone off screen holds or works shows their hand
+        reaching in to it (the cook's hand on the bowl), in their skin tone."""
+        book = self.book
+        if book.story or shot.page or shot.figures or shot.framing not in ('insert', 'close'):
+            return
+        piece = next((p for p in shot.set if p.doodle == focus and p.kind not in ('strip', 'hand')), None)
+        worker = next((c['id'] for c in plan.get('cast') or () if c.get('pose') in HAND_POSES
+                       and self.person(c.get('id')) in book.cast and book._human(self.person(c.get('id')))), None)
+        if piece is None or worker is None:
+            return
+        shot.hands = [(piece, book._look(self.person(worker))['tone'])]
 
     def _seat(self, shot, figures, place, refs, texts=()):
         """Seat everyone who sits, lies or sleeps: the person the shot's words (else its beat's) put on a seat or in
@@ -1052,6 +1130,27 @@ def draw_screen(book, overlay, piece, shown, shot, local, cam):
                                    font=_font(size),
                                    fill=(255, 196, 0, 255), stroke_width=max(1, size // 10), stroke_fill=(60, 40, 0, 255))
     overlay.alpha_composite(glass, (max(0, sx0), max(0, sy0)), (max(0, -sx0), max(0, -sy0)))
+
+
+def draw_hands(book, overlay, shot, cam):
+    """The hands of an insert (Shot.hands): a right hand reaching in from the lower right to grip the thing."""
+    w, h = book.size
+    k = 2
+    layer = Image.new('RGBA', (w * k, h * k), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for piece, tone in shot.hands:
+        x0, y0, x1, y1 = book.stager.frame(piece.doodle, piece.x, piece.ground, piece.height, piece.mirror)[2]
+        gx, gy, _ = book._to_screen(x1 - .12 * (x1 - x0), y0 + .62 * (y1 - y0), cam)
+        _, top, _ = book._to_screen(x0, y0, cam)
+        _, bottom, _ = book._to_screen(x0, y1, cam)
+        s = min(h / 540, max(h / 1440, .4 * (bottom - top) / 160))
+        x, y, s = gx * k, gy * k, s * k
+        reach = w * k + 200 * s - (x + 100 * s)
+        arm = [(x + 100 * s, y + 150 * s), (x + 100 * s + reach, y + 150 * s + .3 * reach)]
+        draw.line(arm, fill=INK, width=round(148 * s))          # the forearm runs on out of the frame's right side
+        draw.line(arm, fill=SLEEVE + (255,), width=round(132 * s))
+        _hand(draw, x, y, s, SKIN.get(tone, SKIN['tan']), 'front')
+    overlay.alpha_composite(layer.resize((w, h), Image.Resampling.LANCZOS))
 
 
 @lru_cache(maxsize=8)
