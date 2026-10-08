@@ -94,8 +94,8 @@ def test_a_card_keeps_clear_of_pictures_it_is_not_about():
                                                                      'hundred bikes.'))
     cards = data_cards.build(ep, tl, 'en', Skin(), (W, H))
     start = cards.entries[0][0]
-    # three icons in a row across the middle, open paper above and below
-    icons = ((.1, .38, .26, .62), (.42, .38, .58, .62), (.74, .38, .9, .62))
+    # one icon a little right of centre: the card has room on either side, and takes the side with air
+    icons = ((.45, .3, .62, .7),)
     box = _painted_box(cards, start + 1.6, _Host(*icons))
     gap = min(max(icon[0] * W - box[2], box[0] - icon[2] * W, icon[1] * H - box[3], box[1] - icon[3] * H)
               for icon in icons)

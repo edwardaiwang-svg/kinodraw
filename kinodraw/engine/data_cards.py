@@ -34,7 +34,7 @@ INK = 48
 CLEAN = {'card': (252, 252, 250), 'ink': (26, 30, 38), 'soft': (96, 104, 116), 'accent': (52, 110, 200),
          'shadow': (0, 0, 0)}
 WARN = (214, 134, 18)     # amber: an overrun, a loss or a delay (figures.Card.tone 'warn'), never the growth colour
-CLEAR = 3                 # cards keep this many more quarter-resolution cells (48 px at 1080p) of air around them ...
+CLEAR = 12                # cards keep this many more quarter-resolution cells (48 px at 1080p) of air around them ...
 CLEAR_WEIGHT = .35        # ... weighed at this share of covered ink: a card never hugs a picture it is not about
 ENTER = .35               # seconds a card takes to fade in whole (never wiped in through its own edge)
 BOLD = ink.ASSETS / 'fonts' / 'Arimo-Bold.ttf'
