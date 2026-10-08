@@ -252,7 +252,49 @@ def _clause_cues(atoms, lang, fits, char_time, gaps, target, minimum):
             and not sentence_end(cues[-2][1]):
         p, t, spots = cues[-2]
         cues[-2:] = [(p, t + cues[-1][1], spots + cues[-1][2])]
-    return cues
+    return _no_fragments(cues, lang, fits, char_time, gaps)
+
+
+def _no_fragments(cues, lang, fits, char_time, gaps):
+    """No caption is a lone word or two cut from its sentence: a cue of fewer than MIN_WORDS words joins the cue of
+    its sentence before it (else after it) when the two fit as one caption, else takes that cue's last words. Cues
+    either side of a line left to a speech bubble stay apart. Chinese has no spaces to count words by: unchanged."""
+    if lang == 'zh':
+        return cues
+    cues = [list(c) for c in cues]
+
+    def short(c):
+        return len(c[1].split()) < MIN_WORDS
+
+    def joined(a, b):
+        return len(a[2]) == len(a[1]) and len(b[2]) == len(b[1]) and \
+            not _between(gaps, char_time(int(a[2][-1])), char_time(int(b[2][0])))
+    i = 0
+    while i < len(cues):
+        c = cues[i]
+        prev = cues[i - 1] if i else None
+        if not short(c) or not c[1].strip():
+            i += 1
+            continue
+        if prev is not None and not sentence_end(prev[1]) and joined(prev, c):
+            if fits(prev[1] + c[1], lang):
+                cues[i - 1:i + 1] = [[prev[0], prev[1] + c[1], prev[2] + c[2]]]
+                continue
+            text, spots = prev[1], prev[2]
+            while True:                              # take the previous caption's last words
+                cut = text.rstrip().rfind(' ')
+                if cut <= 0 or len(text[:cut + 1].split()) < MIN_WORDS or not fits(text[cut + 1:] + c[1], lang):
+                    break
+                c = [spots[cut + 1], text[cut + 1:] + c[1], spots[cut + 1:] + c[2]]
+                text, spots = text[:cut + 1], spots[:cut + 1]
+                if not short(c):
+                    break
+            cues[i - 1], cues[i] = [prev[0], text, spots], c
+        elif i + 1 < len(cues) and not sentence_end(c[1]) and joined(c, cues[i + 1]) and \
+                fits(c[1] + cues[i + 1][1], lang):
+            cues[i:i + 2] = [[c[0], c[1] + cues[i + 1][1], c[2] + cues[i + 1][2]]]
+        i += 1
+    return [tuple(c) for c in cues]
 
 
 def _verse_cues(atoms, offset, breaks, lang, char_time, gaps):
@@ -452,10 +494,17 @@ def _outline_word(text, lang, fonts, color, edge, stroke, word, accent):
     return paint_word(base, lit, boxes[word])
 
 
+# A page or caption carries a readable phrase: at least this many words unless its whole sentence is shorter (never a
+# lone "quarter." left over from a sentence that just missed one page).
+MIN_WORDS = 3
+
+
 def roll_pages(text, chars, lines=2):
     """A long text written on screen as the narration says it, cut into pages that each wrap into at most ``lines``
     lines of ``chars`` characters: whole clauses where they fit (a page ends at , ; : . ! ? …) and never past a
-    sentence end, a clause too long for one page cut between its words. Returns (first, end) word indices of each page; one page when it fits."""
+    sentence end, a clause too long for one page cut between its words. A sentence whose pages would leave a
+    fragment of fewer than MIN_WORDS words is cut again into the fewest pages that each carry MIN_WORDS, at clause
+    ends where it can and evenly otherwise. Returns (first, end) word indices of each page; one page when it fits."""
     words = text.split()
     clauses, cur = [], []
     for k, word in enumerate(words):
@@ -476,11 +525,44 @@ def roll_pages(text, chars, lines=2):
             end = next((e for e in range(b, a, -1) if ok(a, e)), a + 1)
             pages.append((a, end))
             a = end
-    return pages or [(0, len(words))]
+    out, k = [], 0
+    while k < len(pages):                            # one sentence's pages at a time
+        j = k
+        while j < len(pages) - 1 and not sentence_end(words[pages[j][1] - 1]):
+            j += 1
+        run = pages[k:j + 1]
+        if len(run) > 1 and any(b - a < MIN_WORDS for a, b in run):
+            run = _even_pages(words, run[0][0], run[-1][1], ok) or run
+        out += run
+        k = j + 1
+    return out or [(0, len(words))]
+
+
+def _even_pages(words, a, b, ok):
+    """Words a..b (one sentence) as the fewest pages that each fit (``ok``) and carry MIN_WORDS words, cut at clause
+    ends where possible, then with the longest page as short as possible; None when no such cut exists."""
+    best = {a: (0, 0, 0, None)}                      # end -> (pages, cuts inside a clause, longest page, previous)
+    for e in range(a + 1, b + 1):
+        for s in range(a, e):
+            if s not in best or e - s < MIN_WORDS or not ok(s, e):
+                continue
+            pages, inside, longest, _ = best[s]
+            mid = e < b and words[e - 1][-1] not in ',;:.!?…'
+            cand = (pages + 1, inside + mid, max(longest, len(' '.join(words[s:e]))), s)
+            if e not in best or cand[:3] < best[e][:3]:
+                best[e] = cand
+    if b not in best:
+        return None
+    cuts, e = [], b
+    while e != a:
+        cuts.append((best[e][3], e))
+        e = best[e][3]
+    return cuts[::-1]
 
 
 # ------------------------------------------------------------------ where the caption goes, and its backing
-TOP = 30                 # the top band's first row (px) when the bottom band would cover someone
+TOP = 54                 # the top band's first row (px): as far from the top edge as the bottom band is from the
+                         # bottom one, so the caption and its backing strip are never cut by the frame edge
 BUSY = .12               # luminance spread (WCAG relative luminance, 0-1) above which a background is busy
 BACKING_ALPHA = .86
 
@@ -526,16 +608,41 @@ def _overlap(a, b):
 
 def caption_spot(frame_size, caption_size, bottom, avoid=(), margin=60):
     """Top-left (x, y) of the caption: the bottom band, centred, unless it would cover something in ``avoid`` =
-    (figure boxes, prop boxes), each (x0, y0, x1, y1) px. Then the first spot that covers no figure (and, among
-    those, the fewest props) of: the bottom band at the left or right, the top band centred, left or right; where
-    every spot covers someone, the one covering the least of them."""
+    (figure boxes, prop boxes, head boxes), each (x0, y0, x1, y1) px; heads are faces with whatever they wear (a
+    crown, a hat). The spots, in order of preference: the bottom band centred, at the left or right, the top band
+    centred, left or right. The chosen spot covers the least of the heads, then of the props (the things the page
+    shows, the sky's moon among them), then of the bodies."""
     (w, h), (cw, ch) = frame_size, caption_size
-    figures, props = (tuple(avoid) + ((), ()))[:2]
+    figures, props, heads = (tuple(avoid) + ((), (), ()))[:3]
     centre, left, right = (w - cw) / 2, min(margin, (w - cw) / 2), max((w - cw) / 2, w - margin - cw)
     spots = [(centre, bottom - ch), (left, bottom - ch), (right, bottom - ch), (centre, TOP), (left, TOP),
              (right, TOP)]
 
     def covered(spot):
         box = (spot[0], spot[1], spot[0] + cw, spot[1] + ch)
-        return sum(_overlap(box, b) for b in figures), sum(_overlap(box, b) for b in props)
+        return tuple(sum(_overlap(box, b) for b in boxes) for boxes in (heads, props, figures))
     return min(spots, key=covered)
+
+
+def clearance(frame_size, box, heads, most=.14):
+    """Where the caption at ``box`` still covers a head (no band was clear of them): how far (px) the picture under
+    it moves away from the caption so no head stays under it: positive moves it up (a caption in the bottom band),
+    negative down (the top band). Never more than ``most`` of the frame height, and 0 when nothing is covered or
+    the move would push another head out of the frame."""
+    w, h = frame_size
+    hit = [b for b in heads if _overlap(box, b) > 0]
+    if not hit:
+        return 0
+    bottom_band = box[1] > h / 2
+    need = max(b[3] - box[1] for b in hit) + 8 if bottom_band else -(box[3] - min(b[1] for b in hit) + 8)
+    if abs(need) > most * h:
+        return 0
+    if bottom_band and min(b[1] for b in heads) - need < 0 or not bottom_band and max(b[3] for b in heads) - need > h:
+        return 0
+    return round(need)
+
+
+def unwrap(text):
+    """Text wrapped into lines back as one line: a line ending in a word's hyphen ("worn-") joins the next line with
+    no space ("worn-out"), every other line break becomes a space."""
+    return ' '.join(re.sub(r'(?<=\w-)\s*\n\s*(?=\w)', '', text).split())

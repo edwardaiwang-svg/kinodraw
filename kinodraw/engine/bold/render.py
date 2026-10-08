@@ -389,6 +389,7 @@ def _button(e, t, scene):
 
 def _element_content(scene, e, i, t, geometry=None):
     color = scene.palette.accent if e.accent or e.kind in {'dot', 'ring', 'line', 'particle_field', 'chart'} else scene.palette.foreground
+    color = getattr(e, 'color', None) or color
     art, text = '', ''
     if e.kind == 'text' or e.kind == 'chart' and e.chart == 'number':
         text = _text(e, scene, t, color)
@@ -713,7 +714,8 @@ class _SceneLayers:
     def counter_sprite(self, e, i, t):
         # Batch exact complete tokens, retaining resvg shaping, kerning and fit.
         # Prefetch is a cache policy only: arbitrary times still raster exactly.
-        color = self.scene.palette.accent if e.accent or e.kind == 'chart' else self.scene.palette.foreground
+        color = getattr(e, 'color', None) or (self.scene.palette.accent if e.accent or e.kind == 'chart'
+                                              else self.scene.palette.foreground)
         fragment = _text(e, self.scene, t, color)
         key = (self.size, fragment)
         if key not in self.tokens:
