@@ -45,7 +45,7 @@ def clause_marks(text, lang):
     must share. A period that ends an abbreviation ("p.m.", "Dr.", "U.S.") is not one."""
     pat = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
     return [m for m in pat.finditer(text)
-            if not (lang != 'zh' and m.group() == '.' and (_abbreviated(text[:m.end()]) or _unit_dot(text, m.end())))]
+            if not (lang != 'zh' and m.group() == '.' and (_abbreviated(text[:m.end()], text[m.end():]) or _unit_dot(text, m.end())))]
 
 
 def _unit_dot(text, end):
@@ -159,8 +159,13 @@ _CAPITAL_ABBREVIATIONS = re.compile(
     r'Rd|Ave|Blvd|Ln|Hwy|Rte|Dept|Gov|Sen|Rep|Gen|Capt|Lt|Sgt|Col|Inc|Corp|Ltd|Co|Bros|Univ|Assn|Fig|Vol|Ch)\.$')
 
 
-def _abbreviated(text):
-    """Does ``text`` end with an abbreviation's period ("p.m.", "Dr.", "U.S.", "Oct.", "Rd.", "Dept.")?"""
+def _abbreviated(text, after=None):
+    """Does ``text`` end with an abbreviation's period ("p.m.", "Dr.", "U.S.", "Oct.", "Rd.", "Dept.")? With the text
+    ``after`` it, one that also ends the sentence ("on Elm St. Bring a bag") is a sentence's end (lexicon.py)."""
+    from ..lexicon import abbreviation_period
+    known = abbreviation_period(text, after)
+    if known is not None:
+        return known
     return bool(_ABBREVIATIONS.search(text) or _CAPITAL_ABBREVIATIONS.search(text))
 
 

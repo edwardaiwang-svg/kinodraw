@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from . import markup
+from . import lexicon, markup
 
 EMOJI = re.compile('[\U0001F000-\U0001FAFF☀-➿⬀-⯿⌀-⏿︎️‍⃣'
                    '\U000E0020-\U000E007F]')
@@ -64,16 +64,13 @@ def _stop(m: re.Match, word: str) -> str:
 
 def _day(m: re.Match) -> str:
     word = WEEKDAYS[m.group(1).lower()]
-    if not m.group().endswith('.') and re.match(r'\s+' + NUMBER_WORD, m.string[m.end():]):
+    if re.match(r'\s+' + NUMBER_WORD + r'[\w-]*(?: [AP]M)?\s+to\s', m.string[m.end():]):
+        word += ','                                     # "Sat 10-2" -> "Saturday, ten to two" (hours, not a time)
+    elif not m.group().endswith('.') and re.match(r'\s+' + NUMBER_WORD, m.string[m.end():]):
         word += ' at'                                   # "party sat six PM" -> "Saturday at six PM"
     return _stop(m, word)
 
 
-PLACE_WORDS = {'Rd': 'Road', 'Blvd': 'Boulevard', 'Ln': 'Lane', 'Hwy': 'Highway', 'Rte': 'Route', 'Pkwy': 'Parkway',
-               'Ct': 'Court', 'Apt': 'Apartment', 'Ste': 'Suite', 'Bldg': 'Building', 'Dept': 'Department',
-               'Govt': 'Government', 'Gov': 'Governor', 'Sen': 'Senator', 'Rep': 'Representative', 'Capt': 'Captain',
-               'Lt': 'Lieutenant', 'Sgt': 'Sergeant', 'Gen': 'General', 'Corp': 'Corporation', 'Univ': 'University',
-               'Assn': 'Association', 'Intl': 'International', 'Natl': 'National', 'Hosp': 'Hospital'}
 # Chat shorthand a customer types ("ran the store 22 yrs lol", "see u sat w/ the kids"): the voice says the words,
 # the captions keep the writing. Laughs and tone marks are tone, not words: the voice leaves them out.
 SHORTHAND = {'w/': 'with', 'w/o': 'without', 'b/c': 'because', 'bc': 'because', 'u': 'you', 'ur': 'your',
@@ -99,25 +96,14 @@ TLD_WORDS = _tld_words()
 ARROW = re.compile(r'\s*(?:→|->|⟶|➔|➡️?|=>)\s*')
 
 # Abbreviations spelled out for the voice only (captions keep the written form).
-SAY_EN = [(re.compile(r'\bMr\.(?=\s)'), 'Mister'), (re.compile(r'\bMrs\.(?=\s)'), 'Missus'),
-          (re.compile(r'\bMs\.(?=\s)'), 'Miz'),
-          # After a street's name: "Elm St.", "Oak Dr."; before a name: "St. Louis", "Dr. Lee".
-          (re.compile(r'\b(St|Dr)\.'), lambda m: ({'St': 'Street', 'Dr': 'Drive'} if re.search(
-              r'\b[A-Z][\w’\']*\s$', m.string[:m.start()]) else {'St': 'Saint', 'Dr': 'Doctor'})[m.group(1)]),
-          (re.compile(r'\bAve\.'), 'Avenue'),
-          (re.compile(r'\bMt\.(?=\s+[A-Z])'), 'Mount'), (re.compile(r'\bvs\.?(?=\s)'), 'versus'),
-          (re.compile(r'\betc\.'), 'et cetera'), (re.compile(r'\be\.g\.,?'), 'for example'),
-          (re.compile(r'\bi\.e\.,?'), 'that is'), (re.compile(r'\bProf\.(?=\s)'), 'Professor'),
-          (re.compile(r'\bJr\.'), 'Junior'), (re.compile(r'\bSr\.(?=\s|$)'), 'Senior'),
-          (re.compile(r'\bapprox\.'), 'approximately'),
+# The abbreviation lexicon (lexicon.py: titles, streets, offices, listings, kitchen, Latin, states) comes first.
+SAY_EN = [(lexicon.say, None),
           (re.compile(r'\b(Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri)\.'), _day),
           (re.compile(r'\b(Sat|Sun)\.' + DAY_NEXT), _day),
           (re.compile(r'\b(Mon|Tues?|Wed|Thu|Thurs?|Fri|Sat|Sun|mon|tues?|wed|thu|thurs?|fri|sat|sun)\b(?!\.)' + DAY_NEXT),
            _day),
           (re.compile(r'\b(Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.'),
            lambda m: _stop(m, MONTH_NAMES[m.group(1)[:3].lower()])),
-          (re.compile(r'\b(' + '|'.join(PLACE_WORDS) + r')\.'), lambda m: _stop(m, PLACE_WORDS[m.group(1)])),
-          (re.compile(r'\b[Nn]o\.(?=\s*' + NUMBER_WORD + ')'), 'number'),
           # The voice runs on through an abbreviation's period before a lowercase word ("Tom from Pipewise Plumbing
           # Inc. and"), and an extension never ends a sentence.
           (LAUGHS, ''),
@@ -127,6 +113,7 @@ SAY_EN = [(re.compile(r'\bMr\.(?=\s)'), 'Mister'), (re.compile(r'\bMrs\.(?=\s)')
           (re.compile(r'(?<![\w/&])(' + _shorthand + r')(?![\w/&])', re.I),
            lambda m: _shorthand_word(m)),
           (re.compile(r'(?<=\w)\s*&\s*(?=\w)|\s&\s'), ' and '),
+          *lexicon.SYMBOLS,
           # Two addresses in a row ("pipewisebayside.com hello@pipewisebayside.com"): a pause after the first.
           (re.compile(r'\bdot (' + TLD_WORDS + r')(?= (?!dot\b|slash\b|at\b|dash\b)[\w])'), lambda m: m.group() + ','),
           # Two counts in a row ("3 kids 2 grandkids"): a list, with a pause between its items.
@@ -521,13 +508,14 @@ def _say(text: str, index: list[int], lang: str) -> tuple[str, list[int]]:
         return text, index
     for pattern, words in SAY_EN:
         out, out_index, last = [], [], 0
-        for m in pattern.finditer(text):
-            said = words(m) if callable(words) else words
-            out.append(text[last:m.start()])
-            out_index += index[last:m.start()]
+        found = pattern(text) if words is None else (
+            (m.start(), m.end(), words(m) if callable(words) else words) for m in pattern.finditer(text))
+        for start, end, said in found:
+            out.append(text[last:start])
+            out_index += index[last:start]
             out.append(said)
-            out_index += [index[m.start()]] * len(said)
-            last = m.end()
+            out_index += [index[start]] * len(said)
+            last = end
         if last:
             out.append(text[last:])
             out_index += index[last:]
@@ -887,6 +875,10 @@ def pace(spoken: str, lang: str = 'en', labels: set | None = None) -> list[tuple
         if seconds:
             add(next_word(b)[0], seconds)
     shielded = _protect_periods(spoken, lang)
+    for m in re.finditer(r'\.', spoken):           # an abbreviation's period ends a sentence only where one ends
+        known = lexicon.abbreviation_period(spoken[:m.end()], spoken[m.end():]) if lang == 'en' else None
+        if known is not None:
+            shielded = shielded[:m.start()] + ('\0' if known else '.') + shielded[m.end():]
     for a, b in gone:                                 # nothing inside a direction ends a sentence
         shielded = shielded[:a] + '\0' * (b - a) + shielded[b:]
     begun = 0

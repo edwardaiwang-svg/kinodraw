@@ -100,7 +100,7 @@ def test_emoji_never_reach_text_drawn_in_the_picture(preset):
 # ------------------------------------------------------------------ 2. speech respelling
 @pytest.mark.parametrize('text,said', [
     ('Mr. Smith met Dr. Lee on Main St. today.', 'Mister Smith met Doctor Lee on Main Street today.'),
-    ('St. Louis vs. Oak Dr. and so on, etc.', 'Saint Louis versus Oak Drive and so on, et cetera'),
+    ('St. Louis vs. Oak Dr. and so on, etc.', 'Saint Louis versus Oak Drive and so on, et cetera.'),
     ('Every Saturday at 7 a.m. 🔥 Just $3.50 each.', 'Every Saturday at seven AM. Just three fifty each.'),
     ('At 4:17 p.m. Eastern time, it landed.', 'At four seventeen PM Eastern time, it landed.'),
 ])

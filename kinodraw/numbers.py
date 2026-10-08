@@ -13,6 +13,8 @@ from decimal import Decimal
 import cn2an
 from num2words import num2words
 
+from . import lexicon
+
 NUM = r'\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?'
 
 
@@ -73,22 +75,11 @@ SCALES = {'k': 'thousand', 'thousand': 'thousand', 'm': 'million', 'mn': 'millio
           'tn': 'trillion', 'trillion': 'trillion'}
 CURRENCIES = {'US$': ('dollar', 'dollars'), '$': ('dollar', 'dollars'), '€': ('euro', 'euros'),
               '£': ('pound', 'pounds'), '¥': ('yen', 'yen'), '₹': ('rupee', 'rupees')}
-UNITS = {'km/h': 'kilometers per hour', 'mph': 'miles per hour', 'km': 'kilometers', 'kg': 'kilograms',
-         'cm': 'centimeters', 'mm': 'millimeters', '°C': 'degrees Celsius', '°F': 'degrees Fahrenheit',
-         '°': 'degrees', 'GB': 'gigabytes', 'MB': 'megabytes', 'TB': 'terabytes', 'GHz': 'gigahertz',
-         'kWh': 'kilowatt hours', 'MW': 'megawatts', 'GW': 'gigawatts', 'lbs': 'pounds', 'ft': 'feet',
-         'tbsp': 'tablespoons', 'Tbsp': 'tablespoons', 'tsp': 'teaspoons', 'oz': 'ounces', 'lb': 'pounds',
-         'ml': 'milliliters', 'mL': 'milliliters', 'g': 'grams', 'mg': 'milligrams', 'min': 'minutes',
-         'mins': 'minutes', 'hr': 'hours', 'hrs': 'hours', 'sec': 'seconds', 'secs': 'seconds', 'mi': 'miles',
-         'yrs': 'years', 'yr': 'years', 'wks': 'weeks', 'wk': 'weeks'}
+# Units after a number, from the abbreviation lexicon (lexicon.UNITS: singular and plural): "2 ft" two feet, "1 ft" one
+# foot, "850 sq ft" eight hundred fifty square feet, "3BR" three bedrooms.
+UNITS = {k: plural for k, (_, plural) in lexicon.UNITS.items()}
 FRACTIONS = {'1/2': 'one half', '1/3': 'one third', '2/3': 'two thirds', '1/4': 'one quarter',
              '3/4': 'three quarters', '1/5': 'one fifth', '1/10': 'one tenth'}
-SINGULAR = {'kilometers': 'kilometer', 'kilograms': 'kilogram', 'centimeters': 'centimeter',
-            'millimeters': 'millimeter', 'degrees': 'degree', 'gigabytes': 'gigabyte', 'megabytes': 'megabyte',
-            'terabytes': 'terabyte', 'megawatts': 'megawatt', 'gigawatts': 'gigawatt', 'pounds': 'pound', 'feet': 'foot',
-            'tablespoons': 'tablespoon', 'teaspoons': 'teaspoon', 'ounces': 'ounce', 'milliliters': 'milliliter',
-            'grams': 'gram', 'milligrams': 'milligram', 'minutes': 'minute', 'hours': 'hour', 'seconds': 'second',
-            'miles': 'mile', 'years': 'year', 'weeks': 'week', 'inches': 'inch'}
 # A fraction before a noun reads as a cook or a teacher says it: "1/2 cup" is "half a cup", "1 1/2 cups" is
 # "one and a half cups". (phrase before a noun, phrase after a whole number)
 FRACTION_WORDS = {'1/2': ('half a', 'a half'), '1/3': ('a third of a', 'a third'),
@@ -112,6 +103,7 @@ _unit = '|'.join(re.escape(u) for u in sorted(UNITS, key=len, reverse=True))
 _vulgar = '[' + ''.join(VULGAR) + ']'
 _frac = r'[1-9]/[2-8](?!\d)'
 _ampm = r'(?P<{0}>[aApP])(?:\.[mM]\.?|[mM](?![\w-]))'          # a.m., am, AM (a.m.'s period goes with it)
+_ampm1 = r'(?P<{0}>[aApP])(?:\.[mM]\.?|[mM](?!\w))'              # the first time of a range: "9am-5pm"
 # A unit's abbreviation period goes with it when the sentence runs on ("3 ft. away", "2 in. thick"): the voice never
 # stops there, and captions.clause_marks does not break the caption there either.
 _udot = r'(?:\.(?=[ \t]+[a-z(]|,))?'
@@ -131,9 +123,10 @@ _ext = r'(?P<extw>\b(?:[Ee]xt|EXT)\.?|\b[Ee]xtension)[ \t]?(?P<ext>\d{1,6})(?!\d
 _tag = r'(?<![\w&#])#(?P<tag>[A-Za-z][A-Za-z0-9_]*[A-Za-z0-9]|[A-Za-z])'
 EN_PATTERN = re.compile(
     rf'{_email}|{_url}|{_phone}|{_ext}|{_tag}'
-    rf'|(?P<tr1>\d{{1,2}})(?::(?P<trm1>\d{{2}}))?\s?(?:{_ampm.format("tra1")})?\s?[–-]\s?'
+    rf'|(?P<tr1>\d{{1,2}})(?::(?P<trm1>\d{{2}}))?\s?(?:{_ampm1.format("tra1")})?\s?[–-]\s?'
     rf'(?P<tr2>\d{{1,2}})(?::(?P<trm2>\d{{2}}))?\s?{_ampm.format("tra2")}'
     rf'|(?P<inch>{NUM})\s?in\.(?=[ \t]+[a-z(]|,)'
+    rf'|(?<![\d/.])(?P<dm>\d{{1,2}})/(?P<dd>\d{{1,2}})(?:/(?P<dy>\d{{4}}|\d{{2}})|(?!\s?(?:{_unit})(?![A-Za-z])))(?![\d/]|[.,]\d)'
     rf'|'
     rf'(?P<mixw>\d+)(?:\s+(?P<mixf>{_frac})|\s?(?P<mixv>{_vulgar}))(?:\s?(?P<munit>{_unit})(?![A-Za-z]){_udot})?'
     rf'|(?P<vul>{_vulgar})(?:\s?(?P<vunit>{_unit})(?![A-Za-z]){_udot})?'
@@ -148,11 +141,13 @@ EN_PATTERN = re.compile(
     rf'|(?P<ya>1[1-9]\d{{2}}|20\d{{2}})\s?(?:-|–)\s?(?P<yb>1[1-9]\d{{2}}|20\d{{2}})(?!\d)'
     rf'|(?P<mult>{NUM})\s?[x×](?![a-z])'
     rf'|(?<![A-Za-z])(?P<samt>{NUM})(?P<sscale>bn|mn|tn|[kmbKMB])\b'
-    rf'|(?P<uamt>{NUM})\s?(?P<unit>{_unit})(?![A-Za-z]){_udot}'
+    rf'|(?P<hamt>{NUM})-(?P<hunit>{_unit})(?![A-Za-z²³]|-[A-Za-z]){_udot}'
+    rf'|(?P<uneg>(?<![\w.])-)?(?P<uamt>{NUM})\s?(?P<unit>{_unit})(?![A-Za-z²³]|-[A-Za-z]){_udot}'
     rf'|#(?P<hash>\d+)'
-    rf'|(?P<frac>\d+/\d+)'
+    rf'|(?P<frac>\d+/\d+)(?:\s?(?P<funit>{_unit})(?![A-Za-z]){_udot})?'
     rf'|(?P<ra2>{NUM})\s?(?:–|-(?=\d{{1,3}}(?![\d,.]\d)\s?(?:{_unit}|[a-z])))\s?(?P<rb2>{NUM})'
     rf'(?:\s?(?P<runit>{_unit})(?![A-Za-z]){_udot})?'
+    rf'|(?<![\w./-])(?P<sr1>\d{{1,2}})-(?P<sr2>\d{{1,2}})(?![\d/-]|[.,]\d)'
     rf'|(?P<year>(?<![\d.,$])(?:1[1-9]\d{{2}}|20\d{{2}})(?![\d%]|\.\d|,\d))'
     rf'|(?P<neg>(?<![\w.])-)?(?P<num>{NUM})'
 )
@@ -205,7 +200,7 @@ DIGIT_WORDS = 'zero one two three four five six seven eight nine'.split()
 # Words before a number that make it a code read digit by digit ("code 482913", "PIN 0420", "order number 10023").
 CODE_BEFORE = re.compile(r'\b(?:code|codes|pin|otp|passcode|password|verification|confirmation|zip|postcode|tracking|'
                          r'order|reference|ref|account|acct|ticket|serial|booking|member|membership|policy|invoice|'
-                         r'case|claim|id|room|flight|gate|seat|unit|apt|apartment|suite|ste|extension|ext)\b'
+                         r'case|claim|id|room|rm|flight|gate|seat|unit|apt|apartment|suite|ste|extension|ext)\b'
                          r'(?:\s*(?:number|no\.?|num|#|is|was|:|=))*\s*[:#]?\s*$', re.I)
 PHONE_BEFORE = re.compile(r'\b(?:call|calls|phone|tel|telephone|text|txt|fax|dial|number|mobile|cell|reach|ring|'
                           r'hotline|line|whatsapp)\b[^.!?\d]{0,24}$', re.I)
@@ -298,7 +293,37 @@ def _phone(text: str) -> str:
 
 
 def _code_before(m: re.Match) -> bool:
-    return bool(CODE_BEFORE.search(m.string[max(0, m.start() - 40):m.start()]))
+    before = m.string[max(0, m.start() - 40):m.start()]
+    return bool(CODE_BEFORE.search(before) or re.search(r'[A-Za-z],\s*[A-Z]{2}\s+$', before))   # "Austin, TX 78701"
+
+
+def _unit_said(key: str, one: bool = False) -> str:
+    singular, plural = lexicon.UNITS[key]
+    return singular if one else plural
+
+
+# Words before a day and month written with a slash that make it a date ("Tue. 10/14", "due 3/4"); with a year it is
+# always one ("12/25/2026").
+DATE_BEFORE = re.compile(r'(?:\b(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?\.?,?|'
+                         r'\b(?:on|by|due|until|till|til|thru|through|from|starting|since|before|after|deadline|date|'
+                         r'dated|opens?|closes?|ends?|begins?|starts?|expires?|exp\.?|effective|born|died|'
+                         r'and|to|or|[-–&])\s*:?)\s*$', re.I)
+
+
+def _date(m: re.Match, g: dict, rest: str) -> str:
+    """A month and a day written with slashes, as said: "12/25/2026" is "December twenty-fifth twenty twenty-six";
+    without a year only where a date is expected ("on 1/15"), else a fraction ("24/7", "3/4")."""
+    month, day = int(g['dm']), int(g['dd'])
+    frac = f"{g['dm']}/{g['dd']}"
+    dated = 1 <= month <= 12 and 1 <= day <= 31 and (
+        g['dy'] or (DATE_BEFORE.search(m.string[max(0, m.start() - 30):m.start()]) and not re.match(r'\s+(?:of|cups?|in)\b', rest)))
+    if not dated:
+        return _fraction(frac, rest)
+    said = f"{MONTHS[list(MONTHS)[month - 1]]} {num2words(day, to='ordinal')}"
+    if g['dy']:
+        year = g['dy'] if len(g['dy']) == 4 else '20' + g['dy']
+        said += ' ' + en_year(year)
+    return said
 
 
 def _en_speak(m: re.Match) -> str:
@@ -331,13 +356,14 @@ def _en_speak(m: re.Match) -> str:
     if token and re.fullmatch(r'\d+', token) and ((len(token) >= 3 and _code_before(m)) or
                                                   (len(token) >= 3 and token.startswith('0'))):
         return ('minus ' if g['neg'] else '') + digits(token)     # "code 482913", "0147"
+    if g['dm']:
+        return _date(m, g, rest)
     if g['mixw']:
-        unit = f" {UNITS[g['munit']]}" if g['munit'] else ''
+        unit = f" {_unit_said(g['munit'])}" if g['munit'] else ''
         return _fraction(g['mixf'] or VULGAR[g['mixv']], rest, g['mixw']) + unit
     if g['vul']:
         if g['vunit']:
-            first, _, more = UNITS[g['vunit']].partition(' ')
-            return _fraction(VULGAR[g['vul']], ' unit') + f" {SINGULAR.get(first, first)}{' ' + more if more else ''}"
+            return _fraction(VULGAR[g['vul']], ' unit') + f" {_unit_said(g['vunit'], one=True)}"
         return _fraction(VULGAR[g['vul']], rest)
     if g['cur']:
         one, many = CURRENCIES[g['cur']]
@@ -376,21 +402,29 @@ def _en_speak(m: re.Match) -> str:
         return f"{en_number(g['mult'])} times"
     if g['samt']:
         return f"{en_number(g['samt'])} {SCALES[g['sscale'].lower()]}"
+    if g['hamt']:
+        return f"{en_number(g['hamt'])}-{_unit_said(g['hunit'], one=True)}"      # "a 6-ft fence": six-foot
     if g['uamt']:
-        first, _, rest = UNITS[g['unit']].partition(' ')
-        if Decimal(g['uamt'].replace(',', '')) == 1:
-            first = SINGULAR.get(first, first)
-        return f"{en_number(g['uamt'])} {first}{' ' + rest if rest else ''}"
+        amount = g['uamt'].replace(',', '')
+        if g['unit'] == 'W' and re.match(r'\s+(?:\d|[A-Z])', rest):
+            return f"{en_number(g['uamt'])} W"          # "12 W 4th St": West, a compass point (lexicon.py)
+        if re.fullmatch(r'[1-9]\d*\.50*', amount):                              # "2.5 BA": two and a half baths
+            return f"{en_number(amount.split('.')[0])} and a half {_unit_said(g['unit'])}"
+        # Before its noun after "a" the measure is one thing: "a 5 gal bucket" a five gallon bucket.
+        one = Decimal(amount) == 1 or bool(re.search(r'\b(?:a|an)\s+$', m.string[:m.start()], re.I) and re.match(
+            r'\s+(?!(?:of|and|or|to|in|per|a|an|the|each|for|at|on|by|with|from|than|is|was)\b)[a-z]', rest))
+        return ('minus ' if g['uneg'] else '') + f"{en_number(g['uamt'])} {_unit_said(g['unit'], one=one)}"
     if g['hash']:
         return f"number {en_number(g['hash'])}"
     if g['frac']:
+        if g['funit']:
+            return _fraction(g['frac'], ' unit') + f" {_unit_said(g['funit'], one=True)}"
         return _fraction(g['frac'], rest)
     if g['ra2']:
-        unit = ''
-        if g['runit']:
-            first, _, more = UNITS[g['runit']].partition(' ')
-            unit = f" {first}{' ' + more if more else ''}"
+        unit = f" {_unit_said(g['runit'])}" if g['runit'] else ''
         return f"{en_number(g['ra2'])} to {en_number(g['rb2'])}{unit}"
+    if g['sr1']:
+        return f"{en_number(g['sr1'])} to {en_number(g['sr2'])}"             # "9-5", "pp. 10-12", "won 3-2"
     if g['year']:
         noun = re.match(r'\s+([a-z]+)\b', rest)
         if noun and (noun.group(1) in COUNT_NOUNS or (noun.group(1).endswith('s') and noun.group(1) not in NOT_PLURAL)):
