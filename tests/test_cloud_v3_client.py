@@ -338,3 +338,36 @@ def test_real_byok_plan_saved_and_reused(tmp_path, monkeypatch, mode):
     assert cached_usage.calls == 0 and len(calls) == attempts
     assert pipeline.direct_v3(project, provider=provider) == report
     assert len(calls) == attempts  # Saved direction sends no new plan or art requests.
+
+
+def test_cloud_worker_repairs_are_reported_with_the_plan(server):
+    server['repairs'] = ['scenes[0].hold_s: extended 1 to 2.5 for reading at 27 chars/s']
+    original = server['plan']
+    provider = cloud.CloudProvider(token='test-owned')
+    old = cloud._call
+
+    def with_repairs(path, body=None, token=None, timeout=180):
+        out = old(path, body, token, timeout)
+        if path == '/v3/plan':
+            out['repairs'] = server['repairs'] + [7]          # non-strings from a server are ignored
+        return out
+    cloud._call = with_repairs
+    try:
+        plan, report = plan_v3(TEXT, provider)
+    finally:
+        cloud._call = old
+    assert not report['fallback'] and plan == original
+    assert report['repairs'][0] == 'cloud: scenes[0].hold_s: extended 1 to 2.5 for reading at 27 chars/s'
+
+
+def test_byok_reask_tells_the_model_what_was_wrong_and_is_reported():
+    valid = plan_v3(TEXT)[0]
+    broken = json.loads(json.dumps(valid))
+    del broken['style']['energy']
+    provider, calls = openai_fake([json.dumps(broken), json.dumps(valid)])
+    plan, report = plan_v3(TEXT, provider)
+    assert not report['fallback'] and len(calls) == 2
+    first, second = (json.loads(c['messages'][1]['content']) for c in calls)
+    assert 'previous_answer_rejected' not in first
+    assert "plan.style: object fields, missing ['energy']" in second['previous_answer_rejected']
+    assert report['repairs'][0].startswith("openai: re-asked once: the answer did not follow the schema (plan.style")

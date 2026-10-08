@@ -105,6 +105,46 @@ def mentions(name, text) -> bool:
     return bool(name and re.search(r'(?<!\w)' + re.escape(name) + r'(?!\w)', text, re.I))
 
 
+# Display names a planner gives a character at another age or in a role: "Dana as a little girl",
+# "young Dana", "Dana (age 6)", "little Dana", "Dana, now grown".
+YOUNGER = r'little|young|younger|baby|child|kid|girl|boy|teen(?:age)?|small'
+_DESCRIBED = re.compile(r'\s*(?:\(.*?\)|,.*|\s+(?:as|at|aged?|when)\s+.*)$', re.I)
+_AGE_WORD = re.compile(r'^(?:(?:the|a|an)\s+)?(?:' + YOUNGER + r'|old|older|elderly|grown|adult)\s+', re.I)
+
+
+def core_name(name) -> str:
+    """The proper name inside a described display name ('' when nothing is left)."""
+    return _AGE_WORD.sub('', _DESCRIBED.sub('', name_key(name).strip())).strip()
+
+
+def actor_named(name, text) -> bool:
+    """The text names this character by its full or core name, or by its described role
+    ('Dana as a little girl' is on screen when the text shows 'a little girl')."""
+    role = re.search(r'\s(?:as|when)\s+(?:(?:a|an|the)\s+)?(.+?)\)?$', name_key(name), re.I)
+    return (mentions(name, text) or bool(core_name(name)) and mentions(core_name(name), text)
+            or bool(role) and mentions(role.group(1), text))
+
+
+def resolve_actor(ref, cast_by_id):
+    """A cast id for an action's actor given as an id, a display name or a described name; None if unknown.
+
+    'Dana as a little girl' becomes Dana's younger variant when the cast declares one, else Dana.
+    """
+    if ref in cast_by_id:
+        return ref
+    key = name_key(str(ref).replace('_', ' ')).strip()
+    same = [cid for cid, c in cast_by_id.items() if name_key(c['name']) == key]
+    if same:
+        return same[0]
+    core = core_name(key)
+    family = [cid for cid, c in cast_by_id.items() if core and core_name(c['name']) == core]
+    if len(family) > 1:
+        younger = re.search(r'\b(?:' + YOUNGER + r')\b', key, re.I) is not None
+        rank = {'baby': 0, 'young': 1, 'adult': 2, 'old': 3}
+        family.sort(key=lambda cid: rank.get(cast_by_id[cid].get('age'), 2) * (1 if younger else -1))
+    return family[0] if family else None
+
+
 MARK_CUES = (
     ('mane_black', r'\b(?:black|dark)\s+mane\b'), ('mane_gold', r'\bgold(?:en)?\s+mane\b'),
     ('mane_none', r'\b(?:no|without)\s+(?:a\s+)?mane\b|\bcub\b'),

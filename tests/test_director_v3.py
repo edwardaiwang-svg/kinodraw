@@ -153,7 +153,7 @@ def test_broken_plan_repairs_are_listed_and_input_is_untouched(plans, drafts):
     assert all('ghost' != e['ref'] != 'not_offered' for s in fixed['scenes'] for e in s['elements'])
     assert not any(a['at_beat'] == ids[0] for s in fixed['scenes'] for a in s['actions'])
     for phrase in ('clamped', 'contrast', 'Mara', 'duplicate beat', 'reordered', 'missing beat', 'split',
-                   'not_offered', 'ghost', 'dropped action', 'reading', 'unknown property', 'hex colour'):
+                   'not_offered', 'ghost', 'dropped action', 'reading', 'unknown property', "read colour 'orange'"):
         assert any(phrase in r for r in repairs), (phrase, repairs)
     assert all(isinstance(r, str) and r for r in repairs)
     assert validate(fixed, board, _candidates(board)) == (fixed, [])
