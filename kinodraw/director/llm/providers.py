@@ -100,8 +100,11 @@ class StructuredResponseError(ProviderError):
     """Invalid structured content; eligible for one bounded retry."""
 
 
-def validate_structure(value, schema):
-    """Validate the original JSON value, before any semantic repair or coercion."""
+def validate_structure(value, schema, path='plan'):
+    """Validate the original JSON value, before any semantic repair or coercion. A field added to the plan
+    contract later (v3 ``OPTIONAL``) may be absent, as in plans saved or served before it existed. The error
+    names the first place that is wrong, so a re-ask can tell the model what to fix."""
+    from ..v3.schema import OPTIONAL
     kind = schema['type']
     valid = (isinstance(value, dict) if kind == 'object' else
              isinstance(value, list) if kind == 'array' else
@@ -109,15 +112,21 @@ def validate_structure(value, schema):
              isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
              and (kind != 'integer' or isinstance(value, int)))
     if not valid or ('enum' in schema and value not in schema['enum']):
-        raise StructuredResponseError(f'the answer did not follow the schema ({kind})')
+        allowed = f' one of {schema["enum"]}' if 'enum' in schema and len(schema['enum']) <= 12 else ''
+        raise StructuredResponseError(f'the answer did not follow the schema ({path}: expected {kind}{allowed})')
     if kind == 'object':
-        if set(value) != set(schema['required']):
-            raise StructuredResponseError('the answer did not follow the schema (object fields)')
+        extra = sorted(set(value) - set(schema['required']))
+        missing = sorted(set(schema['required']) - set(value) - OPTIONAL)
+        if extra or missing:
+            raise StructuredResponseError(f'the answer did not follow the schema ({path}: object fields'
+                                          + (f', unknown {extra}' if extra else '')
+                                          + (f', missing {missing}' if missing else '') + ')')
         for key, sub in schema['properties'].items():
-            validate_structure(value[key], sub)
+            if key in value:
+                validate_structure(value[key], sub, f'{path}.{key}')
     elif kind == 'array':
-        for item in value:
-            validate_structure(item, schema['items'])
+        for n, item in enumerate(value):
+            validate_structure(item, schema['items'], f'{path}[{n}]')
     return value
 
 
@@ -164,19 +173,30 @@ def loads(text, lenient: bool = False):
         raise StructuredResponseError('the answer was not valid JSON') from error
 
 
-def _structured(ask, schema, lenient=False):
-    """One answer that follows ``schema``: one more try after a malformed answer, and up to 3 tries in all, after
-    BACKOFF waits, while the service is busy, rate-limiting or unreachable. Other failures are not retried."""
+def _noted(payload, rejected):
+    """The request again, telling the model why its previous answer was rejected."""
+    return payload if not rejected or not isinstance(payload, dict) else \
+        {**payload, 'previous_answer_rejected': f'{rejected}. Return the whole corrected answer.'}
+
+
+def _structured(ask, schema, lenient=False, notes=None):
+    """One answer that follows ``schema``: one more try after a malformed answer, told what was wrong
+    (``ask(rejected)``), and up to 3 tries in all, after BACKOFF waits, while the service is busy, rate-limiting or
+    unreachable. Other failures are not retried."""
     reasked = waited = 0
+    rejected = None
     while True:
         try:
-            value = loads(ask(), lenient)
+            value = loads(ask(rejected), lenient)
             if not isinstance(value, dict):
                 raise StructuredResponseError('the answer must be a JSON object')
-            return validate_structure(value, schema)
+            value = validate_structure(value, schema)
+            if rejected and notes is not None:
+                notes.append(f're-asked once: {rejected}')
+            return value
         except ProviderError as error:
             if isinstance(error, StructuredResponseError) and not reasked:
-                reasked = 1
+                reasked, rejected = 1, str(error)
             elif getattr(error, 'transient', False) and waited < len(BACKOFF):
                 _sleep(BACKOFF[waited])
                 waited += 1
@@ -198,6 +218,7 @@ class StructuredProvider:
     def direct_plan(self, payload: dict, usage: Usage) -> dict:
         from ..v3.prompt import SYSTEM as PLAN_SYSTEM
         from ..v3.schema import PLAN_SCHEMA
+        self.served_repairs = []                    # a re-ask is reported with the plan's repairs
         return self.structured(PLAN_SYSTEM, PLAN_SCHEMA, 'video_plan', payload, usage)
 
     def write_draft(self, payload: dict, usage: Usage) -> dict:
@@ -222,8 +243,8 @@ class OpenAIProvider(StructuredProvider):
                             not self.strict)
 
     def structured(self, system, schema, name, payload, usage):
-        return _structured(lambda: self._ask(system, schema, name, payload, usage, whole=True), schema,
-                           lenient=not self.strict)
+        return _structured(lambda rejected: self._ask(system, schema, name, _noted(payload, rejected), usage, whole=True), schema,
+                           lenient=not self.strict, notes=getattr(self, 'served_repairs', None))
 
     def _ask(self, system: str, schema: dict, name: str, payload: dict, usage: Usage, whole=False) -> str:
         user = json.dumps(payload, ensure_ascii=False)
@@ -269,7 +290,8 @@ class AnthropicProvider(StructuredProvider):
         return _parse_style(self._ask(STYLE_SYSTEM, style_schema(_ids(payload)), payload, usage, 'the style pick'))
 
     def structured(self, system, schema, name, payload, usage):
-        return _structured(lambda: self._ask(system, schema, payload, usage, name, whole=True), schema)
+        return _structured(lambda rejected: self._ask(system, schema, _noted(payload, rejected), usage, name, whole=True), schema,
+                           notes=getattr(self, 'served_repairs', None))
 
     def _ask(self, system: str, schema: dict, payload: dict, usage: Usage, what: str, whole=False) -> str:
         try:
@@ -318,7 +340,8 @@ class CommandProvider(StructuredProvider):
         return _parse(self._ask(SYSTEM, SECTION_SCHEMA, payload, usage))
 
     def structured(self, system, schema, name, payload, usage):
-        return _structured(lambda: self._ask(system, schema, payload, usage, strict=True), schema)
+        return _structured(lambda rejected: self._ask(system, schema, _noted(payload, rejected), usage, strict=True), schema,
+                           notes=getattr(self, 'served_repairs', None))
 
     def pick_style(self, payload: dict, usage: Usage) -> dict:
         return _parse_style(self._ask(STYLE_SYSTEM, style_schema(_ids(payload)), payload, usage))

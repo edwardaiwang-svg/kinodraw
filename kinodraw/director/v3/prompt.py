@@ -60,7 +60,30 @@ hit on a music beat. Use cta for the beat that asks the viewer to act; its last 
 No fabricated text or early quote cards. Allow at least displayed character count / 27 seconds of hold;
 multi-beat captions and text elements need time for all their distinct referenced texts. Clear quotes on
 transitions. atmosphere density is 0-1; fog and a shooting star together are fog_with_shooting_star, one scene.
-Actions use a cast id, an allowed verb, a scene beat_id and intensity 1-3. The actor must be named in that
-beat's spoken text; do not bring off-screen beings in to act. Use [] for no actions or elements, and
+Actions use a cast id, an allowed verb, a scene beat_id and intensity 1-3. The actor is someone present in
+that scene (named in the beat, or a cast element of the scene); do not bring off-screen beings in to act. Use [] for no actions or elements, and
 {kind: "none", density: 0} for no atmosphere. Explain the style choice in one short reason.
+
+Shots stage what each beat literally shows; give every story, character and scene-setting beat at least one
+shot (a new shot where a sentence moves to a new place, person or object, with starts_at = that sentence's
+opening words; [] only for diagram, chart and kinetic beats). Show what each sentence describes, not a symbol
+of it. set_refs, props[].ref and focus_ref are picture ids copied exactly from the candidates offered for
+that beat (such as "fl_couch_and_lamp"), never descriptions; describe nothing in them. Establish each new
+place with a wide shot whose set_refs are its set pieces (a town: houses and a street; a living room: a
+couch, a TV, a lamp), and keep the same set_refs while the story stays there. The set is the fixed
+background; props are the movable things the text names, related as it says (a cup on a table; a ball
+rolling into a road; keys held_by the person holding them); `to` is a picture id in that shot or a cast id.
+When the text describes how objects are arranged, use an insert with focus_ref on that object. When a
+character reads or looks at writing or a screen (a list, letter, note, sign, phone), use first_person:
+focus_ref is that object and writing is the words being read, copied exactly from the beat; the quoted lines
+of a letter, list or message each get their own first_person shot with that line as writing. Put in cast
+everyone the text has present at that moment, not only the subject: several people when several are there,
+each with the age the story gives at that moment, which can change as years pass (baby = infant, child =
+about 2-12, teen = 13-19, old = a grandparent or "very old"), and the pose the text gives (dozing in a chair
+= sleep, at a table = sit, reading = read); an unnamed but present person (a parent, a stranger) is a cast
+member too. A voice from another room is speaking off_screen. Give every quoted line its real speaker: the
+one the text attributes it to ("she said" = the woman last named or present), else the one answering the
+previous speaker; screenplay labels (NAME:) name the speaker. Prefer two_shot or medium for conversations;
+avoid a page where one figure just stands: show what they hold, sit on or look at. Use camera static unless
+the text motivates movement (follow a run, push in on a realization, pull back to reveal).
 """
