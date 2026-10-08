@@ -521,3 +521,13 @@ def test_a_shot_with_no_place_does_not_borrow_a_set_its_people_were_never_in(tmp
         shot('b002', 'Kim never', 'close', [('kim', 'adult', 'look', 'no')], place='none')], cast=cast)
     _, (kim,) = pages(prod, 'b002')
     assert kim.place is None and not [p for p in kim.set if p.kind != 'strip']   # never seen anywhere: a plain page
+
+
+def test_a_seat_somewhere_else_does_not_put_someone_first_in_line_for_the_bed(tmp_path):
+    prod = staged(tmp_path, 'Mia sat on the bus.\n\nYears later, Mia came to the hospital. Ada was sitting up in bed.',
+                  [shot('b001', 'Mia sat', 'wide', [('mia', 'young', 'sit', 'no')], place='bus'),
+                   shot('b002', 'Years later', 'wide', [('mia', 'young', 'sit', 'no'), ('ada', 'old', 'sit', 'no')],
+                        place='hospital', set_refs=['fl_bed'])])
+    _, (page,) = pages(prod, 'b002')
+    bed = next(s for s in page.supports if s.kind == 'bed')
+    assert [f.key for f in page.figures if bed.x0 <= f.x <= bed.x1 and abs(f.ground - bed.y) < 1e-6] == ['ada']

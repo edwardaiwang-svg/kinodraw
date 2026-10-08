@@ -477,7 +477,9 @@ class Shots:
                     if key != who and seat[0] == place and seat[1] == claim.doodle:
                         del self.seats[key]                   # the bed is hers now; whoever had it sits elsewhere
                 self.seats[who] = (place, claim.doodle, (claim.x0 + claim.x1) / 2)
-        resting.sort(key=lambda f: (f.key not in self.seats, f.pose == 'sit'))      # who had a seat, then sleepers
+        claimant = named[0] if named else None
+        resting.sort(key=lambda f: (f.key != claimant, (self.seats.get(f.key) or ('',))[0] != place,
+                                    f.pose == 'sit'))    # whom the text seats, who had a seat here, then sleepers
         for piece in self.extra.get(place, ()):
             chair = copy.copy(piece)
             shot.set.append(chair)
