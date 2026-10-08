@@ -77,11 +77,6 @@ OFFSCREEN = re.compile(r"\b(?:off[- ]?(?:screen|stage|camera)|O\.S\.|V\.O\.|voic
                        r"another\s+room|kitchen|hall(?:way)?|bathroom|bedroom|garage|basement|attic|upstairs|"
                        r"downstairs|outside|yard|garden|porch|doorway|stairs|phone|speaker(?:phone)?)|"
                        r"(?:calls?|called|calling|shouts?|shouted|shouting|yells?|yelled|yelling)\s+from)\b", re.I)
-SAID = re.compile(r"\b(?:said|says|say|asked|asks|replied|replies|told|tells|shouted|shouts|called|calls|yelled|"
-                  r"whispered|whispers|answered|answers|added|adds|muttered|mutters|cried|laughed|snapped|sighed|"
-                  r"admitted|insisted|went\s+on)\b", re.I)
-KIN = (('mother', r'mom|mum|mother|mama|mommy|ma'), ('father', r'dad|daddy|father|papa|pa|pop'),
-       ('grandmother', r'grandma|granny|grandmother|nana|gran'), ('grandfather', r'grandpa|grandfather|gramps'))
 QUOTES = str.maketrans({'’': "'", '‘': "'", '“': '"', '”': '"', '—': '-', '–': '-', '…': '.'})
 PAPER = (252, 249, 238, 255)
 INK = (27, 27, 27, 255)
@@ -264,8 +259,6 @@ class Shots:
         self.place = None
         self.night = False
         self.last = None               # the last shot built (a heard voice keeps the listeners' page)
-        self.turn = None               # (speaker, beat id, narration since) of the last quoted line
-        self.said = []                 # who spoke each quoted line so far, in order
         self.previous = None           # the last page of the scene before
         self.rests = {}                # cast id -> (place, pose): who sat or lay where in the last shot
         self.seats = {}                # cast id -> (place, support doodle, x): their seat stays theirs
@@ -882,17 +875,15 @@ class Shots:
 
     # ---------------- bubbles
     def _quotes(self, beats, read):
-        """Every quoted line in reading order: (beat id, line index, line, q0, lead, words, tagged, heard)."""
+        """Every quoted line in reading order: (beat id, line, q0, lead, words, heard)."""
         book = self.book
         for bid in beats:
             display = book.by_id[bid]['text']
             label = SPEAKER_LABEL.match(display)
-            for index, line in enumerate(read[bid]):
+            for line in read[bid]:
                 if not line.quotes:
-                    yield bid, index, line, None, 0, '', False, False
                     continue
                 outside = re.sub(r'["“][^"”]*["”]?', ' ', line.text)
-                tagged = bool(label) or bool(SAID.search(outside) and line.speaker)
                 direction = re.match(r'\s*[\[(]([^\])]*)[\])]', display[label.end():]) if label else None
                 heard = bool(OFFSCREEN.search(outside) or (direction and OFFSCREEN.search(direction[1])))
                 for q0, q1 in line.quotes:
@@ -900,30 +891,23 @@ class Shots:
                     lead = len(raw) - len(raw.lstrip(' "“'))
                     words = raw.strip().strip('"“”').strip().rstrip(',;:').strip()
                     if words:
-                        yield bid, index, line, q0, lead, words, tagged, heard
+                        yield bid, line, q0, lead, words, heard
 
     def _voices(self, plans, beats, read, timers):
         """Who speaks each quoted line, worked out before the shots are staged: {(beat id, q0): (speaker, index of
-        the plan shot it falls in, the plan's speaker)}."""
+        the plan shot it falls in, the plan's speaker)}. The speaker is the one speakers.attribute gave the voice."""
         lines_by_beat = {}
         for bid, _, plan in plans:
             lines_by_beat.setdefault(bid, []).extend(plan.get('lines') or ())
         out = {}
-        for bid, index, line, q0, lead, words, tagged, heard in self._quotes(beats, read):
-            if q0 is None:
-                if self.turn:
-                    self.turn = (self.turn[0], self.turn[1], True)
-                continue
+        for bid, line, q0, lead, words, heard in self._quotes(beats, read):
             at = q0 + lead
             i = max([k for k, (b, o, _) in enumerate(plans) if (beats.index(b), o) <= (beats.index(bid), at + 1)]
                     or [0]) if plans else None
-            plan = plans[i][2] if plans else {}
-            speaker = self._speaker(words, line, lines_by_beat.get(bid, []), plan, tagged, index == 0, bid)
+            speaker = self.person(self.book.speakers.of(bid, q0))
+            speaker = speaker if speaker in self.book.cast else None
             planned = next((self.person(l.get('speaker')) for l in lines_by_beat.get(bid, [])
                             if find_words(words, l.get('quote') or '') == 0), None)
-            self.turn = (speaker, bid, False)
-            if speaker is not None:
-                self.said.append(speaker)
             out[(bid, q0)] = (speaker, i, planned, heard)
         return out
 
@@ -959,9 +943,7 @@ class Shots:
     def _bubbles(self, shots, beats, read, timers, plans, voices):
         from .storybook import BUBBLE_WORDS, Bubble
         book = self.book
-        for bid, index, line, q0, lead, words, tagged, heard in self._quotes(beats, read):
-            if q0 is None:
-                continue
+        for bid, line, q0, lead, words, heard in self._quotes(beats, read):
             at = timers[bid]
             speaker, _, planned, heard = voices.get((bid, q0), (None, None, None, heard))
             if speaker is None:
@@ -995,72 +977,9 @@ class Shots:
                 row = {'beat': bid, 'start': first, 'end': first + len(part), 'speaker': speaker, 'text': part}
                 if planned and planned != speaker:
                     row['plan_speaker'] = planned         # the text's own tag or address overruled the plan
+                if book.speakers.of(bid, q0) != speaker:
+                    row['role'] = book.speakers.of(bid, q0)   # the voice's role ('theo_old'), drawn as its person
                 book.bubbled.append(row)
-
-    def _speaker(self, words, line, planned, plan, tagged, first, bid):
-        """The plan's speaker for a quoted line when it is plausible, else the text reading's."""
-        book = self.book
-        mine = next((self.person(l.get('speaker')) for l in planned
-                     if find_words(words, l.get('quote') or '') == 0), None)
-        if mine is None:
-            talking = [self.person(c['id']) for c in plan.get('cast') or () if c.get('speaking') in ('yes', 'off_screen')]
-            mine = talking[0] if len(talking) == 1 else None
-        fallback = line.speaker if line.speaker in book.cast else None
-        if mine not in book.cast:
-            return fallback
-        if tagged and fallback and fallback != mine:
-            return fallback                               # "...," Sam said / SAM: ...
-        if self._addressed(mine, words):
-            return self._other(mine, fallback)
-        owner = self._kin_owner(words)
-        if owner and owner != mine:
-            return owner
-        if (first and not tagged and self.turn and self.turn[0] == mine and not self.turn[2]
-                and self.turn[1] != bid):
-            return self._other(mine, fallback)             # a new paragraph is a new speaker
-        return mine
-
-    def _other(self, mine, fallback):
-        """Who speaks when the plan's speaker cannot: the last other person who spoke (two people take turns),
-        else the text reading's speaker."""
-        for who in reversed(self.said):
-            if who != mine and who in self.book.cast:
-                return who
-        return fallback if fallback != mine else None
-
-    def _addressed(self, cid, words):
-        """The line speaks to this person (their name as a vocative, "your father" when they are the father's
-        child), so they are not its speaker."""
-        c = self.book.cast[cid]
-        key = name_key(c.get('name') or '').split()
-        if key and re.search(r'(?<!\w)' + re.escape(key[0]) + r'(?!\w)', words, re.I) and len(key[0]) > 1:
-            if not re.search(r"(?<!\w)" + re.escape(key[0]) + r"['’]s\b", words, re.I):
-                return True
-        for kin, cue in KIN:
-            if re.search(r'\byour\s+(?:' + cue + r')\b', words, re.I) and self._child_of(kin) == cid:
-                return True
-        return False
-
-    def _kin_owner(self, words):
-        """"Dad's map", "Mom, look": a parent called by their title is the speaker's own, so the speaker is the
-        child of the cast's "<name>'s father/mother"."""
-        for kin, cue in KIN:
-            titled = '|'.join(c.title() for c in cue.split('|'))
-            for m in re.finditer(r"(?<![\w’'])(?:" + titled + r")\b", words):
-                if not re.search(r"\b(?:your|my|his|her|their|our|the|a|an)\s+$", words[:m.start()], re.I):
-                    child = self._child_of(kin)
-                    if child:
-                        return child
-        return None
-
-    def _child_of(self, kin):
-        """The cast member whose "<name>'s <kin>" is in the cast: Mia for "Mia's father"."""
-        for c in self.book.cast.values():
-            m = re.match(r"(.+?)['’]s\s+(\w+)$", c.get('name') or '')
-            if m and m[2].lower() == kin:
-                return next((d['id'] for d in self.book.cast.values()
-                             if name_key(d.get('name') or '') == name_key(m[1])), None)
-        return None
 
     def _hear(self, shots, shot, speaker):
         """A voice from elsewhere: its speaker is not drawn; a page left with nobody keeps the listeners' page."""
