@@ -117,3 +117,11 @@ def test_hair_stands_out_from_the_skin():
         look = b.looks[c['id']]
         assert look['tone'] == 'brown'
         assert distance(look['hair'], people.SKIN['brown']) >= 60, (c['id'], look['hair'])
+
+
+def test_middle_age_greys_inside_the_hair_never_over_the_ears():
+    for style in ('short', 'curly', 'long', 'bun', 'ponytail'):
+        g = human.Person(age='middle', sex='female' if style in ('long', 'bun', 'ponytail') else 'male',
+                         hair_style=style)
+        grey = [layer for layer in human.build(g, 'stand').layers if layer.name == 'grey_temples']
+        assert grey and all(layer.kind == 'patch' and layer.clip is not None for layer in grey), style
