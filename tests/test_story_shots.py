@@ -30,8 +30,9 @@ def prop(ref, relation='none', to='', motion='none'):
     return {'ref': ref, 'relation': relation, 'to': to, 'motion': motion}
 
 
-def staged(tmp_path, text, shots, cast=PEOPLE):
-    """A story's storybook production with these plan shots on its scenes (a scene with none reads its text)."""
+def staged(tmp_path, text, shots, cast=PEOPLE, sky=None):
+    """A story's storybook production with these plan shots on its scenes (a scene with none reads its text);
+    ``sky``: every scene's atmosphere kind."""
     board = script.build(ingest.read(text), story='story')
     RulesDirector('en').direct(board)
     plan = from_rules(board)
@@ -40,6 +41,8 @@ def staged(tmp_path, text, shots, cast=PEOPLE):
     for scene in plan['scenes']:
         scene.update(treatment='character', composition='stage', text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]},
                      elements=[{'kind': 'cast', 'ref': c['id']} for c in cast])
+        if sky:
+            scene['atmosphere'] = {'kind': sky, 'density': .3}
         mine = [s for s in shots if s['beat_id'] in scene['beat_ids']]
         if mine:
             scene['shots'] = mine
@@ -531,3 +534,92 @@ def test_a_seat_somewhere_else_does_not_put_someone_first_in_line_for_the_bed(tm
     _, (page,) = pages(prod, 'b002')
     bed = next(s for s in page.supports if s.kind == 'bed')
     assert [f.key for f in page.figures if bed.x0 <= f.x <= bed.x1 and abs(f.ground - bed.y) < 1e-6] == ['ada']
+
+
+# ------------------------------------------------------------------ continuity from shot to shot
+def test_nobody_lies_in_the_road_unless_the_words_lay_them_there(tmp_path):
+    text = ('In the town of Brookfield, every child got a kite on the day they were born.\n\n'
+            'Mia lay down in the street and looked at the clouds.')
+    prod = staged(tmp_path, text, [shot('b001', 'In the town', 'wide', [('mia', 'baby', 'lie', 'no')], place='town'),
+                                   shot('b002', 'Mia lay', 'wide', [('mia', 'young', 'lie', 'no')], place='town')])
+    _, (born,) = pages(prod, 'b001')
+    _, (lay,) = pages(prod, 'b002')
+    assert born.figures[0].pose == 'stand'          # a newborn is not left lying in the road
+    assert lay.figures[0].pose == 'lie'
+
+
+def test_a_thing_held_a_moment_ago_stays_in_hand_and_in_its_close_up(tmp_path):
+    text = 'Mia stood in the street with a letter. Everyone said it held a secret. Nobody ever opened theirs.'
+    letter = [prop('fl_envelope', 'held_by', 'mia')]
+    prod = staged(tmp_path, text, [
+        shot('b001', 'Mia stood', 'wide', [('mia', 'young', 'stand', 'no')], place='street', props=letter,
+             focus='fl_envelope'),
+        shot('b001', 'Everyone said', 'close', [('mia', 'young', 'look', 'no')], place='street', props=letter,
+             focus='fl_envelope'),
+        shot('b001', 'Nobody ever', 'close', [], place='street', props=[prop('fl_envelope')], focus='fl_envelope')])
+    book = prod.storybook
+    _, (_, close, alone) = pages(prod, 'b001')
+    assert keys(alone) == ['mia']                    # not a giant letter lying on the road
+    still = next(p for p in alone.set if p.doodle == 'fl_envelope')
+    assert still.kind == 'hand' and still.holder == 'mia' and not still.lone
+    held = next(p for p in close.set if p.doodle == 'fl_envelope')
+    x, middle, anchor = book.held_at(held, close, close.start)
+    box = book.stager.frame(held.doodle, x, middle + (1 - anchor) * held.height, held.height, held.mirror)[2]
+    assert held.kind == 'hand' and visible(book, close, box) > .9   # the close-up shows what she holds
+
+
+def test_a_close_up_of_a_thing_on_a_desk_shows_the_thing(tmp_path):
+    text = 'Sam kept the letter on his desk. One evening he finally cut it open.'
+    on_desk = [prop('fl_envelope', 'on', 'set_desk')]
+    prod = staged(tmp_path, text, [
+        shot('b001', 'Sam kept', 'wide', [('sam', 'adult', 'stand', 'no')], place='bedroom', props=on_desk),
+        shot('b001', 'One evening', 'close', [('sam', 'adult', 'reach', 'no')], place='bedroom', props=on_desk,
+             focus='fl_envelope')])
+    book = prod.storybook
+    _, (_, close) = pages(prod, 'b001')
+    letter = next(p for p in close.set if p.doodle == 'fl_envelope')
+    assert visible(book, close, book.planned._box(letter)) > .9
+    assert visible(book, close, book.planned._body(close.figures[0])) > .5
+
+
+def test_a_shot_called_day_in_a_night_scene_is_night_unless_its_words_say_day(tmp_path):
+    text = ('Most people slept. Sam could not. He sat at his desk and stared at the letter.\n\n'
+            'The next morning the sun was up early.')
+    prod = staged(tmp_path, text, [
+        shot('b001', 'Most people', 'wide', [], place='bedroom'),
+        shot('b001', 'He sat', 'close', [('sam', 'adult', 'sit', 'no')], place='bedroom'),
+        shot('b002', 'The next morning', 'wide', [], place='bedroom')], sky='night_stars')
+    book = prod.storybook
+    _, (wide, close) = pages(prod, 'b001')
+    _, (morning,) = pages(prod, 'b002')
+    window = next(p for p in close.set if p.doodle.startswith('set_window'))
+    assert {p.doodle for p in wide.set} >= {'set_window_night'} and window.doodle == 'set_window_night'
+    assert visible(book, close, book.planned._box(window)) > .5      # the night stays in the close-up's frame
+    assert 'set_window' in {p.doodle for p in morning.set}
+
+
+def test_a_page_read_again_keeps_its_writing(tmp_path):
+    text = ('Inside was a list, written in a hand he did not know:\n\n'
+            'The day you fed the cat. The rain on your roof.\n\n'
+            'The list stopped halfway down the page.\n\n'
+            'Sam read it three times. Then he went downstairs.')
+    prod = staged(tmp_path, text, [
+        shot('b003', 'The list', 'insert', [], place='bedroom', props=[prop('tb_clipboard_list')],
+             focus='tb_clipboard_list'),
+        shot('b004', 'Sam read', 'first_person', [('sam', 'adult', 'read', 'no')], place='bedroom',
+             props=[prop('tb_clipboard_list', 'held_by', 'sam')], focus='tb_clipboard_list')])
+    _, (insert,) = pages(prod, 'b003')
+    _, (reread, *_) = pages(prod, 'b004')
+    assert insert.page['lines'] and reread.page['lines'] == insert.page['lines']   # not a blank sheet
+
+
+def test_an_insert_of_a_thing_in_someones_hands_keeps_them_in_the_room(tmp_path):
+    text = 'Ada sat on the couch. She had opened hers at nineteen.'
+    prod = staged(tmp_path, text, [
+        shot('b001', 'Ada sat', 'wide', [('ada', 'adult', 'sit', 'no')], place='living_room'),
+        shot('b001', 'She had opened', 'insert', [('ada', 'adult', 'look', 'no')], place='living_room',
+             props=[prop('tb_mail_opened', 'held_by', 'ada')], focus='tb_mail_opened')])
+    _, (_, insert) = pages(prod, 'b001')
+    assert keys(insert) == ['ada'] and not any(p.lone for p in insert.set)
+    assert any(p.doodle == 'tb_mail_opened' and p.kind == 'hand' for p in insert.set)
+    assert any(p.kind == 'strip' for p in insert.set)                    # her room, not one icon on blank paper
