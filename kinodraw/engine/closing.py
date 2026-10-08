@@ -8,8 +8,9 @@ three-word card in a six-second greeting stays short). The drawing time never co
 "Made with ..." credit is part of the same card, not a second card after it.
 
 One card: when the script's last sentences are the card's own lines (an ad's "Two Ovens Bakery, corner of Elm and
-Fifth. Come early!"), the card starts on the first of them that falls in the narration's last NARRATED_MAX seconds,
-so the voice reads the card and no silent outro repeats it; it then stays at least AFTER_VOICE after the last word.
+Fifth. Come early!"), the card starts on the first of them that falls in the narration's last NARRATED_MAX seconds
+(about two short lines), so the voice reads the card and no silent outro repeats it; it then stays at least
+AFTER_VOICE after the last word.
 
 Content, by what the script is for:
 - 'info': an ad, promo, notice, invitation or how-to closes on its own last words when they are a call to action or
@@ -32,7 +33,7 @@ CLEAR = .3            # the outgoing scene clears to the blank card page before 
 DRAW_PER_WORD, DRAW_MIN, DRAW_MAX = .2, 1.4, 2.5   # the hand writes a longer piece's card in this long
 READ_PER_WORD = .3    # then the finished card stays this long a word on it (about 200 words a minute)...
 READ_MIN, READ_MIN_SHORT = 2.5, 1.8   # ...and never less than this (a short piece's few words: the short floor)
-NARRATED_MAX = 3.5    # a card that starts on the script's own closing lines is read out for at most this long
+NARRATED_MAX = 4.    # a card that starts on the script's own closing lines is read out for at most this long
 AFTER_VOICE = 1.      # and stays at least this long after the last word
 MAX_ITEMS = 4         # lines of key information from the closing sentences
 MAX_LINES = 5         # lines on the card with the facts its paragraph states earlier
@@ -42,8 +43,10 @@ ITEM_CHARS = 64      # a sentence with contacts longer than this shows only its 
 
 
 def words(text: str) -> float:
-    """How many words a reader reads in ``text`` (a Chinese or Japanese character counts as half a word)."""
-    return len(re.findall(r'[^\W\u3040-\u30ff\u3400-\u9fff]+', text)) + .5 * len(re.findall(r'[\u3040-\u30ff\u3400-\u9fff]', text))
+    """How many words a reader reads in ``text``: what spaces separate ("$3.50", "7 a.m." and an email are read as
+    one word each, as written); a Chinese or Japanese character counts as half a word."""
+    cjk = r'[\u3040-\u30ff\u3400-\u9fff]'
+    return len([w for w in re.sub(cjk, ' ', text).split() if re.search(r'\w', w)]) + .5 * len(re.findall(cjk, text))
 
 
 def reading_seconds(n_words: float, body: float) -> float:

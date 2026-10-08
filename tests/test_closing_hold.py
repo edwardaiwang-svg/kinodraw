@@ -59,7 +59,7 @@ def card(board, tl, tmp_path):
 
 
 def reading(lines, body):
-    words = len(re.findall(r'\w+', ' '.join(lines)))
+    words = len([w for w in ' '.join(lines).split() if re.search(r'\w', w)])     # as written: "$3.50" is a word
     return max(1.8 if body < 20 else 2.5, .3 * words)
 
 
@@ -85,7 +85,7 @@ def test_an_ad_card_lists_the_day_time_and_price_its_script_states(tmp_path):
                  'Come early!'):
         assert fact in said, (fact, lines)
     assert 'The End' not in said and 'Thanks for watching' not in said
-    assert tl['duration'] - done >= reading(lines, 0) - 1 / 30          # 20 words: about 6 s to read, not 1.5 s
+    assert tl['duration'] - done >= reading(lines, 0) - 1 / 30          # 21 words: about 6 s to read, not 1.5 s
 
 
 def test_a_script_that_ends_on_its_call_to_action_gets_one_narrated_card(tmp_path):
