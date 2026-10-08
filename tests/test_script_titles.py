@@ -189,3 +189,81 @@ def test_a_line_in_a_speech_bubble_is_not_captioned_again(tmp_path):
     assert "Mine's broken" not in shown and 'he said.' in shown and "It's just random stuff." in shown
     assert prod.whiteboard.cap_starts == [c['start'] for c in prod.whiteboard.tl['captions']]
     assert 'Theo, a boy, sat by his mother.' in shown                       # narration elsewhere is unchanged
+
+
+def _cards_and_narrator(tmp_path, monkeypatch, opening):
+    from kinodraw.engine import render, scenes
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    drawn_ids = []
+    original = scenes.Ctx.doodle
+    monkeypatch.setattr(scenes.Ctx, 'doodle', lambda self, did, box, **kw: (drawn_ids.append(did),
+                                                                             original(self, did, box, **kw))[1])
+    board = board_of(f'# Where Does Lightning Come From?\n\n{opening}\n\nCount the seconds between flash and thunder.')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['storyboard']['genre'] = 'explainer'
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    for scene in plan['scenes'][1:]:
+        scene.update(treatment='motion', actions=[], elements=[], text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
+    tmp_path.joinpath('project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    render.make_production(board, tl, 'en', tmp_path)
+    return [d for d in drawn_ids if d.startswith('narrator')]
+
+
+def test_a_video_with_no_people_draws_no_presenter_on_its_title_or_end_card(tmp_path, monkeypatch):
+    # Script 02 (r02): "no person at any point", an empty cast, yet the title card and the end card drew the
+    # whiteboard's stick-figure presenter.
+    assert _cards_and_narrator(tmp_path, monkeypatch, 'A storm cloud is not just a puff of water.') == []
+
+
+def test_a_video_with_people_puts_no_stranger_on_its_cards(tmp_path, monkeypatch):
+    # Pancakes (u-unify3): cast Ben and Ava, but the end card showed the stock grey-haired presenter, who is no one
+    # in the story. The presenter is never a cast member, so a planned video's cards draw no presenter at all.
+    assert _cards_and_narrator(tmp_path, monkeypatch, 'Ava, a girl, watched a storm cloud from her window.') == []
+
+
+@pytest.mark.usefixtures('procedural_rig')
+def test_a_sentence_drawn_by_the_board_instead_keeps_its_caption(tmp_path):
+    # Script 02 (r02f): a kinetic line in a character scene with no cast falls back to the whiteboard board, which
+    # never draws the kinetic words; the caption had been dropped for them, so the safety line showed no text at all.
+    from kinodraw.engine import render
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    board = board_of('A storm cloud is not just a puff of water.\n\nWhen thunder roars, go indoors.')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['cast'] = []
+    plan['style'].update(mode='hybrid', motion_floor='breathing')
+    first, last = plan['scenes'][0], plan['scenes'][-1]
+    first.update(treatment='motion', actions=[], elements=[], text={'kind': 'caption_only', 'ref': first['beat_ids'][0]})
+    last.update(treatment='character', actions=[], elements=[], text={'kind': 'kinetic', 'ref': last['beat_ids'][0]})
+    tmp_path.joinpath('project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    span = prod.spans[-1]
+    t = tl['beats'][last['beat_ids'][0]]['start'] + 1.
+    drawn = []
+    prod.whiteboard._caption = lambda image, t, *a, **k: drawn.append(round(t, 3))
+    prod.frame(t)
+    assert not prod._written(span, t) and drawn == [round(t, 3)]
+
+
+def test_a_saved_plan_without_the_title_beat_gets_a_title_card_not_a_blank_page():
+    # Script 09 (r02): a plan saved before the title beat existed had no scene for b000; the repair added a motion
+    # scene with nothing in it, 0-3.2 s of blank paper (frozen_picture). The added scene draws the heading's card.
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    from kinodraw.director.v3.validate import validate
+    board = board_of('# Greenleaf Q3 Update\n\nHi everyone, it\'s Rosa.\n\nHere\'s how our third quarter went.')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style']['mode'] = 'motion'
+    plan['scenes'] = [s for s in plan['scenes'] if 'b000' not in s['beat_ids']]
+    for s in plan['scenes']:
+        s['treatment'] = 'motion'
+    fixed, repairs = validate(plan, board, {})
+    title = next(s for s in fixed['scenes'] if 'b000' in s['beat_ids'])
+    assert 'scenes: added missing beat b000' in repairs
+    assert title['treatment'] == 'kinetic_type' and title['text'] == {'kind': 'title', 'ref': 'b000'}

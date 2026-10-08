@@ -22,6 +22,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
+from ..speakers import attribute
 from ..speech import drawn
 from . import acting, ink, sets, shots as planned
 from ..director.v3.staging import tie
@@ -411,6 +412,8 @@ class Storybook:
         self.reader = Reader(plan['cast'])
         self.reader.prime([b['spoken'] for b in by_id.values()])
         self.cast = self.reader.by_id          # the plan's cast and the extra people the story mentions
+        # Who says each quoted line: the same attribution the voices follow (speech.quote_speakers).
+        self.speakers = attribute(list(by_id.values()), plan)
         self.looks = {}
         for c in plan['cast']:
             if c['id'] in self.cast and self._human(c['id']):
@@ -453,6 +456,10 @@ class Storybook:
                 talkers.setdefault(a.get('at_beat'), []).append(a['actor'])
         read = [(bid, self.reader.read(bid, self.by_id[bid]['spoken'], self.by_id[bid].get('section'),
                                        talker=(talkers.get(bid) or [None])[0])) for bid in spec['beat_ids']]
+        for bid, lines in read:
+            for line in lines:
+                if line.quotes:
+                    line.speaker = self.speakers.of(bid, line.quotes[0][0], line.speaker)
         # The people the plan stages in this scene are on the page: from the first line that involves them, or all
         # along when its lines never do (a mother staged in the room while her son speaks). Animals keep the
         # sentence's own staging.

@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import PRODUCT, ingest, library, script, speech, styles, voice, voice_server
+from . import PRODUCT, ingest, library, script, speakers, speech, styles, voice, voice_server
 from .project_store import ProjectStore, atomic_save_json
 from .progress import RenderContext, wait_process
 from .audio import mix as audio
@@ -392,6 +392,7 @@ def narrate(project_dir: Path, progress=None, server: voice_server.Server | None
     (project_dir / 'voice').mkdir(parents=True, exist_ok=True)
     (project_dir / 'voice' / 'cast.json').write_text(json.dumps(speech.cast_of(
         parts, 'your recording' if cfg.get('recording') else 'the voice server' if server else None)), encoding='utf-8')
+    (project_dir / 'voice' / 'speakers.json').write_text(json.dumps(speakers.voiced(parts)), encoding='utf-8')
     for i, beat in enumerate(board['beats']):
         if progress and hasattr(progress, 'check_cancelled'):
             progress.check_cancelled()
@@ -624,6 +625,14 @@ def _finish(project_dir):
     qa = encoded_qa(tl, video, mixed, size=size, narrated_pages=_narrated_pages(cfg, tl))
     cast = project_dir / 'voice' / 'cast.json'
     qa['voices'] = speech.shared_voices(json.loads(cast.read_text(encoding='utf-8'))) if cast.is_file() else []
+    bubbles, said = build / 'bubbles.json', project_dir / 'voice' / 'speakers.json'
+    if bubbles.is_file() and said.is_file():          # every speech bubble is voiced by its own speaker
+        names = {c['id']: c.get('name') for c in (cfg.get('plan_v3') or {}).get('cast') or ()}
+        wrong = speakers.mismatches(json.loads(bubbles.read_text(encoding='utf-8')),
+                                    json.loads(said.read_text(encoding='utf-8')), names)
+        if wrong:
+            qa['problems'] += wrong
+            qa['ok'] = False
     if board.get('look') == 'collage':                # words written over other words never pass
         crowded = renderer.make_production(board, tl, lang, project_dir).crowded()
         qa['problems'] += [f'At {clock(t)} "{a}" and "{b}" are written on top of each other.' for t, a, b in crowded]

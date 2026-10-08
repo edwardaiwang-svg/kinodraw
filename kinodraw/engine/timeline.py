@@ -83,8 +83,9 @@ def _cues(beat, lang, char_time, speech_end, labels, cue_options, bubbled=()):
     said, shown, index = speech.captions(beat['spoken'][lang], beat['display'][lang], labels, bubbled, lang)
     if not said.strip() or not shown.strip():
         return []
+    gaps = [(char_time(a), char_time(max(a, b - 1))) for a, b in bubbled]      # when each bubbled line is said
     return cap.cues_for_beat(said, shown, lang, lambda pos: char_time(index[min(max(pos, 0), len(index) - 1)]),
-                             speech_end, words=True, **cue_options)
+                             speech_end, words=True, gaps=gaps, **cue_options)
 
 
 def recaption(episode, tline, lang, bubbled):
@@ -130,6 +131,11 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
     n_cards = sum(c['kind'] == 'section' for c in episode['chapters'])
     for i, beat in enumerate(beats):
         clip = clips[beat['id']]
+        if not beat.get('silent') and clip['speech'] > 0 and len(clip['char_times']) > 1 and not any(clip['char_times']):
+            # Nobody says it (a stage direction): its words take place across its hold, so the shots, pictures and
+            # actions keyed to them happen one after another while it holds instead of all at its first instant.
+            n = len(clip['char_times'])
+            clip = {**clip, 'char_times': [round(k / n * clip['speech'] * .8, 4) for k in range(n)]}
         take = beat.get('kind') == 'take' and chapters[beat['chapter']]['kind'] == 'section'
         prep = cursor
         delay = max(0., float(takeaways.get(beat['id'], 0.))) if take else 0.
