@@ -181,3 +181,34 @@ def test_a_sleepers_zs_stay_off_another_face(tmp_path):
         for t in (.2, .9, 1.6):
             x, y = book._zzz_at(f, page, page.start + t)
             assert not any(h[0] <= x <= h[2] and h[1] <= y <= h[3] for h in heads), (f.key, t)
+
+
+def test_a_figure_lying_awake_before_the_words_say_asleep_still_breathes(tmp_path):
+    """Lying awake until "fast asleep" is not a frozen picture: the same slow breath as sleep, from the shot's start."""
+    prod = staged(tmp_path, 'Ada lay down on the couch and read for a long while. Soon she was fast asleep.',
+                  [shot('b001', 'Ada lay', 'wide', [('ada', 'adult', 'lie', 'no')])])
+    book = prod.storybook
+    book._blinking = lambda f, t: False
+    _, (page,) = pages(prod, 'b001')
+    ada = page.figures[0]
+    awake = page.start + .2
+    assert ada.cue - awake > storybook.SLEEP_CYCLE / 2 and book._pose_doodle(ada, awake)[2] == 'lie'
+    a, b = (np.asarray(book._draw(page, awake + t), np.int16) for t in (0., storybook.SLEEP_CYCLE / 2))
+    w = a.shape[1]
+    x, half = int(ada.x * w), int(book._half(ada) * w)
+    assert (np.abs(a - b).max(axis=2) > 40)[:, max(0, x - half):x + half].sum() > 5000  # idle breath alone: ~1.7k
+
+
+def test_a_night_window_beside_the_speakers_does_not_widen_their_two_shot(tmp_path):
+    """The night window joins a framing only when it hangs over what the framing holds, not when one speaker's
+    shoulder merely reaches its edge (a two-shot that dropped from 1.9x to 1.2x to fit a window beside them)."""
+    prod = staged(tmp_path, 'It was late at night. Sam sat on his bed. He looked tired.', [
+        shot('b001', 'It was late', 'wide', [('sam', 'adult', 'stand', 'no')], place='bedroom')], sky='night_stars')
+    planned = prod.storybook.planned
+    _, (page,) = pages(prod, 'b001')
+    pane = planned._box(next(p for p in page.set if p.doodle == 'set_window_night'))
+    w = pane[2] - pane[0]
+    grazing = (pane[0] - .4, .5, pane[0] + .02 * w, .75)                   # its right edge just touches the pane
+    over = (pane[0] - .2, .5, pane[2] + .02, .75)                         # the pane hangs over it
+    assert planned._night_sky(page, grazing) == grazing
+    assert planned._night_sky(page, over) != over

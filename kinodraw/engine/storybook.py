@@ -1342,7 +1342,7 @@ class Storybook:
         direction = 1 if f.facing == 'r' else -1
         rotate, dy, height, pin = 0., 0., f.height, None
         squash = BREATH * math.sin(local * 2.6 + f.phase)
-        if pose == 'sleep':
+        if pose == 'sleep' or (f.pose == 'sleep' and pose == f.before):     # lying awake until the words: same breath
             squash = SLEEP_BREATH * math.sin(2 * math.pi * local / SLEEP_CYCLE + f.phase)
         moving = (m.moving if m is not None else None) or (f.travel and pose in ('walk', 'run', 'carry'))
         if moving and moving != 'fly':

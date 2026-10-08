@@ -1244,13 +1244,13 @@ class Shots:
 
     def _night_sky(self, shot, box):
         """At night a framing of a room keeps its dark window in view (the night is what the words say) when the
-        window hangs above what it frames, so the shot stays as close as it was meant to be."""
+        window hangs above what it frames (its middle over it), so the shot stays as close as it was meant to be."""
         window = next((p for p in shot.set if p.doodle == 'set_window_night'), None) if self.night else None
         if window is None:
             return box
         pane = self._box(window)
         both = self._union([box, pane])
-        above = pane[0] < box[2] + .03 and box[0] - .03 < pane[2]
+        above = box[0] - .03 < (pane[0] + pane[2]) / 2 < box[2] + .03     # over it, not just at a shoulder's edge
         return both if above and both[2] - both[0] <= .7 and both[3] - both[1] <= .62 else box
 
     def _held_box(self, shot, piece):
