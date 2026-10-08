@@ -86,3 +86,22 @@ def test_captions_never_run_on_into_the_next_sentence():
     times = lambda char: char * .05
     cues = captions.cues_for_beat(text, text, 'en', times, len(text) * .05)
     assert [c[2] for c in cues] == ['Theo read it twice.', 'Then he went downstairs to the kitchen.']
+
+
+def test_the_storybook_shows_each_picture_on_the_sentence_that_names_it(tmp_path):
+    import json
+    from kinodraw.engine import render, timeline
+    text = ('# Bread\n\nOnce upon a time, a girl named Ana lived in a quiet little town by the hills. '
+            'Every single morning she carried a warm loaf of bread to her neighbours.')
+    board = script.build(ingest.read(text), story='story')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    (tmp_path / 'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
+    tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    prod.frame(0.)
+    shots = [shot for span in prod.spans if span.story for shot in span.story]
+    props = [[p[0] for p in shot.props] for shot in shots]
+    assert len(shots) == 2
+    assert 'fl_houses' in props[0] and 'fl_bread' not in props[0]
+    assert 'fl_bread' in props[1]

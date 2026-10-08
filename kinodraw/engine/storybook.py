@@ -47,6 +47,7 @@ ARBOREAL = {'monkey', 'bird', 'parrot', 'owl'}
 # front of it. HEAD is a head's half height as a share of its figure's height.
 SCALES = (1., .88, .77, .67, .58)
 GAP = .015
+TALK_GAP = .07                  # people in one shot stand a conversation's distance apart
 BACK_ROW = .035
 FRONT_ROW = 3
 HEAD = .16
@@ -84,6 +85,28 @@ FACE_FALLBACK = {'lion': 'fl_lion', 'tiger': 'fl_tiger_face', 'cat': 'fl_cat_fac
                  'rabbit': 'fl_rabbit_face', 'horse': 'fl_horse_face', 'frog': 'fl_frog', 'owl': 'fl_owl'}
 HUMAN = {'human', 'boy', 'girl', 'man', 'woman'}
 HUMAN_FIGURE = {'boy': 'fl_boy', 'girl': 'fl_girl', 'man': 'fl_man_standing', 'woman': 'fl_woman_standing'}
+# People are the library's people presets (child, adult, elder; stand, walk, run, sit, lie, sleep, wave, shout ...).
+# A teenager is an adult preset drawn a little shorter; a baby a child preset drawn small. Heights are shares of an
+# adult's. A person keeps one look (outfit, skin tone) for the whole video: the outfit where their age has it, else
+# the first their age has (a child's casual clothes).
+PERSON_AGE = {'baby': 'child', 'young': 'child', 'child': 'child', 'teen': 'adult', 'adult': 'adult', 'old': 'elder',
+              'elder': 'elder'}
+PERSON_HEIGHT = {'baby': .5, 'child': .72, 'teen': .93, 'adult': 1., 'elder': .96}
+PERSON_SEX = {'boy': 'male', 'man': 'male', 'girl': 'female', 'woman': 'female'}
+PERSON_BAND = {'boy': 'child', 'girl': 'child'}
+OUTFITS = {'adult': ('villager', 'teacher', 'explorer'), 'child': ('casual', 'explorer'), 'elder': ('villager',)}
+ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|doctor|nurse)\b', 'teacher'),
+                (r'\b(?:explorer|hiker|ranger|scout|adventurer)\b', 'explorer'),
+                (r'\b(?:farmer|villager|baker|shopkeeper)\b', 'villager'), (r'\bking\b', 'king'),
+                (r'\bqueen\b', 'queen'), (r'\bprincess\b', 'princess'))
+TONES = ('light', 'tan', 'brown')
+TONE_MARKS = {'light': 'light', 'fair': 'light', 'pale': 'light', 'tan': 'tan', 'olive': 'tan', 'medium': 'tan',
+              'brown': 'brown', 'dark': 'brown', 'black': 'brown'}
+# What a sitting, lying or sleeping person can rest on when the page shows it, and how high its seat is (a share of
+# the support's drawn height above its feet line). Storybook.seat puts them on it; with none they rest on the ground.
+SUPPORTS = {'sit': ('sofa', 'couch', 'armchair', 'chair', 'bench', 'stool', 'seat'),
+            'lie': ('bed', 'sofa', 'couch', 'hammock', 'bench'), 'sleep': ('bed', 'sofa', 'couch', 'hammock', 'bench')}
+SEAT = {'bed': .45, 'hammock': .5, 'stool': .6, 'bench': .45, 'chair': .45, 'armchair': .4, 'sofa': .4, 'couch': .4}
 JUNGLE = ('monkey', 'elephant', 'antelope', 'warthog', 'frog', 'bird')
 SPECIES_BASE = {'lioness': ('lion', 'female'), 'tigress': ('tiger', 'female'), 'kitten': ('cat', None),
                 'puppy': ('dog', None)}
@@ -111,7 +134,8 @@ def preset(species, age='adult', sex=None, pose='stand', facing='r', marks=()):
     base, implied = SPECIES_BASE.get(species, (species, None))
     sex = implied or (sex if sex in ('male', 'female') else None)
     if base in HUMAN:
-        return HUMAN_FIGURE.get(base, 'fl_person_standing'), False
+        chosen = _person(PERSON_BAND.get(base, age), sex or PERSON_SEX.get(base), pose, facing, marks)
+        return chosen or HUMAN_FIGURE.get(base, 'fl_person_standing'), False
     chosen = _choose(base, age, sex, pose, facing, marks)
     if chosen:
         return chosen, False
@@ -124,6 +148,40 @@ def preset(species, age='adult', sex=None, pose='stand', facing='r', marks=()):
         doodle = 'fl_paw_prints'
     native = 'r' if doodle in NATIVE_RIGHT else 'f' if doodle in FRONT else 'l'
     return doodle, native not in ('f', facing)
+
+
+@lru_cache(maxsize=1)
+def _wardrobe():
+    """(preset age, sex) -> the outfits the people presets draw."""
+    mod = _creatures()
+    out = {}
+    for m in (mod.presets().values() if mod else ()):
+        if m['species'] == 'human' and m.get('variant'):
+            out.setdefault((m['age'], m['sex']), set()).add(m['variant'].rsplit('_', 1)[0])
+    return out
+
+
+def _person(age, sex, pose, facing, marks):
+    """A people preset for this age band, sex and pose in the person's look (``marks`` holds 'outfit:...' and
+    'tone:...'), or None without people presets."""
+    mod = _creatures()
+    if mod is None:
+        return None
+    look = dict(m.split(':', 1) for m in marks if ':' in str(m))
+    want = PERSON_AGE.get(age, 'adult')
+    sex = sex if sex in ('male', 'female') else 'female' if look.get('sex') == 'female' else 'male'
+    have = _wardrobe().get((want, sex), set())
+    outfit = look.get('outfit')
+    if outfit not in have:
+        outfit = next((o for o in OUTFITS.get(want, ()) if o in have), sorted(have)[0] if have else '')
+    tone = look.get('tone', 'tan')
+    try:
+        did = mod.best_preset('human', age=want, sex=sex, pose='face' if pose == 'face' else pose,
+                              facing={'r': 'right', 'l': 'left'}.get(facing, 'front'), variant=f'{outfit}_{tone}',
+                              expression='neutral' if pose == 'face' else None)
+    except Exception:  # noqa: BLE001 - no people presets: the caller's plain figure
+        return None
+    return did if did and library.resolve(did) is not None else None
 
 
 def _choose(species, age, sex, pose, facing, marks):
@@ -147,6 +205,9 @@ def _choose(species, age, sex, pose, facing, marks):
 def face(species, age='adult', sex=None, marks=()):
     """A head close-up doodle for an eye shot, or None."""
     base, implied = SPECIES_BASE.get(species, (species, None))
+    if base in HUMAN:
+        did = _person(age, sex, 'face', 'f', marks)
+        return did if did and meta(did).get('pose', '').startswith('face_') else None
     did = _choose(base, age, implied or sex, 'face', 'f', marks)
     if did and meta(did).get('pose', '').startswith('face_'):
         return did
@@ -334,8 +395,13 @@ class Storybook:
     """Shot lists and frames for a story plan's scenes."""
 
     def __init__(self, plan, by_id, timeline, size, paper, title=''):
-        self.cast = {c['id']: c for c in plan['cast']}
         self.reader = Reader(plan['cast'])
+        self.reader.prime([b['spoken'] for b in by_id.values()])
+        self.cast = self.reader.by_id          # the plan's cast and the extra people the story mentions
+        self.looks = {}
+        for c in plan['cast']:
+            if c['id'] in self.cast and self._human(c['id']):
+                self._look(c['id'])
         self.by_id, self.tl, self.size = by_id, timeline, size
         self.paper_image = paper
         self.title = title
@@ -351,16 +417,28 @@ class Storybook:
         shots = []
         staged = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
         pictures = [e['ref'] for e in spec['elements'] if e['kind'] == 'picture' and story_picture(e['ref'])]
-        for bid in spec['beat_ids']:
-            beat, timing = self.by_id[bid], self.tl['beats'][bid]
-            lines = self.reader.read(bid, beat['spoken'], beat.get('section'))
+        talkers = {}
+        for a in spec.get('actions') or ():
+            if a.get('verb') == 'talk' and a.get('actor') in self.cast:
+                talkers.setdefault(a.get('at_beat'), []).append(a['actor'])
+        read = [(bid, self.reader.read(bid, self.by_id[bid]['spoken'], self.by_id[bid].get('section'),
+                                       talker=(talkers.get(bid) or [None])[0])) for bid in spec['beat_ids']]
+        # The people the plan stages in this scene are on the page: from the first line that involves them, or all
+        # along when its lines never do (a mother staged in the room while her son speaks). Animals keep the
+        # sentence's own staging.
+        involved = {cid for _, lines in read for line in lines for cid in line.present + line.extras}
+        joined = [cid for cid in staged if cid not in involved]
+        for bid, lines in read:
+            timing = self.tl['beats'][bid]
             # Each sentence shows the pictures it names (a set from where it is named on); unnamed ones stay up.
             shares = tie([line.text for line in lines], pictures)
             times = timing['char_times']
-            at = lambda char: timing['start'] - start + (times[min(char, len(times) - 1)] if times else 0.)
+            at = lambda char, timing=timing, times=times: (timing['start'] - start +
+                                                           (times[min(char, len(times) - 1)] if times else 0.))
             for i, line in enumerate(lines):
+                joined += [cid for cid in staged if cid in line.present + line.extras and cid not in joined]
                 begin = timing['start'] - start if i == 0 else at(line.start)
-                shot = self._shot(line, begin, at, staged, shares[i], spec)
+                shot = self._shot(line, begin, at, joined, shares[i], spec)
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
@@ -386,18 +464,57 @@ class Storybook:
             shots[0].title = self.title         # the title once, on the first page
         return shots
 
-    def _cast_figure(self, cid, **kw):
+    def _cast_figure(self, cid, line=None, **kw):
         c = self.cast[cid]
+        if self._human(cid):
+            look = self._look(cid)
+            age = (line.ages.get(cid) if line else None) or self.reader.age_band(cid)
+            marks = tuple(m for m in c.get('marks') or () if m in MARKS) + tuple(f'{k}:{v}' for k, v in look.items())
+            return Figure(cid, 'human', age, look['sex'], marks, height=ADULT_HEIGHT * PERSON_HEIGHT.get(age, 1.),
+                          phase=_seed(cid), **kw)
         return Figure(cid, c['species'], c['age'], c['sex'], tuple(c.get('marks') or ()),
                       height=min(.6, ADULT_HEIGHT * max(.45, min(1.4, c.get('size', 1.)))),
                       phase=_seed(cid), **kw)
 
+    def _human(self, cid):
+        c = self.cast[cid]
+        return c.get('kind') == 'human' or SPECIES_BASE.get(c['species'], (c['species'],))[0] in HUMAN
+
+    def _look(self, cid):
+        """A person's look for the whole video, chosen from their name, marks and id alone: sex (the plan's, the
+        story's pronouns, else from the id), an outfit (a role in the name, a crown, else one of the everyday ones)
+        and a skin tone (a tone mark, else from the id), never the same as another person of the same sex on the
+        cast when the library allows."""
+        if cid in self.looks:
+            return self.looks[cid]
+        c = self.cast[cid]
+        seed = sum((i + 1) * ord(ch) for i, ch in enumerate(cid))
+        sex = self.reader.sex(cid) or PERSON_SEX.get(c['species']) or ('female' if seed % 2 else 'male')
+        words = f"{c.get('name', '')} {cid} {c['species']}".lower().replace('_', ' ')
+        marks = {str(m).lower() for m in c.get('marks') or ()}
+        outfit = next((o for cue, o in ROLE_OUTFITS if re.search(cue, words)), None)
+        if outfit is None and 'crown' in marks:
+            outfit = 'king' if sex == 'male' else 'queen'
+        tone = next((TONE_MARKS[m] for m in marks if m in TONE_MARKS), None)
+        outfits = [outfit] if outfit else list(OUTFITS['adult'])
+        tones = [tone] if tone else [TONES[(seed + i) % 3] for i in range(3)]
+        taken = {(l['outfit'], l['tone']) for l in self.looks.values() if l['sex'] == sex}
+        options = [(o, t) for t in tones for o in outfits]
+        chosen = next((o for o in options if o not in taken), options[0])
+        self.looks[cid] = {'sex': sex, 'outfit': chosen[0], 'tone': chosen[1]}
+        return self.looks[cid]
+
     def _shot(self, line, begin, at, staged, pictures, spec):
         shot = Shot(begin, begin)
-        present = [cid for cid in line.present if cid in self.cast] or [c for c in staged[:3]]
+        present = [cid for cid in line.present if cid in self.cast]
+        if line.roar_lesson or not present:
+            present = present or staged[:3]
+        else:
+            present += [cid for cid in staged if cid not in present and self._human(cid)]
+        present += [cid for cid in line.extras if cid not in present]
         if not present and not line.crowd and not line.props:
             present = staged[:3]
-        figures = [self._cast_figure(cid) for cid in present[:4]]
+        figures = [self._cast_figure(cid, line) for cid in present[:4]]
         for f in figures:
             pose = line.poses.get(f.key)
             if pose:
@@ -405,6 +522,8 @@ class Storybook:
         shot.lesson = line.roar_lesson
         layout = self._layout_lesson if shot.lesson else self._layout
         layout(figures, line)
+        if line.speaker in [f.key for f in figures] and len(figures) > 1 and not any(f.travel for f in figures):
+            self._face_speaker(figures, line.speaker)
         shot.figures = figures
         if line.eyes and line.eyes in self.cast:
             target = next((f for f in figures if f.key == line.eyes), None)
@@ -438,6 +557,9 @@ class Storybook:
             shot.props.append((doodle, x, GROUND - .02, .5 if tall else .3))
         for i, doodle in enumerate(sky[:2]):
             shot.sky.append((doodle, (.83, .2)[i], .15, .16))
+        for f in figures:
+            if f.pose in SUPPORTS:
+                self.seat(f, shot)
         shot.atmosphere = atmosphere
         self._crowd(shot, line, figures)
         if line.speaker in [f.key for f in figures] and shot.eyes is None:
@@ -449,6 +571,33 @@ class Storybook:
                         shot.bubbles[-1].end = min(shot.bubbles[-1].end, at(q0) - .1)
                     shot.bubbles.append(Bubble(line.speaker, text, max(begin, at(q0) - .1), at(q1) + .6))
         return shot
+
+    def _face_speaker(self, figures, speaker):
+        """A conversation: the speaker turns to the nearest listener, and everyone else turns to the speaker."""
+        talker = next(f for f in figures if f.key == speaker)
+        others = [f for f in figures if f is not talker]
+        partner = min(others, key=lambda g: abs(g.x - talker.x))
+        talker.facing = 'r' if partner.x > talker.x else 'l'
+        for f in others:
+            f.facing = 'r' if talker.x > f.x else 'l'
+        for f in figures:
+            self._remember(f)
+
+    @staticmethod
+    def seat(f, shot):
+        """Rest a sitting, lying or sleeping figure on a support the page shows (a sofa, bed, chair, bench: matched on
+        the prop's id and library description), at its seat height and over its middle; returns the support's id, or
+        None when the page has none and the figure rests on the ground."""
+        kinds = SUPPORTS.get(f.pose, ())
+        for doodle, x, ground, height in shot.props:
+            entry = library.catalog().get(doodle) or {}
+            words = f"{doodle.replace('_', ' ')} {entry.get('desc', '')}".lower()
+            kind = next((k for k in kinds if re.search(r'\b' + k + r's?\b', words)), None)
+            if kind:
+                f.x, f.ground, f.travel = x, ground - SEAT[kind] * height, 0.
+                f.depth = max(f.depth, 2)
+                return doodle
+        return None
 
     def _remember(self, f):
         self.facing[f.key] = f.facing
@@ -486,7 +635,8 @@ class Storybook:
         adults = side([f for f in figures if f.age != 'baby'])
         order = adults[:1] + babies + adults[1:] if babies and len(adults) >= 2 else side(adults + babies)
         travel = .1 if walking else 0.
-        self._fit(order, lambda: self._pack(order, .04, .96 - travel))
+        gap = TALK_GAP if all(f.species == 'human' for f in order) else GAP
+        self._fit(order, lambda: self._pack(order, .04, .96 - travel, gap=gap))
         for f in order:
             f.facing = 'r' if f.x < .5 else 'l' if f.x > .5 else ('r' if not adults else 'l')
             if f.age == 'baby':
@@ -530,14 +680,14 @@ class Storybook:
                 return k
         return SCALES[-1]
 
-    def _pack(self, order, lo, hi, align='center'):
+    def _pack(self, order, lo, hi, align='center', gap=GAP):
         """Side by side between lo and hi with a small gap; False when they do not fit."""
         halves = [self._half(f) for f in order]
-        total = 2 * sum(halves) + GAP * (len(order) - 1)
+        total = 2 * sum(halves) + gap * (len(order) - 1)
         x = {'center': (lo + hi - total) / 2, 'right': hi - total, 'left': lo}[align]
         for f, half in zip(order, halves):
             f.x = x + half
-            x += 2 * half + GAP
+            x += 2 * half + gap
         return total <= hi - lo + 1e-9
 
     def _layout_lesson(self, figures, line):
@@ -891,7 +1041,13 @@ class Storybook:
         if roar is not None and roar.sound > .02:
             effects.append(lambda o, fig=f, d=doodle, m=mirror, p=roar, x0=x, g=ground + dy: self._roar_effects(
                 o, fig, d, m, p, x0, g, cam, local))
-        if pose == 'sleep':
+        if pose == 'sleep' and f.species == 'human':
+            # A sleeping person's Z rises from their head, wherever the lying doodle puts it.
+            hx, hy = self._point(doodle, mirror, 'head', x, ground + dy, f.height, reference)
+            effects.append(lambda o, fig=f, x0=hx, y0=hy: self._paste(
+                o, 'fl_zzz', False, x0 + .04 * fig.height / ADULT_HEIGHT,
+                y0 - .03 + .01 * math.sin(local * 2), fig.height * .3, cam))
+        elif pose == 'sleep':
             effects.append(lambda o, fig=f, x0=x: self._paste(
                 o, 'fl_zzz', fig.facing == 'l', x0 + (.06 if fig.facing == 'r' else -.06) * fig.height / ADULT_HEIGHT,
                 fig.ground - fig.height * .75 + .01 * math.sin(local * 2), fig.height * .3, cam))
