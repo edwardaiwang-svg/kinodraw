@@ -159,3 +159,10 @@ def test_qa_fails_a_message_read_over_a_blank_device(tmp_path):
         [{'beat': 'b002', 'strings': ['running late 🚌'], 'start': 1, 'end': 3, 'kind': 'message'}]))
     assert screens_qa.check(board, video) == []
     assert screens_qa.check(board, None) == []
+
+
+def test_typing_stays_inside_the_compose_box():
+    found = moments("Ivy's phone buzzed.", 'Ivy typed back: "can mine be the big one with extra cheese and olives please"')
+    img = _drawn(found[-1], .9)                               # still typing: the words are in the compose box
+    body = [x for x in range(1280) if img.getpixel((x, 300))[3]]
+    assert img.getbbox()[2] <= max(body) + 2                  # nothing spills past the phone's side

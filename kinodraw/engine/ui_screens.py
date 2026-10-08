@@ -525,6 +525,9 @@ def _thread(layer, screen, moment, t, accent, device):
     maxw = (x1 - x0) * .78
     if typing and since < 1.2:                                # typed into the compose box first, then sent
         part = current['text'][:max(0, round(len(current['text']) * min(1., since / 1.0)))]
+        room = (x1 - unit * 12) - (x0 + unit * 5)
+        while part and _width(part, round(size * .9)) > room:
+            part = part[1:]                                   # the box scrolls: its newest letters show
         _text(layer, (x0 + unit * 5, cb + unit * 1.3), part, round(size * .9), INK)
     else:
         messages.append(current)
