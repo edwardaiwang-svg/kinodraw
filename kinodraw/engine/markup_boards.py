@@ -36,7 +36,7 @@ TOKEN = re.compile(r'(#.*$|//.*$|--.*$)|("(?:\\.|[^"\\])*"?|\'(?:\\.|[^\'\\])*\'
 
 @lru_cache(maxsize=32)
 def _font(path, size):
-    return ImageFont.truetype(str(path), max(1, int(size)), layout_engine=ImageFont.Layout.BASIC)
+    return ink.truetype(path, max(1, int(size)), 'code or math board', layout_engine=ImageFont.Layout.BASIC)
 
 
 def _colour_runs(line: str, lang: str):

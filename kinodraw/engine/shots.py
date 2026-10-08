@@ -1508,7 +1508,7 @@ def draw_hands(book, overlay, shot, cam):
 
 @lru_cache(maxsize=8)
 def _font(size):
-    return ImageFont.truetype(ink.EN_HAND[0], size)
+    return ink.truetype(ink.EN_HAND[0], size, 'shot label')
 
 
 def _fit(lines, width, height, big, small):

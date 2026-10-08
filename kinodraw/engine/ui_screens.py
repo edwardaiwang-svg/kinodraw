@@ -18,6 +18,7 @@ from pathlib import Path
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
+from . import ink
 from .. import ui_screens
 
 FONT_DIR = Path(__file__).resolve().parent.parent / 'assets' / 'fonts'
@@ -40,7 +41,7 @@ DOT = {'green': (52, 168, 83), 'yellow': (240, 190, 30), 'red': (219, 68, 55), '
 
 @lru_cache(maxsize=64)
 def _font(size: int, code: bool = False):
-    return ImageFont.truetype(str(CODE_FONT if code else UI_FONT), max(6, int(size)))
+    return ink.truetype(CODE_FONT if code else UI_FONT, max(6, int(size)), 'device screen')
 
 
 @lru_cache(maxsize=1)

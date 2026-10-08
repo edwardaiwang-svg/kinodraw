@@ -1537,6 +1537,9 @@ def render_segments(project, episode, lang, timeline, start, n, output, workers,
             wait_process(join, ctx)
             validate_frames(FFMPEG, temp, n, ctx)
             warnings = json.loads(Path(f'{segs[0]}.json').read_text(encoding='utf-8'))['warnings']
+            for seg in segs[1:]:      # each segment draws its own frames: a missing glyph may show in any of them
+                warnings += [w for w in json.loads(Path(f'{seg}.json').read_text(encoding='utf-8'))['warnings']
+                             if w.startswith('Missing glyph:') and w not in warnings]
             ctx.token.commit(temp, output)
             ctx.report(n, n)
             return warnings
@@ -1588,7 +1591,7 @@ def main(argv=None):
     else:
         prod = build(episode, tline, args)
         encode(prod, args.start, n, output, args.crf)
-        warnings = prod.warnings
+        warnings = prod.warnings + ink.glyph_problems()
     project = Path(args.project)
     inputs = {str(p): sha(p) for p in [Path(args.episode), *sorted(HERE.glob('*.py')), *ink.FONT_FILES,
         *sorted((project / 'doodles').glob('*.svg')), *sorted((project / 'photos').glob('*.jpg')),
