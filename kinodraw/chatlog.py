@@ -45,7 +45,7 @@ VOICE = re.compile(r'^\W*(?:🎤|🎙️?)?\s*\[?\s*(?:<\s*)?(?:voice\s+(?:note|
                    r'note|omitted))?|(?:ptt|opus)(?:-\S+)?)(?:\s*>)?\s*[:(-]?\s*(?P<len>[^)\]\n]{0,24}?)\s*[)\]]?\W*$'
                    r'|^\W*(?:🎤|🎙️?)\s*(?P<len2>[\d:]{3,6}|[\w\s:-]{0,24})\W*$', re.I)
 CHAT_WORD = re.compile(r'\b(?:group\s+chat|chat|group|thread|text(?:s|ing)?|messages?|whatsapp|imessage|signal|'
-                       r'telegram|discord|slack|dms?|team|family|fam|crew|squad|parents|club|gc)\b', re.I)
+                       r'telegram|slack|dms?|team|family|fam|crew|squad|parents|club|gc)\b', re.I)
 TEXTING = re.compile(r'\b(?:lol|lmao|lmfao|rofl|brb|omg|omw|idk|tbh|ttyl|ikr|smh|imo|btw|np|thx|ty|pls|plz|ur|u|k|kk|'
                      r'ya|yep|nope|haha\w*|hehe\w*|gonna|wanna|gotta)\b|[?!]{2,}', re.I)
 EMOJI = re.compile('[\U0001F000-\U0001FAFF☀-➿⬀-⯿]')
