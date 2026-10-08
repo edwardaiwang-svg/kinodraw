@@ -1411,6 +1411,8 @@ class Storybook:
                     continue
                 base = min(max(mx, x0 + edge), x0 + bw - edge)
                 tail = math.hypot(base - mx, y0 + bh - my)
+                if mouth is None:                                    # heard off the frame: hug that edge, up top
+                    tail = (x0 if mx < w / 2 else w - x0 - bw) + .2 * y0
                 covered = sum(max(0, min(box[2], c) - max(x0, a)) * max(0, min(box[3], d) - max(y0, b))
                               for a, b, c, d in bodies) / (bw * bh)
                 cost = tail + .25 * h * covered + (.04 * h if (x0 + bw / 2 - mx) * side < 0 else 0)
@@ -1421,7 +1423,7 @@ class Storybook:
             return None
         _, box, base = best
         if mouth is None:
-            tip = (mx, my)
+            tip = (mx, min(box[3] + .03 * h, my))
         else:
             reach = math.hypot(base - mx, box[3] - my)
             tip = (mx + (base - mx) * .012 * h / max(1., reach), my + (box[3] - my) * .012 * h / max(1., reach))

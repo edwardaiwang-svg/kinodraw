@@ -170,6 +170,8 @@ def test_a_voice_heard_off_screen_is_not_drawn_and_its_bubble_comes_in_from_the_
     assert bubble.speaker == 'sam' and bubble.side in ('l', 'r')
     mouth, box, tip, *_ = book._bubble_plan(page, bubble)
     assert mouth is None and tip[0] in (3., book.size[0] - 3.)
+    gap = box[0] if tip[0] < book.size[0] / 2 else book.size[0] - box[2]
+    assert gap < .1 * book.size[0]                                        # it hugs the edge it is heard from
 
 
 def test_the_plan_speaker_wins_unless_the_text_says_otherwise(tmp_path):
@@ -182,6 +184,15 @@ def test_the_plan_speaker_wins_unless_the_text_says_otherwise(tmp_path):
     assert [b.speaker for b in first.bubbles] == ['sam']                 # untagged: the plan's speaker
     _, (second,) = pages(prod, 'b002')
     assert [b.speaker for b in second.bubbles] == ['sam']                # tagged "Sam said" and addressed to Mia
+    assert [r.get('plan_speaker') for r in prod.storybook.bubbled if r['beat'] == 'b002'] == ['mia']   # reported
+
+
+def test_a_speech_tag_naming_the_speaker_beats_the_plan(tmp_path):
+    prod = staged(tmp_path, '"This part is my favorite," Ada says, flipping the pancake.',
+                  [shot('b001', 'This part', 'two_shot', [('sam', 'adult', 'talk', 'yes'), ('ada', 'adult', 'look', 'no')],
+                        lines=[('This part is my favorite,', 'sam')])])
+    _, (page,) = pages(prod, 'b001')
+    assert [b.speaker for b in page.bubbles] == ['ada']
 
 
 def test_a_bubble_is_never_empty_and_finishes_with_its_speech():
@@ -326,3 +337,38 @@ def test_nobody_walks_on_the_spot_and_seated_people_cast_no_floating_shadow(tmp_
     assert overlay.getbbox() is None                                      # sitting on a couch, not on the floor
     book._shadows(overlay, Shot(0., 2., figures=[Figure('sam', 'human', 'adult', 'male')]), .5, [.5, .5, 1.])
     assert overlay.getbbox() is not None
+
+
+def test_a_thing_only_talked_about_is_not_in_the_room_and_a_home_video_shows_its_contents_and_year(tmp_path):
+    from kinodraw.engine.shots import year_in
+    assert year_in('Nineteen eighty-nine.') == '1989' and year_in('in 2004, then') == '2004'
+    assert year_in('two thousand and five') == '2005' and year_in('nineteen oh six') == '1906'
+    assert year_in('She was nineteen.') is None
+    text = ('"Whatever happened to a movie where a man just rides a horse?" Sam asked.\n\n'
+            'On the TV, a little girl was jumping in puddles. "That is your mother, nineteen eighty-nine," Sam said.')
+    prod = staged(tmp_path, text, [
+        shot('b001', 'Whatever', 'two_shot', [('sam', 'old', 'talk', 'yes'), ('mia', 'teen', 'look', 'no')],
+             props=[prop('fl_horse'), prop('fl_man')], focus='fl_horse', lines=[('Whatever happened', 'sam')]),
+        shot('b002', 'On the TV', 'medium', [('sam', 'old', 'sit', 'no'), ('mia', 'teen', 'look', 'no')],
+             props=[prop('fl_girl', 'in', 'fl_television'), prop('puddle')], focus='fl_television')])
+    _, (talk,) = pages(prod, 'b001')
+    assert not {'fl_horse', 'fl_man'} & {p.doodle for p in talk.set}       # spoken of, not in the room
+    _, (video,) = pages(prod, 'b002')
+    (host, shown), = video.screen
+    assert 'fl_girl' in shown and 'puddle' in shown and 'stamp:1989' in shown
+    assert 'puddle' not in [p.doodle for p in video.set]                    # the puddles are on the video
+
+
+def test_a_framing_never_cuts_a_person_in_half_at_its_side(tmp_path):
+    from kinodraw.engine.storybook import Shot
+    book = staged(tmp_path, 'Sam watched the TV.', []).storybook
+    tv = (.75, .45, .9, .62)                                              # what the shot looks at
+    for x in (.62, .5, .3):
+        sam = Figure('sam', 'human', 'elder', 'male', pose='sit', x=x, ground=sets.FLOOR - .1)
+        page = Shot(0., 2., figures=[sam], view=(.79, .63, 2.4))
+        book.planned._uncut(page, [sam], tv)
+        cx, _, zoom = page.view
+        left, right = cx - .5 / zoom, cx + .5 / zoom
+        x0, _, x1, _ = book._shape(sam, 'sit', sam.x)[0]
+        assert x1 <= left + .002 or x0 >= right - .002 or (x0 >= left - .002 and x1 <= right + .002), x
+        assert left <= tv[0] + .002 and tv[2] - .002 <= right                # the TV stays in the shot

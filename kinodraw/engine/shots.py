@@ -196,6 +196,34 @@ def writing_for(book, plan_shot, bid, text):
 
 
 # ------------------------------------------------------------------ staging
+ONES = {w: i for i, w in enumerate('zero one two three four five six seven eight nine'.split())}
+TEENS = {w: i + 10 for i, w in enumerate('ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen '
+                                          'nineteen'.split())}
+TENS = {w: (i + 2) * 10 for i, w in enumerate('twenty thirty forty fifty sixty seventy eighty ninety'.split())}
+
+
+def year_in(text):
+    """A year the text names ("1989", "nineteen eighty-nine", "two thousand and five"), as digits, or None."""
+    m = re.search(r'\b(1[5-9]\d\d|20\d\d)\b', text)
+    if m:
+        return m[1]
+    words = re.findall(r'[a-z]+', (text or '').lower().replace('-', ' '))
+    for i, word in enumerate(words):
+        rest = words[i + 1:i + 4]
+        if word in ('nineteen', 'eighteen', 'seventeen', 'sixteen', 'twenty') and rest:
+            if rest[0] in TEENS:
+                return str(TEENS.get(word, 20) * 100 + TEENS[rest[0]])
+            if rest[0] in TENS:
+                ones = ONES.get(rest[1], 0) if len(rest) > 1 and rest[1] in ONES else 0
+                return str((TEENS.get(word) or TENS[word]) * 100 + TENS[rest[0]] + ones)
+            if rest[0] == 'oh' and len(rest) > 1 and rest[1] in ONES:
+                return str((TEENS.get(word) or TENS[word]) * 100 + ONES[rest[1]])
+        if word == 'two' and rest[:1] == ['thousand']:
+            tail = [r for r in rest[1:] if r != 'and']
+            return str(2000 + (ONES.get(tail[0], 0) if tail and tail[0] in ONES else TEENS.get(tail[0], 0) if tail else 0))
+    return None
+
+
 def chunks(words, most):
     """(start, end) spans of a quoted line, one per bubble: its sentences, a sentence longer than ``most`` words cut
     at its commas, semicolons and dashes (phrases joined while they fit), a phrase still too long cut by word count.
@@ -237,6 +265,7 @@ class Shots:
         self.seats = {}                # cast id -> (place, support doodle, x): their seat stays theirs
         self.screened = {}             # cast id -> Figure: someone shown on a screen stays on it
         self.extra = {}                # place -> chairs brought in when every seat was full
+        self.stamp = None              # the year a home video on a screen is dated
 
     def prepare(self, spec, start, end):
         from .storybook import Shot
@@ -339,6 +368,13 @@ class Shots:
             else:
                 f.pose = 'carry' if c.get('pose') == 'carry' else POSE.get(c.get('pose'), 'stand')
             figures.append(f)
+        focus = plan.get('focus_ref') or ''
+        if SCREEN.search(focus) and any(p.get('relation') == 'in' for p in props):
+            for p in props:                               # the puddles the girl on the video jumps in are on it too
+                if p['ref'] != focus and p.get('relation') in (None, 'none') and p.get('motion') in (None, 'none') \
+                        and not _kind(p['ref']):
+                    p['relation'], p['to'] = 'in', focus
+        props = [p for p in props if not self._talked_about(p, bid)]
         named = [cid for cid in book.cast if self._named(cid, text[2])]
         screen_to = [p.get('to') for p in props if p.get('relation') == 'in']
         screen = self._on_screen(props, figures, named)
@@ -382,6 +418,10 @@ class Shots:
         host = next((p for p in hosts if p.doodle in screen_to), hosts[0] if hosts else None)
         if host is not None and re.search(r'televis|\btv\b|monitor', _words(host.doodle), re.I):
             shot.screen = [(host, screen or ['menu'])]     # a TV that is on: its picture, else a menu of shows
+            if screen:
+                self.stamp = year_in(text[2]) or self.stamp
+                if self.stamp:
+                    shot.screen = [(host, screen + ['stamp:' + self.stamp])]   # a home video's date
         speakers = [c['id'] for c in plan.get('cast') or () if c.get('speaking') == 'yes'
                     and c['id'] in [f.key for f in figures]]
         if speakers and len(figures) > 1:
@@ -515,6 +555,23 @@ class Shots:
                 return other
         return cid
 
+    def _talked_about(self, p, bid):
+        """A thing only spoken of (the horse in "a movie where a man just rides a horse") is not in the room: its
+        name is in the beat's speech and nowhere in its narration."""
+        if p.get('relation') not in (None, 'none') or p.get('motion') not in (None, 'none'):
+            return False
+        display = self.book.by_id[bid]['text']
+        label = SPEAKER_LABEL.match(display)
+        if label:
+            narration = ' '.join(re.findall(r'[\[(]([^\])]*)[\])]', display[label.end():]))
+            speech = re.sub(r'[\[(][^\])]*[\])]', ' ', display[label.end():])
+        else:
+            speech = ' '.join(re.findall(r'["\u201c]([^"\u201d]*)["\u201d]', display))
+            narration = re.sub(r'["\u201c][^"\u201d]*["\u201d]', ' ', display)
+        names = [t for t in re.split(r'[_\W\d]+', re.sub(r'^(?:fl|tb|set|kd)_', '', p['ref'])) if len(t) > 2]
+        said = lambda t, where: re.search(r'\b' + re.escape(t) + r'(?:e?s)?\b', where, re.I)
+        return bool(names) and any(said(t, speech) for t in names) and not any(said(t, narration) for t in names)
+
     def _known(self, ref):
         return bool(ref) and (sets.svg(ref) is not None or library.resolve(ref) is not None)
 
@@ -629,6 +686,29 @@ class Shots:
                 boxes = [self._knees_up(subject)] if not shot.screen else []
             boxes.append(arrangement)
         self._look_at(shot, self._union(boxes), MEDIUM_FILL, MAX_ZOOM[kind if kind in MAX_ZOOM else 'medium'])
+        self._uncut(shot, [f for f in figures if f not in group or not any(b == self._knees_up(f) for b in boxes)],
+                    self._union(boxes))
+
+    def _uncut(self, shot, others, keep):
+        """Nobody is cut in half at the frame's side: the locked framing pans just past a person it would show only
+        in part, as long as what it frames stays in."""
+        cx, cy, zoom = shot.view
+        half = .5 / zoom
+        for f in sorted(others, key=lambda f: abs(f.x - cx)):
+            x0, _, x1, _ = self._body(f)
+            left, right = cx - half, cx + half
+            if x1 <= left or x0 >= right or (x0 >= left and x1 <= right):
+                continue
+            moved = (x1 + .005 + half) if f.x < (keep[0] + keep[2]) / 2 else (x0 - .005 - half)
+            if moved - half <= keep[0] + .002 and keep[2] - .002 <= moved + half and half <= moved <= 1 - half:
+                cx = moved
+                continue
+            shot.view = (cx, cy, zoom)                    # no room to pan past them: frame them whole
+            keep = self._union([keep, self._knees_up(f)])
+            self._look_at(shot, keep, MEDIUM_FILL, zoom)
+            cx, cy, zoom = shot.view
+            half = .5 / zoom
+        shot.view = (cx, cy, zoom)
 
     def _desk(self, shot, f, piece):
         """Bring a person to the desk or table the shot looks at: sitting on a chair beside it, or standing there."""
@@ -755,6 +835,8 @@ class Shots:
                     plan = plans.get(id(shot)) or {}
                     speaker = self._speaker(words, line, lines_by_beat.get(bid, []), plan, tagged, index == 0,
                                             bid)
+                    planned = next((self.person(l.get('speaker')) for l in lines_by_beat.get(bid, [])
+                                    if find_words(words, l.get('quote') or '') == 0), None)
                     self.turn = (speaker, bid, False)
                     if speaker is None:
                         continue
@@ -782,8 +864,10 @@ class Shots:
                         if speaker not in [f.key for f in shot.figures]:
                             side = self._edge(shot, speaker)
                         shot.bubbles.append(Bubble(speaker, part, times[0], times[-1] + .7, times=times, side=side))
-                        book.bubbled.append({'beat': bid, 'start': first, 'end': first + len(part),
-                                             'speaker': speaker, 'text': part})
+                        row = {'beat': bid, 'start': first, 'end': first + len(part), 'speaker': speaker, 'text': part}
+                        if planned and planned != speaker:
+                            row['plan_speaker'] = planned         # the text's own tag or address overruled the plan
+                        book.bubbled.append(row)
 
     def _speaker(self, words, line, planned, plan, tagged, first, bid):
         """The plan's speaker for a quoted line when it is plausible, else the text reading's."""
@@ -893,6 +977,8 @@ def draw_screen(book, overlay, piece, shown, shot, local, cam):
                                    fill=colours[i] + (255,), outline=(60, 70, 90, 255), width=max(1, round(tw / 18)))
         overlay.alpha_composite(glass, (max(0, sx0), max(0, sy0)), (max(0, -sx0), max(0, -sy0)))
         return
+    stamp = next((item[6:] for item in shown if isinstance(item, str) and item.startswith('stamp:')), None)
+    shown = [item for item in shown if not (isinstance(item, str) and item.startswith('stamp:'))]
     n = len(shown)
     for i, item in enumerate(shown):
         cx = gx0 + (gx1 - gx0) * (i + 1) / (n + 1)
@@ -905,6 +991,11 @@ def draw_screen(book, overlay, piece, shown, shot, local, cam):
             book._paste(sub, doodle, mirror, cx, gy1 - (gy1 - gy0) * .06 - hop, height, cam,
                         reference=book._reference(item))
     glass.alpha_composite(sub.crop((sx0, sy0, sx1, sy1)))
+    if stamp:                                               # the camcorder's date in the corner
+        size = max(8, round(glass.height * .14))
+        ImageDraw.Draw(glass).text((glass.width - size * .4, glass.height - size * .4), stamp, anchor='rs',
+                                   font=_font(size),
+                                   fill=(255, 196, 0, 255), stroke_width=max(1, size // 10), stroke_fill=(60, 40, 0, 255))
     overlay.alpha_composite(glass, (max(0, sx0), max(0, sy0)), (max(0, -sx0), max(0, -sy0)))
 
 
