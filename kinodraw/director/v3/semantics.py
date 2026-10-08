@@ -344,6 +344,11 @@ def _detect_cast(script_beats):
             # "Pendo, their only cub" introduces an animal through a young-animal noun.
             kin = re.match(r',\s+(?:the|his|her|their|our|my)\s+[^,.]+', after, re.I)
             kin = kin if kin and YOUNG_RE.search(kin.group()) else None
+            # "Mara the lioness", "Moss, the old tortoise,", "Pip the cub": a species or young-animal noun right after
+            # the name introduces it as the comma form does.
+            titled = re.match(r",?\s+the\s+(?:[a-z-]+\s+){0,2}[a-z-]+\b(?!['’])", after)
+            titled = titled if titled and (SPECIES_RE.search(titled.group()) or YOUNG_RE.search(titled.group())) \
+                else None
             location = re.search(r'\b(?:in|at|across|from|near|of)\s+(?:the\s+)?(?:[a-z]+\s+){0,2}$', before, re.I)
             subject = re.match(r"\s+(?:(?:was|is|did|would|had)\s+)?(?:" + '|'.join(ACTION_CUES.values()) +
                                r"|watch\w*|lived|loved|returned|guarded)\b", after, re.I)
@@ -351,7 +356,7 @@ def _detect_cast(script_beats):
             # Explicit introductions still admit a character actually named Each.
             determiner_subject = name == 'Each' and re.match(r'\s+point\b', after, re.I)
             # Capitalization alone (places, headings, plural common nouns) is not a name cue.
-            named |= bool(noun or kin or (introduced and not location and SPECIES_RE.search(introduced.group())) or
+            named |= bool(noun or kin or titled or (introduced and not location and SPECIES_RE.search(introduced.group())) or
                           any(w in TITLES for w in text[start:end].split()) or
                           (subject and not determiner_subject and not name.endswith('s') and not SPECIES_RE.fullmatch(name)) or
                           re.search(r'\b(?:mother|father|sister|brother),\s*$', before, re.I) or
@@ -366,6 +371,8 @@ def _detect_cast(script_beats):
                 local += '; ' + introduced.group()
             if kin:
                 local += '; ' + kin.group()
+            if titled:
+                local += '; ' + titled.group()
             group = re.match(r'\s+and the other (lionesses|tigresses|lions|tigers)\b', after, re.I)
             if group:
                 local += '; ' + {'lionesses': 'lioness', 'tigresses': 'tigress',

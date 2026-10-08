@@ -95,6 +95,11 @@ NATURE_WORDS = {'jungle': r'jungles?|rain\s*forests?', 'forest': r'forests?|wood
                 'outdoors': r'outdoors'}
 SEAT_WORDS = {'couch': r'couch|sofa|settee', 'sofa': r'couch|sofa|settee', 'settee': r'couch|sofa|settee',
               'seat': r'seat|chair|couch|sofa|bench'}
+# "asleep in front of the TV", "watching television": whoever the words put there keeps the TV beside them and in
+# every framing of them in that place.
+BY_TV = re.compile(r'\b(?:in\s+front\s+of|before|facing|watching|watches|watched)\s+(?:the\s+|a\s+|an\s+|his\s+|'
+                   r'her\s+|their\s+|our\s+|my\s+)?(?:tv|television|telly)\b', re.I)
+TV_GAP = .03
 SIGNAL = re.compile(r'antenna|signal|reception|wifi|bars', re.I)
 MAP = re.compile(r'\bmap\b|map_|_map|atlas', re.I)
 NO_SIGNAL = re.compile(r'\bno\s+(?:bars|signal|service|reception|connection|network)\b|out\s+of\s+range|'
@@ -306,6 +311,7 @@ class Shots:
         self.gone = None               # sky things the words last said are not there ('moon', 'sun', 'star')
         self.read = {}                 # beat id -> the Reader's sentences
         self.drawn = {}                # 'sun'/'moon' -> the picture of it the story last showed (its full moon)
+        self.by_tv = {}                # cast id -> the place the words put them in front of its TV
 
     def prepare(self, spec, start, end):
         from .storybook import Shot
@@ -568,6 +574,18 @@ class Shots:
             return 'savanna'
         return place
 
+    def _asleep(self, bid, text):
+        """Who the words of this shot say is asleep ("fast asleep", "dozed off", "snoring"), with whoever lies down
+        in that sentence ("curled up against his father, fast asleep"). Plan poses never wake them."""
+        out = set()
+        for line in self.read.get(bid, ()):
+            if not (line.start < text[1] and text[0] < line.end):
+                continue
+            poses = {cid: pose for cid, (pose, char) in line.poses.items()}
+            if 'sleep' in poses.values():
+                out |= {cid for cid, pose in poses.items() if pose in ('sleep', 'lie')}
+        return out
+
     def _roars(self, shot, spoken, timer, text):
         """A roar the words give someone on the page ("unleashing a roar", a cub's try that "came out as a tiny
         squeak") opens their mouth when its word is spoken, as on a page read from the text; someone lying down or
@@ -674,6 +692,12 @@ class Shots:
             else:
                 f.pose = 'carry' if c.get('pose') == 'carry' else POSE.get(c.get('pose'), 'stand')
             figures.append(f)
+        sleepers = self._asleep(bid, text)
+        speaking = {c['id'] for c in cast if c.get('speaking') == 'yes'}
+        for f in figures:
+            if f.key in speaking or f.key not in sleepers and not (sleepers and f.pose == 'lie'):
+                continue
+            f.pose = 'sleep'                              # "fast asleep", "snoring": the words put them to sleep
         focus = plan.get('focus_ref') or ''
         if SCREEN.search(focus) and any(p.get('relation') == 'in' for p in props):
             for p in props:                               # the puddles the girl on the video jumps in are on it too
@@ -715,6 +739,7 @@ class Shots:
                 p.holder = prop['to']
             if prop and prop.get('motion') == 'slide' and p.kind != 'hand':
                 p.motion, p.cue, p.to = 'slide', prop['at'], (.6 if p.x < .5 else -.6, 0.)
+        self._by_tv(shot, figures, place, bid, text)
         seated = self._seat(shot, figures, place, refs, (text[2], book.by_id[bid]['spoken']))
         for f in figures:
             if f in seated:
@@ -882,14 +907,61 @@ class Shots:
             shot.supports.append(support)
         return support
 
+    def _by_tv(self, shot, figures, place, bid, text):
+        """Someone the words put in front of the TV ("half-asleep in front of the TV") has it right beside them in
+        every shot of them in that place, and their framing keeps it in view (shot.keep)."""
+        for line in self.read.get(bid, ()):
+            m = BY_TV.search(line.text) if line.start < text[1] and text[0] < line.end else None
+            refs = [r for r in line.refs if r[0] < m.start() and r[2] != 'of'] if m else []
+            if refs:
+                self.by_tv[max(refs)[1]] = place
+        for f in figures:
+            if self.by_tv.get(f.key) not in (None, place):
+                del self.by_tv[f.key]                     # somewhere else now
+        watchers = [f for f in figures if self.by_tv.get(f.key) == place]
+        tv = [p for p in shot.set if p.kind not in ('hand', 'strip') and re.search(r'televis|\btv\b', _words(p.doodle))]
+        if not watchers or not tv:
+            return
+        stands = [s.piece for s in shot.supports if s.kind == 'top' and any(
+            abs(p.ground - s.y) < .02 and s.x0 <= p.x <= s.x1 for p in tv)]
+        group = tv + [p for p in stands if p not in tv]
+        boxes = [self._box(p) for p in group]
+        gx0, gx1 = min(b[0] for b in boxes), max(b[2] for b in boxes)
+        resting = next((f for f in watchers if f.pose in ('sit', 'lie', 'sleep')), None)
+        old = self.seats.get(resting.key) if resting else None
+        seat = next((s for s in shot.supports if old and old[0] == place and s.doodle == old[1]), None) or (
+            sets.seat_for(shot.supports, resting.pose) if resting else None)
+        wx0, wx1 = (self._box(seat.piece)[0], self._box(seat.piece)[2]) if seat else \
+            (min(self._body(f)[0] for f in watchers), max(self._body(f)[2] for f in watchers))
+        if gx0 >= wx1:
+            dx = wx1 + TV_GAP - gx0                       # the TV comes over to stand just past them
+        elif gx1 <= wx0:
+            dx = wx0 - TV_GAP - gx1
+        else:
+            dx = 0.
+        if gx0 + dx < 0 or gx1 + dx > 1:
+            dx = 0.
+        for p in group:
+            p.x += dx
+        for s in shot.supports:
+            if s.piece in group:
+                s.x0, s.x1 = s.x0 + dx, s.x1 + dx
+        lo, hi = gx0 + dx, gx1 + dx
+        for chair in self.extra.get(place, ()):          # a chair brought in earlier moves out of the TV's way
+            b = self._box(chair)
+            if b[0] < hi and lo < b[2]:
+                chair.x += (hi + TV_GAP - b[0]) if hi + TV_GAP + b[2] - b[0] <= 1 else (lo - TV_GAP - b[2])
+        shot.keep = group
+
     def _clear_of_furniture(self, shot, standing, seated):
         """Standing and walking people keep off the couch and the bed: each stands where the page is free, as near
         its own spot as it can."""
         book = self.book
-        if not standing or not shot.supports:
+        if not standing or not (shot.supports or shot.keep):
             return
         boxes = [(s.x0, s.x1) for s in shot.supports if s.kind in ('seat', 'bed')]
         boxes += [(f.x - book._half(f) * .8, f.x + book._half(f) * .8) for f in seated]
+        boxes += [(b[0], b[2]) for b in map(self._box, shot.keep)]     # nobody stands in front of the TV she watches
         for f in standing:
             half = book._half(f)
             lo, hi = half + .01, 1 - half - .01 - f.travel
@@ -1086,6 +1158,7 @@ class Shots:
             if near[2] - near[0] > .5 and (shot.screen or self._desk(shot, subject, piece)):
                 boxes = [self._knees_up(subject)] if not shot.screen else []
             boxes.append(arrangement)
+        boxes += [self._box(p) for p in shot.keep]       # the TV she sleeps in front of stays in the shot
         self._look_at(shot, self._night_sky(shot, self._union(boxes)), MEDIUM_FILL,
                       MAX_ZOOM[kind if kind in MAX_ZOOM else 'medium'])
         self._uncut(shot, [f for f in figures if f not in group or not any(b == self._knees_up(f) for b in boxes)],
