@@ -17,7 +17,7 @@ LATIN, CJK = ink.EN_CAPTION[0], ink.ZH_CAPTION[0]
 
 @lru_cache(maxsize=64)
 def font(path: str, size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(path, int(size), layout_engine=ImageFont.Layout.BASIC)      # as ink.font
+    return ink.truetype(path, int(size), 'stick-figure text', layout_engine=ImageFont.Layout.BASIC)      # as ink.font
 
 
 @lru_cache(maxsize=1)

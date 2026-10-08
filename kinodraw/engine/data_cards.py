@@ -36,7 +36,7 @@ BOLD = ink.ASSETS / 'fonts' / 'Arimo-Bold.ttf'
 
 @lru_cache(maxsize=64)
 def _clean_font(size):
-    return ImageFont.truetype(str(BOLD), max(8, int(size)), layout_engine=ImageFont.Layout.BASIC)
+    return ink.truetype(BOLD, max(8, int(size)), 'data card', layout_engine=ImageFont.Layout.BASIC)
 
 
 class _Look:

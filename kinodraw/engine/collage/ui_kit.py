@@ -16,6 +16,7 @@ import resvg_py
 from PIL import Image, ImageFont
 
 from . import puppet
+from .. import ink
 
 FONTS = Path(__file__).resolve().parents[2] / 'assets' / 'fonts'
 SANS, HAND, ZH_SANS, ZH_HAND = 'Arimo', 'Playpen Sans', 'Noto Sans SC', 'Doodle Kai Medium'
@@ -45,7 +46,7 @@ def _family(lang, hand=False):
 
 @lru_cache(maxsize=16)
 def _font(family, size):
-    return ImageFont.truetype(str(FONTS / FILES[family]), size, layout_engine=ImageFont.Layout.BASIC)  # as ink.font
+    return ink.truetype(FONTS / FILES[family], size, 'collage text', layout_engine=ImageFont.Layout.BASIC)  # as ink.font
 
 
 def text_width(text, family, size):

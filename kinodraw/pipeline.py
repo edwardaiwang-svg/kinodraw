@@ -550,7 +550,7 @@ def render(project_dir: Path, start: float = 0, duration: float | None = None, w
     else:
         prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect, **native)
         renderer.encode(prod, start, n, out, 20, context=context)
-        warnings = prod.warnings
+        warnings = prod.warnings + renderer.ink.glyph_problems()
     if _hybrid(cfg) or styles.renderer(board.get('look')) != 'whiteboard':   # sound effects follow the scheduled animation
         if workers > 1:
             prod = renderer.make_production(board, tl, cfg['lang'], project_dir, aspect=aspect, **native)
@@ -673,6 +673,7 @@ def _finish(project_dir):
         if wrong:
             qa['problems'] += wrong
             qa['ok'] = False
+    _glyph_qa(qa, build)
     layout = build / 'text-layout.json'
     if layout.is_file():                              # rendered words cut off or written over words never pass
         found = _load(layout)
@@ -703,6 +704,15 @@ def _finish(project_dir):
     qa.update({'video': str(video), 'length': clock(tl['duration'])})
     _save(build / 'qa.json', qa)
     return qa
+
+
+def _glyph_qa(qa, build):
+    """A character some text surface drew as a missing-glyph box (render-warnings.json) never passes."""
+    rendered = build / 'render-warnings.json'
+    missing = [w for w in (_load(rendered) if rendered.is_file() else []) if w.startswith('Missing glyph:')]
+    if missing:
+        qa['problems'] += missing
+        qa['ok'] = False
 
 
 def make(source, project_dir: Path, direct=None, progress=None, server: voice_server.Server | None = None,

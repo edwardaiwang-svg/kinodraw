@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import math
 import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -50,12 +51,163 @@ class Fonts(NamedTuple):
 FONTS = Fonts(EN_HAND, ZH_HAND, EN_CAPTION, ZH_CAPTION, UI_FONT)      # the whiteboard's
 
 
+FONT_DIR = ASSETS / 'fonts'
+# Every bundled font, in the order a missing character is looked for (all OFL; see assets/fonts/OFL-*.txt).
+FALLBACKS = [str(FONT_DIR / n) for n in ('Arimo-Bold.ttf', 'NotoSansSC-Bold.otf', 'PlaypenSans-Bold.ttf',
+             'DoodleKai-Medium.ttf', 'STIXTwoText-Regular.ttf', 'JetBrainsMono-Medium.ttf')]
+SUPERSCRIPTS = dict(zip('⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱ', '0123456789+-=()ni'))
+SUBSCRIPTS = dict(zip('₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜ', '0123456789+-=()aeoxhklmnpst'))
+ROLES = {'en_hand': 'handwritten board text', 'zh_hand': 'handwritten board text', 'en_caption': 'caption',
+         'zh_caption': 'caption', 'ui': 'on-screen label'}
+MISSING: dict = {}      # (character, surface) -> a line it was in: drawn as a box; QA fails the render on these
+
+
+def glyph_problems() -> list:
+    """One QA message per character some drawn text needed and no bundled font has (see FallbackFont)."""
+    return [f'Missing glyph: no bundled font draws "{ch}" (U+{ord(ch):04X}) in the {surface}: "{line[:60]}"'
+            for (ch, surface), line in sorted(MISSING.items())]
+
+
+def _drawn(ch):
+    return not ch.isspace() and unicodedata.category(ch) not in ('Cc', 'Cf') and not '\ufe00' <= ch <= '\ufe0f'
+
+
+class FallbackFont(ImageFont.FreeTypeFont):
+    """A bundled font that draws every character it is given. Text the font covers is drawn exactly as before.
+    A super/subscript the font lacks is its own digit (or sign), scaled and shifted off the baseline; any other
+    missing character comes from the first bundled font that has it, sized to the same cap height. A character
+    no bundled font has is recorded in MISSING with the ``surface`` it was meant for and drawn as a box."""
+
+    def __init__(self, font, size=10, index=0, encoding='', layout_engine=None, surface='text'):
+        super().__init__(font, size, index, encoding, layout_engine)
+        self.surface = surface
+
+    def __getstate__(self):
+        return super().__getstate__() + [self.surface]
+
+    def __setstate__(self, state):
+        self.__init__(*state)
+
+    def _has(self, ch):
+        return ord(ch) in _cmap(str(self.path), self.index) or not _drawn(ch)
+
+    def _pieces(self, text):
+        """[(text, font or None for this font itself, baseline shift)] or None when this font covers it all."""
+        if all(self._has(ch) for ch in text):
+            return None
+        out = []
+        for ch in text:
+            piece = (ch, None, 0)
+            if not self._has(ch):
+                small = SUPERSCRIPTS.get(ch) or SUBSCRIPTS.get(ch)
+                if small and self._has(small):
+                    digit = _cap(str(self.path), self.index, self.size, self.layout_engine)
+                    piece = (small, _variant(str(self.path), self.index, max(1, round(self.size * .62)),
+                                             self.layout_engine),
+                             -round(.45 * digit) if ch in SUPERSCRIPTS else round(.16 * digit))
+                else:
+                    hands = [EN_HAND[0], ZH_HAND[0]]      # handwriting falls back to the other hand font first
+                    chain = [h for h in hands if h != str(self.path)] + FALLBACKS if str(self.path) in hands else FALLBACKS
+                    other = next((p for p in chain if p != str(self.path) and ord(ch) in _cmap(p, 0)), None)
+                    if other:
+                        mine, theirs = (_cap(str(self.path), self.index, 100, self.layout_engine),
+                                        _cap(other, 0, 100, self.layout_engine))
+                        scale = min(1.25, max(.8, mine / theirs)) if mine and theirs else 1
+                        piece = (ch, _variant(other, 0, max(1, round(self.size * scale)), self.layout_engine), 0)
+                    else:
+                        MISSING.setdefault((ch, self.surface), text)
+            if out and out[-1][1:] == piece[1:]:
+                out[-1] = (out[-1][0] + piece[0],) + piece[1:]
+            else:
+                out.append(piece)
+        return out
+
+    def _measure(self, t, f):
+        return super().getlength(t) if f is None else f.getlength(t)
+
+    def getlength(self, text, mode='', direction=None, features=None, language=None):
+        pieces = self._pieces(text) if isinstance(text, str) and '\n' not in text else None
+        if pieces is None:
+            return super().getlength(text, mode, direction, features, language)
+        return sum(self._measure(t, f) for t, f, _ in pieces)
+
+    def _shift(self, anchor, length, top, bottom):
+        anchor = anchor or 'la'
+        asc, desc = self.getmetrics()
+        return ({'l': 0, 'm': -length / 2, 'r': -length}[anchor[0]],
+                {'a': asc, 's': 0, 'd': -desc, 'm': (asc - desc) / 2, 't': -top, 'b': -bottom}[anchor[1]])
+
+    def getbbox(self, text, mode='', direction=None, features=None, language=None, stroke_width=0, anchor=None):
+        pieces = self._pieces(text) if isinstance(text, str) and '\n' not in text else None
+        if pieces is None:
+            return super().getbbox(text, mode, direction, features, language, stroke_width, anchor)
+        x, boxes = 0., []
+        for t, f, dy in pieces:
+            b = (super().getbbox(t, mode, None, None, None, stroke_width, 'ls') if f is None else
+                 f.getbbox(t, mode, None, None, None, stroke_width, 'ls'))
+            boxes.append((b[0] + x, b[1] + dy, b[2] + x, b[3] + dy))
+            x += self._measure(t, f)
+        box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+        sx, sy = self._shift(anchor, x, box[1], box[3])
+        return (box[0] + sx, box[1] + sy, box[2] + sx, box[3] + sy)
+
+    def getmask2(self, text, mode='', direction=None, features=None, language=None, stroke_width=0, anchor=None,
+                 ink=0, start=None, *args, **kwargs):
+        pieces = self._pieces(text) if isinstance(text, str) and '\n' not in text else None
+        if pieces is None:
+            return super().getmask2(text, mode, direction, features, language, stroke_width, anchor, ink, start,
+                                    *args, **kwargs)
+        start = start or (0, 0)
+        x, parts = start[0], []
+        for t, f, dy in pieces:
+            frac = (x - math.floor(x), start[1])
+            core, off = (super().getmask2(t, mode, None, None, None, stroke_width, 'ls', ink, frac, *args, **kwargs)
+                         if f is None else
+                         f.getmask2(t, mode, None, None, None, stroke_width, 'ls', ink, frac, *args, **kwargs))
+            parts.append((Image.Image()._new(core), math.floor(x) + off[0], off[1] + dy))
+            x += self._measure(t, f)
+        parts = [p for p in parts if p[0].width and p[0].height] or parts[:1]
+        x0, y0 = min(p[1] for p in parts), min(p[2] for p in parts)
+        x1, y1 = max(p[1] + p[0].width for p in parts), max(p[2] + p[0].height for p in parts)
+        canvas = Image.new(parts[0][0].mode, (max(1, x1 - x0), max(1, y1 - y0)), 0)
+        for im, px, py in parts:
+            if not (im.width and im.height):
+                continue
+            if canvas.mode == 'RGBA':
+                canvas.alpha_composite(im, (px - x0, py - y0))
+            else:
+                region = (px - x0, py - y0, px - x0 + im.width, py - y0 + im.height)
+                canvas.paste(ImageChops.lighter(canvas.crop(region), im), region[:2])
+        box = self.getbbox(text, stroke_width=stroke_width, anchor='ls')
+        sx, sy = self._shift(anchor, x - start[0], box[1], box[3])
+        return canvas.im, (x0 + round(sx), y0 + round(sy))
+
+
+@lru_cache(maxsize=256)
+def _variant(path, index, size, layout_engine):
+    return ImageFont.truetype(path, size, index=index, layout_engine=layout_engine)
+
+
+@lru_cache(maxsize=256)
+def _cap(path, index, size, layout_engine):
+    """The height of a capital H (of a 0 when the font has no Latin) at ``size``."""
+    f = _variant(path, index, size, layout_engine)
+    cmap = _cmap(path, index)
+    probe = next((c for c in 'H0' if ord(c) in cmap), None)
+    return -f.getbbox(probe, anchor='ls')[1] if probe else 0
+
+
+def truetype(path, size, surface, index=0, layout_engine=None) -> FallbackFont:
+    """ImageFont.truetype for a bundled font on a named text surface: every character gets a real glyph."""
+    return FallbackFont(str(path), size, index, '', layout_engine, surface)
+
+
 @lru_cache(maxsize=128)
 def font(kind: str, size: int, fonts: Fonts = FONTS) -> ImageFont.FreeTypeFont:
     path, index = getattr(fonts, kind)
     # Basic layout everywhere: Pillow would switch to Raqm shaping (other kerning, so other letter positions)
     # wherever libfribidi happens to be installed, as on most Linux systems but not on macOS or Windows.
-    return ImageFont.truetype(path, size, index=index, layout_engine=ImageFont.Layout.BASIC)
+    return truetype(path, size, ROLES.get(kind, kind), index, ImageFont.Layout.BASIC)
 
 
 def hand_font(lang: str, size: int, fonts: Fonts = FONTS):
@@ -76,6 +228,8 @@ def font_runs(text: str, lang: str, size: int, fonts: Fonts = FONTS):
     runs = []
     for ch in text:
         kind = next((k for k in order if ord(ch) in _cmap(*getattr(fonts, k)) or ch.isspace()), primary)
+        if kind == primary and _drawn(ch) and ord(ch) not in _cmap(*getattr(fonts, kind)):
+            font(kind, size, fonts)._pieces(text)   # the primary font draws it; one no font has is noted with its line
         if runs and runs[-1][1] == kind:
             runs[-1][0] += ch
         else:

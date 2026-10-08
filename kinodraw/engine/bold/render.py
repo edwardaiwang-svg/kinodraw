@@ -7,6 +7,7 @@ import re
 from collections import OrderedDict
 from copy import deepcopy
 from functools import lru_cache
+import html
 from html import escape
 from xml.etree import ElementTree as ET
 
@@ -236,8 +237,8 @@ def _text_metrics(text, requested_size, width, corner, family='rounded'):
     size = max(CAPTION_SIZE, requested_size) if corner else requested_size
     font = ink.font('zh_caption' if re.search(r'[㐀-䶿一-鿿豈-﫿]', text) else 'en_caption', max(1, round(size)))
     if family != 'rounded' and not re.search(r'[㐀-䶿一-鿿豈-﫿]', text):
-        font = ImageFont.truetype(str(ink.ASSETS / 'fonts' / TYPE_FONTS[family][1]),
-                                  max(1, round(size)), layout_engine=ImageFont.Layout.BASIC)
+        font = ink.truetype(ink.ASSETS / 'fonts' / TYPE_FONTS[family][1], max(1, round(size)), 'kinetic type',
+                            layout_engine=ImageFont.Layout.BASIC)
     spacing = 4 if corner else 0
     if corner:
         lines = []
@@ -454,6 +455,11 @@ def _raster(doc, w, h, text=False):
     fonts = [str(ink.ASSETS / 'fonts' / name) for _, name in dict.fromkeys(TYPE_FONTS.values())] if text else []
     if text and any(ord(ch) > 127 for ch in doc):
         fonts.append(str(ink.ASSETS / 'fonts' / 'NotoSansSC-Bold.otf'))
+        for line in re.findall(r'<text[^>]*>([^<]*)</text>', doc):      # resvg falls back across these files only
+            line = html.unescape(line)
+            for ch in line:
+                if ink._drawn(ch) and not any(ord(ch) in ink._cmap(f, 0) for f in fonts):
+                    ink.MISSING.setdefault((ch, 'kinetic type'), line)
     png = resvg_py.svg_to_bytes(svg_string=doc, width=w, height=h, skip_system_fonts=True, font_files=fonts)
     image = Image.open(io.BytesIO(png))
     if image.mode != 'RGBA':

@@ -614,7 +614,7 @@ class Storybook:
         from . import ink
         w, h = self.size
         size = round(h * .07)
-        font = ImageFont.truetype(ink.EN_HAND[0], size)
+        font = ink.truetype(ink.EN_HAND[0], size, 'story title')
         draw = ImageDraw.Draw(Image.new('RGBA', (8, 8)))
         lines = _wrap(shot.title, font, w * .8, draw)[:2]
         half = max(draw.textlength(line, font=font) for line in lines) / 2 / w + .02
@@ -1901,7 +1901,7 @@ class Storybook:
         alpha = min(1., local / .5) * min(1., (4.5 - local) / .6)
         from . import ink
         size = round(h * .07)
-        font = ImageFont.truetype(ink.EN_HAND[0], size)
+        font = ink.truetype(ink.EN_HAND[0], size, 'story title')
         layer = Image.new('RGBA', canvas.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(layer)
         lines = _wrap(title, font, w * .8, draw)
