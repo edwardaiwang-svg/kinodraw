@@ -168,7 +168,7 @@ ROAR_AFTER = 2.9
 def test_carry_beat_attaches_the_smaller_doodle_to_the_carrier(tmp_path, monkeypatch):
     from kinodraw.engine import storybook
     pastes = Pastes(monkeypatch)
-    prod, board, plan, tl = production(tmp_path)
+    prod = royal_family(tmp_path, STORY)          # Mara the lioness: she carries cubs by the scruff
     span = span_of(prod, 'carrying the slowest')
     shot, at = shot_of(span, prod, 'carrying the slowest')
     carrier = next(f for f in shot.figures if f.key == 'mara')
@@ -246,7 +246,8 @@ def test_animals_never_resolve_to_a_human_figure():
                     doodle, _ = storybook.preset(species, age, None, pose, facing)
                     assert doodle not in people, (species, age, pose, doodle)
                     assert storybook.meta(doodle).get('species') not in HUMAN_SPECIES
-    assert storybook.preset('girl', 'young', 'female', 'stand', 'r')[0] in people
+    girl = storybook.meta(storybook.preset('girl', 'young', 'female', 'stand', 'r')[0])
+    assert girl['species'] == 'human' and girl['age'] == 'child' and girl['sex'] == 'female'    # a person is a person
 
 
 def test_story_lions_are_full_body_presets_with_kojos_black_mane(tmp_path, monkeypatch):

@@ -182,3 +182,46 @@ def test_a_kitchen_has_its_counter_stove_fridge_and_table_and_the_pan_goes_on_th
     stove = next(s for s in shot.supports if s.doodle == 'set_stove')
     pan = next(p for p in shot.set if p.doodle == 'fl_shallow_pan_of_food')
     assert abs(pan.ground - stove.y) < .01 and stove.x0 <= pan.x <= stove.x1
+
+
+def test_a_house_named_by_its_family_is_the_house_and_coming_from_a_room_is_not_being_in_it():
+    assert places("It's Friday night at the Alvarez house.") == ['house']
+    assert places('Mia walked to her grandmother\'s house.') == ['house']
+    assert places('Mia called from the kitchen. Sam came in from the garden.') == [None, None]
+    assert places('I vote cooking show. Sam loved baking shows.') == [None, None]     # a show, not a kitchen
+    assert places('Sam was cooking.') == ['kitchen']
+
+
+EVENING = ('# Friday\n\n'
+           "It was Friday night at the Alvarez house, and there was exactly one remote.\n\n"
+           'In the living room, Mia flopped onto the couch. Sam sat down in the armchair with a bowl of popcorn.\n\n'
+           'Nobody spoke for a while. Then Sam laughed.')
+
+
+def seated(prod, shot, cid):
+    f = next(f for f in shot.figures if f.key == cid)
+    return next((s.doodle for s in shot.supports if abs(f.ground - s.y) < 1e-6 and s.x0 <= f.x <= s.x1), None)
+
+
+def test_people_sit_where_the_line_puts_them_and_stay_there_while_the_room_holds(tmp_path):
+    prod = book(tmp_path, EVENING, PEOPLE)
+    shot, _ = page(prod, 'Friday night')
+    drawn = [p.doodle for p in shot.set]
+    assert shot.place == 'house'
+    assert not [p for p in shot.set if p.doodle == 'set_remote' and p.kind != 'hand']   # no remote out on the lawn
+    assert not any('palm' in d for d in drawn + [d for d, *_ in shot.props])
+    shot, _ = page(prod, 'Sam sat down in the armchair')
+    assert shot.place == 'living_room'                                       # a bowl of popcorn is not a kitchen
+    assert seated(prod, shot, 'sam') == 'fl_chair' and seated(prod, shot, 'mia') == 'fl_couch_and_lamp'
+    shot, _ = page(prod, 'Nobody spoke')
+    assert shot.place == 'living_room'
+    assert seated(prod, shot, 'sam') == 'fl_chair' and seated(prod, shot, 'mia') == 'fl_couch_and_lamp'
+
+
+def test_a_dropped_bag_on_a_bus_page_goes_to_the_street_the_story_moves_on_to(tmp_path):
+    prod = book(tmp_path, '# Rides\n\nMia rode the bus home in the rain. A stranger dropped a grocery bag.\n\n'
+                          'The orange that rolled into the street. Mia ran for it.', PEOPLE[:1])
+    shot, _ = page(prod, 'dropped a grocery bag')
+    assert shot.place == 'street' and any(p.doodle == 'set_grocery_bag' for p in shot.set)
+    shot, _ = page(prod, 'The orange that rolled')
+    assert any(p.doodle == 'set_grocery_bag' for p in shot.set) and any(p.doodle == 'fl_tangerine' for p in shot.set)

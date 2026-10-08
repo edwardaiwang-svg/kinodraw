@@ -516,9 +516,11 @@ HOLDING = {'stand', 'walk', 'run', 'look', 'happy', 'sit', 'scared', 'carry'}
 
 class Stager:
     """Where each page of one story takes place and what is in it. The place carries over from line to line until
-    the text names a new one; a line with no place cue keeps the scene's own (a plan picture of a house, a bus), then
-    the last place; a thing that does not belong in a carried-over place (a grocery bag on a bus, a page out in the
-    street) brings back the last place it fits. A page with no place at all, and nothing else on it, is outdoors."""
+    the text names a new one; a line with no place cue keeps the place its scene's text named, then the last place,
+    then the scene's own (a plan picture of a house, a bus); a thing that does not belong in a place carried over
+    from an earlier scene (a page out in the street) brings back the last place it fits; within a scene only a
+    place that scene or the next one names can take it (a grocery bag on the bus, when the story goes on to the
+    street). A page with no place at all, and nothing else on it, is outdoors."""
 
     def __init__(self, book):
         self.book = book
@@ -528,13 +530,16 @@ class Stager:
         self.previous = (None, [])     # (place, pieces) of the last line: its things stay where they ended up
 
     # ---------------- reading
-    def scene(self, pictures, text=''):
+    def scene(self, pictures, text='', after=''):
         """A scene's plan pictures, sorted: the place they stand for, the things to stage and the scenery; and the
-        first place its text names, for the lines before it when the story has not named one yet."""
-        from ..director.v3.story import THING_ROLE, first_place
+        first place its text names, for the lines before it when the story has not named one yet; and every place
+        it and the scene ``after`` it name, where a thing that does not fit the room can go."""
+        from ..director.v3.story import THING_ROLE, places_in
         from ..library import catalog
         from .storybook import _animal, _sky
-        out = {'place': None, 'text': None, 'things': [], 'scenery': [], 'ahead': first_place(text)}
+        named = places_in(text)
+        out = {'place': None, 'text': None, 'things': [], 'scenery': [], 'ahead': named[0] if named else None,
+               'named': list(dict.fromkeys(named + places_in(after)))}
         for p in pictures:
             if _sky(p) or _animal(p):
                 continue
@@ -554,14 +559,18 @@ class Stager:
 
     def where(self, line, scene):
         """The place of one line (see the class)."""
-        place = line.place or scene['text'] or scene['place'] or self.place or scene.get('ahead')
+        place = line.place or scene['text'] or self.place or scene['place'] or scene.get('ahead')
         moved = bool(line.place)
         if not moved:
             for t in line.things:
                 if t['homes'] and place not in t['homes']:
-                    place = next((p for p in reversed(self.history) if p in t['homes']), t['homes'][0])
-                    moved = True
-                    break
+                    if scene['text']:   # within a scene the room it named holds (a bowl of popcorn in the den),
+                        fit = next((p for p in scene.get('named', ()) if p in t['homes']), None)  # unless it
+                    else:               # names one this thing belongs in (the bag, then the street it spilled in)
+                        fit = next((p for p in reversed(self.history) if p in t['homes']), t['homes'][0])
+                    if fit:
+                        place, moved = fit, True
+                        break
         if moved:
             scene['text'] = place
         if place:
@@ -585,7 +594,8 @@ class Stager:
         if named:
             self.thing = (named[-1]['doodle'], named[-1]['role'])
         last_place, last = self.previous
-        carried = [{'doodle': p.doodle, 'role': 'small', 'homes': (), 'at': None, 'on': None,
+        carried = [{'doodle': p.doodle, 'role': SUPPORTS[p.doodle][0] if p.kind == 'set' else 'small',
+                    'homes': (), 'at': None, 'on': None,
                     'motion': None, 'target': False, 'piece': p} for p in last] if place == last_place else []
         plan = scene['things'][:2] if len(own) < 3 else []
         out, seen = [], set()
@@ -650,6 +660,7 @@ class Stager:
                         doodle = 'set_window_night'
                     pieces.append(Piece(doodle, x, ground, height, kind='wall' if ground < .6 else 'set'))
         things = self.things(line, scene, place)
+        base = len(pieces)
         indoor = place in INTERIOR
         placed = 0
         # Furniture first, so the small things have somewhere to rest.
@@ -662,7 +673,9 @@ class Stager:
         shot.supports = [s for s in (self.support_of(p) for p in pieces) if s]
         named = {t['doodle'] for t in line.things if t['doodle']} | ({self.thing[0]} if self.thing else set())
         # What the line set down stays for the next line on the same set, where its motion left it.
-        self.previous = (place, [p for p in pieces if p.kind in ('thing', 'hand') and p.doodle in named])
+        # So does furniture a line brought in (the armchair someone sat in), for as long as the place holds.
+        self.previous = (place, [p for p in pieces[base:] if (p.kind in ('thing', 'hand') and p.doodle in named)
+                                 or (p.kind == 'set' and p.doodle in SUPPORTS)])
         return built
 
     def _has(self, pieces, doodle):
@@ -731,6 +744,8 @@ class Stager:
                 piece = self._rest(pieces, host, doodle, height)
                 if piece:
                     break
+        if piece is None and not indoor and t['homes'] and set(t['homes']) <= INTERIOR:
+            return False                       # a remote or a lamp is not left out on the lawn
         if piece is None:
             lone = not self._figures and not indoor and role != 'stand'
             height *= LONE if lone else 1.
@@ -766,7 +781,8 @@ class Stager:
             # The cast walks onto the page: the thing shown large on its own shrinks back and steps aside.
             height /= LONE
             x = self._floor_x(pieces, self.half(old.doodle, height), prefer=(x, .3, .7, .2, .8), things=True)
-        pieces.append(Piece(old.doodle, x, ground, height, kind='thing', rotate=rotate, front=old.front, lone=lone))
+        pieces.append(Piece(old.doodle, x, ground, height, kind='set' if old.kind == 'set' else 'thing', rotate=rotate,
+                            front=old.front, lone=lone))
         return True
 
     def _on(self, pieces, s):
@@ -824,12 +840,14 @@ class Stager:
         other furniture, nearest the preferred spots in order."""
         boxes = []
         for p in pieces:
-            if p.kind == 'strip' or (p.kind == 'wall') != wall:
+            if p.kind == 'strip' or (p.kind == 'wall') != wall or p.doodle == 'set_rug':     # a rug is walked on
                 continue
             x0, _, x1, _ = self.frame(p.doodle, p.x, p.ground, p.height, p.mirror)[2]
             boxes.append((x0, x1))
         if not wall:
             for f in self._figures:
+                if f.pose in ('sit', 'lie', 'sleep'):
+                    continue                   # they will sit or lie on the furniture, not stand in its way
                 w = self.book._half(f)
                 boxes.append((f.x - w * .8, f.x + w * .8 + f.travel))
 
@@ -861,13 +879,35 @@ class Stager:
             piece.to = (0., 0.)
 
 
-def seat_for(supports, pose):
+SETTLE = re.compile(r"\b(?:(?P<lie>sprawl\w*|stretch\w*\s+out|curl\w*\s+up|lies|lay|lying|flops?|flopped|collaps\w*)|"
+                    r"(?P<sit>sits?|sat|sitting|squeez\w*|plops?|plopped|settl\w*|sinks?|sank|slump\w*|perch\w*|"
+                    r"climb\w*|curls?|curled|snuggl\w*|cuddl\w*))\b[^.;!?]{0,25}?\b(?:on|onto|in|into)\s+"
+                    r"(?:the|a|an|his|her|their|our|my|its)\s+(?:\w+\s+)?(?P<what>couch|sofa|settee|armchair|chair|"
+                    r"stool|bench|bed|seat|hammock)", re.I)
+
+
+def settles(text):
+    """('sit' or 'lie', char offset of the verb) when a line puts someone onto a seat or bed ("squeezes onto the
+    couch", "sprawled on the bed", "sinks into the armchair"); None otherwise."""
+    m = SETTLE.search(text or '')
+    if not m:
+        return None
+    return ('lie' if m.group('lie') else 'sit'), m.start()
+
+
+def seat_for(supports, pose, prefer=()):
     """The support a figure in this pose can use: a bed or couch to lie or sleep on, a seat (couch, chair, bench,
     bus seat) or a bed's edge to sit on; None when the page has none. The cast's layout calls this; sit the figure
-    with its seat on support.y between support.x0 and x1, or lay it along support.y."""
+    with its seat on support.y between support.x0 and x1, or lay it along support.y. ``prefer``: doodles the line
+    names ("sits in the armchair") or the figure rested on before, used first."""
     order = {'sit': ('seat', 'bed'), 'sleep': ('bed', 'seat'), 'lie': ('bed', 'seat')}.get(pose, ())
+    usable = [s for s in supports if s.kind in order]
+    for doodle in prefer:
+        chosen = next((s for s in usable if s.doodle == doodle), None)
+        if chosen:
+            return chosen
     for kind in order:
-        found = [s for s in supports if s.kind == kind]
+        found = [s for s in usable if s.kind == kind]
         if found:
             return found[0]
     return None
