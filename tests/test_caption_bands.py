@@ -62,16 +62,20 @@ def test_a_spoken_caption_never_leaves_a_word_or_two_of_its_sentence_alone():
 
 # ------------------------------------------------------------------ hyphenated words across rolled pages
 def test_a_hyphenated_word_wrapped_at_its_hyphen_is_never_rejoined_with_a_space():
+    import re
     from kinodraw.engine.hybrid import HybridProduction
-    text = ('Most of the time the leak under the sink is just a tired, worn-out washer that has finally given up '
-            'after years of hot water, and it costs very little to replace.')
+    text = ('So, the old tap drips all day and most nights. Usually it is a worn-out washer that has finally given '
+            'up after years of hot water, and it is cheap to fix.')
     lines = wrap(text, 36)
-    assert any(line.endswith('-') for line in lines) or 'worn-out' in ' '.join(lines)
+    assert any(line.endswith('worn-') for line in lines)    # the written text wraps at the hyphen
     element = MotionElement(text='\n'.join(lines), preset='clauses', size=96, width=1500,
-                            cues=tuple(float(k) for k in range(text.count(',') + 2)))
+                            cues=tuple(float(k) for k in range(8)))
     pages = HybridProduction._rolled(element)
-    flat = ' '.join(captions.unwrap(p.text) for p in pages)
-    assert 'worn- out' not in flat and 'worn-out' in flat
+    assert len(pages) > 1
+    for page in pages:
+        assert 'worn- ' not in page.text, page.text           # never a space put into the word
+    joined = ' '.join(re.sub(r'-\n', '-', p.text).replace('\n', ' ') for p in pages)
+    assert 'worn-out' in joined
     assert captions.unwrap('a worn-\nout washer') == 'a worn-out washer'
     assert captions.unwrap('a quiet\nnight') == 'a quiet night'
 
