@@ -82,7 +82,33 @@ SHOT = _obj(
     props=_arr(_obj(ref=S, relation=_enum(*RELATIONS), to=S, motion=_enum(*MOTIONS))),
     focus_ref=S, writing=S,
 )
-OPTIONAL = frozenset({'shots'})      # property names that older plans may lack; absent = empty
+# Process boards (2026-10-08). A scene's optional ``boards`` draw a labelled diagram that builds up across its beats,
+# the way a teacher draws on a whiteboard (engine/process_diagrams.py). The planner chooses structure only: which
+# layout, which offered pictures, how parts connect and on which words each item appears. Every word on a board is
+# copied from its beat (KinoDraw typesets spoken math: "A plus B equals B plus A" -> "a + b = b + a"), and all
+# geometry comes from KinoDraw's layout grammar, never from the model.
+#   board.layout   parts (a central picture with labelled callouts, +/- charges and a ground line),
+#                  flow (steps left to right joined by arrows), compare (two things side by side, a ratio between)
+#   item.id        short handle other items point at ("cloud", "leader")
+#   item.beat_id   the scene beat the item appears in; item.cue = verbatim words of that beat it appears on
+#   item.kind      picture (ref = offered picture id), label (text = words from the beat; to = the item it names),
+#                  equation (text = spoken math from the beat, fragments joined by " ... "), charges (+/- badges on
+#                  item `to` at region `at`; style plus|minus), link (from item `ref` to item `to`; style straight|
+#                  curved|dashed|zigzag; text = optional label), rings (expanding rings around `to`), highlight
+#                  (`to` lights up), number_line (text = e.g. "Start at 0"), hop (text = e.g. "jump 3" on number
+#                  line `to`; style restart = start again from the line's start), dots (text = "3 rows of 5"),
+#                  rotate (quarter turn of dots `to`)
+#   item.at        where it goes (auto lets KinoDraw choose); item.style per kind above, box = a label in a rule box
+BOARD_LAYOUTS = ('parts', 'flow', 'compare')
+BOARD_KINDS = ('picture', 'label', 'equation', 'charges', 'link', 'rings', 'highlight', 'number_line', 'hop', 'dots',
+               'rotate')
+BOARD_SLOTS = ('auto', 'center', 'top', 'bottom', 'left', 'right', 'top_left', 'top_right', 'bottom_left',
+               'bottom_right', 'ground')
+BOARD_STYLES = ('none', 'straight', 'curved', 'dashed', 'zigzag', 'plus', 'minus', 'restart', 'box')
+BOARD_ITEM = _obj(id=S, beat_id=S, cue=S, kind=_enum(*BOARD_KINDS), ref=S, to=S, at=_enum(*BOARD_SLOTS), text=S,
+                  style=_enum(*BOARD_STYLES))
+BOARD = _obj(layout=_enum(*BOARD_LAYOUTS), items=_arr(BOARD_ITEM))
+OPTIONAL = frozenset({'shots', 'boards'})      # property names that older plans may lack; absent = empty
 SCENE = _obj(
     beat_ids=_arr(S),
     treatment=_enum('whiteboard', 'motion', 'kinetic_type', 'atmosphere', 'chart', 'character'),
@@ -93,7 +119,7 @@ SCENE = _obj(
     camera=_enum('static', 'slow_push', 'pull_back', 'pan_left', 'pan_right', 'shake', 'follow'),
     transition_in=_enum(*TRANSITIONS), hold_s=N,
     text=_obj(kind=_enum('none', 'caption_only', 'quote', 'title', 'counter', 'kinetic', 'cta'), ref=S),
-    shots=_arr(SHOT),
+    shots=_arr(SHOT), boards=_arr(BOARD),
 )
 PLAN_SCHEMA = _obj(
     storyboard=_obj(
