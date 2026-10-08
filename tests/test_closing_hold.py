@@ -141,3 +141,33 @@ def test_a_story_still_ends_on_the_end_with_the_credit(tmp_path):
     assert any('Made with' in ' '.join(e.drawing.lines) for e in els if e.group == 'credit')
     assert not any('Come home' in line for line in lines)                # a story's quote is not a call to action
     assert tl['duration'] - done >= reading(lines, tl['end_card']['start']) - 1 / 30
+
+
+def test_the_audio_timeline_sizes_the_card_from_the_plan_s_reading_of_the_script(tmp_path, monkeypatch):
+    """The timeline is laid out (pipeline.build_audio) with the genre the planner gave, as the renderer draws the
+    card: an ad's card is timed for its own lines, not for a story's "The End"."""
+    from pathlib import Path
+    from kinodraw import pipeline
+    src = tmp_path / 'ad.md'
+    src.write_text(AD, encoding='utf-8')
+    project = Path(tmp_path / 'Ad')
+    pipeline.new_project(src, project, direction={'story': 'story'})    # as the Studio's "Choose for me" makes it
+    cfg = json.loads((project / 'project.json').read_text(encoding='utf-8'))
+    cfg.update(director_v3=True, plan_v3={'storyboard': {'genre': 'launch/promo'}, 'scenes': []})
+    (project / 'project.json').write_text(json.dumps(cfg), encoding='utf-8')
+    seen = {}
+
+    def assemble(board, lang, clips, out, pauses=None, credit=True):
+        seen['tl'] = timeline.layout(board, lang, timeline.synthetic_clips(board, lang), credit=credit)
+        return seen['tl']
+    monkeypatch.setattr(pipeline.audio, 'assemble', assemble)
+    monkeypatch.setattr(pipeline.renderer, 'pacing', lambda *a: {})
+    monkeypatch.setattr(pipeline.audio, 'timing', lambda clips: {})
+    monkeypatch.setattr(pipeline, '_hybrid', lambda cfg: True)
+    monkeypatch.setattr(pipeline, '_save', lambda *a: None)
+    try:
+        pipeline.build_audio(project, {})
+    except Exception:
+        pass                                              # only the timeline it laid out matters here
+    end = seen['tl']['end_card']
+    assert end['read'] >= .3 * 20 - .01                   # title + day/time + price + place + "Come early!"
