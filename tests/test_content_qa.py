@@ -57,13 +57,15 @@ def test_people_the_plan_leaves_out_are_reported():
     assert {'no_people', 'no_speaker'} <= checks
 
 
-def test_an_explainer_fails_only_when_its_scenes_show_nothing():
+def test_an_explainer_sentence_is_shown_only_by_a_picture_its_words_name():
+    """10/8 sense rule: the rules plan draws a cloud, rain, a glass of water and a sprout; every sentence but the last
+    names one of them, and nothing on screen is the ground."""
     board = script.build(ingest.read('# Rain\n\nClouds hold water. Drops grow heavy. Then they fall as rain. '
                                      'The ground drinks it up.'), story='story')
     RulesDirector('en').direct(board)
     plan = from_rules(board)
     assert plan['storyboard']['genre'] != 'story'
-    assert content.check(plan, board)['problems'] == []
+    assert [line.text for line in content.lines(plan, board) if not line.shown] == ['The ground drinks it up.']
     blank = copy.deepcopy(plan)
     for scene in blank['scenes']:
         scene.update(elements=[], treatment='whiteboard', text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
@@ -103,8 +105,9 @@ def test_finish_reports_a_frozen_composition_as_a_problem(tmp_path):
     video = tmp_path / 'v.mp4'
     _video(video, [200] * int(tl['duration'] + 1))
     report = content.check(plan, board, tl, video)
-    assert [f['check'] for f in report['findings']] == ['same_picture']
-    assert 'does not change for' in report['problems'][0]
+    # A blank page also shows nothing any sentence names (10/8 readable-size rule): that is found too.
+    assert [f['check'] for f in report['findings']] == ['unshown', 'same_picture']
+    assert 'does not change for' in report['problems'][1]
 
 
 def test_content_findings_are_reported_beside_the_qa_and_never_fail_the_finish(tmp_path, monkeypatch):
