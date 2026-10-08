@@ -31,6 +31,7 @@ SFX_DUCK_DB = -6.0         # sound effects while someone speaks
 SWELL_DB, SWELL = 3.0, 1.5  # the bed comes up after every cut, easing back over 1.5 s
 GAP_UNDER_DB = 13.0        # fit_bed: the bed's loudest gaps this far under the voice (12 dB measured, plus 1)
 TAIL_UNDER_LU = 13.0       # ...and a music-only end card or tail this far under the speech (12 LU, plus 1)
+NARRATION_LUFS, NARRATION_DBTP = -18.0, -1.5
 MASTER_LUFS, CEILING_DBTP = -14.0, -1.0
 MUSIC = Path(__file__).resolve().parents[1] / 'assets' / 'music'
 DEFAULT_TRACKS = {'primary': 'fresh_focus', 'secondary': 'natural_vibes'}
@@ -109,18 +110,14 @@ def assemble(storyboard: dict, lang: str, clips: dict, out_dir: Path, pauses: di
         start = round(tl['beats'][beat['id']]['start'] * SR)
         n = max(0, min(len(audio), total - start))
         pcm[start:start + n] += audio[:n]
-    premaster, master = out_dir / 'narration-premaster.wav', out_dir / 'narration.wav'
-    write_wav(premaster, pcm)
-    m = loudness(premaster)
-    af = ('loudnorm=I=-18:TP=-1.5:LRA=7:linear=true:'
-          f"measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}:"
-          f"measured_thresh={m['input_thresh']}:offset={m['target_offset']}")
-    _run([FFMPEG, '-y', '-v', 'error', '-i', str(premaster), '-af', af, '-ar', str(SR), '-ac', '1', '-c:a', 'pcm_s16le',
-          str(master)])
-    premaster.unlink()
-    if len(read_wav(master)[0]) != total:
+    narration_wav = out_dir / 'narration.wav'
+    # One static gain to the target, then the look-ahead limiter for the peaks. Not FFmpeg's loudnorm: it falls back
+    # to dynamic mode whenever the gain would push the peaks past its TP target (most TTS narration), and dynamic mode
+    # starts a voice that follows a silent lead-in about 8 dB quiet and climbs 0.5 dB/s (tests/test_narration_level.py).
+    write_wav(narration_wav, master.master(pcm, SR, NARRATION_LUFS, NARRATION_DBTP))
+    if len(read_wav(narration_wav)[0]) != total:
         raise RuntimeError('loudness normalization changed the narration length')
-    tl['audio'] = master.name                       # next to timeline.json: a moved project still finishes
+    tl['audio'] = narration_wav.name                # next to timeline.json: a moved project still finishes
     write_captions(tl['captions'], out_dir)
     (out_dir / 'timeline.json').write_text(json.dumps(tl, ensure_ascii=False), encoding='utf-8')
     return tl
