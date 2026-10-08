@@ -150,30 +150,74 @@ def test_a_markup_scene_planned_as_motion_is_drawn_on_the_whiteboard(tmp_path):
 
 class _Pen:
     """A drawing whose pen ends at (10, 10)."""
-    size, duration = (40, 40), 1.
+    duration = 1.
+
+    def __init__(self, size=(40, 40)):
+        self.size = size
 
     def state(self, elapsed):
         return Image.new('RGBA', self.size), (10., 10.), True
 
 
-def test_after_writing_the_hand_leaves_the_words_during_a_long_pause():
-    a = wb_board.Element(_Pen(), 500, 400, 0., start=0.)
-    b = wb_board.Element(_Pen(), 900, 400, 6., start=6.)
-    pasted = []
-
+def _resting_production(els, hand_els):
     class Hand:
-        img, tip, side = Image.new('RGBA', (200, 300)), (20, 20), 'right'
+        img, tip, side = Image.new('RGBA', (200, 300), (0, 0, 0, 255)), (20, 20), 'right'
+        pasted = []
 
         def paste(self, frame, point, lifted=False):
-            pasted.append(point)
+            self.pasted.append(point)
 
     prod = render.Production.__new__(render.Production)
-    prod.hand, prod.hand_els, prod.hand_starts, prod.size = Hand(), [a, b], [0., 6.], (1920, 1080)
+    prod.hand, prod.els, prod.hand_els, prod.size = Hand(), els, hand_els, (1920, 1080)
+    prod.hand_starts = [e.start for e in hand_els]
+    return prod
+
+
+def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
+    words = wb_board.Element(_Pen((900, 200)), 200, 250, 0., start=0., hand=False)
+    a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
+    b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
+    prod = _resting_production([words, a, b], [a, b])
     frame = Image.new('RGBA', (1920, 1080))
-    prod._hand(frame, 3.5, 0)                       # mid pause, same page: nowhere near the words
-    assert pasted == []
-    prod._hand(frame, 1.1, 0)                       # sliding away right after writing
-    assert pasted and (pasted[-1][0] > 510 or pasted[-1][1] > 410)
+    spots = []
+    for t in (2.5, 3.5):
+        prod._hand(frame, t, 0)
+        spots.append(prod.hand.pasted[-1])
+    for x, y in spots:                                   # the whole hand is clear of the words and the drawings
+        hand = (x - 20, y - 26, x + 180 + 14, y + 274 + 18)
+        for e in (words, a, b):
+            assert hand[2] <= e.x or e.x + e.w <= hand[0] or hand[3] <= e.y or e.y + e.h <= hand[1]
+    assert spots[0] != spots[1]                          # resting, it still moves: the picture never freezes
+    prod._hand(frame, .9 + 6 - .05, 0)                   # and it comes back to start the next drawing
+    assert abs(prod.hand.pasted[-1][0] - 710) < 30 and abs(prod.hand.pasted[-1][1] - 340) < 30
+
+
+def test_finished_code_keeps_a_blinking_cursor():
+    d = mb.CodeDrawing(CODE, 'python', 1656, 738, 1080, 2.)
+    shown = {d.state(2. + k * mb.BLINK + .1)[0].tobytes() for k in range(2)}
+    assert len(shown) == 2
+
+
+def test_later_board_items_are_drawn_under_the_formula_on_its_page(tmp_path):
+    def edit(board, plan):
+        math_id, next_id = _beat(board, 'A = P')['id'], _beat(board, 'same thing in Python')['id']
+        scenes = plan['scenes']
+        k = next(i for i, s in enumerate(scenes) if math_id in s['beat_ids'])
+        scenes[k]['beat_ids'].append(next_id)
+        scenes[k + 1]['beat_ids'].remove(next_id)
+        if not scenes[k + 1]['beat_ids']:
+            del scenes[k + 1]
+        item = dict(ref='', to='', at='auto', style='none')
+        scenes[k].update(treatment='whiteboard', elements=[], boards=[{'layout': 'flow', 'items': [
+            dict(item, id='f', beat_id=math_id, cue='A', kind='equation', text='A = P(1 + r)^n'),
+            dict(item, id='py', beat_id=next_id, cue='Python', kind='label', text='same thing in Python')]}])
+    board, plan, timing, prod = _production(tmp_path, edit)
+    wb = getattr(prod, 'whiteboard', prod)
+    formula = next(e for e in wb.els if e.group.startswith('markup:'))
+    later = [e for e in wb.els if e.group.endswith(':py')]
+    assert later and not [e for e in wb.els if e.group.endswith(':f')]   # the formula is not written twice
+    assert later[0].stretch == formula.stretch and later[0].y >= formula.y + formula.h
+    assert text_layout.problems(prod) == []
 
 
 def test_the_probe_fails_clipped_and_overlapping_text():

@@ -169,6 +169,10 @@ class Production:
         mark = markup.board(beat, self.lang)
         if mark is not None:                         # code, a formula or a warning: its own board (markup_boards)
             from .markup_boards import draw
+            if self._board_plan is not None:         # its scene's later board items may share its page
+                from .process_diagrams import Boards
+                self._boards = self._boards or Boards(self, self._board_plan)
+                self._boards.prepare(beat, not_before)
             draw(self, beat, mark)
             return
         if self._board_plan is not None:
@@ -768,7 +772,12 @@ class Production:
         prev = cur if cur is not None and cur.end <= t else (self.hand_els[i - 1] if i > 0 else None)
         nxt = self.hand_els[i + 1] if i + 1 < len(self.hand_els) else None
         if prev is None or nxt is None or self._new_board(prev, nxt):
-            self._slide(frame, t, L, prev, nxt)
+            rest = self._rest(prev, nxt, L) if prev is not None and nxt is not None and prev.stretch == nxt.stretch \
+                else None
+            if rest is None:
+                self._slide(frame, t, L, prev, nxt)
+            else:
+                self.hand.paste(frame, self._resting(t, prev, nxt, rest, L), lifted=True)
             return
         gap = nxt.start - prev.end
         if gap <= 0:
@@ -784,6 +793,81 @@ class Production:
         x = (prev.x + p0[0]) * (1 - u) + (nxt.x + p1[0]) * u - L
         y = (prev.y + p0[1]) * (1 - u) + (nxt.y + p1[1]) * u
         self.hand.paste(frame, (x, y - 10 * math.sin(math.pi * u)), lifted=True)
+
+    def _resting(self, t, prev, nxt, rest, L):
+        """Where the pen tip is at ``t`` during a long pause on one page: it lifts off the last stroke to the rest
+        spot (_rest), drifts slowly there while the narration goes on, and goes to the next drawing's first stroke."""
+        (a, b), gap = rest, nxt.start - prev.end
+        p0, p1 = self._last_pen(prev), self._first_pen(nxt)
+        here = (prev.x + p0[0], prev.y + p0[1]) if p0 is not None else a
+        there = (nxt.x + p1[0], nxt.y + p1[1]) if p1 is not None else b
+        go = min(.8, gap * .3)
+        if t < prev.end + go:
+            u, frm, to = ease((t - prev.end) / go), here, a
+        elif t > nxt.start - go:
+            u, frm, to = ease((t - nxt.start + go) / go), b, there
+        else:
+            u, frm, to = (t - prev.end - go) / max(1e-6, gap - 2 * go), a, b
+        return frm[0] + (to[0] - frm[0]) * u - L, frm[1] + (to[1] - frm[1]) * u
+
+    def _rest(self, prev, nxt, L):
+        """Two nearby spots (world px) for the pen tip during a long pause between ``prev`` and ``nxt`` on one page,
+        where the hand and its shadow cover none of the page's drawings and words, the caption or the step rail; the
+        hand drifts from one to the other so the picture never stands still. None when the page has no such room
+        (the hand then slides out of the frame)."""
+        cache = self.__dict__.setdefault('_rests', {})
+        key = (id(prev), id(nxt))
+        if key not in cache:
+            cache[key] = self._find_rest(prev, nxt, L)
+        return cache[key]
+
+    def _find_rest(self, prev, nxt, L):
+        import numpy as np
+        W, H = self.size
+        k = 8                                            # px per cell of the coarse coverage maps
+        busy = np.zeros((math.ceil(H / k), math.ceil(W / k)), bool)
+
+        def block(x0, y0, x1, y1):
+            busy[max(0, int(y0 // k)):max(0, math.ceil(y1 / k)), max(0, int(x0 // k)):max(0, math.ceil(x1 / k))] = True
+
+        for e in self.els:
+            if e.start is None or e.start > nxt.start or e.skipped:
+                continue
+            if e.hidden_after is not None and e.hidden_after <= prev.end:
+                continue
+            block(e.x - L, e.y, e.x - L + e.w, e.y + e.h)
+        block(W * .1, H * .84, W * .9, H)                # the caption
+        block(0, 0, W * .3, H * .06)                     # the title chip
+        if getattr(self, 'steps', None) is not None:
+            block(0, 0, W * .07, H)                      # the step rail
+        img = self.hand.img
+        alpha = np.asarray(img.getchannel('A').resize((math.ceil(img.width / k), math.ceil(img.height / k)))) > 24
+        shadow = np.zeros((alpha.shape[0] + 3, alpha.shape[1] + 2), bool)
+        shadow[:alpha.shape[0], :alpha.shape[1]] |= alpha
+        shadow[3:, 2:] |= alpha                          # the soft shadow falls 14 px right, 18 px down
+        tx, ty = self.hand.tip
+
+        def free(x, y):
+            cx, cy = int((x - tx) // k), int((y - ty - 6) // k)
+            h, w = shadow.shape
+            y0, x0 = max(0, cy), max(0, cx)
+            y1, x1 = min(busy.shape[0], cy + h), min(busy.shape[1], cx + w)
+            return y1 <= y0 or x1 <= x0 or not (busy[y0:y1, x0:x1] & shadow[y0 - cy:y1 - cy, x0 - cx:x1 - cx]).any()
+
+        p0, p1 = self._last_pen(prev), self._first_pen(nxt)
+        if p0 is None or p1 is None:
+            return None
+        here = (prev.x + p0[0] - L, prev.y + p0[1])
+        there = (nxt.x + p1[0] - L, nxt.y + p1[1])
+        spots = [(x, y) for y in range(round(H * .08), round(H * .8), 24) for x in range(round(W * .1), round(W * .94), 24)]
+        spots.sort(key=lambda p: math.dist(p, here) + math.dist(p, there))
+        a = next((p for p in spots if free(*p)), None)
+        if a is None:
+            return None
+        drift = min(90., 24 * (nxt.start - prev.end))
+        b = min((p for p in spots if drift * .5 <= math.dist(p, a) <= drift and free(*p)),
+                key=lambda p: math.dist(p, there), default=a)
+        return (a[0] + L, a[1]), (b[0] + L, b[1])
 
     @staticmethod
     def _new_board(prev, nxt):

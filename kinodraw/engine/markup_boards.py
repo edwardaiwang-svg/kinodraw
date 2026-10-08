@@ -62,6 +62,9 @@ def _colour_runs(line: str, lang: str):
     return runs
 
 
+BLINK = .53                 # seconds the finished code's cursor is shown, then hidden, like an editor's
+
+
 class CodeDrawing:
     """A code editor panel (line numbers, monospace, the code's own indentation, syntax colours) whose code types in
     line by line over ``duration`` seconds, a cursor at the typing point. Typed, so no pen: the hand stays away."""
@@ -161,8 +164,8 @@ class CodeDrawing:
         if elapsed < 0:
             return None, None, False
         k = self.shown(elapsed)
-        if k >= self._typed[-1] and elapsed >= self.duration:
-            k = self._typed[-1] + 1                          # finished: no cursor
+        if k >= self._typed[-1] and elapsed >= self.duration and int((elapsed - self.duration) / BLINK) % 2:
+            k = self._typed[-1] + 1                          # finished: the cursor blinks at the end of the code
         if self._cache[0] != k:
             self._cache = (k, self._image(k))
         return self._cache[1], None, False
@@ -374,36 +377,48 @@ def step_rail(episode, tline, lang, accent, frame_size):
 
 
 # ------------------------------------------------------------------ placing a markup board
-def draw(prod, beat, mark):
-    """Put a beat's markup board (markup.board) on a fresh page of the whiteboard Production ``prod``: the camera
-    cuts to it when the beat starts and it stays until the next page. Code types in during the beat's pause; a
-    formula, a warning card and keycaps are drawn by the hand while the beat is said."""
+def make(prod, beat, mark, w, h):
+    """(drawing, drawn by the hand) of a beat's markup board fitted in w x h page pixels. Code types in during the
+    beat's pause; a formula, a warning card and keycaps are drawn by the hand while the beat is said."""
     bt = prod.tl['beats'][beat['id']]
     start, end = bt['start'], bt['end']
-    box, (col, _) = prod.layout.page()
-    x0, y0, w, h = box
-    W, H = prod.size
-    prod.cut(start, col * prod.g.col, 'cut')
+    H = prod.size[1]
     if mark['kind'] == 'code':
-        drawing = CodeDrawing(mark['code'], mark['lang'], round(w * .92), round(h), H,
-                              max(.6, (end - start) * .92))
-        hand, fixed = False, True
+        drawing = CodeDrawing(mark['code'], mark['lang'], round(w * .92), round(h), H, max(.6, (end - start) * .92))
+        hand = False
     elif mark['kind'] == 'math':
-        img = math_image(mark['formula'], .115 * H, ink.rgba(prod.skin.ink))
+        size = min(.115 * H, h * .6)
+        img = math_image(mark['formula'], size, ink.rgba(prod.skin.ink))
         if img.width > w * .94:
-            img = math_image(mark['formula'], .115 * H * w * .94 / img.width, ink.rgba(prod.skin.ink))
+            img = math_image(mark['formula'], size * w * .94 / img.width, ink.rgba(prod.skin.ink))
         drawing = ink.RevealDrawing(img, min_dur=.8, max_dur=max(.8, min(2.4, (bt['speech_end'] - start) * .8)))
-        hand, fixed = True, False
+        hand = True
     else:
         img = warning_image(mark['text'], round(min(w * .86, 1500)), prod.lang, prod.skin.fonts, H)
         drawing = ink.RevealDrawing(img, min_dur=.8, max_dur=max(.8, min(2.6, (bt['speech_end'] - start) * .7)))
-        hand, fixed = True, False
+        hand = True
     drawing.dressed = True
     drawing.words = mark.get('code') or mark.get('formula') or mark.get('text')
+    return drawing, hand
+
+
+def draw(prod, beat, mark):
+    """Put a beat's markup board (markup.board) on a page of the whiteboard Production ``prod``: the camera cuts to it
+    when the beat starts and it stays until the next page. The page is its own, or the top of one whose lower part
+    carries the scene's later board items (process_diagrams.Boards.share)."""
+    bt = prod.tl['beats'][beat['id']]
+    start, end = bt['start'], bt['end']
+    shared = getattr(prod, 'markup_pages', {}).pop(beat['id'], None)
+    if shared is not None:
+        (x0, y0, w, h), col, (drawing, hand) = shared
+    else:
+        (x0, y0, w, h), (col, _) = prod.layout.page()
+        drawing, hand = make(prod, beat, mark, w, h)
+    prod.cut(start, col * prod.g.col, 'cut')
     x = x0 + (w - drawing.size[0]) / 2
     y = y0 + (h - drawing.size[1]) / 2
     el = prod.ctx.add(drawing, x, y, start + .05, essential=True, group=f"markup:{beat['id']}", beat=beat['id'],
-                      deadline=max(start + drawing.duration + .1, end - .05), hand=hand, fixed=fixed)
+                      deadline=max(start + drawing.duration + .1, end - .05), hand=hand, fixed=not hand)
     prod._visual_triggers[id(el)] = (el, start + .05)
     return el
 

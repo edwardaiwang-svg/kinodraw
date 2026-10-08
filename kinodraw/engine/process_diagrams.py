@@ -805,16 +805,21 @@ class Boards:
         return set(self.scene_of)
 
     # -- per beat
-    def draw(self, beat, not_before=0.):
-        index = self.scene_of[beat['id']]
-        if index not in self.built:
+    def prepare(self, beat, not_before=0.):
+        """Lay out the scene of ``beat`` (once), before any of its boards or markup boards is drawn."""
+        index = self.scene_of.get(beat['id'])
+        if index is not None and index not in self.built:
             self.built[index] = self._build(index, not_before)
+        return index
+
+    def draw(self, beat, not_before=0.):
+        index = self.prepare(beat, not_before)
         prod = self.prod
         for page in self.built[index]:
             for k, (bid, start, add) in enumerate(page['adds']):
                 if bid != beat['id']:
                     continue
-                if k == 0:
+                if k == 0 and not page.get('shared'):
                     prod.cut(page['start'], page['col'] * prod.g.col, 'cut')
                 add()
 
@@ -829,10 +834,15 @@ class Boards:
         pages = []
         boards = [self.sums(b, by_id, lang) for b in scene['boards'] if b['items']]
         marked = [k for k, bid in enumerate(scene['beat_ids']) if markup.board(by_id[bid], lang)]
+        later = []
         if marked:
             # From a code, formula or warning beat on, its own board (markup_boards) stays on screen for the rest of
-            # the scene: no labels restating the code, no camera trip back to this board.
-            keep = set(scene['beat_ids'][:marked[0]])
+            # the scene: no labels restating the code, no camera trip back to this board. The items of the beats
+            # after it (up to the next markup beat) go under it on its page (share).
+            ids = scene['beat_ids']
+            keep = set(ids[:marked[0]])
+            after = set(ids[marked[0] + 1:marked[1] if len(marked) > 1 else len(ids)])
+            later = [it for b in boards for it in b['items'] if it['beat_id'] in after]
             boards = [dict(b, items=[it for it in b['items'] if it['beat_id'] in keep]) for b in boards]
             boards = [b for b in boards if b['items']]
         times = []
@@ -843,7 +853,39 @@ class Boards:
             end = times[n + 1][0] if n + 1 < len(boards) else scene_end
             box, (col, _) = prod.layout.page()
             pages.append(self._page(board, [max(start, t) for t in times[n]], start, end, box, col, by_id))
+        if marked:
+            ids = scene['beat_ids']
+            until = tl['beats'][ids[marked[1]]]['start'] if len(marked) > 1 else scene_end
+            pages += self.share(by_id[ids[marked[0]]], later, until, by_id)
         return pages
+
+    def share(self, beat, items, end, by_id):
+        """Give a markup beat's board (markup_boards) the top of a fresh page and lay ``items`` (the scene's later
+        board items) out under it: what the narration says next is drawn while the code, formula or warning stays
+        on screen. Without such items, or room for them, the board gets the whole page."""
+        from .markup_boards import make
+        prod, lang = self.prod, self.prod.lang
+        ids = {it['id'] for it in items}
+        items = [dict(it, to=it['to'] if it['to'] in ids else '') for it in items
+                 if it['kind'] != 'link' or (it['ref'] in ids and it['to'] in ids)]
+        box, (col, _) = prod.layout.page()
+        x0, y0, w, h = box
+        mark = markup.board(beat, lang)
+        made = make(prod, beat, mark, w, h * .6) if items else None
+        room = h - made[0].size[1] - .08 * h if made else 0
+        if not items or room < .3 * h:
+            prod.markup_pages = {**getattr(prod, 'markup_pages', {}),
+                                 beat['id']: (box, col, made or make(prod, beat, mark, w, h))}
+            return []
+        top = h - room
+        prod.markup_pages = {**getattr(prod, 'markup_pages', {}), beat['id']: ((x0, y0, w, top), col, made)}
+        tl = prod.tl
+        times = [max(tl['beats'][beat['id']]['end'], cue_time(tl, by_id[it['beat_id']], it['cue'], lang))
+                 for it in items]
+        board = {'layout': 'flow', 'items': items}
+        page = self._page(board, times, times[0], end, (x0, y0 + top, w, room), col, by_id, scale=h / 738)
+        page['shared'] = True
+        return [page]
 
     def _text(self, words, size, colour, max_w, lines=3, quick=False):
         prod = self.prod
@@ -881,10 +923,10 @@ class Boards:
                             'ref': '', 'to': '', 'at': 'auto', 'text': written, 'style': 'none', 'raw': True})
         return dict(board, items=out)
 
-    def _page(self, board, times, start, end, box, col, by_id):
+    def _page(self, board, times, start, end, box, col, by_id, scale=None):
         prod = self.prod
         x0, y0, W, H = box
-        s = H / 738
+        s = scale or H / 738
         ink_c, accent, accent2 = self.colours['ink'], self.colours['accent'], self.colours['accent2']
         texts = {}
 
