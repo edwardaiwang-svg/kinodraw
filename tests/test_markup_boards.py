@@ -180,6 +180,7 @@ def _resting_production(els, hand_els):
     prod = render.Production.__new__(render.Production)
     prod.hand, prod.els, prod.hand_els, prod.size = Hand(), els, hand_els, (1920, 1080)
     prod.hand_starts = [e.start for e in hand_els]
+    prod.camera = wb_board.Camera()
     return prod
 
 

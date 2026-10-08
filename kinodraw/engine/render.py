@@ -842,8 +842,8 @@ class Production:
         of the frame)."""
         cache = self.__dict__.setdefault('_rests', {})
         key = (id(prev), id(nxt))
-        if key not in cache:
-            cache[key] = self._find_rest(prev, nxt, L, pause)
+        if key not in cache:                             # the page's own camera stop, not the moment asked (a
+            cache[key] = self._find_rest(prev, nxt, self.camera.at(prev.end), pause)   # render segment starts anywhere)
         return cache[key]
 
     def _find_rest(self, prev, nxt, L, pause):
@@ -853,7 +853,8 @@ class Production:
         k = 8                                            # px per cell of the coarse coverage maps
         busy = np.zeros((math.ceil(H / k), math.ceil(W / k)), bool)
 
-        def block(x0, y0, x1, y1):
+        def block(x0, y0, x1, y1, pad=k):
+            x0, y0, x1, y1 = x0 - pad, y0 - pad, x1 + pad, y1 + pad
             busy[max(0, int(y0 // k)):max(0, math.ceil(y1 / k)), max(0, int(x0 // k)):max(0, math.ceil(x1 / k))] = True
 
         for e in self.els:
@@ -896,22 +897,29 @@ class Production:
         there = (nxt.x + p1[0] - L, nxt.y + p1[1]) if back else here
         spots = [(x, y) for y in range(round(H * .08), round(H * .8), 24) for x in range(round(W * .1), round(W * .94), 24)]
         spots.sort(key=lambda p: math.dist(p, here) + math.dist(p, there))
-        a = next((p for p in spots if free(*p)), None)
-        if a is None:
-            return None
         gap = until - prev.end
-        want = min(420., DRIFT * (gap - (2 if back else 1) * min(.8, gap * .3)))
+        want = max(48., min(420., DRIFT * (gap - (2 if back else 1) * min(.8, gap * .3))))
 
         def clear(p, q):
             n = max(1, math.ceil(math.dist(p, q) / 24))
             return all(free(p[0] + (q[0] - p[0]) * j / n, p[1] + (q[1] - p[1]) * j / n) for j in range(1, n + 1))
 
-        ring = [p for p in spots if want * .75 <= math.dist(p, a) <= want * 1.25]
-        b = min((p for p in ring if clear(a, p)), key=lambda p: math.dist(p, there), default=None)
-        if b is None:                                    # no room to drift that far: the farthest it can
-            b = max((p for p in spots if math.dist(p, a) <= want and clear(a, p)), key=lambda p: math.dist(p, a),
-                    default=a)
-        return (a[0] + L, a[1]), (b[0] + L, b[1])
+        def room(a):                                     # the spot the hand can drift to from a, as far as wanted
+            r = want
+            while r >= 47.:
+                ends = [(a[0] + r * math.cos(j * math.pi / 6), a[1] + r * math.sin(j * math.pi / 6)) for j in range(12)]
+                ends = [q for q in ends if W * .05 <= q[0] <= W * .95 and H * .05 <= q[1] <= H * .85 and clear(a, q)]
+                if ends:
+                    return min(ends, key=lambda q: math.dist(q, there))
+                r /= 2
+            return None
+
+        near = [p for p in spots if free(*p)][:40]
+        for a in near:
+            b = room(a)
+            if b is not None:
+                return (a[0] + L, a[1]), (b[0] + L, b[1])
+        return ((near[0][0] + L, near[0][1]),) * 2 if near else None     # nowhere to drift: it stays put
 
     @staticmethod
     def _new_board(prev, nxt):
