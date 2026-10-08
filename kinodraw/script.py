@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 
+from . import markup
 from .ingest import Document, Section, CLOSERS, _outside_quotes, _sentence_spacing, _sentences, _title
 from .numbers import normalize
 
@@ -85,6 +86,40 @@ def beats_of(paragraphs: list[str], lang: str) -> list[str]:
             else:
                 chunks.append(cur)
         out += [joiner.join(c) for c in chunks]
+    return out
+
+
+def marked_beats(paragraphs: list[str], lang: str) -> list[tuple[str, str, dict | None]]:
+    """(display, spoken, markup or None) of each beat of ``paragraphs`` (markup.py): a fenced code block is one beat
+    the voice never reads; a display formula is one beat said in words; a numbered list item loses its number to
+    the step indicator ({'kind': 'step', 'n', 'of'}); a warning callout is marked for its warning card."""
+    steps = [markup.step(p) for p in paragraphs]
+    of, run = {}, []
+    for k, found in enumerate(steps + [None]):          # each run of numbered items counts its own steps
+        if found and (not run or found[0] == steps[run[-1]][0] + 1):
+            run.append(k)
+            continue
+        for j in run:
+            of[j] = max(steps[i][0] for i in run)
+        run = [k] if found else []
+    out = []
+    for k, para in enumerate(paragraphs):
+        if markup.code_block(para):                      # never said (speech.hidden); numbers as words like any beat
+            out.append((para, normalize(para, lang).spoken, {'kind': 'code'}))
+            continue
+        if markup.math_line(para):
+            # Said in words with the formula's own clause punctuation (none), as captions and checks expect.
+            said = re.sub(r'\s*[,.;:!?]+', '', normalize(markup.say_math(para), lang).spoken)
+            out.append((para, said, {'kind': 'math'}))
+            continue
+        mark = None
+        if steps[k] and of.get(k, 0) >= 2:
+            para, mark = steps[k][1], {'kind': 'step', 'n': steps[k][0], 'of': of[k]}
+        elif steps[k]:
+            para = steps[k][1]
+        elif markup.warning(para):
+            mark = {'kind': 'warning'}
+        out += [(text, normalize(text, lang).spoken, mark) for text in beats_of([para], lang)]
     return out
 
 
@@ -244,17 +279,25 @@ def build(doc: Document, story: str = 'explain', title_card: bool = False) -> di
 
     chapters, beats = [], []
 
+    # Code, formulas, numbered steps and warnings (marked_beats): their spoken form and markup, by beat text.
+    marks = {text: (said, mark) for p in [preamble, outro_paras] + [s.paragraphs for s in sections]
+             for text, said, mark in marked_beats(p, lang)}
+
     def beat(chapter, kind, display, **extra):
-        n = normalize(display, lang)
+        said, mark = marks.get(display, (None, None)) if kind == 'narration' else (None, None)
         beats.append({'id': f'b{len(beats) + 1:03d}', 'chapter': chapter, 'kind': kind,
-                      'display': {lang: display}, 'spoken': {lang: n.spoken}, 'visuals': [], **extra})
+                      'display': {lang: display}, 'spoken': {lang: said or normalize(display, lang).spoken},
+                      'visuals': [], **({'markup': mark} if mark else {}), **extra})
         return beats[-1]
+
+    def texts_of(paragraphs):
+        return [text for text, _, _ in marked_beats(paragraphs, lang)]
 
     chapters.append({'id': 'intro', 'kind': 'intro', 'label': {lang: doc.title}, 'title': {lang: ''}})
     beat('intro', 'title', T['intro'].format(title=sentence_of(doc.title, lang)), music=True)
     if preamble:
         chapters.append({'id': 'preamble', 'kind': 'board', 'label': {lang: T['intro_label']}, 'title': {lang: ''}})
-        for text in beats_of(preamble, lang):
+        for text in texts_of(preamble):
             beat('preamble', 'narration', text)
     multi = len(sections) >= 2
     if multi:
@@ -271,7 +314,7 @@ def build(doc: Document, story: str = 'explain', title_card: bool = False) -> di
         label = T['label'].format(n=k) if multi else ''
         chapters.append({'id': cid, 'kind': 'section' if multi else 'board', 'label': {lang: label},
                          'title': {lang: s.heading}})
-        texts = beats_of(s.paragraphs, lang)
+        texts = texts_of(s.paragraphs)
         if multi:
             chapters[-1]['hook'] = {lang: hook(texts, lang)}
         head = headline(texts, s.heading, lang, titled[k - 1])
@@ -281,7 +324,7 @@ def build(doc: Document, story: str = 'explain', title_card: bool = False) -> di
                 and headline([closing], s.heading, lang, titled[k - 1], keep_last=True) == closing:
             # a one-sentence closing paragraph that sums the section up is its takeaway, said once (as the note
             # is written), not read out and then repeated straight after as "Key takeaway: ..."
-            head, texts = closing, beats_of(s.paragraphs[:-1], lang)
+            head, texts = closing, texts_of(s.paragraphs[:-1])
         if multi and texts and sentences(texts[-1], lang)[-1] == head \
                 and (len(texts) > 1 or len(sentences(texts[-1], lang)) > 1):
             # Move a final summary to the note only when the chapter still has source narration.
@@ -294,7 +337,7 @@ def build(doc: Document, story: str = 'explain', title_card: bool = False) -> di
         if multi and head:                          # no note when the source contains only questions/hooks
             beat(cid, 'take', take_text(head, lang), take={'headline': {lang: head}})
     chapters.append({'id': 'outro', 'kind': 'outro', 'label': {lang: T['outro_label']}, 'title': {lang: ''}})
-    for text in beats_of(outro_paras, lang):
+    for text in texts_of(outro_paras):
         beat('outro', 'narration', text)
     beat('outro', 'closing', T['closing'], music=True)
     return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator',
@@ -347,10 +390,10 @@ def _lean(doc: Document, story: str, title_card: bool = False) -> dict:
         beats.append({'id': 'b000', 'chapter': 'intro', 'kind': 'title', 'display': {lang: doc.title},
                       'spoken': {lang: normalize(doc.title, lang).spoken}, 'visuals': [], 'silent': True,
                       'music': True})
-    for text in beats_of(paragraphs, lang):
-        n = normalize(text, lang)
+    for text, spoken, mark in marked_beats(paragraphs, lang):
         beats.append({'id': f'b{len(beats) + (not heading):03d}', 'chapter': 'main', 'kind': 'narration',
-                      'display': {lang: text}, 'spoken': {lang: n.spoken}, 'visuals': []})
+                      'display': {lang: text}, 'spoken': {lang: spoken}, 'visuals': [],
+                      **({'markup': mark} if mark else {})})
     chapters.append({'id': 'main', 'kind': 'board', 'label': {lang: doc.title}, 'title': {lang: ''}})
     return {'version': 1, 'lang': lang, 'title': {lang: doc.title}, 'narrator': 'narrator', 'story': story,
             'chapters': chapters, 'beats': beats}

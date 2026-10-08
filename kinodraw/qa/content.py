@@ -64,7 +64,9 @@ class Line:
 def _spoken(board, lang):
     def text(value):
         return value.get(lang, next(iter(value.values()), '')) if isinstance(value, dict) else value or ''
-    return {b['id']: text(b.get('spoken', b.get('display', ''))) for b in board['beats']}
+    # a code block (markup.py) is shown, never said: its lines are not narrated sentences
+    return {b['id']: '' if (b.get('markup') or {}).get('kind') == 'code' else
+            text(b.get('spoken', b.get('display', ''))) for b in board['beats']}
 
 
 def lines(plan, board, timeline=None) -> list[Line]:
