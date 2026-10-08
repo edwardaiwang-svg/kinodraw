@@ -470,7 +470,9 @@ class Production:
         n0 = len(ctx.elements)
         at = end['start'] + (.05 if quick else self.g.pan_seconds)
         auto.SCENES[self.g.name]['end_card'](ctx, col * self.g.col, at)
-        ready = end['start'] + .6 if quick else end['end'] - .5
+        # Its own words are up by 60% of the card (the credit after them), so the card is read, not watched being written.
+        span = end['end'] - end['start']
+        ready = end['start'] + .6 if quick else end['start'] + max(self.g.pan_seconds + .8, min(span - .5, .6 * span))
         self._tag(n0, 'endcard', essential=True, deadline=ready, **({'hand': False} if quick else {}))
         if self.tl.get('credit'):                      # "Made with ...", written under it while it is read
             n0 = len(ctx.elements)

@@ -244,19 +244,20 @@ def end_heading(ctx):
 
 def build_info_card(ctx, x0, t, close):
     """An ad's, notice's or invitation's closing page: its title, then its own last words (the call to action, the
-    contacts, the time and place) as written; a greeting's page is its wish alone. The credit goes at the foot."""
+    contacts, the time and place) as written; a greeting's page is its wish alone. The credit goes at the foot.
+    Each line is a quick sketch, so even four of them are up early enough to be read before the video ends."""
     els, y = [], 150
     title = ctx.T(ctx.ep.get('title')) if close['kind'] == 'info' else ''
     if title:
         lines, size = fit_title(title, ctx.lang, 1500, 92, ctx.fonts)
         head = ink.TextDrawing(lines, ctx.lang, size, color=ink.SECTION_COLORS['blue'], align='center', pace=1.8,
-                               fonts=ctx.fonts)
+                               max_dur=.7, fonts=ctx.fonts)
         els.append(ctx.add(head, x0 + (1920 - head.size[0]) / 2, y, t))
         y += head.size[1] + 36
     big = close['kind'] == 'wish'
     for item in close['items']:
         lines, size = ink.fit_text(item, ctx.lang, 1500, 2, 110 if big else 66, min_size=40, fonts=ctx.fonts)
-        line = ink.TextDrawing(lines, ctx.lang, size, align='center', pace=1.8, fonts=ctx.fonts)
+        line = ink.TextDrawing(lines, ctx.lang, size, align='center', pace=1.8, max_dur=.5, fonts=ctx.fonts)
         els.append(ctx.add(line, x0 + (1920 - line.size[0]) / 2, y + (120 if big else 0), t))
         y += line.size[1] + 14
     return els

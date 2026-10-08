@@ -121,3 +121,18 @@ def test_a_story_still_ends_on_the_end(tmp_path):
     assert closing().closing(board, 'en') == {'kind': 'story', 'items': []}
     _, _, texts = card_text(board, layout(board), tmp_path)
     assert 'The End' in texts
+
+
+def test_a_long_card_is_written_with_time_left_to_read_it(tmp_path):
+    tips = '\n\n'.join(f'Tip {k}: check the pipe under sink number {k} for a slow drip every single month.'
+                       for k in range(1, 9))
+    board = board_of(CONTACTS.replace('Find the drip first.', tips + '\n\nFind the drip first.'), 'launch/promo')
+    tl = layout(board)
+    end = tl['end_card']
+    span = end['end'] - end['start']
+    assert span == pytest.approx(4.0, abs=.04)
+    _, els, texts = card_text(board, tl, tmp_path)
+    done = {e.group: max(x.start + x.drawing.duration / x.rate for x in els if x.group == e.group) for e in els}
+    assert all(e.hand for e in els)                                        # a long card is written by the hand
+    assert done['endcard'] <= end['start'] + .6 * span + .05               # its words are up with time to read them
+    assert done['credit'] <= end['end'] - .25
