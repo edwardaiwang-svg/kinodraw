@@ -800,7 +800,9 @@ BOARD_PICTURES = 3          # pictures a board draws at most, its own and the sc
 
 def _board_pictures(scene, path, by_id, repairs):
     """A board sits beside its scene's pictures, never in place of them: a scene picture no board draws joins
-    the board (up to BOARD_PICTURES), appearing when its beat names it, else when the scene starts."""
+    the board (up to BOARD_PICTURES), appearing when its beat names it, else with the board's last item. It never
+    takes a board item's turn: it follows every item heard with or before it, so the board's own items keep their
+    words (a kangaroo drawn ahead of "Start at 0." pushed the number line and its hops a second late)."""
     boards = scene.get('boards') or []
     if not boards:
         return
@@ -821,18 +823,21 @@ def _board_pictures(scene, path, by_id, repairs):
             if hit:
                 bid, cue = b, hit.group()
                 break
+        last = max(board['items'], key=lambda it: _position(it, order, by_id), default=None)
+        if not cue and last:
+            bid, cue = last['beat_id'], last['cue']           # after the board's own items, not ahead of them
         k = 1
         while f'picture_{k}' in taken:
             k += 1
         item = _item(bid, 'picture', '', cue=cue, ref=e['ref'], iid=f'picture_{k}')
         taken.add(item['id'])
         drawn.add(e['ref'])
-        here = _position(item, order, by_id)          # ahead of what is said with or after it: words point at it
-        at = next((k for k, it in enumerate(board['items']) if _position(it, order, by_id) >= here),
+        here = _position(item, order, by_id)          # after every item heard with or before it
+        at = next((k for k, it in enumerate(board['items']) if _position(it, order, by_id) > here),
                   len(board['items']))
         board['items'].insert(at, item)
         repairs.append(f'{path}: the board draws the scene picture {e["ref"]} '
-                       + (f'when {bid} says {cue!r}' if cue else 'from the start'))
+                       + (f'when {bid} says {cue!r}, after the items heard by then' if cue else 'from the start'))
 
 
 def _merge_diagram_scenes(scenes, script_beats, repairs):

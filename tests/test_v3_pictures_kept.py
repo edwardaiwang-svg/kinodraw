@@ -102,6 +102,23 @@ def test_a_board_scene_draws_its_pictures_beside_the_boards_words():
     pictures = [it for it in items if it['kind'] == 'picture']
     assert sorted(it['ref'] for it in pictures) == ['fl_locked', 'key_lock'], repairs
     assert next(it for it in pictures if it['ref'] == 'key_lock')['cue'] == 'Lock'  # when its beat names it
-    assert next(it for it in pictures if it['ref'] == 'fl_locked')['cue'] == ''     # else from the scene start
+    assert next(it for it in pictures if it['ref'] == 'fl_locked')['cue'] == 'Lock it'  # else with the last item
     assert {it['id'] for it in items} >= {'password', 'not_enough', 'link'}         # the board's own words stay
     assert len({it['id'] for it in items}) == len(items)
+
+
+def test_a_scene_picture_never_takes_a_board_items_turn():
+    """Gauntlet r04f 25: a kangaroo ahead of "Start at 0." drew first and pushed the number line and its hops late."""
+    board = _board('# Hops\n\nStart at 0. Jump 3, then jump 5. You land on 8.\n\nNow swap the order. Jump 5 first, then 3.')
+    bids = [b['id'] for b in board['beats']]
+    plan = from_rules(board)
+    scene = _one_scene(plan, bids, treatment='whiteboard', elements=[{'kind': 'picture', 'ref': 'fl_kangaroo'}])
+    scene['boards'] = [{'layout': 'flow', 'items': [
+        _item('line', bids[0], 'number_line', 'Start at 0.'), _item('jump3', bids[0], 'label', 'Jump 3', text='3'),
+        _item('land', bids[0], 'label', 'You land on 8.', text='8'),
+        _item('swap', bids[1], 'label', 'Jump 5 first', text='5')]}]
+    out, repairs = validate(plan, board, _offered(board, ['fl_kangaroo']))
+    items = out['scenes'][0]['boards'][0]['items']
+    picture, = [it for it in items if it['kind'] == 'picture']
+    assert items[0]['id'] == 'line' and items[-1] is picture, repairs          # "Start at 0." draws the line first
+    assert picture['beat_id'] == bids[1] and picture['cue'] == items[-2]['cue'], repairs   # with the last item
