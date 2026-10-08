@@ -319,3 +319,14 @@ def test_a_hand_with_no_room_to_drift_still_rests():
     b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
     prod = _resting_production([a, b], [a, b])
     assert prod._resting(3., a, b, ((900., 500.), (900., 500.)), 0, (6., True)) == (900., 500.)
+
+
+def test_every_render_segment_rests_the_hand_on_the_same_spot_of_the_page():
+    def pasted(L):
+        a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
+        b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
+        prod = _resting_production([a, b], [a, b])
+        prod._hand(Image.new('RGBA', (1920, 1080)), 3., L)    # a segment's first frame, the camera drifting by L
+        return prod.hand.pasted[-1]
+    still, drifted = pasted(0), pasted(9)
+    assert drifted == (still[0] - 9, still[1])              # the same place on the page, seen 9 px further on
