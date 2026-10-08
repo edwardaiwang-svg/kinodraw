@@ -2,6 +2,7 @@
 keycaps, the step indicator; board text keeps its symbols attached; the hand leaves the words it wrote; the QA
 probe fails clipped or overlapping text (qa/text_layout.py)."""
 import json
+import math
 
 import pytest
 from PIL import Image
@@ -187,7 +188,7 @@ def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
         hand = (x - 20, y - 26, x + 180 + 14, y + 274 + 18)
         for e in (words, a, b):
             assert hand[2] <= e.x or e.x + e.w <= hand[0] or hand[3] <= e.y or e.y + e.h <= hand[1]
-    assert spots[0] != spots[1]                          # resting, it still moves: the picture never freezes
+    assert math.dist(*spots) >= 20                       # resting, it still moves: the picture never freezes
     prod._hand(frame, .9 + 6 - .05, 0)                   # and it comes back to start the next drawing
     assert abs(prod.hand.pasted[-1][0] - 710) < 30 and abs(prod.hand.pasted[-1][1] - 340) < 30
 

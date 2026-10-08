@@ -56,6 +56,7 @@ def ease(u):
 HANDS = ('right', 'left', 'none')     # storyboard "hand": which hand draws, or none
 HAND_IN, HAND_OUT = .45, .35           # seconds the hand takes to slide in before a board, and out after it
 PARK = 2.0                             # a pause longer than this between drawings: the hand leaves the text it wrote
+DRIFT = 36                             # px/s a resting hand drifts: slower reads as a frozen picture (QA freezedetect)
 HAND_EDGE = .55                        # ...half across the frame edge this far into the slide
 
 
@@ -864,9 +865,18 @@ class Production:
         a = next((p for p in spots if free(*p)), None)
         if a is None:
             return None
-        drift = min(90., 24 * (nxt.start - prev.end))
-        b = min((p for p in spots if drift * .5 <= math.dist(p, a) <= drift and free(*p)),
-                key=lambda p: math.dist(p, there), default=a)
+        gap = nxt.start - prev.end
+        want = min(420., DRIFT * (gap - 2 * min(.8, gap * .3)))
+
+        def clear(p, q):
+            n = max(1, math.ceil(math.dist(p, q) / 24))
+            return all(free(p[0] + (q[0] - p[0]) * j / n, p[1] + (q[1] - p[1]) * j / n) for j in range(1, n + 1))
+
+        ring = [p for p in spots if want * .75 <= math.dist(p, a) <= want * 1.25]
+        b = min((p for p in ring if clear(a, p)), key=lambda p: math.dist(p, there), default=None)
+        if b is None:                                    # no room to drift that far: the farthest it can
+            b = max((p for p in spots if math.dist(p, a) <= want and clear(a, p)), key=lambda p: math.dist(p, a),
+                    default=a)
         return (a[0] + L, a[1]), (b[0] + L, b[1])
 
     @staticmethod
