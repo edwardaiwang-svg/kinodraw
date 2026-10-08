@@ -293,8 +293,12 @@ class HybridProduction:
             # chose for the scene: never a storybook page, kinetic type or a caption over a picture.
             span.source_proof = True
             return
-        if self.storybook is not None and (self._staged(spec) if not self.story_genre else (
-                treatment not in ('whiteboard', 'chart') and not any(e['kind'] == 'diagram' for e in spec['elements']))):
+        from .. import speech
+        chat = getattr(self.labels, 'chat', False) and any(speech.labels_in(self.by_id[b]['text'], self.labels)
+                                                           for b in spec['beat_ids'] if b in self.by_id)
+        if self.storybook is not None and (chat or (self._staged(spec) if not self.story_genre else (
+                treatment not in ('whiteboard', 'chart') and not any(e['kind'] == 'diagram' for e in spec['elements'])))):
+            # A chat log's messages always cut to their senders (Storybook._chat_pages).
             # A story page: preset doodles on the whiteboard paper, one shot per narrated sentence.
             span.story = self.storybook.prepare(spec, span.start, span.end)
             return

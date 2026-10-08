@@ -127,3 +127,22 @@ def test_the_senders_are_seen_alone_in_their_own_places_with_their_phones():
     assert set(seen) == {'okoye', 'ruby', 'felix', 'abe'} and len(set(seen.values())) == 4
     assert all(any(p.doodle == 'fl_mobile_phone' and p.holder == s.figures[0].key for p in s.set) for s in shots)
     assert not any(s.bubbles for s in shots)
+
+
+def test_a_chat_lines_time_gets_no_data_card_and_wordless_messages_pass_the_screen_check(tmp_path):
+    import json
+    from kinodraw.engine import data_cards
+    from kinodraw.qa import screens as screens_qa
+    b = board()
+    tl = {'beats': {x['id']: {'start': i * 3., 'end': i * 3. + 3., 'char_times': [k * .04 for k in range(400)]}
+                    for i, x in enumerate(b['beats'])}}
+    cards = data_cards.entries(b, tl, 'en')
+    times = {'6:58', '7:01', '7:02', '7:03', '7:04', '7:05'}
+    assert not any(t in json.dumps([str(c) for _, _, c, _ in cards]) for t in times)
+    # A voice note, the header and an emoji-only message have no words to find on a screen.
+    video = tmp_path / 'v.mp4'
+    (tmp_path / 'build').mkdir()
+    rows = [{'beat': m['beat'], 'strings': ui_screens.drawn_strings(m), 'start': 0, 'end': 1, 'kind': 'message'}
+            for m in thread()]
+    (tmp_path / 'build' / 'ui-screens.json').write_text(json.dumps(rows))
+    assert screens_qa.check(b, video) == []

@@ -619,8 +619,8 @@ class Storybook:
             at = lambda char, timing=timing, times=times: (timing['start'] - start +
                                                            (times[min(char, len(times) - 1)] if times else 0.))
             happy = re.search(r'\b(?:lol|lmao|haha\w*|yay|yes+|love|thanks?|thx|ty)\b|[😂🤣😄😊😁🎉❤️👍🥳]|!', body, re.I)
-            upset = re.search(r'\b(?:no+|oh\s+no|omg|ugh|forgot|late|sorry|help)\b|[😩😱😬😭😢😡]|\?\?', body, re.I)
-            pose = 'scared' if upset and not happy else 'happy' if happy else 'look'
+            upset = re.search(r'\b(?:oh\s+no|omg|ugh|forgot|sorry|nooo+)\b|[😩😱😬😭😢😡]|\?\?', body, re.I)
+            pose = 'scared' if upset and not happy else 'happy' if happy else 'stand'
             line = Sentence(0, len(spoken), spoken, present=[cid], subject=cid, poses={cid: (pose, found[0][1])},
                             place=self._homes[cid],
                             things=[{'doodle': 'fl_mobile_phone', 'role': 'hand', 'homes': (), 'at': found[0][1],
