@@ -573,7 +573,7 @@ def _finish(project_dir):
     aspect = validate_aspect(cfg.get('aspect', '16:9'), board.get('look'))
     size = _check_render_size(project_dir, saved)
     tl = _load(build / 'timeline.json')
-    mixed = _hybrid_audio(board, tl, build, cfg) if _hybrid(cfg) else audio.mix(board, tl, build)
+    mixed = _hybrid_audio(board, tl, build, cfg) if _scored(cfg, board) else audio.mix(board, tl, build)
     stem = _output_stem(board, cfg)
     video = project_dir / f'{stem}.mp4'
     mux(tl, build / 'silent.mp4', mixed, video, lang, board['title'][lang], build)
@@ -624,6 +624,13 @@ def _hybrid(cfg):
                 and any(s['treatment'] != 'whiteboard' for s in plan['scenes']))
 
 
+def _scored(cfg, board):
+    """A v3 plan gets the planned score, its sound effects and the master: the hybrid looks, and the whiteboard ones
+    too (before, an all-whiteboard plan fell back to music only on the end card)."""
+    return _hybrid(cfg) or bool(cfg.get('director_v3') and cfg.get('plan_v3')
+                                and styles.renderer(board.get('look')) == 'whiteboard')
+
+
 def _narrated_pages(cfg, tl):
     """(start, end) of each story or motion page of a hybrid plan while its narration speaks: from the scene's first
     spoken word to its last. Whiteboard, chart and diagram scenes draw as they speak and get none."""
@@ -639,20 +646,28 @@ def _narrated_pages(cfg, tl):
 
 
 def _hybrid_audio(board, tl, build, cfg):
-    from .audio import score, sfx, master
+    """The planned score under the whole narration (only your choice of no music, storyboard music false, leaves it
+    out: a plan's music_mood 'none' plays the calm score), the renderer's sound effects plus the everyday ones the
+    words and actions name (audio.foley), mastered."""
+    from .audio import score, sfx, master, foley
     import numpy as np
     import zlib
     speech = audio.read_wav(audio.narration(tl, build))[0]
     style = cfg['plan_v3']['style']
+    mood = 'calm' if style['music_mood'] == 'none' else style['music_mood']
     cues_path = build / 'cues.json'
     cues = _load(cues_path)['cues'] if cues_path.is_file() else []
-    if (style['music_mood'] != 'none' or score.own(board.get('music'), build.parent)) and board.get('music', True):
-        track, _ = score.source(board.get('music'), style['music_mood'], style['tempo_bpm'], build.parent)
+    if board.get('sfx', True):
+        words = foley.cues(tl, cfg['plan_v3'], cues)
+        _save(build / 'foley.json', {'cues': words})            # for review: what was heard, when, and why
+        cues = cues + words
+    if board.get('music', True):
+        track, _ = score.source(board.get('music'), mood, style['tempo_bpm'], build.parent)
         sections, marks = score.story_marks(board, tl, cues)
-        result = score.render(tl['duration'], style['music_mood'], style['tempo_bpm'], narration=speech,
+        result = score.render(tl['duration'], mood, style['tempo_bpm'], narration=speech,
                               ambient=True, seed=zlib.crc32(board['title'][cfg['lang']].encode('utf-8')),
                               track=track, sections=sections, marks=marks)  # each video its own variation
-        out = speech + result.music
+        out = speech + result.music * audio.outro(tl, len(result.music))[:, None]
         _save(build / 'score.json', {'bpm': result.bpm, 'track': result.track, 'beats': result.beats.tolist(),
                                    'sections': sections, 'marks': marks})
     else:

@@ -1,10 +1,9 @@
 """Narration master and light music bed.
 
 assemble(): place every beat's clip on the timeline, normalize to -18 LUFS, write captions.
-mix(): lay the bundled CC0 music under the timeline's music windows (title, agenda,
-section transitions, outro and end card), ducked under speech, fading at every edge.
-The animated looks (any look the whiteboard renderer does not draw) get a bed under the whole video instead,
-the sound effects the renderer cued (build/cues.json), and a mastered mix (-14 LUFS, -1 dBTP).
+mix(): every look gets a bed of the bundled CC0 music under the whole video, from the first word, ducked about 17 dB
+under speech and rising in the pauses and over the end card (mix.outro); the sound effects the renderer cued (build/cues.json)
+and the everyday ones the narration names (audio.foley); and a mastered mix (-14 LUFS, -1 dBTP).
 Your own music file (pipeline.set_music) plays under the whole video in every look, and the mix is mastered.
 """
 from __future__ import annotations
@@ -23,12 +22,13 @@ from ..engine import timeline
 from . import master, sfx
 
 SR = 48000
-FADE = 1.5
-UNDER_SPEECH_LUFS = -31.0
-OPEN_LUFS = -25.0
-BED_UNDER_LUFS = -36.0     # animated looks: the bed sits 18 dB under the -18 LUFS narration
+FADE = 1.5                 # the music fades out over the end
+FADE_IN = .3               # ...and in at the start, so it is there from the first word
+OPEN_LUFS = -22.0         # the music in the pauses and over the end card
+BED_UNDER_LUFS = -33.0     # the bed sits about 17 LU under the -18 LUFS narration (measured, 15 nominal)
 SFX_DUCK_DB = -6.0         # sound effects while someone speaks
 SWELL_DB, SWELL = 3.0, 1.5  # the bed comes up after every cut, easing back over 1.5 s
+OUTRO_DB = 4.0             # ...and over the end card, once the last word is said, so the video ends on its music
 MASTER_LUFS, CEILING_DBTP = -14.0, -1.0
 MUSIC = Path(__file__).resolve().parents[1] / 'assets' / 'music'
 DEFAULT_TRACKS = {'primary': 'fresh_focus', 'secondary': 'natural_vibes'}
@@ -149,11 +149,14 @@ def narration(tl: dict, out_dir: Path) -> Path:
 
 
 def track(slug) -> tuple[np.ndarray, float]:
-    """A bundled track at SR with its silent ends trimmed, and its loudness (LUFS)."""
+    """A bundled track at SR with its silent and faded ends trimmed (any 100 ms more than 30 dB under the track's
+    median), so a loop of it never drops out at the join, and its loudness (LUFS)."""
     path = MUSIC / f'{slug}.mp3'
     audio = decode(path, 2)
-    nz = np.flatnonzero(np.abs(audio).max(1) > 1e-3)
-    return audio[nz[0]:nz[-1] + 1] if len(nz) else audio, float(loudness(path)['input_i'])
+    w = SR // 10
+    rms = 20 * np.log10(np.sqrt((audio[:len(audio) // w * w].reshape(-1, w, 2) ** 2).mean((1, 2))) + 1e-12)
+    keep = np.flatnonzero(rms > np.median(rms) - 30)
+    return audio[keep[0] * w:(keep[-1] + 1) * w] if len(keep) else audio, float(loudness(path)['input_i'])
 
 
 def loop(audio, n) -> np.ndarray:
@@ -171,38 +174,13 @@ def loop(audio, n) -> np.ndarray:
     return seg
 
 
-def fades(n) -> np.ndarray:
-    """Gain 1, easing in and out over FADE seconds at the ends."""
+def fades(n, fade_in=FADE) -> np.ndarray:
+    """Gain 1, easing in over fade_in and out over FADE seconds at the ends."""
     fade = np.ones(n, np.float32)
-    f = min(int(FADE * SR), n // 2)
-    fade[:f] = np.linspace(0, 1, f) ** 1.5
+    f, g = min(int(FADE * SR), n // 2), min(int(fade_in * SR), n // 2)
+    fade[:g] = np.linspace(0, 1, g) ** 1.5
     fade[n - f:] = np.linspace(1, 0, f) ** 1.5
     return fade
-
-
-def windows(storyboard: dict, tl: dict, env: np.ndarray, tracks: dict) -> np.ndarray:
-    """The whiteboard's music: each music window, the primary track near the start and end."""
-    total = len(env)
-    music = np.zeros((total, 2), np.float32)
-    kinds = {c['id']: c['kind'] for c in storyboard['chapters']}
-    spans = {kinds[c['id']]: c for c in tl['chapters']}
-    intro_end = spans['intro']['end'] if 'intro' in spans else 0
-    outro_start = spans['outro']['start'] if 'outro' in spans else tl['duration']
-    cache = {}
-    for win in tl['music']:
-        a, b = win['start'], min(win['end'], total / SR)
-        slug = tracks['primary'] if (a < intro_end + 1 or b > outro_start - 1) else tracks['secondary']
-        if slug not in cache:
-            cache[slug] = track(slug)
-        audio, lufs = cache[slug]
-        n = int((b - a) * SR)
-        if n <= 0:
-            continue
-        g_under, g_open = 10 ** ((UNDER_SPEECH_LUFS - lufs) / 20), 10 ** ((OPEN_LUFS - lufs) / 20)
-        i0 = int(a * SR)
-        gain = g_open + (g_under - g_open) * env[i0:i0 + n]
-        music[i0:i0 + n] += loop(audio, n) * (gain * fades(n))[:, None]
-    return music
 
 
 def swell(cues: list, n: int) -> np.ndarray:
@@ -217,42 +195,58 @@ def swell(cues: list, n: int) -> np.ndarray:
     return 10 ** (db / 20)
 
 
+def outro(tl: dict, n: int) -> np.ndarray:
+    """Music gain: 1 until the last word is said (the end card's start), then up OUTRO_DB over a second."""
+    words = [b.get('speech_end', 0) for b in tl.get('beats', {}).values()]
+    end = tl.get('end_card', {}).get('start') or (max(words) if words else None)
+    gain = np.ones(n, np.float32)
+    if end is not None and round(end * SR) < n:
+        i = round(end * SR)
+        ramp = np.minimum(1, np.arange(n - i) / SR)
+        gain[i:] = 10 ** (OUTRO_DB * ramp / 20)
+    return gain
+
+
 def bed(env: np.ndarray, cues: list, slug: str) -> np.ndarray:
-    """The animated looks' music: one track under the whole video, 18 dB under speech, swelling after cuts."""
+    """The music: one track under the whole video, 17 dB under speech, swelling after cuts."""
     audio, lufs = track(slug)
     g_under, g_open = 10 ** ((BED_UNDER_LUFS - lufs) / 20), 10 ** ((OPEN_LUFS - lufs) / 20)
-    gain = (g_open + (g_under - g_open) * env) * fades(len(env)) * swell(cues, len(env))
+    gain = (g_open + (g_under - g_open) * env) * fades(len(env), FADE_IN) * swell(cues, len(env))
     return loop(audio, len(env)) * gain[:, None]
 
 
 def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
-    """Write mix.wav (48 kHz stereo): the narration plus the music bed (or narration only when music is off).
-    Any look but the whiteboard also gets its sound effects and a bed under the whole video, and is mastered;
-    storyboard keys 'sfx' and 'master' (true or false) override either. Your own music file (score.own, in the
-    project folder above out_dir) plays under the whole video instead, looped on its bars or cut to the video's
-    length, at the bundled recordings' level and ducking (score.recording, score.ducking), and is mastered."""
-    from . import score
+    """Write mix.wav (48 kHz stereo): the narration plus the music bed under the whole video (or narration only when
+    music is off), the sound effects (the renderer's cues and the words' foley), mastered; storyboard keys 'sfx'
+    and 'master' (true or false) turn either off. Your own music file (score.own, in the project folder above
+    out_dir) plays under the whole video instead, looped on its bars or cut to the video's length, at the bundled
+    recordings' level and ducking (score.recording, score.ducking)."""
+    from . import foley, score
     out_dir = Path(out_dir)
     speech = read_wav(narration(tl, out_dir))[0][:, 0]
     total = len(speech)
     animated = styles.renderer(storyboard.get('look')) != 'whiteboard'   # skins over the whiteboard mix as it does
     cued = out_dir / 'cues.json'
     cues = json.loads(cued.read_text(encoding='utf-8'))['cues'] if cued.is_file() else []
+    words = foley.cues(tl, None, cues) if storyboard.get('sfx', True) else []
+    if words:                                            # for review: what was heard, when, and why
+        (out_dir / 'foley.json').write_text(json.dumps({'cues': words}), encoding='utf-8')
+    effects = cues + words if storyboard.get('sfx', True) else []
     music = np.zeros((total, 2), np.float32)
     setting = storyboard.get('music', True)
     own = score.own(setting, out_dir.parent)
-    env = envelope(speech) if setting or cues else None
+    env = envelope(speech) if setting or effects else None
     if own:
         music = score.recording(decode(own.path, 2), total / SR, own.bpm, own.downbeat) * score.ducking(speech)[:, None]
         if animated:
             music *= swell(cues, total)[:, None]
     elif setting:
         tracks = {**DEFAULT_TRACKS, **(setting if isinstance(setting, dict) else {})}
-        music = bed(env, cues, tracks['primary']) if animated else windows(storyboard, tl, env, tracks)
+        music = bed(env, cues, tracks['primary']) * outro(tl, total)[:, None]
     out = speech[:, None].repeat(2, axis=1) + music
-    if cues and storyboard.get('sfx', animated):
-        out += sfx.render(cues, total / SR) * (1 + (10 ** (SFX_DUCK_DB / 20) - 1) * env)[:, None]
-    if storyboard.get('master', animated or own is not None):
+    if effects:
+        out += sfx.render(effects, total / SR) * (1 + (10 ** (SFX_DUCK_DB / 20) - 1) * env)[:, None]
+    if storyboard.get('master', True):
         out = master.master(out, SR, MASTER_LUFS, CEILING_DBTP)
     path = out_dir / 'mix.wav'
     write_wav(path, out)

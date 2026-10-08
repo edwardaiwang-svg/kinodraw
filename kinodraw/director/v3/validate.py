@@ -24,8 +24,21 @@ def _default(schema):
     return [] if kind == 'array' else '' if kind == 'string' else 0
 
 
-def _shape(value, schema, path, repairs):
+# Ids, names, refs and colours are short; a longer model string is noise (script text can steer the planner) and
+# is dropped unread, and any string is cut to 4000 characters, so no later pattern or note sees a huge string.
+SHORT = frozenset({'id', 'name', 'ref', 'actor', 'at_beat', 'beat_id', 'beat_ids', 'section_id', 'speaker', 'focus_ref',
+                   'to', 'set_refs', 'background', 'ink', 'accent', 'accent2', 'body', 'eye'})
+SHORT_CAP, TEXT_CAP = 80, 4000
+
+
+def _shape(value, schema, path, repairs, key=None):
     kind = schema['type']
+    if kind == 'string' and isinstance(value, str) and len(value) > (SHORT_CAP if key in SHORT else TEXT_CAP):
+        if key in SHORT:
+            repairs.append(f'{path}: dropped a value longer than {SHORT_CAP} characters')
+            return _default(schema)
+        repairs.append(f'{path}: shortened a value longer than {TEXT_CAP} characters')
+        value = value[:TEXT_CAP]
     if kind == 'object' and isinstance(value, dict):
         out = {}
         for key in value.keys() - schema['properties'].keys():
@@ -37,10 +50,10 @@ def _shape(value, schema, path, repairs):
                     repairs.append(f'{where}: filled missing field')
                 out[key] = _default(sub)
             else:
-                out[key] = _shape(value[key], sub, where, repairs)
+                out[key] = _shape(value[key], sub, where, repairs, key)
         return out
     if kind == 'array' and isinstance(value, list):
-        return [_shape(v, schema['items'], f'{path}[{i}]', repairs) for i, v in enumerate(value)]
+        return [_shape(v, schema['items'], f'{path}[{i}]', repairs, key) for i, v in enumerate(value)]
     if kind == 'string' and isinstance(value, str) and ('enum' not in schema or value in schema['enum']):
         return value
     if kind in ('number', 'integer') and isinstance(value, (int, float)) and not isinstance(value, bool) \
@@ -66,6 +79,8 @@ def colour_hex(value) -> str | None:
     CSS colour ("warm brown" is brown); else None."""
     from PIL import ImageColor
     text = str(value).strip()
+    if len(text) > 80:
+        return None
     text = '#' + text if re.fullmatch(r'[0-9a-fA-F]{3}|[0-9a-fA-F]{6}', text) else text
     words = re.split(r'[\s_-]+', text)
     # "dark slate gray" -> darkslategray; "warm brown" / "moss green" -> their colour word (brown, green)
