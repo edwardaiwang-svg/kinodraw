@@ -49,6 +49,9 @@ KNEES = .28
 MEDIUM_FILL, CLOSE_FILL, INSERT_FILL = (.8, .62), .8, (.58, .5)
 MAX_ZOOM = {'medium': 2.4, 'two_shot': 2.4, 'close': 4.2, 'insert': 5.5}
 EYE_LINE = .44                     # where a framed subject's middle sits on screen, clear of the caption band
+# A close-up of someone takes in the thing it is about only when it is beside them: a gap wider than this share of
+# their width leaves it out of the framing (the subject stays whole in the middle, never cropped into a corner).
+APART = .5
 WIDE_SCALE = .86                   # a wide shot shows the whole set, its people a little smaller
 MIN_SHOT = .8                      # seconds: a shorter shot shares the page before it
 # A story page whose cast only fits the page drawn smaller than this (storybook._fit) shows, sentence by sentence,
@@ -345,7 +348,9 @@ class Shots:
             spoken = [(bid, s) for s in read[bid] if s.start < text[1] and text[0] < s.end]
             acts = [a for a in spec.get('actions') or () if a.get('at_beat') == bid]
             self._sky_words(text[2])
-            if shots and begin - shots[-1].start < MIN_SHOT:
+            if shots and begin - shots[-1].start < MIN_SHOT or shots and shots[-1].figures and self._at_nothing(
+                    plan, text[2]):
+                # (a look at what the words say is not there holds on whoever is reacting to it)
                 acting.direct(book, shots[-1], spoken, timers[bid], acts, bid, window=text[:2])
                 self._roars(shots[-1], spoken, timers[bid], text)
                 continue
@@ -514,6 +519,28 @@ class Shots:
         return absent(text, start, end) or bool(TAKEN.search(text[max(0, start - 40):start])) or \
             bool(BEHIND.match(text, end))
 
+    def _gone(self, focus, text):
+        """Do the words say the thing a shot looks at is not there: a sky thing the story last took away, or one
+        these words call gone, missing or taken ("the key was missing", "somebody took the moon"); a thing the words
+        only deny ("No bars") is shown without it, so it stays the focus."""
+        from ..director.match import singular
+        from ..director.v3.literal import _names
+        from ..director.v3.staging import GONE
+        from .storybook import _sky, _sky_kind
+        if not focus:
+            return False
+        if _sky(focus) and _sky_kind(focus) in self.gone:
+            return True
+        names = _names(focus)
+        return any(singular(m.group().lower()) in names and (GONE.match(text, m.end()) or BEHIND.match(text, m.end())
+                                                             or TAKEN.search(text[max(0, m.start() - 40):m.start()]))
+                   for m in re.finditer(r'[A-Za-z]+', text))
+
+    def _at_nothing(self, plan, text):
+        """Is this plan shot a look (insert, first person) with nobody in it at a thing the words say is gone?"""
+        return plan.get('shot') in ('insert', 'first_person') and not plan.get('cast') and \
+            self._gone(plan.get('focus_ref') or '', text)
+
     def _sky_words(self, text):
         """Follow what the words say about the moon, the sun and the stars, in reading order: "No moon anywhere",
         "the moon is gone", "somebody took the moon" or "the moon went behind a cloud" take it out of the sky; any
@@ -632,6 +659,13 @@ class Shots:
         from .storybook import ADULT_HEIGHT, PERSON_HEIGHT, Shot
         book = self.book
         shot = Shot(begin, begin)
+        if self._at_nothing(plan, text[2]):
+            # an insert of what is not there ("The moon is gone") shows the scene's people where it was
+            plan = dict(plan, shot='medium', focus_ref='', cast=[
+                {'id': e['ref'], 'pose': 'stand', 'speaking': 'no'} for e in spec.get('elements') or ()
+                if e.get('kind') == 'cast'])
+        elif self._gone(plan.get('focus_ref') or '', text[2]):
+            plan = dict(plan, focus_ref='')                       # "The moon is gone": no close-up of the moon
         shot.framing = plan.get('shot') or 'wide'
         people = []
         for c in plan.get('cast') or ():
@@ -640,12 +674,10 @@ class Shots:
                 people.append(c)                          # an age variant of someone is that person, once a page
         heard = {c['id'] for c in people if c.get('speaking') == 'off_screen'}
         cast = [c for c in people if c.get('id') in book.cast and c['id'] not in heard]
-        from .storybook import _sky, _sky_kind
+        from .storybook import _sky
         props = [dict(p) for p in plan.get('props') or () if self._known(p.get('ref'))]
         sky = [p['ref'] for p in props if _sky(p['ref'])]          # a moon or a cloud hangs in the sky
         props = [p for p in props if not _sky(p['ref'])]
-        if _sky(plan.get('focus_ref') or '') and _sky_kind(plan['focus_ref']) in self.gone:
-            plan = dict(plan, focus_ref='')                       # "The moon is gone": no close-up of the moon
         focus = plan.get('focus_ref') or ''
         if (not book.story and shot.framing in ('insert', 'close') and self._known(focus) and not writable(focus)
                 and focus not in [p['ref'] for p in props] + list((plan.get('setting') or {}).get('set_refs') or ())):
@@ -1141,7 +1173,11 @@ class Shots:
             if thing is not None and piece.kind != 'hand' and self._union([self._body(subject), thing])[2] - \
                     self._union([self._body(subject), thing])[0] > .5 and self._desk(shot, subject, piece):
                 thing = self._arrangement(shot, piece, props)
-            top, (x0, _, x1, _) = self._top(subject), self._body(subject)
+            body = self._body(subject)
+            if thing is not None and piece.kind != 'hand' and max(thing[0] - body[2], body[0] - thing[2]) > \
+                    APART * (body[2] - body[0]):
+                thing = None                              # a thing across the page never pushes them into a corner
+            top, (x0, _, x1, _) = self._top(subject), body
             hx = (x0 + x1) / 2
             span = (subject.ground - top) * .42
             face = (hx - .5 * span * book.size[1] / book.size[0], top, hx + .5 * span * book.size[1] / book.size[0],

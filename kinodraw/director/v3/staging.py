@@ -147,7 +147,7 @@ SKY_WORDS = r'moon\w*|sun\w*|stars?|night|evening|dawn|sunrise|sunset|morning|af
 NEGATION = re.compile(r"\b(?:no|not|never|without|nothing|nobody)\b|\b\w+n['’]t\b", re.I)
 # "The moon is gone", "the key was missing": the words name a thing that is not there.
 GONE = re.compile(r"\s+(?:(?:is|was|were|are|has|had)\s+)?(?:been\s+|already\s+|still\s+)?"
-                  r"(?:gone|missing|vanished|disappeared|lost)\b", re.I)
+                  r"(?:gone|missing|absent|vanished|disappeared|lost)\b", re.I)
 
 
 def absent(body: str, start: int, end: int) -> bool:

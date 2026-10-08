@@ -109,6 +109,8 @@ def _focus_drawn(plan, script, repairs):
                 scene['elements'].append({'kind': 'picture', 'ref': focus})
                 pictures.add(focus)
             cut = _insert_at(shot, shots, beat, focus)
+            if cut and _gone_at(beat['text'], cut, focus):
+                cut = ''                               # "The moon is gone": no insert of what is not there
             if cut:
                 # a thing only talked about is not in the room (a plain prop of it is not drawn): the camera cuts
                 # to it while the line goes on
@@ -165,6 +167,17 @@ def _insert_at(shot, shots, beat, focus):
            for other in shots):
         return ''
     return ' '.join(re.findall(r"\S+", text[at:])[:4]).strip(' "\u201c\u201d')
+
+
+def _gone_at(text, words, focus):
+    """Does the sentence starting at ``words`` say the picture ``focus`` is gone ("The moon is gone", "the map was
+    missing")? A thing only denied ("No bars") can still be looked at: the phone shows none."""
+    from .staging import GONE
+    start = _find(text, words)
+    sentence = re.match(r'[^.!?]*[.!?]*', text[start:]).group()
+    names = _names(focus)
+    return any(singular(m.group().lower()) in names and GONE.match(sentence, m.end())
+               for m in re.finditer(r'[A-Za-z]+', sentence))
 
 
 def _find(text, words):
