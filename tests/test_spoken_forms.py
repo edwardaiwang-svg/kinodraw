@@ -296,3 +296,11 @@ def test_on_screen_wrap_keeps_ext_and_dates_with_their_numbers():
     assert ' '.join(lines) == ('Questions? Call (707) 555-0147, Ext. 3, email leaves@millbrook.example, '
                                'or visit millbrook.example/leaves.')
     assert not any(line.endswith('Nov.') for line in wrap('Leaf Pickup Week is Mon., Nov. 3 through Fri., Nov. 7.', 30))
+
+
+def test_board_text_keeps_one_as_a_pronoun():
+    from kinodraw.engine import process_diagrams as pd
+    assert pd.typeset('Half a load uses almost the same water as a full one') == \
+        'Half a load uses almost the same water as a full one'
+    assert pd.typeset('one drop a second over 3,000 gallons a year') == '1 drop a second over 3,000 gallons a year'
+    assert pd.typeset('twelve minus one is eleven') == '12 − 1 = 11'

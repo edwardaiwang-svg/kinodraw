@@ -122,6 +122,9 @@ def typeset(words: str) -> str:
     return words.strip() if bare(out) == bare(words) else out
 
 
+DETERMINERS = {'a', 'an', 'the', 'this', 'that', 'each', 'every', 'any', 'which', 'another', 'no'}
+
+
 def _typeset(text: str) -> str:
     toks, out, i = _tokens(text), [], 0
     letters = any(_kind(toks, k) == 'var' for k in range(len(toks)))
@@ -130,7 +133,10 @@ def _typeset(text: str) -> str:
         lower = word.lower()
         nxt = _kind(toks, i + 1) if i + 1 < len(toks) else None
         prev = out[-1] if out else ''
-        if kind == 'num':
+        if kind == 'num' and lower == 'one' and any(t[0].lower() in DETERMINERS for t in toks[max(0, i - 2):i]) \
+                and toks[i - 1][0].isalpha():
+            out.append(word)                              # a pronoun ("a full one", "the one"), not the number 1
+        elif kind == 'num':
             value = number(word)
             out.append(word if word[0].isdigit() else str(value))
         elif kind == 'var' and (nxt in ('op', 'pair', 'eq') or prev in ('+', '−', '×', '·', '÷', '=')):
