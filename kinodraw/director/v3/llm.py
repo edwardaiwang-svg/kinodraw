@@ -10,6 +10,7 @@ from ..llm.director import LLMDirector
 from ..llm import errors
 from ..llm.providers import CommandProvider, ProviderError, Usage, make_provider
 from ..rules import RulesDirector as PictureDirector
+from .offer import Offer, fit
 from .rules import from_rules
 from .semantics import beats
 from .validate import validate
@@ -59,11 +60,14 @@ def plan_v3(doc_or_script, provider=None):
                     b['scientific_plots'] = [scientific_summary(v['plot']) for v in scientific[b['beat_id']]]
             payload['section_ids'] = list(dict.fromkeys(b['section_id'] for b in payload['beats']))
             payload['look_ids'] = [look['id'] for look in styles.looks()]
+            Offer(lang, getattr(pictures, 'matcher', None)).widen(payload['beats'], lambda text: script.sentences(text, lang))
+            fit(payload)
             candidates = {b['beat_id']: b['candidates'] for b in payload['beats']}
             answer = provider.direct_plan(payload, usage)
             if not isinstance(answer, dict):
                 raise ProviderError('the v3 answer must be a JSON object')
             plan, repairs = validate(answer, board, candidates)
+            repairs = [f'{name}: {note}' for note in getattr(provider, 'served_repairs', None) or []] + repairs
         else:
             plan = from_rules(board)
     except Exception as error:  # noqa: BLE001 - provider or repair failure keeps the offline video usable

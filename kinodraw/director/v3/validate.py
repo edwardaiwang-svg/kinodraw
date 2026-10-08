@@ -6,9 +6,13 @@ import math
 import re
 
 from .arc import cta_phrase, proof_number
-from .schema import PLAN_SCHEMA, SCENE
+from .schema import OPTIONAL, PLAN_SCHEMA, SCENE
 from ...engine.source_diagrams import resolve as resolve_diagram
-from .semantics import beats, candidate_ids, cast_evidence, detect_cast, mentions, name_key
+from ...library import catalog
+from ..match import singular
+from .offer import ALIASES
+from .semantics import (actor_named, beats, candidate_ids, cast_evidence, detect_cast, name_key,
+                        resolve_actor)
 
 
 def _default(schema):
@@ -29,7 +33,8 @@ def _shape(value, schema, path, repairs):
         for key, sub in schema['properties'].items():
             where = f'{path}.{key}'
             if key not in value:
-                repairs.append(f'{where}: filled missing field')
+                if key not in OPTIONAL:              # an older plan without a later optional field is complete
+                    repairs.append(f'{where}: filled missing field')
                 out[key] = _default(sub)
             else:
                 out[key] = _shape(value[key], sub, where, repairs)
@@ -56,11 +61,30 @@ def _clamp(obj, key, low, high, path, repairs):
         repairs.append(f'{path}.{key}: clamped {value} to {fixed}')
 
 
+def colour_hex(value) -> str | None:
+    """#RRGGBB for a colour written as #rgb, a hex without '#', rgb()/hsl(), a CSS colour name or a described
+    CSS colour ("warm brown" is brown); else None."""
+    from PIL import ImageColor
+    text = str(value).strip()
+    text = '#' + text if re.fullmatch(r'[0-9a-fA-F]{3}|[0-9a-fA-F]{6}', text) else text
+    words = re.split(r'[\s_-]+', text)
+    # "dark slate gray" -> darkslategray; "warm brown" / "moss green" -> their colour word (brown, green)
+    for spec in (text, ''.join(words), words[-1]):
+        try:
+            return '#%02X%02X%02X' % ImageColor.getrgb(spec)[:3]
+        except ValueError:
+            continue
+    return None
+
+
 def _palette(palette, defaults, path, repairs):
     for key, value in palette.items():
-        if not re.fullmatch(r'#[0-9a-fA-F]{6}', value):
-            palette[key] = defaults[key]
-            repairs.append(f'{path}.{key}: replaced invalid hex colour {value!r} with {palette[key]}')
+        if re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+            continue
+        fixed = colour_hex(value)
+        palette[key] = fixed or defaults[key]
+        repairs.append(f'{path}.{key}: read colour {value!r} as {fixed}' if fixed else
+                       f'{path}.{key}: replaced invalid hex colour {value!r} with {palette[key]}')
 
 
 def _luminance(colour):
@@ -167,6 +191,108 @@ def _cast_traits(cast, evidence, repairs):
         c['marks'] = marks
 
 
+def _words(text) -> str:
+    return ' '.join(re.findall(r"\w+(?:['’]\w+)?", str(text).casefold()))
+
+
+def _verbatim(words, beat) -> bool:
+    """Do these words appear in the beat as written or spoken (case, punctuation and quote marks aside)?"""
+    words = _words(words)
+    return bool(words) and any(f' {words} ' in f' {_words(beat[k])} ' for k in ('text', 'spoken'))
+
+
+BIBLE_AGE = {'baby': 'baby', 'young': 'child', 'adult': 'adult', 'old': 'old'}
+
+
+def _shots(scene, path, by_id, cast_by_id, offered, repairs):
+    """Keep each shot's references to this scene's beats, the offered pictures, the cast and the beat's own
+    words; a shot's pictures join the scene's picture elements so every renderer and editor sees them."""
+    bids = scene['beat_ids']
+    shots = [shot for shot in scene['shots'] if shot['beat_id'] in bids]
+    if len(shots) != len(scene['shots']):
+        repairs.append(f'{path}.shots: dropped shots for beats outside the scene')
+    ordered = sorted(shots, key=lambda shot: bids.index(shot['beat_id']))
+    if ordered != shots:
+        repairs.append(f'{path}.shots: reordered shots to beat order')
+    pictures = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture']
+    on_stage = {e['ref'] for e in scene['elements'] if e['kind'] == 'cast'}
+
+    def picture(ref, where):
+        """The offered picture id this ref means ('' when none): an id, or a plain name of an offered picture
+        ("couch", "TV") matched to the offered drawing whose description and first keywords say every word."""
+        if ref not in offered:
+            words = {ALIASES.get(w, w) for w in map(singular, re.findall(r'[a-z]+', ref.lower()))}
+            entries = catalog()
+            named = [i for i in offered if i in entries and words and words <= {
+                singular(w) for w in re.findall(r'[a-z]+', ' '.join([entries[i].get('desc', '')] +
+                                                                    (entries[i].get('en') or [])[:6]).lower())}]
+            match = min(named, key=lambda i: (len(entries[i].get('desc', '')), i)) if named else None
+            if match is None:
+                repairs.append(f'{where}: dropped picture {ref!r}, not offered for this scene')
+                return ''
+            repairs.append(f'{where}: read {ref!r} as the offered picture {match}')
+            ref = match
+        if ref not in pictures:
+            pictures.append(ref)
+            scene['elements'].append({'kind': 'picture', 'ref': ref})
+            repairs.append(f'{where}: added shot picture {ref} to the scene elements')
+        return ref
+
+    for k, shot in enumerate(ordered):
+        where, beat = f'{path}.shots[{k}]', by_id[shot['beat_id']]
+        if shot['starts_at'] and not _verbatim(shot['starts_at'], beat):
+            repairs.append(f'{where}.starts_at: {shot["starts_at"]!r} is not in {shot["beat_id"]}; shot starts with the beat')
+            shot['starts_at'] = ''
+        shot['setting']['set_refs'] = list(dict.fromkeys(
+            ref for ref in (picture(ref, where + '.setting') for ref in shot['setting']['set_refs']) if ref))
+        staged, seen = [], set()
+        for member in shot['cast']:
+            if member['id'] in cast_by_id and member['id'] not in seen:
+                staged.append(member)
+                seen.add(member['id'])
+            else:
+                repairs.append(f'{where}.cast: dropped unknown or repeated cast {member["id"]!r}')
+        lines = []
+        for line in shot['lines']:
+            if line['speaker'] not in cast_by_id or not _verbatim(line['quote'], beat):
+                repairs.append(f'{where}.lines: dropped line {line["quote"]!r}: its speaker must be a cast id and '
+                               f'its words must be in {shot["beat_id"]}')
+                continue
+            lines.append(line)
+            if line['speaker'] not in seen:
+                bible = cast_by_id[line['speaker']]
+                staged.append({'id': line['speaker'], 'age': BIBLE_AGE[bible['age']], 'pose': 'talk',
+                               'speaking': 'yes'})
+                seen.add(line['speaker'])
+                repairs.append(f'{where}.cast: added speaker {line["speaker"]}')
+        shot['cast'], shot['lines'] = staged, lines
+        for member in staged:
+            if member['speaking'] != 'off_screen' and member['id'] not in on_stage:
+                on_stage.add(member['id'])
+                scene['elements'].append({'kind': 'cast', 'ref': member['id']})
+                repairs.append(f'{where}.cast: added {member["id"]} to the scene elements')
+        props = []
+        for prop in shot['props']:
+            prop['ref'] = picture(prop['ref'], where + '.props')
+            if prop['ref']:
+                props.append(prop)
+        here = set(shot['setting']['set_refs']) | {prop['ref'] for prop in props}
+        for prop in props:
+            relation, to = prop['relation'], prop['to']
+            partner = to in cast_by_id if relation == 'held_by' else (to in cast_by_id or to in here - {prop['ref']})
+            if (relation == 'none') != (not to) or (relation != 'none' and not partner):
+                repairs.append(f'{where}.props: {prop["ref"]} {prop["relation"]} {prop["to"]!r} has no such partner '
+                               'in the shot; kept without a relation')
+                prop['relation'], prop['to'] = 'none', ''
+        shot['props'] = props
+        if shot['focus_ref']:
+            shot['focus_ref'] = picture(shot['focus_ref'], where + '.focus_ref')
+        if shot['writing'] and not _verbatim(shot['writing'], beat):
+            repairs.append(f'{where}.writing: not verbatim from {shot["beat_id"]}; cleared')
+            shot['writing'] = ''
+    scene['shots'] = ordered
+
+
 def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
     """Return (repaired plan, repairs). Invalid script ids raise ValueError rather than inventing coverage.
 
@@ -245,16 +371,27 @@ def validate(plan, script_beats, candidates) -> tuple[dict, list[str]]:
             else:
                 repairs.append(f'{path}: dropped unknown or out-of-scene {e["kind"]} ref {e["ref"]!r}')
         scene['elements'] = elements
-        kept = []
+        kept, staged = [], {e['ref'] for e in elements if e['kind'] == 'cast'}
         for action in scene['actions']:
-            actor, bid = cast_by_id.get(action['actor']), action['at_beat']
-            if actor is None or bid not in bids or not mentions(actor['name'], by_id[bid]['spoken']):
+            ref, bid = resolve_actor(action['actor'], cast_by_id), action['at_beat']
+            if ref is not None and ref != action['actor']:
+                repairs.append(f'{path}: action actor {action["actor"]!r} read as cast id {ref!r}')
+                action['actor'] = ref
+            actor = cast_by_id.get(ref)
+            # present = named in the beat ("Dana", "a little girl" for "Dana as a little girl") or staged in the
+            # scene (a cast element, or on screen in that beat's shot): pronouns and "you" scripts keep actions
+            present = actor is not None and bid in bids and (
+                actor_named(actor['name'], by_id[bid]['spoken']) or ref in staged
+                or any(shot.get('beat_id') == bid and c.get('id') == ref and c.get('speaking') != 'off_screen'
+                       for shot in scene.get('shots') or [] for c in shot.get('cast') or []))
+            if not present:
                 repairs.append(f'{path}: dropped action {action["verb"]} by {action["actor"]!r} '
-                               f'at {bid!r}; actor must be named in that scene beat')
+                               f'at {bid!r}; that actor is not named or staged in the scene')
                 continue
             _clamp(action, 'intensity', 1, 3, path + '.action', repairs)
             kept.append(action)
         scene['actions'] = kept
+        _shots(scene, path, by_id, cast_by_id, offered, repairs)
         _clamp(scene['atmosphere'], 'density', 0, 1, path + '.atmosphere', repairs)
         _clamp(scene, 'hold_s', 0, None, path, repairs)
         forced = ('whiteboard' if style['mode'] == 'whiteboard' else
