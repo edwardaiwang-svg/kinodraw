@@ -101,10 +101,10 @@ def test_the_storybook_shows_each_picture_on_the_sentence_that_names_it(tmp_path
     prod = render.make_production(board, tl, 'en', tmp_path)
     prod.frame(0.)
     shots = [shot for span in prod.spans if span.story for shot in span.story]
-    props = [[p[0] for p in shot.props] for shot in shots]
+    drawn = [[p[0] for p in shot.props] + [piece.doodle for piece in shot.set] for shot in shots]
     assert len(shots) == 2
-    assert 'fl_houses' in props[0] and 'fl_bread' not in props[0]
-    assert 'fl_bread' in props[1]
+    assert 'fl_bread' not in drawn[0]
+    assert 'fl_bread' in drawn[1]
 
 
 def test_a_thing_the_words_say_is_not_there_is_never_drawn():

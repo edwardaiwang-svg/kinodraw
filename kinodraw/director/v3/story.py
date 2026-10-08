@@ -163,7 +163,8 @@ LARGE = {'elephant', 'giraffe', 'gorilla', 'zebra', 'crocodile', 'bear'}
 # Concrete setting nouns -> library doodles. Sky doodles sit high; the rest stand on the ground.
 PROPS = (
     (r'fig\s+tree|trees?|branch(?:es)?|trunks?', 'fl_deciduous_tree'),
-    (r'jungle|forest', 'fl_palm_tree'),
+    (r'jungle', 'fl_palm_tree'),
+    (r'forest|woods', 'fl_evergreen_tree'),
     (r'river|stream', 'river'),
     (r'lake|flood\w*|water', 'lake'),
     (r'ridge|hills?|valley|mountains?|path', 'fl_mountain'),
@@ -180,11 +181,159 @@ SKY = (
 )
 SKY_IDS = {doodle for _, doodle in SKY}
 
+# Where a line takes place (engine.sets draws each). A line is where the last place it names is: a destination
+# comes after its origin. Quoted speech names no place.
+PLACES = (
+    ('space', r'space\s+station|spaceships?|space\s*craft|in\s+space|in\s+orbit'),
+    ('street', r'bus\s+stop|streets?|roads?|sidewalks?|pavements?|crosswalks?|kerbs?|curbs?|alley(?:way)?s?'),
+    ('bus', r'bus(?!\s+stop)|buses|minibus|school\s+bus'),
+    ('train', r'trains?|subway|metro|tram|railway\s+carriage'),
+    ('car', r'cars?|back\s*seat|drove|driving'),
+    ('living_room', r'living\s*room|lounge|sitting\s*room|family\s*room|couch|sofa|settee|tvs?|televisions?|telly|'
+                    r'downstairs'),
+    ('bedroom', r'bedrooms?|(?<!flower\s)(?<!river\s)beds?|bunk\s*beds?|pillows?|upstairs|nursery'),
+    ('study', r'desks?|(?:his|her|the|my|their|your)\s+study'),
+    ('kitchen', r'kitchens?|fridge|refrigerator|stoves?|ovens?|cooker|stovetop|frying\s+pans?|skillets?|breakfast|'
+                r'(?:cook(?:s|ed|ing)?|bak(?:e|es|ed|ing))(?!\s+(?:shows?|programm?es?|channels?|competitions?|'
+                r'contests?|class(?:es)?|books?))|recipes?|batter'),
+    ('dining', r'dining\s+room|dinner\s+table|dining\s+table|kitchen\s+table'),
+    ('bathroom', r'bathrooms?|bath\s*tubs?|toilets?|showers?|washroom|restroom'),
+    ('office', r'offices?|cubicles?|workplace|meeting\s+room|boardroom'),
+    ('classroom', r'class\s*rooms?|blackboards?|chalkboards?|whiteboards?|lecture\s+hall|homeroom'),
+    ('school', r'school(?:yard)?s?|campus'),
+    ('hospital', r'hospitals?|clinics?|infirmary|doctor[’\']s\s+office'),
+    ('shop', r'shops?|supermarkets?|(?:the|a|corner|grocery|candy|toy|book)\s+store|stores|grocer[’\']?s|bakery|'
+             r'pharmacy|checkout|aisles?'),
+    ('market', r'market(?:place)?s?|bazaars?'),
+    ('cafe', r'caf[eé]s?|coffee\s*shops?|restaurants?|diners?|bistros?|cafeteria|canteen'),
+    ('library', r'librar(?:y|ies)|bookshops?|bookstores?|bookshel(?:f|ves)|bookcases?'),
+    ('church', r'churche?s?|chapels?|cathedrals?'),
+    ('stadium', r'stadiums?|arenas?|ballpark|bleachers'),
+    ('playground', r'playgrounds?|swings|swing\s+set|jungle\s+gym|see-?saw|sandbox'),
+    ('park', r'parks?'),
+    ('garden', r'gardens?|backyard|back\s+yard|yard|lawns?'),
+    ('beach', r'beach(?:es)?|seaside|sea\s*shore|shore|ocean|sea|sand'),
+    ('farm', r'farm(?:yard|house)?s?|barns?|tractors?|pastures?'),
+    ('camp', r'camp(?:site|fire|ground)?s?|tents?'),
+    ('forest', r'forests?|woods|woodland'),
+    ('jungle', r'jungle|rain\s*forest'),
+    ('countryside', r'countryside|meadows?|fields?|hills?|valley|mountains?'),
+    ('night_sky', r'night\s+sky|starry|under\s+the\s+stars|stargaz\w*'),
+    ('town', r'towns?|villages?|hometown|neighbou?rhoods?|suburbs?'),
+    ('city', r'city|cities|downtown|skyscrapers?'),
+    ('house', r'front\s+(?:door|yard|porch|steps)|porch|driveway|outside\s+(?:the|his|her|their|our|my)\s+house|'
+              r"(?:at|to|towards?|near|reached)\s+(?:the|a|an|his|her|their|our|my)\s+(?:[\w'’]+\s+){0,2}house"),
+    ('living_room', r'at\s+home|indoors|inside\s+(?:the\s+)?house|in\s+(?:the|his|her|their|our|my)\s+'
+                    r'(?:house|home|flat|apartment)|apartments?'),
+)
+PLACE_RE = [(place, re.compile(r'\b(?:' + cue + r')\b', re.I)) for place, cue in PLACES]
+
+# Everyday things a line names: (cue, doodle, role, homes). Roles: 'top' furniture things rest on, 'seat' and
+# 'bed' furniture a figure sits or lies on, 'stand' furniture, 'screen' a TV on its stand, 'small' a thing that rests
+# on a surface, 'hand' a thing a hand holds, 'round' one that can also roll, 'wall' a picture on the wall.
+# homes: the places it belongs in, used when a line only carries the place over from earlier lines.
+INDOOR = ('study', 'bedroom', 'living_room', 'kitchen', 'dining', 'office', 'classroom', 'library', 'cafe', 'hospital')
+KITCHEN = ('kitchen', 'dining', 'cafe')
+GROCERY = ('street', 'shop', 'market', 'kitchen', 'car', 'city')
+# A colour, not the fruit: "an orange sky".
+_FRUIT = (r'(?=\s*(?:[,.;:!?"”)]|$)|\s+(?:that|which|rolled|rolls|rolling|fell|falls|from|in|into|on|onto|out|off|'
+          r'and|or|was|is|across|under|to|of|for|with|he|she|they|it)\b)')
+# "half a cup of oats", "2 cups": a measure, not a cup.
+_MEASURE = r'(?<![\d½¼¾⅓⅔]\s)(?<![\d½¼¾⅓⅔])(?<!half\sa\s)(?<!one\s)(?<!two\s)(?<!three\s)'
+THINGS = (
+    (r'couch(?:es)?|sofas?|settees?', 'fl_couch_and_lamp', 'seat', ()),
+    (r'(?<!flower\s)(?<!river\s)beds?', 'fl_bed', 'bed', ()),
+    (r'desks?', 'set_desk', 'top', ()),
+    (r'(?:kitchen\s+|dining\s+|coffee\s+)?tables?', 'set_table', 'top', ()),
+    (r'counters?|countertops?|worktops?', 'set_counter', 'top', ()),
+    (r'stoves?|ovens?|cookers?|stovetops?', 'set_stove', 'top', KITCHEN),
+    (r'chairs?|stools?|armchairs?', 'fl_chair', 'seat', ()),
+    (r'benches|bench', 'empty_bench', 'seat', ()),
+    (r'tvs?|televisions?|telly', 'fl_television', 'screen', INDOOR),
+    (r'fridges?|refrigerators?', 'set_fridge', 'stand', KITCHEN),
+    (r'bookshel(?:f|ves)|bookcases?', 'set_bookshelf', 'stand', INDOOR),
+    (r'lamps?', 'set_desk_lamp', 'small', INDOOR),
+    (r'clocks?', 'fl_mantelpiece_clock', 'small', INDOOR),
+    (r'(?:potted\s+)?plants?', 'fl_potted_plant', 'small', ()),
+    (r'photo(?:graph)?s?|paintings?|picture\s+frames?', 'fl_framed_picture', 'wall', ()),
+    (r'envelopes?', 'fl_envelope', 'hand', ()),
+    (r'(?:sheets?|pieces?|scraps?)\s+of\s+paper|papers?|pages?|lists?|notes?|letters?|memos?', 'fl_page_facing_up',
+     'hand', INDOOR),
+    (r'books?|novels?|diar(?:y|ies)|journals?|notebooks?', 'fl_closed_book', 'hand', INDOOR),
+    (r'newspapers?|magazines?', 'fl_newspaper', 'hand', ()),
+    (r'pens?|pencils?|crayons?', 'fl_pencil', 'hand', ()),
+    (r'knife|knives', 'fl_kitchen_knife', 'hand', ()),
+    (r'forks?', 'fl_fork_and_knife', 'hand', ()),
+    (r'spoons?|spatulas?|whisks?|ladles?', 'fl_spoon', 'hand', KITCHEN),
+    (r'phones?|smartphones?|cell\s*phones?|mobiles?', 'fl_mobile_phone', 'hand', ()),
+    (r'laptops?', 'fl_laptop', 'small', INDOOR),
+    (r'computers?|monitors?', 'fl_desktop_computer', 'small', INDOOR),
+    (r'remote(?:\s+controls?)?s?', 'set_remote', 'hand', INDOOR),
+    (r'radios?', 'fl_radio', 'small', ()),
+    (r'keys', 'fl_old_key', 'hand', ()),
+    (r'umbrellas?', 'fl_umbrella', 'hand', ()),
+    (r'guitars?', 'fl_guitar', 'hand', ()),
+    (r'teddy(?:\s+bears?)?', 'fl_teddy_bear', 'hand', ()),
+    (r'balloons?', 'fl_balloon', 'hand', ()),
+    (r'presents?|gifts?', 'fl_wrapped_gift', 'hand', ()),
+    (r'boxe?s|box|parcels?|packages?', 'fl_package', 'hand', ()),
+    (r'candles?', 'fl_candle', 'small', ()),
+    (r'cameras?', 'fl_camera', 'hand', ()),
+    (r'flowers?|bouquets?|roses?|tulips?', 'fl_tulip', 'hand', ()),
+    (r'balls?', 'fl_soccer_ball', 'round', ()),
+    (r'(?:grocery|shopping|paper)\s+bags?|groceries', 'set_grocery_bag', 'hand', GROCERY),
+    (r'backpacks?|rucksacks?|school\s*bags?|bags?|suitcases?', 'fl_backpack', 'hand', ()),
+    (r'baskets?', 'fl_basket', 'hand', ()),
+    (r'oranges|(?:orange|tangerine|clementine|mandarin)' + _FRUIT + r'|tangerines|clementines', 'fl_tangerine',
+     'round', ()),
+    (r'apples?', 'fl_red_apple', 'round', ()),
+    (r'bananas?', 'fl_banana', 'hand', ()),
+    (r'eggs?', 'fl_egg', 'round', KITCHEN),
+    (r'pancakes?', 'fl_pancakes', 'small', ()),
+    (r'bread|loaf|loaves|toast', 'fl_bread', 'hand', ()),
+    (r'milk', 'fl_glass_of_milk', 'small', ()),
+    (_MEASURE + r'cups?|mugs?|coffee|tea', 'coffee_cup', 'hand', ()),
+    (r'bowls?', 'fl_bowl_with_spoon', 'small', KITCHEN),
+    (r'(?:frying\s+|nonstick\s+)?pans?|skillets?|saucepans?', 'fl_shallow_pan_of_food', 'small', KITCHEN),
+    (r'plates?|dish(?:es)?', 'fl_fork_and_knife_with_plate', 'small', KITCHEN),
+    (r'cakes?|cupcakes?', 'fl_birthday_cake', 'small', ()),
+    (r'(?:straw|blue|rasp)?berr(?:y|ies)', 'fl_strawberry', 'small', ()),
+    (r'cookies?|biscuits?', 'fl_cookie', 'hand', ()),
+    (r'sandwich(?:es)?', 'fl_sandwich', 'hand', ()),
+    (r'pizzas?', 'fl_pizza', 'small', ()),
+    (r'carrots?', 'fl_carrot', 'hand', ()),
+    (r'kites?', 'fl_kite', 'hand', ()),
+    (r'bicycles?|bikes?', 'fl_bicycle', 'stand', ()),
+)
+THING_RE = [(re.compile(r'\b(?:' + cue + r')\b', re.I), doodle, role, homes) for cue, doodle, role, homes in THINGS]
+THING_ROLE = {doodle: role for _, doodle, role, _ in THINGS}
+FURNITURE = {'top', 'seat', 'bed', 'stand', 'screen'}
+# A thing moving by itself: "the orange that rolled into the street", "the dropped bag", "the kite flew".
+MOTIONS = (
+    ('roll', r'roll(?:s|ed|ing)?'),
+    ('fall', r'f[ae]ll(?:s|ing|en)?|dropp(?:ed|ing)|drops?|tumbl\w*|toppl\w*|spill(?:s|ed|ing)?|knocked\s+over'),
+    ('fly', r'fl(?:y|ies|ew|ying|own)|float\w*|blew\s+away|soar\w*'),
+    ('bounce', r'bounc\w*'),
+)
+MOTION_RE = [(kind, re.compile(r'\b(?:' + cue + r')\b', re.I)) for kind, cue in MOTIONS]
+# "on his desk", "propped against the lamp", "beside the bed", "under the table".
+RELATION = re.compile(r'\b(on\s+top\s+of|on(?:to)?|upon|against|beside|next\s+to|by|under(?:neath)?)\s+'
+                      r'(?:the|a|an|his|her|their|its|my|your|our)\s+(?:[\w’\'-]+\s+){0,2}$', re.I)
+# A thing a line refers to without naming it: "He kept his on his desk", "put it on the table".
+UNNAMED = re.compile(r'\b(?:it|them|his|hers|theirs|mine|yours|ours)\b(?=\s*(?:[,;]|\s(?:propped\s+|leaning\s+|'
+                     r'standing\s+|lying\s+)?(?:on|onto|upon|against|beside|next\s+to|under)\b))', re.I)
 
 # The whiteboard paper (engine.ink.PAPER_RGB) with dark ink: a picture book, not a night sky.
 STORY_PALETTE = {'background': '#ECEBE6', 'ink': '#1B1B1B', 'accent': '#E4AB55', 'accent2': '#287FA3'}
 # Library categories that can stand in a story's world; people, faces, symbols and concepts cannot.
-STORY_CATEGORIES = {'Animals & Nature', 'nature', 'Travel & Places', 'places', 'Food & Drink', 'food'}
+STORY_CATEGORIES = {'Animals & Nature', 'nature', 'Travel & Places', 'places', 'Food & Drink', 'food', 'Objects',
+                    'Activities', 'education', 'transport', 'history'}
+# Concrete everyday things from the other library shelves (an office desk, a newspaper, a cash register, a love letter).
+STORY_THINGS = re.compile(r'desk|laptop|smartphone|phone|briefcase|wallet|newspaper|register|cart|store|stall|'
+                          r'backpack|piggy_bank|coffee|cup|camera|printer|television|lamp|book|pencil|lantern|'
+                          r'love_letter|running_shoe|dumbbell')
+# Symbols that live on the same shelves: charts, arrows, flying money.
+NOT_STORY = re.compile(r'chart|graph|arrow|with_wings|_symbol|button|sign$|_mark')
 
 
 def titled(title, first_line) -> bool:
@@ -195,10 +344,15 @@ def titled(title, first_line) -> bool:
 
 
 def story_picture(doodle_id) -> bool:
-    """A scene doodle a picture book can show: concrete nature, places and food from the library."""
+    """A scene doodle a picture book can show: concrete nature, places, food and everyday things from the library;
+    never people, faces, symbols, charts or concepts, and never the ink-line icon packs."""
     from ...library import catalog
     entry = catalog().get(doodle_id)
-    return bool(entry) and entry.get('category') in STORY_CATEGORIES
+    if (not entry or entry.get('creature') or entry.get('set') in ('tabler', 'healthicons')
+            or NOT_STORY.search(doodle_id)):
+        return False
+    return entry.get('category') in STORY_CATEGORIES or bool(
+        entry.get('category') not in ('symbols', 'concepts', 'people', 'narrator') and STORY_THINGS.search(doodle_id))
 
 
 @dataclass
@@ -218,6 +372,8 @@ class Sentence:
     roar_lesson: bool = False                          # a parent roars for a watching cub
     crowd_pose: str | None = None                      # "The ants were marching": the crowd's own action
     quotes: list = field(default_factory=list)         # (start, end) char offsets in the beat of each quoted line
+    place: str | None = None                           # where the line takes place (engine.sets), when it names one
+    things: list = field(default_factory=list)         # everyday things it names, see Reader._things
     extras: list = field(default_factory=list)         # people the story mentions who are not in the cast
     ages: dict = field(default_factory=dict)           # person id -> age band (baby/child/teen/adult/elder) now
 
@@ -701,6 +857,82 @@ class Reader:
                 s.sky.append(doodle)
         s.props = s.props[:2]
         s.sky = s.sky[:2]
+        outside = ''.join(' ' if _inside(_quoted(body), i) else ch for i, ch in enumerate(body))
+        places = [(m.end(), m.end() - m.start(), place) for place, m in _place_matches(outside)]
+        s.place = max(places)[2] if places else None
+        s.things = _things(outside, s.start)
+
+
+def places_in(text):
+    """The places a text names outside its quotations, in reading order."""
+    outside = ''.join(' ' if _inside(_quoted(text), i) else ch for i, ch in enumerate(text))
+    return list(dict.fromkeys(place for _, _, place in sorted((m.start(), -len(m[0]), place)
+                                                              for place, m in _place_matches(outside))))
+
+
+_FROM = re.compile(r"\bfrom\s+(?:(?:the|a|an|his|her|their|our|my|its)\s+)?(?:[\w'’]+\s+)?$", re.I)
+
+
+def _place_matches(text):
+    """(place, match) for each place the text names, except where someone only comes or calls from it ("[from
+    the kitchen]", "walks in from the garden"): the line still takes place where they are now."""
+    return [(place, m) for place, pattern in PLACE_RE for m in pattern.finditer(text)
+            if not _FROM.search(text[max(0, m.start() - 40):m.start()])]
+
+
+def _things(body, offset=0):
+    """Everyday things a line names, in reading order: [{'doodle', 'role', 'homes', 'at', 'on', 'motion'}]. A thing
+    the line only points at ("He kept his on his desk") has doodle None: the storybook resolves it to the last thing
+    it showed. ``on`` is (relation, doodle) of the furniture or thing it rests on, leans against or stands by;
+    ``motion`` is (kind, offset) when it rolls, falls, flies or bounces. Quoted speech is blanked by the caller."""
+    found, taken = [], []
+    for pattern, doodle, role, homes in THING_RE:
+        for m in pattern.finditer(body):
+            if any(a < m.end() and m.start() < b for a, b in taken):
+                continue
+            taken.append(m.span())
+            found.append({'doodle': doodle, 'role': role, 'homes': homes, 'at': m.start(), 'end': m.end(),
+                          'on': None, 'motion': None, 'target': False})
+    for m in UNNAMED.finditer(body):
+        if not any(a <= m.start() < b for a, b in taken):
+            found.append({'doodle': None, 'role': 'hand', 'homes': (), 'at': m.start(), 'end': m.end(),
+                          'on': None, 'motion': None, 'target': False})
+    found.sort(key=lambda t: t['at'])
+    clause_start = lambda at: max([0] + [m.end() for m in re.finditer(r'[;:.!?]|,\s+(?:and|but|while|when)\b|'
+                                                                       r'\b(?:but|while|when|and\s+then)\b',
+                                                                       body[:at], re.I)])
+    for target in found:
+        rel = RELATION.search(body[:target['at']])
+        if not rel or target['doodle'] is None:
+            continue
+        kind = re.sub(r'\s+', ' ', rel[1].lower())
+        kind = {'onto': 'on', 'upon': 'on', 'on top of': 'on', 'next to': 'beside', 'by': 'beside',
+                'underneath': 'under'}.get(kind, kind)
+        owners = [t for t in found if t is not target and not t['target'] and t['at'] < rel.start()
+                  and t['at'] >= clause_start(rel.start()) - 60 * (t['doodle'] is None)]
+        if not owners:
+            continue
+        owner = owners[-1]
+        target['target'] = True
+        if owner['on'] is None or kind == 'against':
+            owner['on'] = (kind, target['doodle'])
+    for kind, pattern in MOTION_RE:
+        for m in pattern.finditer(body):
+            start = clause_start(m.start())
+            before = [t for t in found if start <= t['at'] < m.start() and not t['target'] and t['doodle']]
+            after = [t for t in found if m.end() <= t['at'] <= m.end() + 24 and t['doodle']]
+            # "the dropped grocery bag", "rolled oats": a verb used as an adjective belongs to what follows it.
+            adjective = re.match(r"\s+(?!(?:into|onto|in|on|off|out|away|down|over|under|across|along|to|from|up|"
+                                 r"back|and|or|but|the|a|an|its|his|her|their|my|your|our|by|toward|towards|"
+                                 r"through|around)\b)[a-z]", body[m.end():])
+            owner = ((after[0] if after else None) if adjective else
+                     before[-1] if before else after[0] if after else None)
+            if owner and owner['motion'] is None and owner['role'] not in FURNITURE:
+                owner['motion'] = (kind, offset + m.start())
+    for t in found:
+        t['at'] += offset
+        del t['end']
+    return found
 
 
 def read_beats(script_beats, cast) -> dict:
