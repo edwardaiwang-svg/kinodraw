@@ -85,6 +85,11 @@ ID = re.compile(r"\b[A-Za-z]{1,6}-\d[\w-]*|\b(?:ticket|order|case|incident|invoi
                 r"tracking|booking|claim|policy|account|acct|serial|model|item|sku|po|id|receipt|request|issue|"
                 r"pr|batch|badge|patient|reservation)s?\b\.?\s*(?:no\.?\s*|number\s+|#\s*)?"
                 r"(?:[A-Za-z]{1,4}-?\d[\w-]*|\d{2,}(?![\d,.]*\s?(?:%|percent\b)))", re.I)
+# A stage direction is never shown as a figure: anything in square brackets ("[pause 3 seconds]", "[TEXT ON SCREEN:
+# ...]") or a parenthesised pause, beat, sound or music cue ("(pause 4 seconds)", "(beat)", "(music fades 10 s)").
+DIRECTION = re.compile(r"\[[^\]\n]*\]?|\((?:\s*(?:long\s+|short\s+|brief\s+)?(?:pause|beat|silence|wait|music|sound|sfx|"
+                       r"applause|laugh|laughs|laughter|sigh|sighs|breath|breathe|inhale|exhale|cue|fade|fades|cut|"
+                       r"beep|chime|bell|ding|whoosh|ambience|ambient)\b)[^)\n]*\)?", re.I)
 # A street address is a place, not a count ("14 Birch Rd.", "200 Main Street"); its abbreviation keeps its period.
 STREET = (r"(?:St|Rd|Ave|Blvd|Ln|Dr|Ct|Pl|Way|Hwy|Pkwy|Cir|Ter|Sq|Street|Road|Avenue|Lane|Drive|Court|Place|"
           r"Boulevard|Highway|Parkway|Circle|Terrace|Square)")
@@ -194,7 +199,7 @@ def _named(text: str, start: int) -> bool:
 
 def figures(text: str) -> list[Figure]:
     """Every figure a sentence states, in order (see the module docstring for what never is one)."""
-    taken = [m.span() for pattern in (CONTACT, ID, ADDRESS) for m in pattern.finditer(text)]
+    taken = [m.span() for pattern in (DIRECTION, CONTACT, ID, ADDRESS) for m in pattern.finditer(text)]
     # Inline code and markdown emphasis stay; a hyphen after a number makes it an adjective ("6-digit").
     found: list[Figure] = []
 
@@ -534,9 +539,14 @@ def cards(display: str, lang: str = 'en') -> list[Card]:
     out = []
     for a, b in sentences(display):
         card = _sentence_card(display, a, b)
-        if card is not None:
-            out.append(card)
+        if card is not None and not any(_unmatched(t) for t in shown(card)):
+            out.append(card)                           # never a card carrying a stray bracket of the source
     return out
+
+
+def _unmatched(text: str) -> bool:
+    """``text`` has a bracket without its partner ("20%]", "(about 40")."""
+    return any(text.count(a) != text.count(b) for a, b in ('[]', '()', '{}'))
 
 
 def shown(card: Card) -> list[str]:

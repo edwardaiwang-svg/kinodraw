@@ -158,10 +158,10 @@ def test_cards_quote_the_script_exactly():
     # a number that counts nothing the sentence names is no chip ("kids 6 and up")
     card = figures.cards('Swim lessons run 2–3 days a week for kids 6 and up.')[0]
     assert '6' not in figures.shown(card) and card.value == '2–3 days'
-    card = figures.cards('[ON SCREEN: SAVE UP TO 15%]')[0]
-    assert all(']' not in t for t in figures.shown(card))
+    # a label never carries a bracket of the source
+    assert figures.shown(figures.cards('Save up to 15%] today.')[0]) == ['up to', '15%']
     for sentence in ('Open house Sat 10–2 PM.', '2 cups · 350°F · 25 min · serves 6', 'The late fee is $0.',
-                     'Swim lessons run 2–3 days a week for kids 6 and up.', '[ON SCREEN: SAVE UP TO 15%]'):
+                     'Swim lessons run 2–3 days a week for kids 6 and up.', 'Save up to 15%] today.'):
         assert all(not figures.unquoted(c, sentence) for c in figures.cards(sentence)), sentence
 
 
@@ -230,3 +230,19 @@ def test_a_hybrid_paints_each_card_once_and_none_over_a_board_that_writes_it(tmp
     pastes.clear()
     prod.frame(t)
     assert pastes == [], 'a card over a board page that already writes its figure'
+
+
+def test_a_stage_direction_never_yields_a_card():
+    for text in ('[pause 3 seconds]', 'Breathe in. [pause 4 seconds] Breathe out.', '(pause 5 seconds)', '(beat)',
+                 '(music swells for 10 seconds)', '[SFX: 3 chimes]', '[ON SCREEN: SAVE UP TO 15%]',
+                 'Rest here. (long pause, 6 seconds)'):
+        assert figures.cards(text) == [], text
+    # a figure beside a direction is still a figure, and a parenthesis that is no direction keeps its numbers
+    assert figures.shown(figures.cards('[pause] We raised $2,400 this spring.')[0]) == ['$2,400']
+    assert figures.cards('The trail (about 12 miles) opens Monday.')
+
+
+def test_a_card_with_an_unmatched_bracket_is_dropped(monkeypatch):
+    monkeypatch.setattr(figures, '_sentence_card', lambda text, a, b: figures.Card('number', a, b, value='4 seconds',
+                                                                                  label=']'))
+    assert figures.cards('Hold for 4 seconds.') == []
