@@ -152,7 +152,6 @@ class HybridProduction:
         self.square = self.native and self.size[0] == self.size[1]
         self._square_layers = {}
         self._text_layers = {}
-        self._travelled = {}
         self.ctx, self.els, self.cap_words = whiteboard.ctx, whiteboard.els, whiteboard.cap_words
         self.warnings = list(whiteboard.warnings)
         self.by_id = {b['id']: b for b in beats(episode, lang)}
@@ -1063,13 +1062,6 @@ class HybridProduction:
         x = {'left_third': 1/3, 'right_third': 2/3}.get(span.spec['composition'], .5) if n == 1 else .2 + .6 * i / max(1, n - 1)
         return x, .8, min(.78, (0.78 if self.square else 1.5) / max(1, n))
 
-    @staticmethod
-    def _pan(span, local, w):
-        """A pan camera's horizontal offset at this point of the span; negative moves the picture right."""
-        u = min(1., local / max(.01, span.end - span.start))
-        camera = span.spec['camera']
-        return (65 * u if camera == 'pan_right' else -65 * u if camera == 'pan_left' else 0) * w / 1920
-
     def _travel(self, span, key, local, height):
         """Pixels a walk/run cue has carried an actor: scenes, not the pose cycle, do the moving."""
         return sum(travel_x(a, local) for actor, a, _ in span.actions if actor == key) * self.cast[key].size * height / RIG_HEIGHT
@@ -1081,7 +1073,6 @@ class HybridProduction:
         crowd = [key for key in span.actors if key.startswith('crowd-hyena-')]
         n = len(main)
         w, h = image.size
-        self._travelled = {}
         for key in crowd + main:
             is_crowd = key in crowd
             i = (crowd if is_crowd else main).index(key)
@@ -1124,12 +1115,9 @@ class HybridProduction:
                         move += direction * w * .035 * math.sin(math.pi * u) ** 2
                     elif target == key:
                         move += direction * target_response(a, local).dx * w / 600
-            # Travel carries the actor rightward but never past a margin at the frame edge, counted after pan_left
-            # moves the picture right; the follow camera reads the same clamped distance from self._travelled.
+            # Travel carries the actor rightward but never past a margin at the frame edge.
             travel = self._travel(span, key, local, sprite_height)
-            travel = min(travel, max(0., w * (1 - TRAVEL_MARGIN) + min(0., self._pan(span, local, w))
-                                     - (x * w + move + sprite.width / 2)))
-            self._travelled[key] = travel
+            travel = min(travel, max(0., w * (1 - TRAVEL_MARGIN) - (x * w + move + sprite.width / 2)))
             move += travel
             image.paste(sprite, (round(x * w + move - sprite.width / 2),
                                  round(h * ground - sprite.height)), sprite)
@@ -1141,7 +1129,6 @@ class HybridProduction:
         from .creatures.rig import build
         w, h = image.size
         floor = span.motion.motion_floor
-        self._travelled = {}
         # Receivers sit in front of the nudging adult's mane/head, keeping both faces visible.
         sleepers = {actor for actor, a, target in span.actions if a.name == 'sleep' and target}
         covers = {target for actor, a, target in span.actions if a.name == 'hide' and target}
@@ -1245,15 +1232,14 @@ class HybridProduction:
             bbox = sprite.getchannel('A').getbbox()
             if bbox:
                 # A5's eased travel is retained in this stable-root composition.
-                # Leave room for the authored idle sway and the whole-scene pan.
+                # Leave room for the authored idle sway.
                 right = x * w + bbox[2] - 300 * scale
                 destination = next((target for actor, a, target in span.actions
                                     if actor == key and a.name == 'walk' and target in span.actor_layout), None)
                 direction = -1 if destination and span.actor_layout[destination][0] < x else 1
                 left = x * w + bbox[0] - 300 * scale
-                room = (max(0., left - w * TRAVEL_MARGIN - max(0., self._pan(span, local, w)) - 60 * floor)
-                        if direction < 0 else
-                        max(0., w * (1 - TRAVEL_MARGIN) + min(0., self._pan(span, local, w)) - right - 60 * floor))
+                room = (max(0., left - w * TRAVEL_MARGIN - 60 * floor) if direction < 0 else
+                        max(0., w * (1 - TRAVEL_MARGIN) - right - 60 * floor))
                 if destination:
                     target_x, _, target_height, target_mirror, target_group = span.actor_layout[destination]
                     target_phase = seed((span.spec['beat_ids'], target_group)) / 2**32 * math.tau
@@ -1269,16 +1255,14 @@ class HybridProduction:
                     approach = left - target_edge - clearance if direction < 0 else target_edge - right - clearance
                     room = min(room, max(0., approach))
                 travel = min(room, self._travel(span, key, local, sprite_height))
-                self._travelled[key] = direction * travel
                 x += direction * travel / w
                 # Pounces, jaw/head action and idle sway also need the complete
-                # silhouette inside the final camera's safe edges.
+                # silhouette inside the frame's safe edges.
                 left = x * w + bbox[0] - 300 * scale
                 right = x * w + bbox[2] - 300 * scale
                 panel = not self.square and len(self._cast_groups(span)) == 1
                 left_stage, right_stage = ((.04, .50) if span.spec['composition'] == 'left_third' else (.50, .96)) if panel else (TRAVEL_MARGIN, 1 - TRAVEL_MARGIN)
-                low = w * left_stage + max(0., self._pan(span, local, w))
-                high = w * right_stage + min(0., self._pan(span, local, w))
+                low, high = w * left_stage, w * right_stage
                 x += (max(0., low - left) - max(0., right - high)) / w
                 # Retain the SVG's ground/root anchor. Recentring each cropped pose
                 # used to cancel body translation and make interacting actors icons.
@@ -1338,40 +1322,15 @@ class HybridProduction:
         return image.convert('RGB')
 
     def _camera(self, span, local):
-        """The scene camera applied over a rendered span: zoom about the centre and a pan, in output pixels."""
-        spec = span.spec
-        w, h = self.size
-        camera = spec['camera']
-        u = min(1., local / max(.01, span.end - span.start))
-        zoom = 1 + .045 * u if camera == 'slow_push' else 1.045 - .045 * u if camera == 'pull_back' else 1.
-        dx = self._pan(span, local, w)
-        dy = 0.
-        if camera == 'follow':
-            # Track the moving foreground group; a fixed group focus avoids a
-            # camera jump when a finite action ends.
-            targets = [a for a in span.actors if not a.startswith('crowd-hyena-')]
-            if targets:
-                from .creatures.actions import action_pose
-                xs = []
-                for actor in targets:
-                    x = self._actor_slot(span, actor)[0]
-                    x += sum(action_pose(a, local).dx for key, a, _ in span.actions if key == actor) / 600
-                    x += self._travelled.get(actor, 0.) / w
-                    xs.append(x)
-                dx = (sum(xs) / len(xs) - .5) * w * .35
-            elif span.motion.elements:
-                from .bold.render import element_pose
-                xs = [element_pose(span.motion, e, i, local)[0] for i, e in enumerate(span.motion.elements)]
-                dx = (sum(xs) / len(xs) / 1920 - .5) * w * .35
-            zoom = 1.06
-            if span.source_character and not self.square and len(self._cast_groups(span)) == 1:
-                # A side panel's text is pinned; keep the focus from carrying its
-                # actor into that text area. Travel remains visible in the stage.
-                dx = max(0., dx) if spec['composition'] == 'left_third' else min(0., dx)
-        if camera == 'shake':
-            strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
-            dx, dy = strength * math.sin(local * 39), strength * math.sin(local * 31)
-        return zoom, dx, dy
+        """The scene camera applied over a rendered span: (zoom about the centre, pan dx, dy) in output pixels.
+        Locked (J 10/8: no "random camera zooms"): the planner's slow_push, pull_back, pans and follow each restarted
+        with every scene, so the picture zoomed in and jumped back at each join. Only a shake scene's opening jolt
+        moves it."""
+        if span.spec['camera'] != 'shake':
+            return 1., 0., 0.
+        h = self.size[1]
+        strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
+        return 1., strength * math.sin(local * 39), strength * math.sin(local * 31)
 
     def _anchored(self, span):
         """Scenes the recurring anchor point visits: drawn motion scenes, not boards, stories, plots or diagrams."""

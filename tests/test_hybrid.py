@@ -376,16 +376,25 @@ def test_page_is_not_wipe_and_endpoints_exact():
                               render_transition(a, b, .3, 100, 60, kind='wipe'))
 
 
-def test_follow_tracks_subject_instead_of_center_push(tmp_path):
+def test_planner_cameras_hold_the_frame(tmp_path):
+    """J 10/8: "random camera zooms ... it zooms in, then suddenly zooms out". A slow_push, pull_back, pan or follow
+    scene moved from its own start, so every scene join jumped back to the wide frame. Motion scenes hold a locked
+    frame whatever camera the planner asked for; only a shake scene's opening jolt moves it."""
     board, plan, tl = fixture(tmp_path)
     scene = plan['scenes'][1]
-    scene.update(camera='follow', composition='left_third', treatment='motion',
-                 elements=[], actions=[], text={'kind': 'title', 'ref': scene['beat_ids'][0]})
+    scene.update(composition='left_third', treatment='motion', elements=[], actions=[],
+                 text={'kind': 'title', 'ref': scene['beat_ids'][0]})
+    frames = {}
+    for camera in ('static', 'slow_push', 'pull_back', 'pan_left', 'pan_right', 'follow'):
+        scene['camera'] = camera
+        prod = save_production(tmp_path, board, plan, tl)
+        span = prod.spans[1]
+        assert prod._camera(span, 0.) == prod._camera(span, span.end - span.start) == (1., 0., 0.)
+        frames[camera] = [prod.frame(t).tobytes() for t in (span.start + 1, span.end - .1)]
+    assert all(f == frames['static'] for f in frames.values())
+    scene['camera'] = 'shake'
     prod = save_production(tmp_path, board, plan, tl)
-    t = prod.spans[1].start + 1
-    followed = prod.frame(t).tobytes()
-    scene['camera'] = 'slow_push'
-    assert followed != save_production(tmp_path, board, plan, tl).frame(t).tobytes()
+    assert prod._camera(prod.spans[1], .05)[1] != 0 and prod._camera(prod.spans[1], 3.)[1] == pytest.approx(0, abs=1e-3)
 
 
 def test_settled_foreground_motion_meets_probe_floor(tmp_path):
