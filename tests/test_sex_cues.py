@@ -125,3 +125,32 @@ def test_middle_age_greys_inside_the_hair_never_over_the_ears():
                          hair_style=style)
         grey = [layer for layer in human.build(g, 'stand').layers if layer.name == 'grey_temples']
         assert grey and all(layer.kind == 'patch' and layer.clip is not None for layer in grey), style
+
+
+def test_a_presenter_who_names_a_grown_ups_role_is_a_grown_up_dressed_for_it():
+    texts = ["Hi, I'm Dana, the owner of Juniper Lane Bakery.", 'Every morning we bake forty loaves before seven.']
+    for age in ('young', 'baby', 'adult'):
+        b = book([person('dana', 'Dana', 'female', age)], *texts)
+        assert b.reader.look_age('dana') == 'adult', age
+        sex, style, outfit, _ = drawn(b, 'dana', b.reader.look_age('dana'))
+        assert (sex, outfit) == ('female', 'apron') and style in ('long', 'bun', 'ponytail')
+    b = book([person('rowan', 'Rowan', 'female', 'young')], "Hello, I'm Rowan, founder of Kestrel Labs.",
+             'We build quiet fans.')
+    assert b.reader.look_age('rowan') == 'adult'
+    sex, _, outfit, flags = drawn(b, 'rowan', 'adult')
+    assert outfit == 'suit' and 'tie' not in [
+        layer.name for layer in human.build(human.Person(sex=sex, outfit=outfit, dress='d' in flags), 'stand').layers]
+    b = book([person('kim', 'Kim', 'male', 'young')], 'Kim is the store manager.', 'We open at nine.')
+    assert b.reader.look_age('kim') == 'adult'
+
+
+def test_a_role_said_about_someone_else_leaves_a_child_a_child():
+    b = book([person('lee', 'Lee', 'male', 'young')], 'Lee, a boy whose mother was a nurse, ran home.')
+    assert b.reader.look_age('lee') == 'child'
+
+
+def test_a_time_of_day_is_not_an_age_and_an_age_still_is():
+    b = book([person('kim', 'Kim', 'male', 'adult')], 'Kim waved.', 'We open at nine.', 'Doors close at ten tonight.')
+    assert 'kim' not in b.reader.first_years and b.reader.look_age('kim') == 'adult'
+    b = book([person('ana', 'Ana', 'female', 'adult')], 'Ana moved from Lima to Ohio at nine.')
+    assert b.reader.first_years.get('ana') == 9

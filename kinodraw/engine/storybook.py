@@ -116,9 +116,11 @@ ROLE_OUTFITS = ((r'\b(?:teacher|professor|tutor|principal|librarian|counsel+or)\
                 (r'\bqueen\b', 'queen'), (r'\bprincess\b', 'princess'),
                 # Work clothes from role words (engine.people draws them).
                 (r'\b(?:cook|chef|baker|butcher|barista|waiter|waitress|grocer|shopkeeper|cashier|bartender|'
-                 r'(?:cafe|café|diner|bakery|restaurant|shop|store)\s+owner)s?\b', 'apron'),
+                 r'(?:cafe|café|diner|bakery|restaurant|shop|store)\s+owner|(?:owner|founder|proprietor)\s+of\s+'
+                 r'(?:[\w\'’-]+\s+){0,3}(?:cafe|café|coffee|diner|bakery|restaurant|kitchen|shop|store|deli|bistro|'
+                 r'pizzeria|grocery|market|food))s?\b', 'apron'),
                 (r'\b(?:anchor|anchorman|anchorwoman|newsreader|reporter|correspondent|host|presenter|manager|boss|'
-                 r'ceo|executive|banker|lawyer|attorney|mayor|senator|president|businessman|businesswoman|'
+                 r'ceo|executive|owner|co-?owner|founder|co-?founder|proprietor|supervisor|chair|banker|lawyer|attorney|mayor|senator|president|businessman|businesswoman|'
                  r'salesman|saleswoman|realtor|agent|director|principal)s?\b', 'suit'),
                 (r'\b(?:scientist|chemist|researcher|doctor|physician|surgeon|dentist|pharmacist|vet|veterinarian|'
                  r'lab\s+tech\w*|technician)s?\b', 'labcoat'),
@@ -710,6 +712,10 @@ class Storybook:
             told = re.match(r",?\s+(?:is\s+|was\s+)?(?:the|a|an|our|my|your|his|her|their)\s+(?:[\w-]+\s+){0,2}[\w-]+|"
                             r"\s*[-–—:]\s*(?:[\w'’-]+\s+){0,2}[\w-]+", after)      # a lower third: "Sam - Engineer"
             near.append(told.group() if told else '')
+            owns = re.match(r",?\s+(?:and\s+)?(?:I'?m\s+|is\s+)?(?:the\s+|a\s+|our\s+|my\s+)?(?:co-?)?(?:owner|founder|"
+                            r"proprietor)\s+of\s+(?:the\s+|a\s+)?(?:[\w'’-]+\s+){0,3}[\w'’-]+", after)
+            if owns:                    # "the owner of Juniper Lane Bakery": the place says the clothes
+                near.insert(len(near) - 1, owns.group())
             before = re.search(r'([\w-]+)\s+$', text[max(0, m.start() - 30):m.start()])
             near.append(before[1] if before else '')
         for chunk in near:
