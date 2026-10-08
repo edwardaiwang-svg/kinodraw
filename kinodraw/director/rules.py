@@ -191,6 +191,20 @@ def singular_words(phrase: str, lang: str = 'en') -> set:
     return {w.rstrip('s') for w in re.findall(r'[a-z]+', phrase) if w not in EN_STOP} if phrase.isascii() else set()
 
 
+
+def _labelled_numbers(text):
+    """(start, end, label) of each number English ``text`` names: an extension ("ext. 214") or a code with its word
+    right before it ("Flight 2231", "order #10023") is shown whole, label and all; a code its words introduce from
+    further off ("a 6-digit code, like 482 913") is shown in its written groups under that word ("code")."""
+    out = [(m.start(), m.end(), '') for m in re.finditer(numbers._ext, text)]
+    for m in numbers.code_runs(text):
+        word = m.end('det') if m['det'] else m.start('intro')
+        if re.fullmatch(r'\s*(?:(?i:numbers?|no\.)\s*)?#?\s*', m['gap']):
+            out.append((word, m.end('code'), ''))
+        else:
+            out.append((m.start('code'), m.end('code'), text[word:m.end('intro')].strip()))
+    return out
+
 class RulesDirector:
     def __init__(self, lang: str):
         self.lang = lang
@@ -1035,8 +1049,12 @@ class RulesDirector:
         if self.lang == 'es':                      # '3,5%', '3.000 años' as numbers.normalize_es reads them
             num = f'(?:{numbers.ES_NUM})'
             pattern = rf'(?:\$|€|£)?{num}(?:\s?(?:%|×|(?:por ciento|mil|millón|millones|billón|billones|veces|x)\b))?'
+        labelled = _labelled_numbers(text) if self.lang == 'en' else []
         for m in re.finditer(pattern, text):
-            token = m.group(0).strip()
+            token, start, end = m.group(0).strip(), m.start(), m.end()
+            named = next((x for x in labelled if x[0] <= start < x[1]), None)
+            if named:                              # "ext. 214", "Flight 2231", a code "482 913": as written
+                start, end, token = named[0], named[1], text[named[0]:named[1]]
             digits = re.sub(r'[^\d.]', '', token)
             if self.lang == 'es':
                 digits = re.sub(r'[^\d.,]', '', token)
@@ -1049,7 +1067,7 @@ class RulesDirector:
             salient = (not is_year) and (float(digits) >= 20 or token != digits)
             if not salient:
                 continue
-            label = self._noun_after(text[m.end():])
+            label = named[2] if named else self._noun_after(text[end:])
             v = {'id': f"{beat['id']}n", 'type': 'stat', 'value': {self.lang: token}, 'label': {self.lang: label or ' '}}
             if label:
                 sentence = next((x for x in script.sentences(text, self.lang) if token in x), text)
@@ -1061,10 +1079,10 @@ class RulesDirector:
                             self._candidate_allowed(hit, sentence, beat['chapter']):
                         v['doodle'] = hit.id
                         break
-            trig = self._spoken(norm, token, m.start())
+            trig = self._spoken(norm, token, start)
             if trig:
                 v['trigger'] = {self.lang: trig}
-            return v, m.start()
+            return v, start
         return None
 
     def _event_label(self, sentence, date):
