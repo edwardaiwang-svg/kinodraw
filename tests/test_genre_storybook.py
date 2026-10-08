@@ -37,10 +37,10 @@ def shot(bid, kind, cast, place='kitchen', props=(), speaking='no', focus=None):
             'focus_ref': focus if focus is not None else props[0] if props else '', 'writing': ''}
 
 
-def produce(tmp_path, genre='lesson', insert=None):
+def produce(tmp_path, genre='lesson', insert=None, text=TEXT):
     """A plan of this genre: two character scenes with kitchen shots, then a kinetic-type scene and a character
     scene whose text is a call to action."""
-    board = script.build(ingest.read(TEXT), story='story')
+    board = script.build(ingest.read(text), story='story')
     RulesDirector('en').direct(board)
     plan = from_rules(board)
     plan['storyboard']['genre'] = genre
@@ -141,3 +141,17 @@ def test_a_story_insert_is_unchanged(tmp_path):
     prod = produce(tmp_path, genre='story', insert=bowl)
     assert not prod.spans[1].story[0].hands
 
+
+
+def test_outside_a_story_no_framing_holds_more_than_two_sentences(tmp_path):
+    """The pancakes' opening wide held three sentences, and two inserts of one bowl held three more: content QA's
+    same_picture. Outside a story the third sentence cuts to a closer or wider framing of the same page; a story's
+    pages are unchanged."""
+    text = TEXT.replace('Ben heats the pan in the kitchen and smiles at the camera.',
+                        'Ben heats the pan in the kitchen. He adds a little oil. He waits one minute. He smiles.')
+    prod = produce(tmp_path, text=text)
+    pages = prod.spans[0].story
+    assert len(pages) >= 2 and pages[0].view != pages[1].view
+    assert pages[0].view[2] == 1. and pages[1].view[2] > 1.2      # the wide kitchen, then a medium on Ben
+    story = produce(tmp_path / 'story', genre='story', text=text)
+    assert len(story.spans[0].story) == 1

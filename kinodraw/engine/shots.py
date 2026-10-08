@@ -316,12 +316,65 @@ class Shots:
         shots[0].start = 0.
         shots[-1].end = end - start
         self._bubbles(shots, beats, read, timers, {id(s): p for s, (_, _, p) in zip(shots, plans)}, voices)
+        if not book.story:
+            shots = self._vary(shots, sorted(timers[bid](line.start) for bid in beats for line in read[bid]))
         for shot in shots:
             for b in shot.bubbles:
                 b.start, b.end = max(b.start, shot.start), min(b.end, shot.end - .05)
             shot.bubbles = [b for b in shot.bubbles if b.end - b.start >= .6]
         self.previous = shots[-1]
         return shots
+
+    # ---------------- editing
+    VARY_EVERY = 2                 # sentences one framing holds outside a story before the next sentence cuts
+
+    def _vary(self, shots, starts):
+        """Outside a story no picture holds more than VARY_EVERY sentences: on the next sentence it cuts to a
+        closer or a wider framing of the same page (the coach's wide kitchen to a medium on him, two inserts of one
+        bowl to a wider look at the counter), a cut on a new sentence, never a camera move."""
+        out, run, look = [], 0, None
+        for shot in shots:
+            if shot.page:                                 # a page read fills the frame: it has no other framing
+                out.append(shot)
+                run, look = 0, None
+                continue
+            inside = [t for t in starts if shot.start + .05 < t < shot.end - MIN_SHOT]
+            same = self._look(shot) == look
+            run = run + 1 if same else 1                  # the sentence this shot opens on
+            if same and run > self.VARY_EVERY and out and out[-1].view == shot.view:
+                shot.view, run = self._other_view(shot), 1
+            look = self._look(shot)
+            out.append(shot)
+            for t in inside:
+                run += 1
+                if run <= self.VARY_EVERY:
+                    continue
+                cut = copy.copy(out[-1])
+                cut.start, out[-1].end = t, t
+                cut.bubbles = [copy.copy(b) for b in out[-1].bubbles]
+                cut.view, run = self._other_view(out[-1]), 1
+                out.append(cut)
+        return out
+
+    def _look(self, shot):
+        return (shot.framing, tuple(p.doodle for p in shot.set), tuple((f.key, f.pose) for f in shot.figures),
+                bool(shot.page))
+
+    def _other_view(self, shot):
+        """A different framing of the same page: a medium on its people from a wide, else a wider look."""
+        cx, cy, zoom = shot.view
+        if zoom <= 1.05:
+            if shot.figures:
+                probe = SimpleNamespace(view=shot.view)
+                self._look_at(probe, self._union([self._knees_up(f) for f in shot.figures[:2]]), MEDIUM_FILL,
+                              MAX_ZOOM['medium'])
+                if probe.view[2] > 1.2:
+                    return probe.view
+            zoom = 1.6
+        else:
+            zoom = max(1., zoom * .6)
+        half = .5 / zoom
+        return min(1 - half, max(half, cx)), min(1 - half, max(half, cy)), zoom
 
     # ---------------- time
     def _timer(self, bid, start):
