@@ -1488,8 +1488,9 @@ class HybridProduction:
         Locked (J 10/8: no "random camera zooms"): the planner's slow_push, pull_back, pans and follow each restarted
         with every scene, so the picture zoomed in and jumped back at each join. Only a shake scene's opening jolt
         moves it."""
-        if span.spec['camera'] != 'shake':
-            return 1., 0., 0.
+        from .storybook import calm
+        if span.spec['camera'] != 'shake' or calm(self.style):
+            return 1., 0., 0.                     # a calm, low-energy plan keeps a static camera in every scene
         h = self.size[1]
         strength = 2 * self.style['energy'] * math.exp(-local * 4) * (h / 1080 if self.native else 1)
         return 1., strength * math.sin(local * 39), strength * math.sin(local * 31)
@@ -1753,7 +1754,9 @@ class HybridProduction:
             # Two story pages: the old page keeps living until the join, then turns like any shot change (a wipe, or
             # a two-frame dissolve where the same set continues), never a long dissolve of two crowded pictures.
             previous = self.spans[i - 1]
-            if local < 0:
+            if self.storybook.turn_kind(previous.story[-1], span.story[0]) == 'cut':
+                image = self._frame(span, t)   # out of a close-up or onto the same picture: a cut on its sentence
+            elif local < 0:
                 image = self._frame(previous, t)
             elif kind == 'cut':
                 image = self._frame(span, t)
