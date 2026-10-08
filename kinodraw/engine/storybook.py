@@ -22,7 +22,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
-from . import ink
+from . import ink, sets
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
@@ -155,8 +155,7 @@ def face(species, age='adult', sex=None, marks=()):
 
 @lru_cache(maxsize=256)
 def _svg(doodle_id):
-    path = library.resolve(doodle_id)
-    raw = path.read_text(encoding='utf-8')
+    raw = sets.svg(doodle_id) or library.resolve(doodle_id).read_text(encoding='utf-8')
     root = fromstring(raw)
     box = root.get('viewBox')
     if box:
@@ -315,6 +314,9 @@ class Shot:
     title: str | None = None
     atmosphere: str = 'none'
     bubbles: list = field(default_factory=list)
+    set: list = field(default_factory=list)          # sets.Piece: the place's set and the things in it, back to front
+    place: str | None = None                         # where the page takes place (engine.sets.SETS)
+    supports: list = field(default_factory=list)     # sets.Support: where things rest and figures sit or lie
 
 
 @dataclass(eq=False)
@@ -343,6 +345,7 @@ class Storybook:
         self.at = {}             # where each character stood last: they keep their side
         self._paper = {}
         self._bubbles = {}
+        self.stager = sets.Stager(self)
 
     # ---------------- planning
     def prepare(self, spec, start, end):
@@ -350,6 +353,7 @@ class Storybook:
         shots = []
         staged = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
         pictures = [e['ref'] for e in spec['elements'] if e['kind'] == 'picture' and story_picture(e['ref'])]
+        scene = self.stager.scene(pictures, ' '.join(self.by_id[b]['spoken'] for b in spec['beat_ids']))
         for bid in spec['beat_ids']:
             beat, timing = self.by_id[bid], self.tl['beats'][bid]
             lines = self.reader.read(bid, beat['spoken'], beat.get('section'))
@@ -357,7 +361,7 @@ class Storybook:
             at = lambda char: timing['start'] - start + (times[min(char, len(times) - 1)] if times else 0.)
             for i, line in enumerate(lines):
                 begin = timing['start'] - start if i == 0 else at(line.start)
-                shot = self._shot(line, begin, at, staged, pictures, spec)
+                shot = self._shot(line, begin, at, staged, pictures, spec, scene)
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
@@ -389,7 +393,7 @@ class Storybook:
                       height=min(.6, ADULT_HEIGHT * max(.45, min(1.4, c.get('size', 1.)))),
                       phase=_seed(cid), **kw)
 
-    def _shot(self, line, begin, at, staged, pictures, spec):
+    def _shot(self, line, begin, at, staged, pictures, spec, scene=None):
         shot = Shot(begin, begin)
         present = [cid for cid in line.present if cid in self.cast] or [c for c in staged[:3]]
         if not present and not line.crowd and not line.props:
@@ -407,9 +411,12 @@ class Storybook:
             target = next((f for f in figures if f.key == line.eyes), None)
             if target:
                 shot.eyes, shot.eyes_at = target, at(line.eyes_at)
+        scene = scene or self.stager.scene(pictures)
+        place = self.stager.where(line, scene)
         props = list(dict.fromkeys([p for p in line.props if not _sky(p)] +
-                                   [p for p in pictures if not _sky(p) and p not in line.props
-                                    and not _animal(p)]))[:2]
+                                   [p for p in scene['scenery'] if p not in line.props]))[:2]
+        if place in sets.INTERIOR:
+            props = []                                    # no trees or rivers indoors
         sky = []
         for doodle in line.sky + [p for p in pictures if _sky(p)]:
             if _sky_kind(doodle) not in [_sky_kind(d) for d in sky]:
@@ -423,8 +430,12 @@ class Storybook:
             sky.append('fl_cloud_with_rain')
         if atmosphere in ('dawn', 'rays') and 'sun' not in kinds:
             sky.append('fl_sun')
-        if not (figures or line.crowd or props):
-            props = ['fl_palm_tree', 'fl_deciduous_tree']      # never an empty page
+        night = 'moon' in [_sky_kind(d) for d in sky] or atmosphere in ('night_stars', 'shooting_star')
+        shot.place = place
+        built = self.stager.stage(shot, line, scene, place, figures, at, not (figures or line.crowd or props), night)
+        if built and place not in sets.NATURE:
+            props = [p for p in props if 'tree' not in p]      # the set has its own trees
+        sky = self._window_sky(shot, sky, place)
         sides = [.12, .88]
         resting = [f for f in figures if f.pose in ('lie', 'sleep', 'sit')] if any(f.travel for f in figures) else []
         for i, doodle in enumerate(props):
@@ -434,7 +445,10 @@ class Storybook:
                 x, resting = sum(f.x for f in resting) / len(resting), []   # "where his parents rested": under it
             shot.props.append((doodle, x, GROUND - .02, .5 if tall else .3))
         for i, doodle in enumerate(sky[:2]):
-            shot.sky.append((doodle, (.83, .2)[i], .15, .16))
+            if isinstance(doodle, tuple):
+                shot.sky.append(doodle)                       # seen through a window
+            else:
+                shot.sky.append((doodle, (.83, .2)[i], .15, .16))
         shot.atmosphere = atmosphere
         self._crowd(shot, line, figures)
         if line.speaker in [f.key for f in figures] and shot.eyes is None:
@@ -705,7 +719,8 @@ class Storybook:
     @staticmethod
     def _set(shot):
         """What a page shows besides its cast and crowd: its setting, sky, weather and framing."""
-        return (tuple(shot.props), tuple(d for d, *_ in shot.sky), shot.atmosphere, shot.lesson, bool(shot.title))
+        return (tuple(shot.props), tuple(d for d, *_ in shot.sky), shot.atmosphere, shot.lesson, bool(shot.title),
+                tuple(p.doodle for p in shot.set if p.kind in ('strip', 'wall', 'set')))
 
     def turn_kind(self, before, after):
         """'blend' where the same set continues, 'wipe' for a new set or after a close-up."""
@@ -754,8 +769,16 @@ class Storybook:
         cam = self._camera(shot, local)
         canvas = self._page(cam)
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-        for doodle, x, y, height in shot.sky:
-            self._paste(overlay, doodle, False, x, y + height / 2, height, cam, parallax=.4)
+        through = any(p.doodle in sets.WINDOWS for p in shot.set)
+        if not through:
+            for doodle, x, y, height in shot.sky:
+                self._paste(overlay, doodle, False, x, y + height / 2, height, cam, parallax=.4)
+        for piece in shot.set:
+            if not piece.front:
+                self._piece(overlay, piece, shot, local, cam)
+            if through and piece.doodle in sets.WINDOWS:
+                for doodle, x, y, height in shot.sky:
+                    self._paste(overlay, doodle, False, x, y + height / 2, height, cam)
         for doodle, x, ground, height in shot.props:
             self._paste(overlay, doodle, False, x, ground, height, cam)
         if getattr(shot, 'atmosphere', 'none') in ('fog', 'fog_with_shooting_star'):
@@ -765,8 +788,11 @@ class Storybook:
         effects = []
         for f in sorted(shot.figures, key=lambda f: f.depth):
             effects += self._figure(overlay, f, shot, local, cam)
-        if self._raining(shot):
-            self._rain(overlay, local)
+        for piece in shot.set:
+            if piece.front:
+                self._piece(overlay, piece, shot, local, cam)
+        if self._raining(shot) and shot.place not in sets.INTERIOR:
+            self._rain(overlay, local)                  # indoors the rain is heard, not drawn across the room
         for effect in effects:
             effect(overlay)
         face = self._face_overlay(shot, local)
@@ -780,6 +806,76 @@ class Storybook:
         if shot.title:
             self._title(canvas, shot.title, local)
         return canvas
+
+    def support(self, shot, pose='sit'):
+        """The furniture on this page a figure in ``pose`` can sit on ('sit') or lie on ('sleep', 'lie'): a
+        sets.Support with the seat or lying line y and its span x0..x1 (frame shares), or None."""
+        return sets.seat_for(shot.supports, pose)
+
+    def _window_sky(self, shot, sky, place):
+        """Indoors the sun or moon shows through the window; a room without one shows no sky."""
+        if place not in sets.INTERIOR:
+            return sky
+        window = next((p for p in shot.set if p.doodle in sets.WINDOWS), None)
+        if window is None:
+            return []
+        X, Y, _ = self.stager.frame(window.doodle, window.x, window.ground, window.height)
+        inside = [d for d in sky if _sky_kind(d) in ('sun', 'moon')][:1] or sky[:1]
+        size = .36 * window.height
+        return [(d, X(.36 + .28 * i), Y(.26) - size / 2, size) for i, d in enumerate(inside)]
+
+    def _piece(self, overlay, piece, shot, local, cam):
+        """One picture of the set, or a thing in it, at this time: strips span the page, a held thing moves with
+        its holder's hand, and a thing that rolls, falls or flies moves when its verb is spoken."""
+        if piece.kind == 'strip':
+            w, h = self.size
+            x0, y0, zoom = self._to_screen(0., piece.top, cam)
+            x1, y1, _ = self._to_screen(1., piece.ground, cam)
+            px_w, px_h = max(8, round(x1 - x0)), max(4, round(y1 - y0))
+            image = _strip_image(piece.doodle, px_w, px_h)
+            overlay.alpha_composite(image, (max(0, round(x0)), max(0, round(y0))),
+                                    (max(0, -round(x0)), max(0, -round(y0))))
+            return
+        x, ground, rotate, anchor_y = piece.x, piece.ground, piece.rotate, 1.
+        if piece.kind == 'hand':
+            f = next((f for f in shot.figures if f.key == piece.holder), None)
+            if f is None:
+                return
+            doodle, mirror, _ = self._pose_doodle(f, local)
+            u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
+            fx = f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u))
+            x, ground = self._point(doodle, mirror, 'carry', fx, f.ground, f.height, self._reference(f))
+            ground, anchor_y = ground, .5
+        elif piece.motion and piece.cue is not None:
+            x, ground, rotate, anchor_y = self._moving(piece, local)
+        self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, rotate=rotate,
+                    anchor_y=anchor_y)
+
+    @staticmethod
+    def _moving(piece, local):
+        """(x, ground, rotation, anchor_y) of a thing in motion: an orange rolls (turning as it goes), a dropped
+        bag falls and settles tilted, a kite flies off, a ball bounces."""
+        t = local - piece.cue
+        dx, dg = piece.to
+        if piece.motion == 'roll':
+            u = min(1., max(0., t / 1.6))
+            e = 1 - (1 - u) ** 2
+            centre = piece.ground - piece.height / 2
+            turn = -math.degrees(dx * e / max(.01, piece.height / 2 * .5625)) if dx else 0.
+            return piece.x + dx * e, centre + dg * e, turn, .5
+        if piece.motion == 'fall':
+            if t < 0:
+                return piece.x, piece.ground - .2, 0., 1.
+            u = min(1., t / .45)
+            drop = .2 * (1 - u * u)
+            hop = .025 * abs(math.sin(math.pi * min(1., max(0., (t - .45) / .3)))) if t > .45 else 0.
+            return piece.x, piece.ground - drop - hop, 10. * min(1., t / .75), 1.
+        if piece.motion == 'fly':
+            u = min(1., max(0., t / 2.6))
+            return (piece.x + dx * u, piece.ground + dg * u + .015 * math.sin(local * 3), 6 * math.sin(local * 2),
+                    1.)
+        hop = .06 * abs(math.sin(math.pi * max(0., t) / .5)) * (0 <= t < 2.)
+        return piece.x, piece.ground - hop, 0., 1.
 
     def _page(self, cam):
         """The paper under the camera: a push or a shake reads as a camera move over the page. The grain is soft,
@@ -1171,6 +1267,15 @@ def _wrap(text, font, width, draw):
         else:
             line = trial
     return lines + ([line] if line else [])
+
+
+@lru_cache(maxsize=32)
+def _strip_image(kind, width, height):
+    """A page-wide set strip (road, floor, grass) rendered at exactly this pixel size."""
+    units = sets.STRIP_UNITS.get(kind, 90)
+    raw = sets.strip(kind, round(units * width / max(1, height)), units)
+    png = resvg_py.svg_to_bytes(svg_string=raw, width=width, height=height)
+    return Image.open(io.BytesIO(bytes(png))).convert('RGBA')
 
 
 def _overlap(a, b, slack=.004) -> bool:
