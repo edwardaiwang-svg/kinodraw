@@ -140,6 +140,8 @@ class Production:
         self._index()
         from .markup_boards import step_rail
         self.steps = step_rail(self.ep, tline, lang, (46, 157, 79), self.size)
+        from .data_cards import build as data_cards
+        self.data_cards = data_cards(self.ep, tline, lang, self.skin, self.size, self.ctx.elements, self.cuts)
 
     # ------------------------------------------------------------ building
     def _beats(self, cid):
@@ -965,10 +967,14 @@ class Production:
         self._caption(frame, t)
         return frame
 
-    def _steps(self, frame, t):
-        """The step indicator while a numbered list is read (markup_boards.StepRail)."""
+    def _steps(self, frame, t, host=None, clean=False):
+        """The step indicator while a numbered list is read (markup_boards.StepRail), and the data card of a figure
+        being said (data_cards: hand-lettered on the board, ``clean`` on a motion page; ``host`` renders the frame
+        the viewer sees, to place it)."""
         if getattr(self, 'steps', None) is not None:
             self.steps.paint(frame, t)
+        if getattr(self, 'data_cards', None) is not None:
+            self.data_cards.paint(frame, t, clean, host or self)
 
     def cues(self):
         """Sound-effect events ({t, kind, strength, id}); the whiteboard mix has none."""

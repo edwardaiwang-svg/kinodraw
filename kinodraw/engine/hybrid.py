@@ -1776,7 +1776,7 @@ class HybridProduction:
                 image = Image.fromarray(array)
         image = self._draw_anchor(image.convert('RGBA'), t)
         if not self.vertical:
-            self.whiteboard._steps(image, t)
+            self.whiteboard._steps(image, t, host=self, clean=span.story is None and not self._on_board(span))
         if not self.vertical and not self._written(span, t):
             self.whiteboard._caption(image, t, self.caption_look, self.caption_accent)
         return image.convert('RGB')

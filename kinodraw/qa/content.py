@@ -11,7 +11,8 @@ qa.json's ``content`` (never in its problems or ok: they are heuristics for revi
   the largest one on screen; a board diagram or a page is measured whole), written words at least READABLE_TEXT.
   The drawing hand and a title tag along the top are never what a sentence shows.
 - ``numbers_as_icons``: a sentence with numbers or a comparison (an explainer's revenue, a lesson's "3 times 5") is
-  shown only by an icon, with no board, chart or counter to show the numbers themselves.
+  shown only by an icon, with no board, chart, counter or data card (kinodraw/figures.py: the renderer draws the
+  figures a sentence states) to show the numbers themselves.
 - ``same_picture``: one composition stays on screen for more than SAME_RUN sentences in a row (measured on the
   video's frames at each sentence's middle, the caption band left out).
 - ``no_people``: a story names people but no scene puts anyone on screen.
@@ -64,7 +65,7 @@ class Line:
     at: float | None = None     # seconds: the sentence's middle in the video
     until: float | None = None  # seconds: its end
     numeric: bool = False       # it gives numbers or a comparison
-    by: str = ''                # what shows it: board, chart, text, cast, sky, picture or '' (nothing)
+    by: str = ''                # what shows it: board, chart, card, text, cast, sky, picture or '' (nothing)
     size: float | None = None   # share of the frame its drawing covers (with the video)
 
 
@@ -92,6 +93,7 @@ def lines(plan, board, timeline=None) -> list[Line]:
     reader = Reader(cast)
     sense = _sense(lang, [spoken.get(b['id'], '') for b in board['beats']])
     out, place = [], None
+    cards = _card_spans(board, lang, spoken)
     for index, scene in enumerate(plan['scenes']):
         staged = {e['ref'] for e in scene['elements'] if e['kind'] == 'cast'}
         pictures = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture']
@@ -122,7 +124,8 @@ def lines(plan, board, timeline=None) -> list[Line]:
                     data = scene['treatment'] == 'chart' or scene['text']['kind'] == 'counter'
                     words = scene['treatment'] == 'kinetic_type' or \
                         scene['text']['kind'] in ('kinetic', 'title', 'quote', 'cta')
-                    line.by = ('board' if on_board else 'chart' if data else
+                    card = any(s.start <= at < s.end for at in cards.get(bid, ()))
+                    line.by = ('board' if on_board else 'chart' if data else 'card' if card else
                                'picture' if named_here or free else 'text' if words else '')
                     line.shown = bool(line.by) and not (line.numeric and line.by == 'text')
                 else:
@@ -154,6 +157,20 @@ def lines(plan, board, timeline=None) -> list[Line]:
                         line.at = beat['start'] + (a + b) / 2
                         line.until = beat['start'] + b
                 out.append(line)
+    return out
+
+
+def _card_spans(board, lang, spoken):
+    """{beat id: spoken offsets where a data card (kinodraw/figures.py) starts}: the renderer draws those figures."""
+    from .. import figures
+    out = {}
+    for b in board['beats']:
+        display = b.get('display')
+        text = display.get(lang, '') if isinstance(display, dict) else str(display or '')
+        said = spoken.get(b['id'], '')
+        found = figures.beat_cards(b, lang) if said else []
+        if found:
+            out[b['id']] = [figures.spoken_offset(text, said, c.start, lang) for c in found]
     return out
 
 
@@ -240,7 +257,7 @@ def _ink(frame, band):
     return drawn
 
 
-WRITTEN = ('board', 'text', 'chart')     # a sentence shown in words, a board or a chart
+WRITTEN = ('board', 'text', 'chart', 'card')     # a sentence shown in words, a board, a chart or a data card
 
 
 def _frame_index(t):
