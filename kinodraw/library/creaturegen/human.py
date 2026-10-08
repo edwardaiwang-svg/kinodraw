@@ -286,9 +286,10 @@ class _Build:
             f.patch(Union([self.ellipse(hc + V(s * r * .95, r * .05), r * .25, r * .35) for s in (-1, 1)]), g.hair, head,
                     'hair_sides')
 
-        if g.age == 'middle' and hs != 'bald':        # grey at the temples, over any curls
-            f.fill(Union([self.ellipse(hc + V(s * r * .93, r * .12), r * .17, r * .34) for s in (-1, 1)]), GREY,
-                   SW_DETAIL, 'grey_temples')
+        if g.age == 'middle' and hs in ('short', 'long', 'ponytail', 'bun', 'curly'):
+            # Grey streaks at the temples inside the hair (a patch over the ears reads as headphones).
+            f.patch(Union([self.ellipse(hc + V(s * r * .78, r * .52), r * .3, r * .26) for s in (-1, 1)]), GREY, cap,
+                    'grey_temples')
         if g.beard:
             beard = Union([self.ellipse(hc + V(lx * .5, -r * .8), r * .66, r * .36),
                            self.circle(hc + V(lx * .5, -r * 1.06), r * .26)], k=.06)
