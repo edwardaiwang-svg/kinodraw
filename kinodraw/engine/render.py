@@ -56,8 +56,6 @@ def ease(u):
 HANDS = ('right', 'left', 'none')     # storyboard "hand": which hand draws, or none
 HAND_IN, HAND_OUT = .45, .35           # seconds the hand takes to slide in before a board, and out after it
 PARK = 2.0                             # a pause longer than this between drawings: the hand leaves the text it wrote
-STILL = .6                             # ...and over such a pause on one page it takes its time leaving and coming back, so the
-SLOW = .6                              # page stands still at most this long (QA freezedetect: 1 s), up to SLOW s slower each way
 HAND_EDGE = .55                        # ...half across the frame edge this far into the slide
 
 
@@ -801,17 +799,11 @@ class Production:
     def _slide(self, frame, t, L, prev, nxt):
         """Between hand sessions: over HAND_OUT after the last stroke the hand slides out of the frame, and over
         HAND_IN before the next session's first stroke it slides in, across the right or the bottom edge, whichever
-        is nearer the pen (a left hand: the left or the bottom), so the arm it hangs from stays off-frame. Over a long
-        pause on one page it leaves and comes back up to SLOW s more slowly, so the page stands still no longer than
-        STILL (pauses up to 2.6 s); a longer pause holds the narrated page still with the hand off it."""
-        out, back = HAND_OUT, HAND_IN
-        if prev is not None and nxt is not None and prev.stretch == nxt.stretch:      # a long pause on one page
-            extra = min(SLOW, max(0., (nxt.start - prev.end - HAND_OUT - HAND_IN - STILL) / 2))
-            out, back = out + extra, back + extra
-        if prev is not None and t < prev.end + out:
-            el, pen, u = prev, self._last_pen(prev), 1 - (t - prev.end) / out
-        elif nxt is not None and nxt.start - back <= t:
-            el, pen, u = nxt, self._first_pen(nxt), (t - nxt.start + back) / back
+        is nearer the pen (a left hand: the left or the bottom), so the arm it hangs from stays off-frame."""
+        if prev is not None and t < prev.end + HAND_OUT:
+            el, pen, u = prev, self._last_pen(prev), 1 - (t - prev.end) / HAND_OUT
+        elif nxt is not None and nxt.start - HAND_IN <= t:
+            el, pen, u = nxt, self._first_pen(nxt), (t - nxt.start + HAND_IN) / HAND_IN
         else:
             return
         W, H = self.size

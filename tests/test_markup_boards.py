@@ -199,28 +199,10 @@ def test_during_a_long_pause_the_hand_leaves_the_page_and_comes_back():
         return prod.hand.pasted[-1] if len(prod.hand.pasted) > before else None
 
     assert hand_at(1.05) is not None                                         # on its way out
-    for t in (2.5, 3.5, 4.5):
+    for t in (1. + render.HAND_OUT + .01, 2.5, 3.5, 4.5, 6. - render.HAND_IN - .01):
         assert hand_at(t) is None, t                                         # off the page: nothing covered
     x, y = hand_at(6. - 1e-3)                                                # back on the next drawing's first point
     assert abs(x - 710) < 3 and abs(y - 340) < 3, (x, y)
-
-
-def test_over_a_pause_just_past_park_the_hand_keeps_moving_until_the_page_may_stand_still():
-    """Leaving and coming back are timed across the pause: the page stands still (no hand) at most STILL seconds,
-    which QA's freezedetect (1 s) does not call a frozen picture, and the hand never stops on the page."""
-    a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
-    b = wb_board.Element(_Pen(), 700, 330, 1. + render.PARK + .4, start=1. + render.PARK + .4)
-    prod = _resting_production([a, b], [a, b])
-    frame = Image.new('RGBA', (1920, 1080))
-    seen = []
-    for k in range(1, round((b.start - 1.) * 30)):
-        before = len(prod.hand.pasted)
-        prod._hand(frame, 1. + k / 30, 0)
-        seen.append(prod.hand.pasted[-1] if len(prod.hand.pasted) > before else None)
-    gone = [p is None for p in seen]
-    assert any(gone) and sum(gone) <= render.STILL * 30 + 1                 # it does leave, briefly
-    shown = [p for p in seen if p is not None]
-    assert all(p != q for p, q in zip(shown, shown[1:]))                     # and never parks on the page
 
 
 def test_typing_moves_a_line_highlight_wide_enough_to_read_as_motion():
