@@ -648,7 +648,7 @@ penelope priya rachel rebecca rosa rose ruby ruth sakura samantha sara sarah sof
 valentina victoria violet wendy yuki zara zoe zoey
 """.split())
 MALE_NAMES = set("""
-aaron adam ahmed alan albert alejandro andre andrew anthony arjun arthur ben benjamin brandon brian bruno caleb carlos
+aaron adam ahmed alan albert alejandro andre andrew anthony arjun arthur ben brandon brian bruno caleb carlos
 charles charlie chris christopher colin daniel david dev diego dmitri dylan eli elijah ethan felix frank gabriel
 george greg harry henry hiroshi hugo ian isaac jack jacob jake james jason javier jeff jim joe john jonah jorge jose
 joseph josh juan julian kenji kevin kofi kwame leo liam logan lucas luis luke marco marcus mark mateo matt matthew max
