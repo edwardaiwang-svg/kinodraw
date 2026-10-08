@@ -144,6 +144,83 @@ def _en_key(text: str) -> str:
     return ' '.join(singular(w) for w in re.findall(r"[a-z0-9']+", text.lower()))
 
 
+# ------------------------------------------------------------------ proper names
+# The words of a name are not things to draw: "Kestrel Falls" is a town (not a fall), "Bramwell Hardware" a shop (not
+# a computer chip), "King Kojo" a character (not a crown). A name's kind word says what kind of place it is; a kind
+# the library draws as itself keeps its word ("the Elm Street Bridge" is a bridge).
+NAME_KINDS = {}
+for _kind, _words in (
+        ('town', 'falls springs creek valley heights hill hills harbor harbour bay port city town village ville '
+                 'borough county junction crossing'),
+        ('street', 'street avenue road lane boulevard drive way court place square'),
+        ('shop', 'hardware market grocery grocer grocers bakery books store stores shop shops pharmacy mart supply '
+                 'supplies outfitters plumbing electric motors goods'),
+        ('cafe', 'diner cafe café grill restaurant pizza pizzeria kitchen bistro bar')):
+    NAME_KINDS.update(dict.fromkeys(_words.split(), _kind))
+DRAWN_KINDS = set('''bridge park lake river mountain mount beach island tower station farm zoo museum church school
+academy hospital clinic library castle palace stadium airport forest woods garden gardens pond'''.split())
+_CAP_LEAD = set('The A An This That These Those My Our Your His Her Their Its'.split())
+_LOWER_DET = set('the a an this that these those my our your his her their its'.split())
+_WORD = re.compile(r"[A-Za-z][A-Za-z'’]*")
+
+
+def proper_names(text: str) -> list[tuple[int, int, str | None]]:
+    """(start, end, kind) of each proper name in English text: two or more capitalised words in a row ("Kestrel
+    Falls", "King Kojo"), or one mid-sentence capitalised word with no article before it ("Pendo", not "the Moon").
+    A Title Case heading line has none; neither have ALL-CAPS words. ``kind`` is 'town', 'street', 'shop' or 'cafe'
+    from the name's kind word, the drawn kind word itself ('bridge'), or None."""
+    out = []
+    for line in re.finditer(r'[^\n]+', text):
+        words = [(m.start() + line.start(), m.end() + line.start(), m.group()) for m in _WORD.finditer(line.group())]
+        big = [w for _, _, w in words if w.lower() not in EN_STOP or w == words[0][2]]
+        if words and words[0][2][0].isupper() and not re.search(r'[.!?]["”)\]]*\s*$', line.group()) and \
+                sum(w[0].isupper() for w in big) >= .75 * len(big):
+            continue                                     # a Title Case heading: every word is capitalised
+        run: list = []
+        for i, word in enumerate(words + [(len(text) + 1, len(text) + 1, '')]):
+            capital = word[2][:1].isupper() and not word[2].isupper() and word[2] != 'I'
+            joined = run and capital and not text[run[-1][1]:word[0]].strip()
+            if capital and (not run or joined):
+                run.append(word)
+                continue
+            if run:
+                out += _name(text, run)
+            run = [word] if capital else []
+    return out
+
+
+def _name(text, run):
+    before = text[:run[0][0]]
+    initial = not before.strip() or bool(re.search(r'[.!?:;"“”(\[\n]\s*$', before))
+    while run and (run[0][2] in _CAP_LEAD or initial and run[0][2].lower() in EN_STOP):
+        lead = run[0][2] in _CAP_LEAD
+        run, initial = run[1:], False
+        before = 'the ' if lead else 'and '      # "The Moon": an article; "But Pendo": a sentence's first word
+    if not run:
+        return []
+    if len(run) == 1:
+        previous = re.findall(r'[A-Za-z]+', before[-20:])
+        if initial or (previous and previous[-1].lower() in _LOWER_DET):
+            return []                                    # "Jump three.", "the Moon": an ordinary word
+    ends = [re.sub(r"['’]s$", '', w.lower()) for _, _, w in (run[-1], run[0])]
+    kind = next((NAME_KINDS.get(w) or (w if w in DRAWN_KINDS else None) for w in ends
+                 if NAME_KINDS.get(w) or w in DRAWN_KINDS), None) if len(run) > 1 else None
+    return [(run[0][0], run[-1][1], kind)]
+
+
+def in_name(names, start: int, end: int, word: str = '') -> bool:
+    """Do text[start:end] touch a proper name (other than as the name's own drawn kind, "Bridge")?"""
+    return any(a < end and start < b and not (kind in DRAWN_KINDS and word.lower() in DRAWN_KINDS)
+               for a, b, kind in names)
+
+
+def unname(text: str) -> str:
+    """The text with each proper name replaced by its kind ("grew up in town"), for matching by meaning."""
+    for a, b, kind in reversed(proper_names(text)):
+        text = text[:a] + (kind or '') + text[b:]
+    return text
+
+
 def listed(entry: dict, lang: str) -> bool:
     """Is a picture searched in this language? Imported icons have no Chinese words, so Chinese leaves them out."""
     return lang != 'zh' or not imported(entry) or bool(entry.get('zh'))
@@ -185,9 +262,12 @@ class Matcher:
         hits: dict = {}
         if self.lang == 'en':
             words = [(m.group(0), m.start()) for m in re.finditer(r"[A-Za-z0-9']+", text)]
+            names = proper_names(text)
             for n in (3, 2, 1):
                 for i in range(len(words) - n + 1):
                     chunk = words[i:i + n]
+                    if in_name(names, chunk[0][1], chunk[-1][1] + len(chunk[-1][0]), chunk[-1][0] if n == 1 else ''):
+                        continue                  # "Kestrel Falls" names a town, not a fall
                     key = ' '.join(singular(w.lower()) for w, _ in chunk)
                     for did, weight in self.index.get(key, []):
                         score = weight * self.rarity[key] + .15 * (n - 1)
