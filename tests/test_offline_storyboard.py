@@ -91,7 +91,7 @@ def test_captions_never_run_on_into_the_next_sentence():
 def test_the_storybook_shows_each_picture_on_the_sentence_that_names_it(tmp_path):
     import json
     from kinodraw.engine import render, timeline
-    text = ('# Bread\n\nOnce upon a time, a girl named Ana lived in a quiet little town by the hills. '
+    text = ('# Bread\n\nOnce upon a time, a girl named Ana lived in a quiet little town near the sea. '
             'Every single morning she carried a warm loaf of bread to her neighbours.')
     board = script.build(ingest.read(text), story='story')
     RulesDirector('en').direct(board)
