@@ -16,6 +16,7 @@ import re
 from . import captions as cap
 from . import skin
 from .storyboard import normalize
+from .. import speech
 
 FPS = 30
 CHAPTER_GAP = .6
@@ -25,6 +26,7 @@ CREDIT = 2.0              # then "Made with ..." under it (the project's credit 
 ZH_DWELL = .5             # extra reading pause per Mandarin paragraph (9/19 precedent)
 ZOOM_IN = .35             # first part of each section: zoom into its agenda card
 TAKE_PREROLL = .15        # start the note's camera move just before its words
+OVERLAP = .2              # a line that breaks off ("Dad, turn it off—"): the next speaker comes in this much early
 
 
 class Pacing(dict):
@@ -59,17 +61,29 @@ def word_times(episode, tline, lang):
         return [c['words'] for c in tline['captions']]
     episode = normalize(episode)
     cue_options, found = _cue_options(episode, lang), {}
+    labels = speech.screenplay_labels(b['display'][lang] for b in episode['beats'])
     for beat in episode['beats']:
         info = tline['beats'].get(beat['id'])
         if not info or not info.get('char_times'):
             continue
         ct, start = info['char_times'], info['start']
-        for a, _, text, words in cap.cues_for_beat(beat['spoken'][lang], beat['display'][lang], lang,
-                                                   lambda pos: ct[min(max(pos, 0), len(ct) - 1)],
-                                                   info['speech_end'] - start, words=True, **cue_options):
+        for a, _, text, words in _cues(beat, lang, lambda pos: ct[min(max(pos, 0), len(ct) - 1)],
+                                       info['speech_end'] - start, labels, cue_options):
             found.setdefault(text, []).append((start + a, [round(start + w, 4) for w in words]))
     return [c.get('words') or next((words for at, words in found.get(c['text'], ()) if abs(at - c['start']) < .001),
                                    None) for c in tline['captions']]
+
+
+def _cues(beat, lang, char_time, speech_end, labels, cue_options):
+    """A beat's caption cues: its written words without speaker labels, stage directions, emoji or Markdown, each
+    word timed by its spoken characters. A silent beat (a title card, a direction) has none."""
+    if beat.get('silent'):
+        return []
+    said, shown, index = speech.captions(beat['spoken'][lang], beat['display'][lang], labels)
+    if not said.strip() or not shown.strip():
+        return []
+    return cap.cues_for_beat(said, shown, lang, lambda pos: char_time(index[min(max(pos, 0), len(index) - 1)]),
+                             speech_end, words=True, **cue_options)
 
 
 def take_hold(beat, lang):
@@ -83,6 +97,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
     takeaways = getattr(pauses, "takeaways", {})
     episode = normalize(episode)
     cue_options = _cue_options(episode, lang)
+    labels = speech.screenplay_labels(b['display'][lang] for b in episode['beats'])
     beats = episode['beats']
     chapters = {c['id']: c for c in episode['chapters']}
     cursor = 0.
@@ -95,6 +110,15 @@ def layout(episode, lang, clips, pauses=None, credit=True):
         prep = cursor
         delay = max(0., float(takeaways.get(beat['id'], 0.))) if take else 0.
         start = cursor + (TAKE_PREROLL + delay if take else 0.)
+        before = clips[beats[i - 1]['id']] if i else None
+        if (before and before.get('cut_off') and not take and clip.get('speakers')
+                and clip['speakers'][0] != before['speakers'][-1]):
+            # Interrupted: the next speaker comes in over the end of the line that breaks off.
+            previous = out_beats[order[-1]]
+            start = max(previous['start'], previous['start'] + before['duration'] - OVERLAP)
+            previous['end'] = round(start, 4)
+            for c in capts:
+                c['end'] = min(c['end'], round(start, 4))
         speech_end = start + clip['speech']
         pause = min(.1, max(0., float(pauses.get(beat['id'], 0.))))
         if pause:
@@ -123,8 +147,7 @@ def layout(episode, lang, clips, pauses=None, credit=True):
 
         def char_time(pos, ct=ct):
             return ct[min(max(pos, 0), len(ct) - 1)] if ct else 0.
-        for a, b, text, words in cap.cues_for_beat(beat['spoken'][lang], beat['display'][lang], lang, char_time,
-                                                  clip['speech'] - .15, words=True, **cue_options):
+        for a, b, text, words in _cues(beat, lang, char_time, clip['speech'] - .15, labels, cue_options):
             capts.append({'start': round(start + a, 4), 'end': round(start + b, 4), 'text': text,
                           'words': [round(start + w, 4) for w in words]})
         cursor = end

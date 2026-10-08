@@ -73,6 +73,9 @@ def _clean_inline(text: str) -> str:
 def _text_blocks(text: str) -> list[tuple[int, str]]:
     """[(heading level or 0 for a paragraph, text)] from Markdown or plain text."""
     lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    lines = [re.sub(r'^\s*>\s?', '', line) for line in lines]          # > quoted lines are ordinary text
+    from .speech import labels_in, screenplay_labels
+    labels = screenplay_labels(lines)
     blocks, para = [], []
 
     def flush():
@@ -97,6 +100,8 @@ def _text_blocks(text: str) -> list[tuple[int, str]]:
             flush()                                                   # list items stand alone
             blocks.append((0, _clean_inline(re.sub(r'^([-*+•]|\d+[.)])\s+', '', line))))
         else:
+            if para and (labels_in(line, labels) or re.fullmatch(r'\[[^\]]*\]', line)):
+                flush()                                               # each screenplay line or direction stands alone
             para.append(line)
         i += 1
     flush()
