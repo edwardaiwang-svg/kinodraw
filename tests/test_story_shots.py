@@ -587,7 +587,8 @@ def test_a_shot_called_day_in_a_night_scene_is_night_unless_its_words_say_day(tm
             'The next morning the sun was up early.')
     prod = staged(tmp_path, text, [
         shot('b001', 'Most people', 'wide', [], place='bedroom'),
-        shot('b001', 'He sat', 'close', [('sam', 'adult', 'sit', 'no')], place='bedroom'),
+        shot('b001', 'He sat', 'close', [('sam', 'adult', 'sit', 'no')], place='bedroom',
+             props=[prop('fl_envelope', 'on', 'set_desk')], focus='fl_envelope'),
         shot('b002', 'The next morning', 'wide', [], place='bedroom')], sky='night_stars')
     book = prod.storybook
     _, (wide, close) = pages(prod, 'b001')
@@ -596,6 +597,20 @@ def test_a_shot_called_day_in_a_night_scene_is_night_unless_its_words_say_day(tm
     assert {p.doodle for p in wide.set} >= {'set_window_night'} and window.doodle == 'set_window_night'
     assert visible(book, close, book.planned._box(window)) > .5      # the night stays in the close-up's frame
     assert 'set_window' in {p.doodle for p in morning.set}
+
+
+def test_a_face_close_up_at_night_does_not_reach_for_a_window_across_the_room(tmp_path):
+    text = 'It was late at night. Sam sat on his bed. He looked tired.'
+    prod = staged(tmp_path, text, [
+        shot('b001', 'It was late', 'wide', [('sam', 'adult', 'stand', 'no')], place='bedroom'),
+        shot('b001', 'Sam sat', 'medium', [('sam', 'adult', 'sit', 'no')], place='bedroom'),
+        shot('b001', 'He looked', 'close', [('sam', 'adult', 'look', 'no')], place='bedroom')], sky='night_stars')
+    book = prod.storybook
+    _, (*_, close) = pages(prod, 'b001')
+    sam = close.figures[0]
+    window = book.planned._box(next(p for p in close.set if p.doodle == 'set_window_night'))
+    assert window[0] > book.planned._body(sam)[2] + .03                # the window is across the room from his bed
+    assert close.view[2] >= 2.5 and abs(close.view[0] - sam.x) < .1     # still a close-up on him
 
 
 def test_a_page_read_again_keeps_its_writing(tmp_path):
