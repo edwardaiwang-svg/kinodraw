@@ -46,7 +46,8 @@ INDOOR_WORD = re.compile(r'room|hall|house|home|flat|apartment|inside|indoor|off
                          r'kitchen|corridor|lobby|theat', re.I)
 # A medium or two-shot shows people from the knees up; a close-up their head and shoulders.
 KNEES = .28
-MEDIUM_FILL, CLOSE_FILL, INSERT_FILL = (.8, .62), .8, (.58, .5)
+MEDIUM_FILL, CLOSE_FILL, INSERT_FILL = (.8, .62), .72, (.58, .5)
+CLOSE_WIDTH, CLOSE_SPEAKING = .84, .55             # a close-up's head stays inside the sides; a speaker's bubble fits
 MAX_ZOOM = {'medium': 2.4, 'two_shot': 2.4, 'close': 4.2, 'insert': 5.5}
 EYE_LINE = .44                     # where a framed subject's middle sits on screen, clear of the caption band
 WIDE_SCALE = .86                   # a wide shot shows the whole set, its people a little smaller
@@ -372,9 +373,9 @@ class Shots:
         shots[0].start = 0.
         shots[-1].end = end - start
         self._bubbles(shots, beats, read, timers, owner, voices)
-        if not book.story:
+        if not book.story and not book.calm:
             shots = self._vary(shots, sorted(timers[bid](line.start) for bid in beats for line in read[bid]))
-        else:
+        elif book.story:
             shots = self._follow(shots, [(timers[bid](line.start), timers[bid], line) for bid in beats
                                          for line in read[bid]])
         for shot in shots:
@@ -393,7 +394,9 @@ class Shots:
         bowl to a wider look at the counter), a cut on a new sentence, never a camera move."""
         out, run, look = [], 0, None
         for shot in shots:
-            if shot.page:                                 # a page read fills the frame: it has no other framing
+            if shot.page or (not shot.figures and shot.view[2] <= 1.05):
+                # A page read fills the frame, and a wide page with nobody on it has nothing to frame closer (a
+                # closer look at it is a random zoom that crops its set): neither has another framing.
                 out.append(shot)
                 run, look = 0, None
                 continue
@@ -451,7 +454,7 @@ class Shots:
             start, end = shot.start, shot.end
             for t, timer, line in lines:
                 current = out[-1]
-                eyes = next((f for f in figures if f.key == line.eyes), None)
+                eyes = next((f for f in figures if f.key == line.eyes), None) if self.book.pushes(line) else None
                 if not start <= t <= end - MIN_SHOT or (eyes is None and current.eyes is None):
                     continue
                 if t - current.start < MIN_SHOT:
@@ -1141,13 +1144,16 @@ class Shots:
             if thing is not None and piece.kind != 'hand' and self._union([self._body(subject), thing])[2] - \
                     self._union([self._body(subject), thing])[0] > .5 and self._desk(shot, subject, piece):
                 thing = self._arrangement(shot, piece, props)
-            top, (x0, _, x1, _) = self._top(subject), self._body(subject)
-            hx = (x0 + x1) / 2
+            # Framed from the head's own box (an animal's head is at its side, a sleeper's low): the whole head
+            # inside the frame and above the captions, with room for a speaker's bubble.
+            head = book.head_box(subject)
+            top, hx = min(head[1], self._top(subject)), (head[0] + head[2]) / 2
             span = (subject.ground - top) * .42
-            face = (hx - .5 * span * book.size[1] / book.size[0], top, hx + .5 * span * book.size[1] / book.size[0],
-                    top + span)
+            face = self._union([head, (hx - .5 * span * book.size[1] / book.size[0], top,
+                                       hx + .5 * span * book.size[1] / book.size[0], top + span)])
             self._look_at(shot, self._night_sky(shot, face if thing is None else self._union([face, thing])),
-                          (1., CLOSE_FILL), MAX_ZOOM['close'], at=.4)
+                          (CLOSE_WIDTH, CLOSE_SPEAKING if subject.key in speakers else CLOSE_FILL), MAX_ZOOM['close'],
+                          at=.4)
             return
         group = figures
         if kind == 'two_shot' and len(figures) > 2:
@@ -1276,8 +1282,11 @@ class Shots:
         return self._body(f)[1]
 
     def _knees_up(self, f):
+        """Someone from the knees up, their whole head with it (a crown, a mane): a framing never cuts through it."""
         x0, y0, x1, y1 = self._body(f)
-        return x0, y0, x1, y1 - (y1 - y0) * (KNEES if f.pose not in ('sit', 'lie', 'sleep') else 0.)
+        hx0, hy0, hx1, _ = self.book.head_box(f)
+        return (min(x0, hx0), min(y0, hy0), max(x1, hx1),
+                y1 - (y1 - y0) * (KNEES if f.pose not in ('sit', 'lie', 'sleep') else 0.))
 
     @staticmethod
     def _union(boxes):

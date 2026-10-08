@@ -68,12 +68,32 @@ BUBBLE_FILL, BUBBLE_INK = (255, 254, 248, 255), (27, 27, 27, 255)
 # its height, and blinks for BLINK seconds (3 frames) every 2.4-3.9 s. The camera is locked on every page: the only
 # moves are the push into the eyes a line is about and a roar's shake (J 10/8: no "random camera zooms").
 BREATH = .003
+# A push needs its motivation in the line's own words: the eyes it names (a look at someone is not about their
+# eyes). It eases in and out over PUSH seconds from the shot's framing to one built from the head's box: the whole
+# head (mane, ears, crown) at most PUSH_FILL of the frame's height, inside the SAFE margins and above the captions
+# (CAPTION_TOP), and the head never leaves that frame on the way in.
+EYE_WORDS = re.compile(r'\beyes?\b|眼', re.I)
+PUSH, PUSH_FILL, PUSH_MOST = 1.3, .5, 4.5
+PUSH_GAIN = 1.2                 # a push gets at least this much closer, or the camera stays put (never a pan alone)
+SAFE, CAPTION_TOP = .04, .8
+# A cut between two framings that read as the same picture (one backdrop, the camera within NEAR of itself) is a
+# plain cut on its sentence, never a wipe that reads as a glitch; a cut out of a close-up is a plain cut too.
+NEAR = .12
 # Sleep is motivated motion, not idle wobble: a sleeper's body rises and falls by SLEEP_BREATH of its height every
 # SLEEP_CYCLE seconds, and Z marks drift up from the head and fade, a new one every half ZZZ_CYCLE.
 SLEEP_BREATH, SLEEP_CYCLE = .022, 3.4
 ZZZ_CYCLE, ZZZ_RISE = 2.8, .1
 BLINK = .1
 TREMBLE, LAUGH = 2.2, 2.4         # seconds a trembling or laughing pose shakes from its word, then it holds still
+
+
+def calm(style):
+    """The plan's own calm, low-energy style (a breathing exercise, a lullaby): every scene keeps a static camera,
+    with no push, shake or re-framing."""
+    style = style or {}
+    energy = style.get('energy', 3)
+    return energy <= 1 or (energy <= 2 and style.get('pacing') == 'calm' and
+                           style.get('motion_floor') in ('still', 'breathing'))
 # Existing full-body library doodles per species until a preset exists. Most Fluent animals face left.
 FALLBACK = {
     'lion': 'fl_lion', 'tiger': 'fl_tiger', 'cat': 'fl_cat', 'leopard': 'fl_leopard', 'cheetah': 'fl_leopard',
@@ -497,6 +517,7 @@ class Storybook:
         self.paper_image = paper
         self.title = title
         self.story = plan['storyboard']['genre'] == 'story'   # a lesson or promo staged here gets no story furniture
+        self.calm = calm(plan.get('style'))
         self.first = plan['scenes'][0]['beat_ids'][0] if plan['scenes'] else None
         self.scenes = [s['beat_ids'] for s in plan['scenes']]
         self.facing = {}
@@ -728,7 +749,7 @@ class Storybook:
         if line.speaker in [f.key for f in figures] and len(figures) > 1 and not any(f.travel for f in figures):
             self._face_speaker(figures, line.speaker)
         shot.figures = figures
-        if line.eyes and line.eyes in self.cast:
+        if line.eyes and line.eyes in self.cast and self.pushes(line):
             target = next((f for f in figures if f.key == line.eyes), None)
             if target:
                 shot.eyes, shot.eyes_at = target, at(line.eyes_at)
@@ -1117,7 +1138,7 @@ class Storybook:
         if i:
             kind = self.turn_kind(shots[i - 1], shots[i])
             since = local - shots[i].start
-            if since < (BLEND if kind == 'blend' else WIPE):
+            if since < self._duration(kind):
                 image = self._turn(self._draw(shots[i - 1], local), image, kind, since)
         return image
 
@@ -1126,7 +1147,7 @@ class Storybook:
         after = self.frame(after_shots, after_local)
         i = max(0, next((k for k in range(len(after_shots) - 1, -1, -1) if after_local >= after_shots[k].start), 0))
         kind = self.turn_kind(before_shots[-1], after_shots[i])
-        if since >= (BLEND if kind == 'blend' else WIPE):
+        if since >= self._duration(kind):
             return after
         return self._turn(self.frame(before_shots, before_local), after, kind, max(0., since))
 
@@ -1137,10 +1158,39 @@ class Storybook:
                 tuple(p.doodle for p in shot.set if p.kind in ('strip', 'wall', 'set')))
 
     def turn_kind(self, before, after):
-        """'blend' where the same set continues, 'wipe' for a new set or after a close-up."""
-        return 'blend' if before.eyes is None and self._set(before) == self._set(after) else 'wipe'
+        """'blend' where the same set continues; 'cut' out of a close-up or between two framings that read as the
+        same picture (a wipe there reads as a glitch); 'wipe' for a new set."""
+        if before.eyes is not None or self.near(before, after) and self._set(before) != self._set(after):
+            return 'cut'
+        return 'blend' if self._set(before) == self._set(after) else 'wipe'
+
+    @staticmethod
+    def _backdrop(shot):
+        """What a page draws behind its people and things: its place, set, sky and weather (rain indoors is heard,
+        not drawn)."""
+        weather = 'none' if shot.atmosphere == 'rain' and shot.place in sets.INTERIOR else shot.atmosphere
+        return (shot.place, tuple(p.doodle for p in shot.set if p.kind in ('strip', 'wall', 'set')),
+                tuple(d for d, *_ in shot.sky), weather, shot.lesson, bool(shot.title))
+
+    def near(self, before, after):
+        """Two framings that read as the same picture: one backdrop, the camera within NEAR of itself."""
+        if before.page or after.page or self._backdrop(before) != self._backdrop(after):
+            return False
+        (ax, ay, az), (bx, by, bz) = before.view, after.view
+        return abs(math.log(bz / az)) < math.log(1 + 2 * NEAR) and abs(ax - bx) < NEAR and abs(ay - by) < NEAR
+
+    @staticmethod
+    def _duration(kind):
+        return {'blend': BLEND, 'wipe': WIPE}.get(kind, 0.)
+
+    def pushes(self, line):
+        """Whether a line about someone's eyes pushes into them: its own words name the eyes, in a style that
+        moves the camera at all."""
+        return not self.calm and bool(EYE_WORDS.search(line.text or ''))
 
     def _turn(self, before, after, kind, since):
+        if kind == 'cut':
+            return after
         if kind == 'blend':
             return Image.blend(before, after, min(1., since / BLEND))
         from .motion import wipe_mask
@@ -1183,6 +1233,8 @@ class Storybook:
         """[x, y, zoom] of the camera over the page: locked, apart from a push into the eyes and a roar's shake.
         A push per shot restarted at every sentence, so the picture zoomed in and jumped back every 2-3 s."""
         cam = list(shot.view)
+        if self.calm:
+            return cam
         shake = 0.
         roaring = [f for f in shot.figures if f.pose == 'roar' and f.cue is not None]
         for f in roaring:
@@ -1651,16 +1703,44 @@ class Storybook:
             xx = x * w - yy * .08
             draw.line((xx, yy, xx - h * .006, yy + h * .03), fill=(100, 150, 210, 120), width=max(1, round(h / 400)))
 
+    def head_box(self, f):
+        """The figure's whole head in frame shares: its head anchor's circle, out to the body's own edge where the
+        head is the outermost part (a mane, ears, hair), with its crown on top."""
+        body, (x0, y0, x1, y1) = self._shape(f, self._pose_name(f.pose), f.x)
+        reach = y1 - y0
+        if x0 - body[0] < reach:
+            x0 = min(x0, body[0])
+        if body[2] - x1 < reach:
+            x1 = max(x1, body[2])
+        if y0 - body[1] < reach:
+            y0 = min(y0, body[1])
+        if 'crown' in f.marks:
+            y0 -= CROWN_SIZE * f.height
+        return x0, y0, x1, y1
+
     def _eye_camera(self, shot, local, cam):
-        """Push into the eyes of the character the line is about."""
+        """Push into the eyes of the character the line is about: eased in and out over PUSH seconds, from the
+        shot's framing to one built from the head's box (the whole head inside the safe frame, above the captions,
+        never past the page's edges). The head's place on screen glides in a straight line while the zoom grows, so
+        it stays inside the frame all the way in."""
+        w, h = self.size
         f = shot.eyes
-        doodle, mirror, _ = self._pose_doodle(f, local)
-        hx, hy = self._point(doodle, mirror, 'eye', f.x, f.ground, f.height, self._reference(f))
+        x0, y0, x1, y1 = self.head_box(f)
+        hx, hy = (x0 + x1) / 2, (y0 + y1) / 2
+        zoom = min(PUSH_MOST, PUSH_FILL / max(.01, y1 - y0), (1 - 4 * SAFE) / max(.01, x1 - x0))
+        if zoom < cam[2] * PUSH_GAIN:
+            return cam                      # the framing already shows the head as close as it may: no move at all
+        # Where the head's middle sits on screen (frame shares) at the end: as central as the page's edges allow.
+        half = .5 / zoom
+        tx, ty = min(1 - half, max(half, hx)), min(1 - half, max(half, hy + (.5 - .44) / zoom))
+        s1 = (.5 + (hx - tx) * zoom, .5 + (hy - ty) * zoom)
+        s0 = (.5 + (hx - cam[0]) * cam[2], .5 + (hy - cam[1]) * cam[2])
         start = max(shot.start, shot.eyes_at - .3)
-        v = min(1., max(0., (local - start) / 1.3))
+        v = min(1., max(0., (local - start) / PUSH))
         e = v * v * (3 - 2 * v)
-        target_zoom = min(4.5, .9 / max(.08, f.height))       # the head nearly fills the page
-        return [cam[0] + (hx - cam[0]) * e, cam[1] + (hy - cam[1]) * e, cam[2] + (target_zoom - cam[2]) * e]
+        z = cam[2] * (zoom / cam[2]) ** e
+        sx, sy = s0[0] + (s1[0] - s0[0]) * e, s0[1] + (s1[1] - s0[1]) * e
+        return [hx - (sx - .5) / z, hy - (sy - .5) / z, z]
 
     def _face_overlay(self, shot, local):
         """After the push, the character's own head close-up fills the page (a face preset), for a beat."""
@@ -1668,7 +1748,7 @@ class Storybook:
             return None
         f = shot.eyes
         doodle = face(f.species, f.age, f.sex, f.marks)
-        start = max(shot.start, shot.eyes_at - .3) + 1.3          # once the push has landed on the eyes
+        start = max(shot.start, shot.eyes_at - .3) + PUSH         # once the push has landed on the eyes
         if doodle is None or local < start:
             return None
         alpha = min(1., (local - start) / FACE_CUT)
