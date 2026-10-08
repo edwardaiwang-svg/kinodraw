@@ -98,23 +98,45 @@ def mentions(name, text) -> bool:
 
 
 # Display names a planner gives a character at another age or in a role: "Dana as a little girl",
-# "young Dana", "Dana (age 6)", "little Dana", "Dana, now grown".
+# "young Dana", "Dana (age 6)", "little Dana", "Dana, now grown". Every pattern below is anchored or fixed-width (no
+# overlapping quantifiers), so each runs in linear time, and a name longer than NAME_CAP is never read: script text
+# can steer the planner's strings.
+NAME_CAP = 80
 YOUNGER = r'little|young|younger|baby|child|kid|girl|boy|teen(?:age)?|small'
-_DESCRIBED = re.compile(r'\s*(?:\(.*?\)|,.*|\s+(?:as|at|aged?|when)\s+.*)$', re.I)
-_AGE_WORD = re.compile(r'^(?:(?:the|a|an)\s+)?(?:' + YOUNGER + r'|old|older|elderly|grown|adult)\s+', re.I)
+_DESCRIBED = re.compile(r'[(,]|\s(?:as|at|age|aged|when)\s', re.I)
+_AGE_WORD = re.compile(r'(?:(?:the|a|an)\s+)?(?:' + YOUNGER + r'|old|older|elderly|grown|adult)\s+', re.I)
+_ROLE = re.compile(r'\s(?:as|when)\s', re.I)
+_ARTICLE = re.compile(r'(?:a|an|the)\s+', re.I)
 
 
 def core_name(name) -> str:
-    """The proper name inside a described display name ('' when nothing is left)."""
-    return _AGE_WORD.sub('', _DESCRIBED.sub('', name_key(name).strip())).strip()
+    """The proper name inside a described display name ('' when nothing is left or the name is too long)."""
+    key = name_key(name).strip() if len(name) <= NAME_CAP else ''
+    cut = _DESCRIBED.search(key)
+    key = (key[:cut.start()] if cut else key).strip()
+    age = _AGE_WORD.match(key)
+    return (key[age.end():] if age else key).strip()
+
+
+def _role(name) -> str:
+    key = name_key(name) if len(name) <= NAME_CAP else ''
+    at = _ROLE.search(key)
+    if not at:
+        return ''
+    rest = key[at.end():].strip()
+    article = _ARTICLE.match(rest)
+    rest = rest[article.end():] if article else rest
+    return rest[:-1].strip() if rest.endswith(')') else rest
 
 
 def actor_named(name, text) -> bool:
     """The text names this character by its full or core name, or by its described role
     ('Dana as a little girl' is on screen when the text shows 'a little girl')."""
-    role = re.search(r'\s(?:as|when)\s+(?:(?:a|an|the)\s+)?(.+?)\)?$', name_key(name), re.I)
+    if len(name) > NAME_CAP:
+        return False
+    role = _role(name)
     return (mentions(name, text) or bool(core_name(name)) and mentions(core_name(name), text)
-            or bool(role) and mentions(role.group(1), text))
+            or bool(role) and mentions(role, text))
 
 
 def resolve_actor(ref, cast_by_id):
@@ -124,6 +146,8 @@ def resolve_actor(ref, cast_by_id):
     """
     if ref in cast_by_id:
         return ref
+    if len(str(ref)) > NAME_CAP:
+        return None
     key = name_key(str(ref).replace('_', ' ')).strip()
     same = [cid for cid, c in cast_by_id.items() if name_key(c['name']) == key]
     if same:
