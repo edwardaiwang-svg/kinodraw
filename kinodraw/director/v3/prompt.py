@@ -108,12 +108,27 @@ character reads or looks at writing or a screen (a list, letter, note, sign, pho
 focus_ref is that object and writing is the words being read, copied exactly from the beat; the quoted lines
 of a letter, list or message each get their own first_person shot with that line as writing. Put in cast
 everyone the text has present at that moment, not only the subject: several people when several are there,
-each with the age the story gives at that moment, which can change as years pass (baby = infant, child =
-about 2-12, teen = 13-19, old = a grandparent or "very old"), and the pose the text gives (dozing in a chair
-= sleep, at a table = sit, reading = read); an unnamed but present person (a parent, a stranger) is a cast
-member too. A voice from another room is speaking off_screen. Give every quoted line its real speaker: the
-one the text attributes it to ("she said" = the woman last named or present), else the one answering the
-previous speaker; screenplay labels (NAME:) name the speaker. Prefer two_shot or medium for conversations;
-avoid a page where one figure just stands: show what they hold, sit on or look at. Use camera static unless
-the text motivates movement (follow a run, push in on a realization, pull back to reveal).
+each with the age the story gives at that moment, which can change as years pass (baby = infant, child = about
+2-12, "grew up" = child, teen = 13-19, adult = 20-64 incl. "turns 50", old = only 65+ or words like grandma,
+elderly, "very old"), and the pose the text gives (dozing in a chair = sleep, at a table = sit, reading =
+read); an unnamed but present person (a parent, a stranger) is a cast member too. Everyone the text names,
+addresses ("Sam,", "you") or counts ("2 sons 4 grandkids" = son_1, son_2, grandkid_1... together in one shot)
+is cast and on screen in the beats about them, and so is the "I/my" speaker of a greeting or message; a text
+about people never has an empty cast or story scenes without shots. A voice from another room is speaking
+off_screen. Give every quoted line its real speaker: the one the text attributes it to ("she said" = the woman
+last named or present), else the one answering the previous speaker; screenplay labels (NAME:) name the
+speaker.
+Place and time: infer the story's places and time of day once (headlights, dark, stars = night) and give every
+shot that place and time until the text moves; never unknown when any line implies one. A named place is a set
+of its kind ("X Springs" = town, "X Books" = shop, a diner = cafe); an activity brings its scene (fisherman =
+lake, boat, fishing pole; party = table, cake, balloons). Read occasions literally ("25th ... years" to a
+partner = anniversary). Literal focus: each sentence's named object or action is visible in its shot, as a
+prop where the text puts it (a cookie held_by the hand taking it, pose reach) or an insert whose focus_ref is
+it (a goat, a map, a phone). Pick the candidate that IS the noun, never one that only shares a word (field
+hockey for a field, a leaf for "Falls", a chip for "hardware"); if none shows it, stage its place or the
+person doing it. Dialogue: cut to the speaker for each line (close or medium on them with what they hold);
+two_shot only for silences, reactions or both acting; each object a line names gets its own insert shot,
+starts_at = the words naming it. Avoid a page where one figure just stands: show what they hold, sit on or
+look at. Use camera static unless the text motivates movement (follow a run, push in on a realization, pull
+back to reveal).
 """
