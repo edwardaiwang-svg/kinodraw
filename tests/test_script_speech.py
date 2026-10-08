@@ -293,3 +293,14 @@ def test_a_stage_direction_takes_place_across_its_silent_hold():
     times = timeline.layout(board, 'en', clips)['beats'][direction['id']]['char_times']
     later = direction['spoken']['en'].index('WALT')
     assert times[0] == 0 and 0 < times[later] < 1.2 and times == sorted(times) and times[-1] < 1.2
+
+
+def test_a_direction_nobody_can_act_out_takes_no_silent_hold():
+    # Script 04 (r02 qa_failed): "[Living room. JULES is sprawled on the couch ...]" and "[WALT clicks through
+    # menus ...]" each held 1.2 s of silence on a picture where nothing moves (frozen_picture). A direction with a
+    # movement the page acts out ("walks in") keeps its hold; one with none passes at once.
+    board = board_of(SCREENPLAY + "\n\n[DANA walks in with two mugs.]\n\n[WALT clicks. The TV shows a girl jumping in puddles.]")
+    parts = speech.voice_parts(board, None, 'af_heart', available=None)
+    still, moving, screen = board['beats'][1]['id'], board['beats'][-2]['id'], board['beats'][-1]['id']
+    assert parts[moving]['hold'] == speech.DIRECTION_HOLD
+    assert parts[still]['hold'] < .3 and parts[screen]['hold'] < .3
