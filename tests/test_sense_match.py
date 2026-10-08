@@ -189,9 +189,9 @@ HOWTO = ('# Banana Pancakes\n\nYou need two ripe bananas.\n\nCrack two eggs into
 PICTURES = ['fl_banana', 'fl_egg', 'fl_cooking', 'fl_pancakes']
 
 
-def _icon_video(path, tl, side, size=(320, 180)):
+def _icon_video(path, tl, side, size=(320, 180), extra=None):
     """Paper with one dark square icon of ``side`` pixels per beat, each beat's in its own place (and a caption band
-    that never counts)."""
+    that never counts); ``extra``: a title tag along the top, or a drawing hand with its pen resting by the icon."""
     starts = sorted(beat['start'] for beat in tl['beats'].values())
     writer = imageio_ffmpeg.write_frames(str(path), size, fps=10, macro_block_size=1)
     writer.send(None)
@@ -199,13 +199,20 @@ def _icon_video(path, tl, side, size=(320, 180)):
         frame = np.full((size[1], size[0], 3), 236, np.uint8)
         x = 20 + (sum(f / 10 >= s for s in starts) % 4) * 70
         frame[40:40 + side, x:x + side] = (60, 40, 30)
+        if extra == 'tag':
+            frame[3:15, 10:200] = (40, 40, 40)                  # 6% of the frame, on every frame
+        if extra == 'hand':
+            frame[80:120, x + 10:x + 60] = (230, 190, 160)      # skin, 4.5% of the frame
+            for k in range(20):
+                frame[80 - k:83 - k, x + 5 - k // 2:x + 8 - k // 2] = (20, 20, 20)   # the pen
         frame[-20:, 20:300] = 0
         writer.send(frame.tobytes())
     writer.close()
 
 
-@pytest.mark.parametrize('side,shown', [(28, False), (60, True)])   # 1.4% and 6.3% of the frame
-def test_an_icon_too_small_to_read_does_not_show_its_sentence(tmp_path, side, shown):
+@pytest.mark.parametrize('side,shown,extra', [(28, False, None), (60, True, None),     # 1.4% and 6.3% of the frame
+                                              (28, False, 'tag'), (28, False, 'hand')])
+def test_an_icon_too_small_to_read_does_not_show_its_sentence(tmp_path, side, shown, extra):
     board = script.build(ingest.read(HOWTO), story='story')
     plan = {'storyboard': {'genre': 'how-to'}, 'cast': [], 'scenes': [
         {'beat_ids': [b['id']], 'treatment': 'whiteboard', 'text': {'kind': 'caption_only', 'ref': b['id']},
@@ -213,7 +220,7 @@ def test_an_icon_too_small_to_read_does_not_show_its_sentence(tmp_path, side, sh
     tl = timeline.layout(board, 'en', timeline.synthetic_clips(board, 'en'))
     assert content.check(copy.deepcopy(plan), board)['stats']['unshown'] == 0     # the plan names each one
     video = tmp_path / 'v.mp4'
-    _icon_video(video, tl, side)
+    _icon_video(video, tl, side, extra=extra)
     report = content.check(plan, board, tl, video)
     lines = [line for line in report['lines'] if line['at'] is not None]
     assert lines and all(line['shown'] is shown for line in lines), [(line['text'], line['size']) for line in lines]

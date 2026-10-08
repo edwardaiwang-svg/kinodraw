@@ -8,7 +8,8 @@ qa.json's ``content`` (never in its problems or ok: they are heuristics for revi
   sense the sentence uses that word (director.v3.offer.Sense: "jump three" is no kangaroo, "the order" no menu
   icon); with the video, the thing shown must also be readable: at the sentence's middle and end its drawing covers
   at least READABLE of the frame (the bounding box of the largest drawn shape that the sentence brought on, else of
-  the largest one on screen; a board diagram or a page is measured whole).
+  the largest one on screen; a board diagram or a page is measured whole), written words at least READABLE_TEXT.
+  The drawing hand and a title tag along the top are never what a sentence shows.
 - ``numbers_as_icons``: a sentence with numbers or a comparison (an explainer's revenue, a lesson's "3 times 5") is
   shown only by an icon, with no board, chart or counter to show the numbers themselves.
 - ``same_picture``: one composition stays on screen for more than SAME_RUN sentences in a row (measured on the
@@ -31,6 +32,11 @@ UNSHOWN = .2              # share of concrete sentences allowed to show nothing 
 # gauntlet renders: the pancake video's ingredient icons that its critic called unreadable box 1.6-2.3% of the frame;
 # the lesson's kangaroo and menu icons 3-5%; story pages and board diagrams 5-30%.
 READABLE = .03
+# Written words read smaller: the lesson's board line "a + b = b + a" boxes 1.5% of the frame and reads at 1080p,
+# while the three starting dots of its dot array (0.4% each) show no sentence yet.
+READABLE_TEXT = .01
+HAND_REACH = .04          # the pen reaches this share of the frame width beyond the drawing hand's skin
+TITLE_STRIP = .12         # a mark on nearly every frame within this top share of the frame is the video's title tag
 INK = 48                  # a pixel is drawn when a colour channel differs from the paper by more than this
 NUMERIC = re.compile(r"\d|%|\$|£|€|\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|"
                      r"thirty|forty|fifty|hundred|thousand|million|billion|percent|half|twice|double|triple|dozen)\b|"
@@ -185,12 +191,7 @@ def readable(video, found: list[Line]) -> None:
         return
     band = int(next(iter(frames.values())).shape[0] * CAPTION_BAND)
 
-    def ink(frame):
-        region = frame[:band]
-        paper = np.median(region.reshape(-1, 3), axis=0)
-        return np.abs(region - paper).max(axis=2) > INK
-
-    inks = {i: ink(f) for i, f in frames.items()}
+    inks = {i: _ink(f, band) for i, f in frames.items()}
     area = band / CAPTION_BAND * next(iter(frames.values())).shape[1]
 
     def boxes(mask):
@@ -201,21 +202,38 @@ def readable(video, found: list[Line]) -> None:
     def largest(mask):
         return max((share for _, share in boxes(mask)[1]), default=0)
 
-    # A small mark on nearly every frame is a title tag or a logo, not what any sentence shows.
+    # A small mark on nearly every frame, or one along the top, is a title tag or a logo, not what a sentence shows.
     overlay = np.zeros_like(next(iter(inks.values())))
     if len(inks) >= 8:
         labels, found = boxes(np.mean(list(inks.values()), axis=0) > .9)
         for k, (box, share) in enumerate(found, 1):
-            if share < READABLE:
-                overlay[box] |= labels[box] == k
+            if share < READABLE or box[0].stop <= TITLE_STRIP * band / CAPTION_BAND:
+                overlay[box] = True                    # the whole box: its anti-aliased edges flicker
 
     for line, (t0, t1, t2) in times:
         before, middle, end = (inks[_frame_index(t)] for t in (t0, t1, t2))
         kept = middle & end & ~overlay
         new = kept & ~ndimage.binary_dilation(before, iterations=1)
         line.size = round(largest(new if line.by == 'picture' and new.mean() > .003 else kept), 4)
-        if line.size < READABLE:
+        if line.size < (READABLE_TEXT if line.by in WRITTEN else READABLE):
             line.shown = False
+
+
+def _ink(frame, band):
+    """Drawn pixels above the caption band: a colour channel off the paper by more than INK, without the drawing
+    hand (its skin is warm and light, no ink colour) and the pen and shadow within HAND_REACH of it."""
+    from scipy import ndimage
+    region = frame[:band]
+    paper = np.median(region.reshape(-1, 3), axis=0)
+    drawn = np.abs(region - paper).max(axis=2) > INK
+    r, g, b = region[..., 0], region[..., 1], region[..., 2]
+    skin = drawn & (r > g) & (g > b) & (r > 150) & (b > 90) & (r - b > 25)
+    if skin.sum() >= 50:
+        drawn &= ~ndimage.binary_dilation(skin, iterations=round(HAND_REACH * frame.shape[1]))
+    return drawn
+
+
+WRITTEN = ('board', 'text', 'chart')     # a sentence shown in words, a board or a chart
 
 
 def _frame_index(t):
@@ -308,7 +326,8 @@ def check(plan, board, timeline=None, video=None) -> dict:
                                         f'{len(runs)} such stretch{"es" if len(runs) > 1 else ""} in the video.'})
     return {'problems': [f['problem'] for f in findings], 'findings': findings,
             'stats': {'sentences': len(found), 'concrete': len(concrete), 'unshown': len(unshown),
-                      'too_small': sum(1 for line in found if line.size is not None and line.size < READABLE),
+                      'too_small': sum(1 for line in found if line.size is not None and
+                                       line.size < (READABLE_TEXT if line.by in WRITTEN else READABLE)),
                       'numbers_as_icons': len(icons),
                       'dialogue': len(dialogue), 'dialogue_unshown': len(silent),
                       'same_runs': [(clock(a.at), clock(b.at), n) for a, b, n in runs]},
