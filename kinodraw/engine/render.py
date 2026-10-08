@@ -821,7 +821,9 @@ class Production:
 
         def drift(tt):                                   # to and fro between the two spots at DRIFT px/s
             d = math.dist(a, b)
-            phase = DRIFT * max(0., tt - prev.end - go) % (2 * d) if d >= 1 else 0.
+            if d < 1:
+                return a
+            phase = DRIFT * max(0., tt - prev.end - go) % (2 * d)
             v = phase / d if phase <= d else 2 - phase / d
             return a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v
 

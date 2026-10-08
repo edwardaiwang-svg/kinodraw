@@ -311,3 +311,10 @@ def test_a_resting_hand_near_the_frame_edge_stays_mostly_in_the_frame():
     x, y = prod.hand.pasted[-1]
     left, right = max(0, x - 20), min(1920, x + 180)
     assert right - left >= .8 * 200                      # a hand mostly off the edge barely moves the picture
+
+
+def test_a_hand_with_no_room_to_drift_still_rests():
+    a = wb_board.Element(_Pen(), 600, 300, 0., start=0.)
+    b = wb_board.Element(_Pen(), 700, 330, 6., start=6.)
+    prod = _resting_production([a, b], [a, b])
+    assert prod._resting(3., a, b, ((900., 500.), (900., 500.)), 0, (6., True)) == (900., 500.)
