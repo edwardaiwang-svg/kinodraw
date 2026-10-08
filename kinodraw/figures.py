@@ -84,12 +84,13 @@ PLACE = re.compile(r"\b(?:corner of [A-Z][\w'’.]*(?:\s[A-Z][\w'’.]*)*\s(?:an
 ID = re.compile(r"\b[A-Za-z]{1,6}-\d[\w-]*|\b(?:ticket|order|case|incident|invoice|ref|reference|confirmation|"
                 r"tracking|booking|claim|policy|account|acct|serial|model|item|sku|po|id|receipt|request|issue|"
                 r"pr|batch|badge|patient|reservation)s?\b\.?\s*(?:no\.?\s*|number\s+|#\s*)?"
-                r"[A-Za-z]{0,4}-?\d[\w-]*", re.I)
+                r"(?:[A-Za-z]{1,4}-?\d[\w-]*|\d{2,}(?![\d,.]*\s?(?:%|percent\b)))", re.I)
 # A street address is a place, not a count ("14 Birch Rd.", "200 Main Street"); its abbreviation keeps its period.
 STREET = (r"(?:St|Rd|Ave|Blvd|Ln|Dr|Ct|Pl|Way|Hwy|Pkwy|Cir|Ter|Sq|Street|Road|Avenue|Lane|Drive|Court|Place|"
           r"Boulevard|Highway|Parkway|Circle|Terrace|Square)")
 ADDRESS = re.compile(r"\b\d{1,6}\s+(?:[NSEW]\.?\s+)?(?:[A-Z][\w'’]*\s+){1,3}" + STREET + r"\b\.?")
-# A one-line list: parts joined by " · ", " / ", " | " or " • " (each part kept whole, the separators never shown).
+# A one-line list: parts joined by " · ", " | " or " • ", or by two or more " / " ("$12 / month" is a rate); each part
+# kept whole, the separators never shown.
 LIST_SEP = re.compile(r"\s+[·/|•]\s+")
 # The words that make a figure bad news: an overrun, a shortfall, a loss or a delay (a warning card, never growth).
 WARN = re.compile(r"\b(?:overrun|overran|over\s+(?:budget|plan|target|forecast|estimate)|more than (?:we |was |were |"
@@ -413,7 +414,7 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
         return None                                # "Jump 3, then jump 5": counting, not data
     sentence = text[a:b]
     parts = LIST_SEP.split(sentence)
-    if len(parts) >= 2:
+    if len(parts) >= 3 or (len(parts) == 2 and '/' not in LIST_SEP.search(sentence).group()):
         # a one-line list ("2 cups · 350°F · 25 min · serves 6"): every part whole, no separator shown
         parts = [_end(re.sub(r'[`*_]', '', p).strip()) for p in parts]
         parts = [p for p in parts if p]
@@ -557,7 +558,7 @@ def unquoted(card: Card, script: str) -> list[str]:
     missing = []
     for text in shown(card):
         missing += [t for t in tokens(text) if t not in said]
-        if re.search(r'[\[\]{}<>]', text) or re.match(r'[·/|•,;:]', text) or re.search(r'\s[·/|•]$', text) or \
+        if re.search(r'[\[\]{}<>]', text) or re.match(r'[·|•,;:]', text) or re.search(r'\s[·/|•]$', text) or \
                 _end(text) != text:
             missing.append(text)
     return missing

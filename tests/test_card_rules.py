@@ -171,6 +171,10 @@ def test_an_id_is_a_label_never_a_figure():
         assert figures.cards(sentence) == [], sentence
     card = figures.cards('Order 7781 shipped 3,000 units.')[0]
     assert figures.shown(card) == ['3,000 units']
+    # a record word before a percentage or a rate is no ID
+    assert figures.shown(figures.cards('Members claim 40% savings.')[0]) == ['40%', 'savings']
+    card = figures.cards('Plans start at $12 / month.')[0]
+    assert card.kind == 'price' and not figures.unquoted(card, 'Plans start at $12 / month.')
 
 
 def test_content_qa_flags_card_text_the_script_does_not_say():
