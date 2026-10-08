@@ -1725,7 +1725,9 @@ class HybridProduction:
             if (last.spec['treatment'] != 'whiteboard' and not last.source_proof and not last.scientific
                     and t < end_start + clear):
                 previous = self._frame(last, end_start - 1 / 30, quotes=False)
-                current = self.whiteboard.frame(t).convert('RGB')
+                # The target is the card's blank page itself, not the whiteboard's own clearing of its legacy page.
+                wb = self.whiteboard
+                current = (wb.board_frame(t) if wb.mode_at(t)[0] == 'clear' else wb.frame(t)).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start, *self.size,
                                           kind='page' if last.story is not None and self.story_genre else 'match',
                                           duration=clear)      # a picture book turns to its last page
