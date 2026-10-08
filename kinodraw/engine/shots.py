@@ -303,7 +303,7 @@ class Shots:
         self.seen = {}                 # cast id -> the place they were last on the page
         self.readable = None           # the last thing in the scene with words on it (the map she unfolds)
         self.written = {}              # doodle -> the words a page of it last showed: a page keeps its writing
-        self.gone = set()              # sky things the words last said are not there ('moon', 'sun', 'star')
+        self.gone = None               # sky things the words last said are not there ('moon', 'sun', 'star')
         self.read = {}                 # beat id -> the Reader's sentences
 
     def prepare(self, spec, start, end):
@@ -313,6 +313,8 @@ class Shots:
         read = {bid: book.reader.read(bid, book.by_id[bid]['spoken'], book.by_id[bid].get('section'))
                 for bid in beats}
         self.read.update(read)
+        if self.gone is None:
+            self.gone = self._missing_from_the_start()
         timers = {bid: self._timer(bid, start) for bid in beats}
         plans = []
         for plan in spec.get('shots') or ():
@@ -488,15 +490,32 @@ class Shots:
         return out
 
     # ---------------- sky
+    def _missing_from_the_start(self):
+        """The sky things the story first speaks of as missing ("Mama, the moon is gone"): they were not there
+        before those words either."""
+        story = ' '.join(self.book.by_id[b]['spoken'] for ids in self.book.scenes for b in ids if b in self.book.by_id)
+        first = {}
+        for kind, cue in SKY_WORDS.items():
+            m = re.search(r'(?<![\w-])(?:' + cue + r')', story, re.I)
+            if m:
+                first[kind] = self._took(story, m.start(), m.end())
+        return {kind for kind, took in first.items() if took}
+
+    @staticmethod
+    def _took(text, start, end):
+        """Do the words at text[start:end] say that sky thing is not there?"""
+        from ..director.v3.staging import absent
+        return absent(text, start, end) or bool(TAKEN.search(text[max(0, start - 40):start])) or \
+            bool(BEHIND.match(text, end))
+
     def _sky_words(self, text):
         """Follow what the words say about the moon, the sun and the stars, in reading order: "No moon anywhere",
         "the moon is gone", "somebody took the moon" or "the moon went behind a cloud" take it out of the sky; any
         other mention ("there was the moon") puts it back."""
-        from ..director.v3.staging import absent
         hits = sorted((m.start(), m.end(), kind) for kind, cue in SKY_WORDS.items()
                       for m in re.finditer(r'(?<![\w-])(?:' + cue + r')', text, re.I))
         for start, end, kind in hits:
-            if absent(text, start, end) or TAKEN.search(text[max(0, start - 40):start]) or BEHIND.match(text, end):
+            if self._took(text, start, end):
                 self.gone.add(kind)
             else:
                 self.gone.discard(kind)
@@ -510,7 +529,7 @@ class Shots:
         atmosphere = (spec.get('atmosphere') or {}).get('kind') or 'none'
         words = [d for line in self.read.get(bid, ()) if line.start < text[1] and text[0] < line.end
                  for d in line.sky]
-        wanted = words + list(sky)
+        wanted = list(sky) + words                               # the plan's own picture first: a full moon
         if self.night or atmosphere in MOON_SKIES:
             wanted.append('fl_crescent_moon')
         if atmosphere in SUN_SKIES:

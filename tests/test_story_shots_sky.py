@@ -46,19 +46,21 @@ def test_a_night_room_shows_its_dark_window_and_no_stars_across_the_wall(tmp_pat
 
 
 def test_the_sky_never_shows_what_the_words_took_away_until_they_bring_it_back(tmp_path):
-    text = ('"Gran, somebody took the moon," said Pip.\n\nThe sky was dark and empty. No moon anywhere.\n\n'
-            'Then the cloud slid away, and there was the moon.')
+    text = ('Pip woke in the dark wood.\n\n"Gran, somebody took the moon," said Pip.\n\n'
+            'The sky was dark and empty. No moon anywhere.\n\nThen the cloud slid away, and there was the moon.')
     walk = [('pip', 'young', 'stand', 'no')]
-    prod = staged(tmp_path, text, [shot('b001', 'Gran,', 'wide', walk, place='forest',
+    prod = staged(tmp_path, text, [shot('b001', 'Pip woke', 'wide', walk, place='forest'),
+                                   shot('b002', 'Gran,', 'wide', walk, place='forest',
                                         props=[prop('fl_crescent_moon')], focus='fl_crescent_moon'),
-                                   shot('b002', 'The sky', 'wide', walk, place='forest'),
-                                   shot('b003', 'Then the cloud', 'wide', walk, place='forest')],
+                                   shot('b003', 'The sky', 'wide', walk, place='forest'),
+                                   shot('b004', 'Then the cloud', 'wide', walk, place='forest',
+                                        props=[prop('fl_full_moon')])],
                   cast=MICE, sky='night_stars')
-    (_, (took,)), (_, (empty,)), (_, (back,)) = pages(prod, 'b001'), pages(prod, 'b002'), pages(prod, 'b003')
-    for page in (took, empty):
+    before, took, empty, back = (pages(prod, bid)[1][0] for bid in ('b001', 'b002', 'b003', 'b004'))
+    for page in (before, took, empty):           # missing from the start: the story first speaks of it as gone
         assert 'moon' not in kinds(page) and 'fl_star' in sky(page)
         assert not any('moon' in p.doodle for p in page.set)      # nor as a picture on the ground
-    assert 'moon' in kinds(back)
+    assert 'fl_full_moon' in sky(back)                            # the plan's own moon, round and full
 
 
 def test_a_nature_place_is_drawn_with_its_cast_on_it(tmp_path):
