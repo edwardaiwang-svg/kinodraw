@@ -180,3 +180,15 @@ def test_one_device_stays_on_screen_between_its_states(tmp_path):
     found = screens.moments_for(b, tl, 'en', tmp_path)
     assert len(found) == 2 and found[0]['device'] == found[1]['device'] == 'laptop'
     assert found[0]['end'] == found[1]['start']              # no glimpse of the board between two laptop screens
+
+
+def test_a_short_gap_before_another_device_is_a_cut_not_a_flash_of_the_board(tmp_path):
+    b = script.build(ingest.read('On your laptop, open Tidewater Bank and click Settings.\n\n'
+                                 'On your phone, open the Keyring app and tap the + button.'), 'story')
+    ids = [x['id'] for x in b['beats']]
+    tl = {'beat_order': ids, 'end_card': {'start': 99.},
+          'beats': {bid: {'start': i * 3.75, 'end': i * 3.75 + 3.6, 'char_times': [k * .05 for k in range(200)]}
+                    for i, bid in enumerate(ids)}}
+    found = screens.moments_for(b, tl, 'en', tmp_path)
+    assert [m['device'] for m in found] == ['laptop', 'phone'] and 0 < found[1]['start'] - 3.3 <= .6
+    assert found[0]['end'] == found[1]['start']
