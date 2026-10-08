@@ -8,6 +8,7 @@ from __future__ import annotations
 import bisect
 import copy
 import hashlib
+import json
 import math
 import re
 import textwrap
@@ -212,6 +213,12 @@ class HybridProduction:
                      if s.spec['transition_in'] == 'cut' or s.scientific or self.spans[i - 1].scientific]
         self.warnings.append('hybrid: hold_s is a reading target inside source spans; narration timing is preserved')
         self.anchor_keys = self._anchor_keys()
+        if self.storybook is not None:
+            # The quoted spans the story pages draw in speech bubbles, for the captions to leave to them.
+            build = Path(project_dir) / 'build'
+            build.mkdir(parents=True, exist_ok=True)
+            (build / 'bubbles.json').write_text(json.dumps(self.storybook.bubbled, ensure_ascii=False, indent=1),
+                                                encoding='utf-8')
 
     def _prepare(self, span, project_dir):
         spec = span.spec
