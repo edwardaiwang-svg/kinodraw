@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import bisect
 import colorsys
-import difflib
 import logging
 import re
 import textwrap
@@ -71,8 +70,25 @@ def shared_marks(display, spoken, lang):
     a, b = [m.group() for m in md], [m.group() for m in ms]
     if a == b:
         return md, ms
-    pairs = [(i, j) for blk in difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks()
-             for i, j in zip(range(blk.a, blk.a + blk.size), range(blk.b, blk.b + blk.size))]
+    # Order-keeping alignment: a pair is the same mark at about the same place in its text (share of the text before
+    # it), so a comma early in one text never pairs with a comma late in the other.
+    rd, rs = [m.end() / max(1, len(display)) for m in md], [m.end() / max(1, len(spoken)) for m in ms]
+    best = [[0.] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            best[i][j] = max(best[i - 1][j], best[i][j - 1],
+                             best[i - 1][j - 1] + 1 - 2 * abs(rd[i - 1] - rs[j - 1]) if a[i - 1] == b[j - 1] else 0.)
+    pairs, i, j = [], len(a), len(b)
+    while i and j:
+        if a[i - 1] == b[j - 1] and best[i][j] == best[i - 1][j - 1] + 1 - 2 * abs(rd[i - 1] - rs[j - 1]) \
+                and 1 - 2 * abs(rd[i - 1] - rs[j - 1]) > 0:
+            pairs.append((i - 1, j - 1))
+            i, j = i - 1, j - 1
+        elif best[i][j] == best[i - 1][j]:
+            i -= 1
+        else:
+            j -= 1
+    pairs.reverse()
     log.warning('caption clause marks differ between display %r and spoken %r; paired %d of %d/%d',
                 display[:60], spoken[:60], len(pairs), len(a), len(b))
     return [md[i] for i, _ in pairs], [ms[j] for _, j in pairs]
