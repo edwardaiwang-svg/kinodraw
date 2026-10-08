@@ -325,6 +325,7 @@ class DataCards:
         self.entries = entries                 # [(start, end, card, beat id)], sorted, never overlapping
         # cards whose figures the board page on screen already writes: not repeated over that page
         self.on_board = {k for k, e in enumerate(entries) if _written(e, written, cuts)}
+        self.cuts = sorted(cuts)               # the board camera's cuts and wipes: each is a new picture
         self.skin, self.lang = skin, lang
         self.W, self.H = frame_size
         self.unit = min(self.W, self.H) / 1080
@@ -422,6 +423,11 @@ class DataCards:
         if self._on_device(k, t, host):
             return
         start, end, card, _ = self.entries[k]
+        if _board_on_screen(self, host, t):
+            # on the board page the camera's next cut or wipe is the next picture: the card leaves before it
+            end = min(end, next((c for c in self.cuts if c > start + .05), math.inf) - .05)
+            if t >= end:
+                return
         look = 'clean' if clean else 'board'
         final = self.image(k, look)
         if k not in self._places:
@@ -533,11 +539,6 @@ def build(episode, tline, lang, skin, frame_size, elements=(), cuts=()):
     """The DataCards of an episode, or None when its script states no figures. ``elements``: the whiteboard's
     drawn elements, whose written words show some figures already."""
     found = entries(episode, tline, lang)
-    # a camera cut or wipe to another stretch of board is the next picture: the card leaves before it
-    stops = sorted(c[0] for c in cuts)
-    found = [(start, min(end, next((t for t in stops if t > start + .05), math.inf) - .05), card, bid)
-             for start, end, card, bid in found]
-    found = [e for e in found if e[1] - e[0] > .5]
     if not found:
         return None
     written = [(el.trigger if getattr(el, 'start', None) is None else el.start, getattr(el, 'stretch', 0),

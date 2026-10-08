@@ -249,11 +249,16 @@ def test_a_card_with_an_unmatched_bracket_is_dropped(monkeypatch):
 
 
 def test_a_card_leaves_before_the_camera_moves_to_another_stretch_of_board():
+    from types import SimpleNamespace
     ep, tl = _episode(('Volunteers planted 1,800 trees along the river this spring.',
                        'Volunteers planted one thousand eight hundred trees along the river this spring.'))
     start = data_cards.entries(ep, tl, 'en')[0][0]
     cards = data_cards.build(ep, tl, 'en', Skin(), (W, H), cuts=[(5., 0, 'cut'), (start + 1.2, 1920, 'cut')])
-    assert cards.entries[0][1] <= start + 1.2, 'the card stays over the next stretch of board'
+    board = SimpleNamespace(data_cards=cards, frame=_Host().frame)     # the whiteboard production itself
+    assert _painted_box(cards, start + .8, board) is not None
+    assert _painted_box(cards, start + 1.4, board) is None, 'the card stays over the next stretch of board'
+    # a page that is not the board (a story page, a motion scene) keeps its card through the board's cut
+    assert _painted_box(cards, start + 1.4, _Host()) is not None
 
 
 def test_a_list_after_a_colon_and_a_label_after_its_owner():
