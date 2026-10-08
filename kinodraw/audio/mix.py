@@ -1,8 +1,9 @@
 """Narration master and light music bed.
 
 assemble(): place every beat's clip on the timeline, normalize to -18 LUFS, write captions.
-mix(): every look gets a bed of the bundled CC0 music under the whole video, from the first word, ducked about 17 dB
-under speech and rising in the pauses and over the end card (mix.outro); the sound effects the renderer cued (build/cues.json)
+mix(): every look gets a bed of the bundled CC0 music under the whole video, from the first word, ducked under speech
+and rising a little in the pauses, never closer than 12 dB to the voice there nor on the end card (fit_bed); the
+sound effects the renderer cued (build/cues.json)
 and the everyday ones the narration names (audio.foley); and a mastered mix (-14 LUFS, -1 dBTP).
 Your own music file (pipeline.set_music) plays under the whole video in every look, and the mix is mastered.
 """
@@ -24,11 +25,12 @@ from . import master, sfx
 SR = 48000
 FADE = 1.5                 # the music fades out over the end
 FADE_IN = .3               # ...and in at the start, so it is there from the first word
-OPEN_LUFS = -22.0         # the music in the pauses and over the end card
+OPEN_LUFS = -25.0         # the music in the pauses and over the end card
 BED_UNDER_LUFS = -33.0     # the bed sits about 17 LU under the -18 LUFS narration (measured, 15 nominal)
 SFX_DUCK_DB = -6.0         # sound effects while someone speaks
 SWELL_DB, SWELL = 3.0, 1.5  # the bed comes up after every cut, easing back over 1.5 s
-OUTRO_DB = 4.0             # ...and over the end card, once the last word is said, so the video ends on its music
+GAP_UNDER_DB = 13.0        # fit_bed: the bed's loudest gaps this far under the voice (12 dB measured, plus 1)
+TAIL_UNDER_LU = 13.0       # ...and a music-only end card or tail this far under the speech (12 LU, plus 1)
 MASTER_LUFS, CEILING_DBTP = -14.0, -1.0
 MUSIC = Path(__file__).resolve().parents[1] / 'assets' / 'music'
 DEFAULT_TRACKS = {'primary': 'fresh_focus', 'secondary': 'natural_vibes'}
@@ -198,16 +200,47 @@ def swell(cues: list, n: int) -> np.ndarray:
     return 10 ** (db / 20)
 
 
-def outro(tl: dict, n: int) -> np.ndarray:
-    """Music gain: 1 until the last word is said (the end card's start), then up OUTRO_DB over a second."""
-    words = [b.get('speech_end', 0) for b in tl.get('beats', {}).values()]
-    end = tl.get('end_card', {}).get('start') or (max(words) if words else None)
-    gain = np.ones(n, np.float32)
-    if end is not None and round(end * SR) < n:
-        i = round(end * SR)
-        ramp = np.minimum(1, np.arange(n - i) / SR)
-        gain[i:] = 10 ** (OUTRO_DB * ramp / 20)
-    return gain
+def _db50(x) -> np.ndarray:
+    """50 ms RMS levels (dBFS) of a mono signal."""
+    w = SR // 20
+    return 10 * np.log10((x[:len(x) // w * w].reshape(-1, w).astype(np.float64) ** 2).mean(1) + 1e-12)
+
+
+def fit_bed(speech: np.ndarray, bed: np.ndarray, tl: dict, calm: bool = False) -> np.ndarray:
+    """The bed (music and effects, stereo) held under the voice as the gauntlet's tools/bedlevel.py measures it:
+    in the speech gaps (50 ms windows of the narration under -50 dBFS, between its first and last word) its loudest
+    tenth sits GAP_UNDER_DB under the voice's median level, or the whole bed comes down by the difference; after
+    the last word (the music-only end card or tail) it sits TAIL_UNDER_LU under the speech's loudness, or comes down
+    there over a second. A calm story's music then fades out across the tail to silence. A bed already that quiet
+    is returned unchanged."""
+    speech = np.asarray(speech, np.float32).reshape(len(speech), -1).mean(1)
+    spoken = [b for b in tl.get('beats', {}).values() if b.get('speech_end', 0) - b.get('start', 0) > .05]
+    if not spoken or not len(bed):
+        return bed
+    first, last = min(b['start'] for b in spoken), max(b['speech_end'] for b in spoken)
+    v, b = _db50(speech), _db50(bed.mean(1))
+    t = (np.arange(len(v)) + .5) * .05
+    within = (t >= first) & (t <= last)
+    talking, gaps = within & (v > -45), within & (v < -50)
+    out = bed
+    if talking.any() and gaps.any():
+        over = GAP_UNDER_DB - (np.median(v[talking]) - np.percentile(b[gaps], 90))
+        if over > 0:
+            out = out * np.float32(10 ** (-over / 20))
+    i = round(last * SR)
+    tail = round((last + .3) * SR)
+    if len(out) - tail > SR // 2:
+        from . import master
+        level = master.loudness(out[tail:].mean(1), SR)
+        over = TAIL_UNDER_LU - (master.loudness(speech[round(first * SR):i], SR) - level)
+        gain = np.ones(len(out), np.float32)
+        if np.isfinite(level) and over > 0:
+            gain[i:] = 10 ** (-over * np.minimum(1, np.arange(len(out) - i) / SR) / 20)
+        if calm:
+            gain[i:] *= np.cos(np.pi / 2 * np.arange(len(out) - i) / (len(out) - i)) ** 2
+        if not np.all(gain == 1):
+            out = out * gain[:, None]
+    return out
 
 
 def bed(env: np.ndarray, cues: list, slug: str) -> np.ndarray:
@@ -245,10 +278,10 @@ def mix(storyboard: dict, tl: dict, out_dir: Path) -> Path:
             music *= swell(cues, total)[:, None]
     elif setting:
         tracks = {**DEFAULT_TRACKS, **(setting if isinstance(setting, dict) else {})}
-        music = bed(env, cues, tracks['primary']) * outro(tl, total)[:, None]
-    out = speech[:, None].repeat(2, axis=1) + music
+        music = bed(env, cues, tracks['primary'])
     if effects:
-        out += sfx.render(effects, total / SR) * (1 + (10 ** (SFX_DUCK_DB / 20) - 1) * env)[:, None]
+        music = music + sfx.render(effects, total / SR) * (1 + (10 ** (SFX_DUCK_DB / 20) - 1) * env)[:, None]
+    out = speech[:, None].repeat(2, axis=1) + fit_bed(speech, music, tl)
     if storyboard.get('master', True):
         out = master.master(out, SR, MASTER_LUFS, CEILING_DBTP)
     path = out_dir / 'mix.wav'
