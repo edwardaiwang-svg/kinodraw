@@ -17,6 +17,8 @@ qa.json's ``content`` (never in its problems or ok: they are heuristics for revi
   video's frames at each sentence's middle, the caption band left out).
 - ``no_people``: a story names people but no scene puts anyone on screen.
 - ``no_speaker``: a story has dialogue but more than half of its lines show no speaker.
+- ``card_text``: a data card shows a word or number its script does not say (beyond the card's own "+", thousands
+  separators and unit symbols), a stray bracket or separator, or the sentence's closing punctuation.
 
 English scripts only (the readings are English word lists); other languages get no content findings.
 """
@@ -365,6 +367,7 @@ def check(plan, board, timeline=None, video=None) -> dict:
                                         f'{len(runs)} such stretch{"es" if len(runs) > 1 else ""} in the video.'})
     from .screens import check as blank_screens
     findings += blank_screens(board, video)        # a message or notification read over a blank device
+    findings += card_text(board)                   # a data card shows only the script's own words
     return {'problems': [f['problem'] for f in findings], 'findings': findings,
             'stats': {'sentences': len(found), 'concrete': len(concrete), 'unshown': len(unshown),
                       'too_small': sum(1 for line in found if line.size is not None and
@@ -373,6 +376,24 @@ def check(plan, board, timeline=None, video=None) -> dict:
                       'dialogue': len(dialogue), 'dialogue_unshown': len(silent),
                       'same_runs': [(clock(a.at), clock(b.at), n) for a, b, n in runs]},
             'lines': [asdict(line) for line in found]}
+
+
+def card_text(board) -> list[dict]:
+    """A data card (kinodraw/figures.py) that shows a word or number its sentence does not say, a stray bracket or
+    separator, or the sentence's closing punctuation: one finding per card."""
+    from .. import figures
+    lang = board.get('lang', 'en')
+    out = []
+    for b in board['beats']:
+        display = b.get('display')
+        text = display.get(lang, '') if isinstance(display, dict) else str(display or '')
+        for card in figures.beat_cards(b, lang):
+            missing = figures.unquoted(card, text)
+            if missing:
+                out.append({'check': 'card_text', 'beat': b['id'], 'missing': missing,
+                            'problem': f'A {card.kind} card shows "{" / ".join(figures.shown(card))}", but the script '
+                                       f'does not say: ' + ', '.join(f'"{m}"' for m in missing) + '.'})
+    return out
 
 
 def _when(line, clock):

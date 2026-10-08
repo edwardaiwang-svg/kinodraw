@@ -156,6 +156,7 @@ class HybridProduction:
         self.whiteboard.motion_floor = plan['style']['motion_floor']
         self.cutaway = copy.copy(whiteboard)
         self.cutaway.cap_starts = []  # joins carry one sharp caption at actual narration time
+        self.cutaway.data_cards = None  # a data card is painted once, over the finished frame (board_on_screen)
         self.size, self.duration = whiteboard.size, tline['duration']
         self.native = getattr(whiteboard, 'native', False)
         self.square = self.native and self.size[0] == self.size[1]
@@ -481,6 +482,8 @@ class HybridProduction:
                     counter = elements[-1]
                     counter.value_from, counter.value_to = proof['from'], proof['to']
                     counter.prefix, counter.suffix, counter.decimals = proof['prefix'], proof['suffix'], proof['decimals']
+                    if proof['from'] == 0:      # no spoken starting value: show the stated one, never roll up to it
+                        counter.value_from = counter.value_to
                     counter.duration = min(1.8, max(.1, duration - .4))
                     if source and not span.source_character:
                         self._proof_counter(span, elements, source, proof)
@@ -1910,6 +1913,13 @@ class HybridProduction:
         wb.tl = {**wb.tl, 'captions': self.tl['captions']}
         wb.cap_starts = [c['start'] for c in wb.tl['captions']]
         wb.cap_words = [c['words'] for c in wb.tl['captions']]
+
+    def board_on_screen(self, t):
+        """The source whiteboard page is the picture at ``t`` (data_cards: no card over a page that writes it)."""
+        if not self.spans or t < self.starts[0] or t >= self.tl['end_card']['start']:
+            return True
+        span = self.spans[bisect.bisect_right(self.starts, t) - 1]
+        return span.story is None and bool(self._on_board(span))     # a story page is drawn before any board
 
     @staticmethod
     def _on_board(span):

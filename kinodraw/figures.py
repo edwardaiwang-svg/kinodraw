@@ -49,7 +49,8 @@ ABBREV = {'a.m', 'p.m', 'am', 'pm', 'mr', 'mrs', 'ms', 'dr', 'st', 'rd', 'ave', 
           'sep', 'sept', 'oct', 'nov', 'dec', 'mon', 'tue', 'tues', 'wed', 'thu', 'thurs', 'fri', 'sat', 'sun',
           'min', 'hr', 'hrs', 'yrs', 'oz', 'lb', 'lbs', 'ft', 'mt', 'u.s', 'e.g', 'i.e'}
 
-TIME = re.compile(r'(?<![\w$])(?:(?P<h>\d{1,2})(?::(?P<m>[0-5]\d))?\s?(?P<ap>[aApP]\.?\s?[mM]\b\.?)|'
+TIME = re.compile(r'(?<![\w$])(?:(?P<range>\d{1,2}(?::[0-5]\d)?\s?(?:[aApP]\.?\s?[mM]\b\.?\s?)?(?:[–—-]|to)\s?)?'
+                  r'(?P<h>\d{1,2})(?::(?P<m>[0-5]\d))?\s?(?P<ap>[aApP]\.?\s?[mM]\b\.?)|'
                   r'(?P<clock>\d{1,2}:[0-5]\d)(?!\d))')
 DATE = re.compile(r'\b(?:' + MONTHS + r'\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?(?!\d)|'
                   r'\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?' + MONTHS + r'\b\.?(?:,?\s+\d{4})?|'
@@ -69,7 +70,8 @@ MULTIPLE = re.compile(r'\b(?:(?:' + NUM + r'|' + SPELLED + r')\s?(?:times|x|×)\
                       r'(?:double|triple|quadruple)\s+the\b)', re.I)
 CODE = re.compile(r'(?<![\d,.])\d{3}[ -]\d{3}(?![\d,])|(?<![\d,.])\d{4,8}(?![\d,.])')
 CODE_WORDS = re.compile(r'\b(?:code|pin|passcode|otp|verification|one-time|password)\b', re.I)
-COUNT = re.compile(r'(?<![\w$€£¥₹.,#/:-])(?P<n>' + NUM + r')(?P<ord>st|nd|rd|th)?(?P<scale>' + SCALE + r')?'
+COUNT = re.compile(r'(?<![\w$€£¥₹.,#/:–—-])(?P<n>(?:' + NUM + r')(?:\s?[–—]\s?(?:' + NUM + r'))?)(?P<ord>st|nd|rd|th)?'
+                   r'(?P<scale>' + SCALE + r')?'
                    r'(?![\w%/:-])(?!\.\d)', re.I)
 CONTACT = re.compile(r'\S+@\S+|(?:https?://|www\.)\S+|\b\S+\.(?:com|org|net|io|edu|gov|co)\b\S*|'
                      r'\b(?:ext|extension|x)\.?\s*\d+|\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}|\b\d{3}[ .-]\d{4}\b|'
@@ -77,6 +79,34 @@ CONTACT = re.compile(r'\S+@\S+|(?:https?://|www\.)\S+|\b\S+\.(?:com|org|net|io|e
 WORD_AFTER = re.compile(r"[\s,]*([A-Za-z][\w'’-]*)")
 PLACE = re.compile(r"\b(?:corner of [A-Z][\w'’.]*(?:\s[A-Z][\w'’.]*)*\s(?:and|&)\s[A-Z][\w'’.]*(?:\s[A-Z][\w'’.]*)*|"
                    r"(?:at|in)\s+(?:the\s+)?(?P<name>(?:[A-Z][\w'’.]*\s?){1,5}))")
+# An ID is an exact label, never a figure: letters joined to digits by a hyphen ("TK-4471", "A-12"), or a number
+# right after a word that names a record ("ticket 4471", "order no. 58213", "invoice #301").
+ID = re.compile(r"\b[A-Za-z]{1,6}-\d[\w-]*|\b(?:ticket|order|case|incident|invoice|ref|reference|confirmation|"
+                r"tracking|booking|claim|policy|account|acct|serial|model|item|sku|po|id|receipt|request|issue|"
+                r"pr|batch|badge|patient|reservation)s?\b\.?\s*(?:no\.?\s*|number\s+|#\s*)?"
+                r"(?:[A-Za-z]{1,4}-?\d[\w-]*|\d{2,}(?![\d,.]*\s?(?:%|percent\b)))", re.I)
+# A stage direction is never shown as a figure: anything in square brackets ("[pause 3 seconds]", "[TEXT ON SCREEN:
+# ...]") or a parenthesised pause, beat, sound or music cue ("(pause 4 seconds)", "(beat)", "(music fades 10 s)").
+DIRECTION = re.compile(r"\[[^\]\n]*\]?|\((?:\s*(?:long\s+|short\s+|brief\s+)?(?:pause|beat|silence|wait|music|sound|sfx|"
+                       r"applause|laugh|laughs|laughter|sigh|sighs|breath|breathe|inhale|exhale|cue|fade|fades|cut|"
+                       r"beep|chime|bell|ding|whoosh|ambience|ambient)\b)[^)\n]*\)?", re.I)
+# A street address is a place, not a count ("14 Birch Rd.", "200 Main Street"); its abbreviation keeps its period.
+STREET = (r"(?:St|Rd|Ave|Blvd|Ln|Dr|Ct|Pl|Way|Hwy|Pkwy|Cir|Ter|Sq|Street|Road|Avenue|Lane|Drive|Court|Place|"
+          r"Boulevard|Highway|Parkway|Circle|Terrace|Square)")
+ADDRESS = re.compile(r"\b\d{1,6}\s+(?:[NSEW]\.?\s+)?(?:[A-Z][\w'’]*\s+){1,3}" + STREET + r"\b\.?")
+# A one-line list: parts joined by " · ", " | " or " • ", or by two or more " / " ("$12 / month" is a rate); each part
+# kept whole, the separators never shown.
+LIST_SEP = re.compile(r"\s+[·/|•]\s+")
+# The words that make a figure bad news: an overrun, a shortfall, a loss or a delay (a warning card, never growth).
+WARN = re.compile(r"\b(?:overrun|overran|over\s+(?:budget|plan|target|forecast|estimate)|more than (?:we |was |were |"
+                  r"it was |they )?(?:planned|budgeted|expected|forecast|projected|estimated)|above (?:budget|plan|"
+                  r"target|forecast)|over the (?:budget|plan|limit)|(?:is|are|was|were|be|been|ran|running|came|arrived?)\s+late|"
+                  r"late by|delayed|behind|shortfall|deficit|lost|missed|short of|fell short)\b", re.I)
+# A period a figure belongs to, as the text says it ("last year", "Q3 2025", "in 2024", "this quarter", "now").
+PERIOD = re.compile(r"\b(?:(?:this time |the same time |same time )?last (?:year|quarter|month|week|season|spring|"
+                    r"summer|fall|autumn|winter)|(?:this|the|next|that) (?:year|quarter|month|week|season)|"
+                    r"(?:Q[1-4]|H[12]|FY)\s?'?\d{2,4}|Q[1-4]|(?:19|20)\d\d|an? \w+ ago|(?:the )?(?:previous|prior) "
+                    r"(?:year|quarter|month|week)|today|now|before)\b", re.I)
 UP = re.compile(r'\b(?:up|rose|risen|grew|grown|gained|increased|climbed|jumped|more|higher|added)\b', re.I)
 DOWN = re.compile(r'\b(?:down|fell|fallen|dropped|decreased|declined|shrank|lost|cut|less|lower|fewer)\b', re.I)
 
@@ -104,6 +134,7 @@ class Card:
     direction: str = ''      # up | down | ''
     rows: list = field(default_factory=list)     # stat: rows of exact text; event: when lines
     where: str = ''          # event: the place
+    tone: str = ''           # 'warn': bad news (an overrun, a loss, a delay), never styled as growth
 
 
 def _number(text: str) -> float | None:
@@ -168,7 +199,7 @@ def _named(text: str, start: int) -> bool:
 
 def figures(text: str) -> list[Figure]:
     """Every figure a sentence states, in order (see the module docstring for what never is one)."""
-    taken = [m.span() for m in CONTACT.finditer(text)]
+    taken = [m.span() for pattern in (DIRECTION, CONTACT, ID, ADDRESS) for m in pattern.finditer(text)]
     # Inline code and markdown emphasis stay; a hyphen after a number makes it an adjective ("6-digit").
     found: list[Figure] = []
 
@@ -214,6 +245,8 @@ def figures(text: str) -> list[Figure]:
             continue                               # one group of a longer number ("482 913" without "code")
         word = WORD_AFTER.match(text, m.end())
         unit = word.group(1).lower() if word and word.start(1) - m.end() <= 1 and _unit(word.group(1)) else ''
+        if unit in ('in', 'm', 'g') and re.match(r'\s+\w', text[word.end(1):]):
+            unit = ''                              # "900 in 2024": a preposition, not inches
         if unit == 'times' and re.match(r'\s+\d', text[word.end(1):]):
             unit = ''                              # "3 times 5": an operator, not "3 times a week"
         if not unit and _named(text, m.start()):
@@ -242,11 +275,14 @@ def _label(text: str, start: int, limit: int = 4) -> str:
     rest = rest[:stop.start()] if stop else rest
     out = []
     for w in rest.split():
-        bare = w.strip('*_`"“”').lower()
+        w = w.strip('*_`"“”[]{}()<>')
+        if not re.search(r'\w', w):
+            break                                  # "20%]": a bracket of the source, never a word of the card
+        bare = w.lower()
         if bare in STOP and not (bare == 'of' or (out and bare in ('a', 'an'))) or re.search(r'\d', bare) or \
                 (out and bare.endswith('ed') and len(bare) > 4):
             break
-        out.append(w.strip('*_`"“”'))
+        out.append(w)
         if len(out) >= limit:
             break
     while out and out[-1].lower() in ('of', 'a', 'an', 'the'):
@@ -262,7 +298,52 @@ def _qualifier(text: str, start: int) -> str:
 
 
 def _shown(f: Figure) -> str:
-    return re.sub(r'[`*_]', '', f.text).strip()
+    return _end(re.sub(r'[`*_]', '', f.text).strip())
+
+
+def _end(text: str) -> str:
+    """``text`` without the sentence's closing punctuation ("4 PM." -> "4 PM"); an abbreviation keeps its period
+    ("7 a.m.", "Tues.", "Birch Rd.")."""
+    m = re.search(r"([\w.]*?)([.,;:!?]+)$", text)
+    if not m:
+        return text
+    word, marks = m.group(1), m.group(2)
+    if marks == '.' and ('.' in word or word.lower() in ABBREV - {'am', 'pm'} or re.fullmatch(STREET, word)):
+        return text
+    return text[:m.start(2)].rstrip()
+
+
+def signed(text: str, direction: str, tone: str = '') -> str:
+    """A percentage of growth as shown on a card: "+18%" (the script's "18%" with its sign); a fall, an overrun or a
+    figure already signed stays as written."""
+    if direction == 'up' and tone != 'warn' and re.search(r'%|percent', text, re.I) and not re.match(r'[+\-−]', text):
+        return '+' + text
+    return text
+
+
+def _lead(text: str, a: int, start: int) -> tuple[int, str]:
+    """The label a figure is the value of, written before it ("The late fee is $0" -> "late fee"; "Parking: $5"):
+    (its start offset, its words as written), or (start, '')."""
+    m = re.search(r"((?:[A-Za-z][\w'’-]*\s+){0,3}[A-Za-z][\w'’-]*)(?:\s+(?:is|are|was|were|will be|stays?|remains?)"
+                  r"(?:\s+(?:now|still|just|only))?\s+|\s*:\s*)$", text[a:start])
+    if not m:
+        return start, ''
+    words = list(re.finditer(r"[A-Za-z][\w'’-]*", m.group(1)))
+    if ':' in m.group()[len(m.group(1)):]:
+        named = [w.group().lower() for w in words]
+        while named and named[0] in ('the', 'a', 'an', 'our', 'your', 'their', 'my', 'his', 'her'):
+            named = named[1:]
+        if any(w in STOP for w in named):
+            return start, ''                       # "Parking: $5" names its value; "you are wrong: 5%" does not
+    owners = {'a', 'an', 'our', 'your', 'their', 'my', 'his', 'her', 'the', 'its'}
+    cut = max((k + 1 for k, w in enumerate(words) if w.group().lower() in owners), default=0)
+    words = words[cut:]                            # "this year our goal is $1,500" -> "goal"
+    while words and words[0].group().lower() in STOP | owners:
+        words = words[1:]
+    if not words:
+        return start, ''
+    first = a + m.start(1) + words[0].start()
+    return first, text[first:a + m.start(1) + words[-1].end()]
 
 
 def _change(text, figs, a, b):
@@ -299,7 +380,7 @@ def _direction(text, old=None, new=None):
     return ''
 
 
-def _rows(text, figs):
+def _rows(text, figs, a=0):
     """Figures joined only by short words ("5% of $1,000 is $50") make one row of exact script text."""
     rows, run = [], []
     for f in figs:
@@ -312,11 +393,15 @@ def _rows(text, figs):
         run = [f]
     if run:
         rows.append(run)
-    out = []
+    out, done = [], a
     for run in rows:
-        piece = re.sub(r'[`*_]', '', text[run[0].start:run[-1].end]).strip()
         label = '' if run[-1].unit else _label(text, run[-1].end, 3)
-        out.append((piece + (' ' + label if label else '')).strip())
+        begin = run[0].start
+        if not label:
+            begin, _ = _lead(text, done, run[0].start)        # "parking is $0": the value keeps its label
+        piece = _end(re.sub(r'[`*_]', '', text[begin:run[-1].end]).strip())
+        out.append(_end((piece + (' ' + label if label else '')).strip()))
+        done = run[-1].end
     return out
 
 
@@ -325,11 +410,24 @@ def _small(f: Figure) -> bool:
     return f.family == 'count' and f.value is not None and f.value < 10 and f.unit not in UNITS
 
 
+def _bare(text: str, a: int, f: Figure) -> bool:
+    """A count with no unit, no noun after it and no label before it: a number that counts nothing named."""
+    return f.family == 'count' and not f.unit and not _label(text, f.end, 3) and not _lead(text, a, f.start)[1]
+
+
 def _sentence_card(text: str, a: int, b: int) -> Card | None:
     figs = [f for f in figures(text) if a <= f.start < b]
     if not figs or all(_small(f) for f in figs):
         return None                                # "Jump 3, then jump 5": counting, not data
     sentence = text[a:b]
+    lead = re.match(r'[^:·|•]*:\s+(?=\S)', sentence)
+    listed = sentence[lead.end():] if lead and LIST_SEP.search(sentence[lead.end():]) else sentence
+    parts = LIST_SEP.split(listed)                     # "The card says: 2 cups · 350°F": the list after the colon
+    if len(parts) >= 3 or (len(parts) == 2 and '/' not in LIST_SEP.search(sentence).group()):
+        # a one-line list ("2 cups · 350°F · 25 min · serves 6"): every part whole, no separator shown
+        parts = [_end(re.sub(r'[`*_]', '', p).strip()) for p in parts]
+        parts = [p for p in parts if p]
+        return Card('stat', figs[0].start, b, rows=parts if len(parts) <= 6 else [_end(listed.strip())])
     first = figs[0].start
     when = [f for f in figs if f.family in ('time', 'date', 'day')]
     if when:
@@ -339,25 +437,40 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
             if f.family == 'day' and words[:1].islower() and not re.match(r'(?:every|this|next|on|each)\b', words):
                 words = words[:1].upper() + words[1:]
             (lines if f.family != 'time' else rest).append(words[:1].upper() + words[1:])
-        place = PLACE.search(sentence)
+        place = ADDRESS.search(sentence) or PLACE.search(sentence)
         where = ''
         if place:
-            name = (place.group('name') or place.group()).strip(' .,')
+            name = _end(((place.groupdict().get('name') or place.group())).strip(' ,'))
             if not re.match(r'(?:' + MONTHS + r'|' + DAYS + r'|' + DAY_ABBR + r')\b', name) and \
-                    not re.match(r'\d', name):
+                    (not re.match(r'\d', name) or ADDRESS.fullmatch(name)):
                 where = name[:1].upper() + name[1:]
         return Card('event', first, b, rows=[' · '.join(lines)] * bool(lines) + [' · '.join(rest)] * bool(rest),
                     where=where)
     change = _change(text, figs, a, b)
     if change:
         old, new, delta = change
-        when = re.match(r"[\s,]*(?:at\s+|in\s+)?((?:this time |the same time )?last \w+|an? \w+ ago|\d{4}|"
-                        r"(?:the )?(?:previous|prior) \w+)", text[old.end:b], re.I)
-        old_label = when.group(1) if when else 'before'
+        # each bar's period in the text's own words ("last year", "Q3 2025", "now"), or none
+        lead = r"[\s,]*(?:(?:at|in|for|during|by)\s+)?(" + PERIOD.pattern + ")"
+        when = re.match(lead, text[old.end:b], re.I)
+        old_label = when.group(1) if when else ''
+        if new.start > old.start:                              # "from X last year to Y now"
+            after = re.match(lead, text[new.end:b], re.I)
+            new_label = after.group(1) if after else ''
+        else:                                                   # "Y for the quarter, up from X last year"
+            between = PERIOD.search(text[new.end:old.start])
+            before = list(PERIOD.finditer(text[a:new.start]))
+            new_label = between.group() if between else before[-1].group() if before else ''
+        if new_label.lower() == old_label.lower():
+            new_label = ''
         unit = new.unit or old.unit
         return Card('change', first, b, label=_label(text, new.end, 3) if not new.unit else unit,
-                    items=[(_shown(old), old_label, old.value), (_shown(new), 'now', new.value)],
-                    delta=_shown(delta) if delta else '', direction=_direction(sentence, old, new))
+                    items=[(_shown(old), old_label, old.value), (_shown(new), new_label, new.value)],
+                    delta=_shown(delta) if delta else '', direction=_direction(sentence, old, new),
+                    tone=_tone(sentence))
+    if len(figs) > 1:
+        # a bare number that counts nothing the sentence names ("kids 6 and up") is no chip of its own
+        figs = [f for f in figs if not _bare(text, a, f)] or figs
+        first = figs[0].start
     values = [f for f in figs if f.family in ('money', 'percent', 'count') and f.value is not None]
     families = {f.family for f in values}
     compare = re.search(r'\b(?:vs\.?|versus|compared (?:to|with)|than|instead of|against)\b', sentence, re.I)
@@ -373,7 +486,7 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
                     label=(words[head.end(1):].strip() + ' ' + _label(text, multiple.end, 3)).strip() if head else
                     _label(text, multiple.end, 3), direction=_direction(words))
     if len(figs) >= 2:
-        rows = _rows(text, figs)
+        rows = _rows(text, figs, a)
         if len(rows) >= 2:
             return Card('stat', first, b, rows=rows[:5])
     f = figs[0]
@@ -398,7 +511,7 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
         tail = text[f.end:min(b, f.end + 24)]
         lead = text[max(a, f.start - 12):f.start]
         direction = 'down' if re.search(r'\b(?:less|lower|fewer|down|off)\b', tail + ' ' + lead, re.I) else \
-            'up' if re.search(r'\b(?:more|higher|up)\b', tail + ' ' + lead, re.I) else ''
+            'up' if re.search(r'\b(?:more|higher|up)\b', tail + ' ' + lead, re.I) else _direction(text[a:b])
         more = re.match(r'\s*(more|less|fewer|higher|lower)(\s+than\s+[\w\s]+?)?(?=[,.;!?]|$)', tail)
         if more:
             label = (more.group(1) + (more.group(2) or '')).strip()
@@ -406,8 +519,14 @@ def _sentence_card(text: str, a: int, b: int) -> Card | None:
         direction = ''                             # a ceiling, not a rise
     counter = f.family == 'count' and f.value is not None and f.value >= 10 and f.value == int(f.value) \
         and not re.search(r'(st|nd|rd|th)$', f.text)
+    if not label and f.family in ('money', 'percent', 'count'):
+        label = _lead(text, a, f.start)[1]           # "The late fee is $0": the value keeps its label
     return Card('counter' if counter else 'number', first, b, value=value, label=label, qualifier=qualifier,
-                direction=direction)
+                direction=direction, tone=_tone(sentence))
+
+
+def _tone(sentence: str) -> str:
+    return 'warn' if WARN.search(sentence) else ''
 
 
 def _code_label(text, start):
@@ -424,9 +543,39 @@ def cards(display: str, lang: str = 'en') -> list[Card]:
     out = []
     for a, b in sentences(display):
         card = _sentence_card(display, a, b)
-        if card is not None:
-            out.append(card)
+        if card is not None and not any(_unmatched(t) for t in shown(card)):
+            out.append(card)                           # never a card carrying a stray bracket of the source
     return out
+
+
+def _unmatched(text: str) -> bool:
+    """``text`` has a bracket without its partner ("20%]", "(about 40")."""
+    return any(text.count(a) != text.count(b) for a, b in ('[]', '()', '{}'))
+
+
+def shown(card: Card) -> list[str]:
+    """Every string a card draws (engine/data_cards.card_image), with the card's own formatting ("+18%")."""
+    out = [card.qualifier, signed(card.value, card.direction, card.tone), card.label, card.where,
+           signed(card.delta, card.direction, card.tone)]
+    out += [t for item in card.items for t in item[:2]] + list(card.rows)
+    return [t for t in out if t]
+
+
+def unquoted(card: Card, script: str) -> list[str]:
+    """What a card shows that the script does not say: each word or number it draws must be in ``script`` (a "+",
+    thousands separators and unit symbols are the card's own formatting), and no string carries a stray bracket,
+    a list separator or the sentence's closing punctuation."""
+    def tokens(text):
+        text = re.sub(r'(?<=\d),(?=\d{3})', '', text.lower())
+        return re.findall(r"[a-z0-9]+(?:['’.][a-z0-9]+)*", text)
+    said = set(tokens(script))
+    missing = []
+    for text in shown(card):
+        missing += [t for t in tokens(text) if t not in said]
+        if re.search(r'[\[\]{}<>]', text) or re.match(r'[·|•,;:]', text) or re.search(r'\s[·/|•]$', text) or \
+                _end(text) != text:
+            missing.append(text)
+    return missing
 
 
 def beat_cards(beat: dict, lang: str) -> list[Card]:
