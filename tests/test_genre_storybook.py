@@ -3,6 +3,8 @@ presets with real skin tones, the plan's shots), not the hybrid's small figures 
 paper. Boards, charts, diagrams, kinetic type and scenes whose text is a title, call to action or counter stay motion
 scenes, and nothing that belongs to a picture book (its title page, its "The End") reaches them."""
 import json
+
+import numpy as np
 from types import SimpleNamespace
 
 from kinodraw import ingest, script
@@ -93,3 +95,26 @@ def test_a_person_never_takes_the_palette_body_colour_as_skin(tmp_path):
         look = prod.storybook._look(c['id'])
         assert genome.palette.body.upper() == '#%02X%02X%02X' % SKIN[look['tone']]   # the same skin in both renderers
 
+
+def test_a_motion_scene_never_balloons_a_picture_or_zooms_into_the_next_scene(tmp_path, monkeypatch):
+    """The Q3 update's pickup truck grew to fill the frame between scenes: a full-bleed scene covered the page with
+    each library icon. Pictures keep a centred slot, and a zoom-through join dissolves (the camera stays locked)."""
+    from kinodraw.engine import hybrid
+    prod = produce(tmp_path)
+    kinetic = prod.spans[2]
+    spec = dict(kinetic.spec, composition='full_bleed', transition_in='zoom_through',
+                elements=kinetic.spec['elements'] + [{'kind': 'picture', 'ref': 'fl_pickup_truck'}])
+    span = hybrid.Span(kinetic.start, kinetic.end, spec)
+    span.join, span.join_length = kinetic.join, kinetic.join_length
+    prod._prepare(span, tmp_path)
+    assert span.motion.composition == 'center'
+    image = prod._frame(span, span.end - .05)
+    ink = np.asarray(image.convert('L')) < 200
+    rows, cols = np.nonzero(ink)
+    assert (cols.max() - cols.min()) < .8 * image.size[0]          # the truck is a picture on the page, not the page
+    kinds = []
+    real = hybrid.render_transition
+    monkeypatch.setattr(hybrid, 'render_transition', lambda *a, **k: kinds.append(k.get('kind')) or real(*a, **k))
+    prod.spans[2] = span
+    prod.frame(span.join + span.join_length / 2)
+    assert kinds and 'zoom_through' not in kinds

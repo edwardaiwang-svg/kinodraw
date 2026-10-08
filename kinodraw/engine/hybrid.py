@@ -471,12 +471,12 @@ class HybridProduction:
             for e in copy_elements:
                 e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
                 e.size = 96
-            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
+            if pictures and copy_elements and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 for e in copy_elements:
                     e.y, e.width = .23, 1400
                 for e in pictures:
                     e.y = .60
-            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
+            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 # A stable frame: one fixed slot per picture, left to right in spoken order, so a picture that
                 # arrives with a later clause never covers or shifts the ones already on the board.
                 pictures.sort(key=lambda e: e.start)
@@ -488,8 +488,10 @@ class HybridProduction:
                 elements[:] = [next(order) if e.kind == 'picture' else e for e in elements]
         camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
         transition = spec['transition_in']
+        # A full-bleed scene is laid out like a centred one: a library picture is an object, never the whole frame,
+        # so a truck or a skyline never balloons over the page (J 10/8: no random zooms).
         span.motion = MotionScene(elements, duration=max(.01, duration), composition='center' if
-            spec['composition'] == 'stage' else spec['composition'], camera=camera,
+            spec['composition'] in ('stage', 'full_bleed') else spec['composition'], camera=camera,
             transition_in=transition,
             palette=Palette(p['background'], p['ink'], p['accent']), energy=self.style['energy'],
             motion_floor={'still': 0, 'breathing': .4, 'drifting': .7, 'lively': 1}[self.style['motion_floor']],
@@ -1542,6 +1544,8 @@ class HybridProduction:
             return self.whiteboard.frame(t)
         local = t - span.join
         kind = span.spec['transition_in']
+        if kind == 'zoom_through':
+            kind = 'match'          # the camera stays locked between scenes too: a dissolve, never a zoom (J 10/8)
         if span.scientific or (i and self.spans[i - 1].scientific):
             # Scientific panels follow the source clock and retain their exact
             # canvas/axis transform through both sides of every scene boundary.
