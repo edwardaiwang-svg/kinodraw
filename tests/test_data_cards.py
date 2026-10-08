@@ -115,3 +115,24 @@ def test_content_qa_counts_a_sentence_with_a_card_as_shown_by_it():
     revenue = next(line for line in found if 'Revenue' in line.text)
     assert revenue.numeric and revenue.by == 'card' and revenue.shown
     assert content.check(plan, board)['stats']['numbers_as_icons'] == 0
+
+
+def test_a_whiteboard_page_that_writes_the_figure_gets_no_card_over_it():
+    from types import SimpleNamespace
+
+    from kinodraw.engine import ink
+    ep, tline = _episode('Members kept 3,100 tons of food scraps out of the landfill.',
+                         'Members kept three thousand one hundred tons of food scraps out of the landfill.')
+    text = ink.TextDrawing.__new__(ink.TextDrawing)
+    text.lines = ['3,100 tons of', 'food scraps']
+    written = [SimpleNamespace(drawing=text, trigger=10.5)]
+    cards = data_cards.build(ep, tline, 'en', Skin(), (W, H), written)
+    assert cards.on_board == {0}
+    start = cards.entries[0][0]
+    board = SimpleNamespace(data_cards=cards, frame=_Host().frame)     # the whiteboard production itself
+    frame = Image.new('RGBA', (W, H), (246, 244, 238, 255))
+    cards.paint(frame, start + 1.5, False, board)
+    assert frame.getextrema()[0] == (246, 246)
+    cards.paint(frame, start + 1.5, True, _Host())                     # a motion page over the same beat
+    assert frame.getextrema()[0] != (246, 246)
+    assert not data_cards.build(ep, tline, 'en', Skin(), (W, H)).on_board

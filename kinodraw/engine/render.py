@@ -141,7 +141,7 @@ class Production:
         from .markup_boards import step_rail
         self.steps = step_rail(self.ep, tline, lang, (46, 157, 79), self.size)
         from .data_cards import build as data_cards
-        self.data_cards = data_cards(self.ep, tline, lang, self.skin, self.size)     # figures the script states
+        self.data_cards = data_cards(self.ep, tline, lang, self.skin, self.size, self.ctx.elements)   # stated figures
 
     # ------------------------------------------------------------ building
     def _beats(self, cid):

@@ -45,7 +45,7 @@ class _Look:
         self.lang, self.unit = lang, unit
         self.fonts = skin.fonts
         if self.board:
-            self.fill = tuple(skin.base[:3]) + (244,)
+            self.fill = tuple(skin.base[:3]) + (255,)
             self.ink = tuple(skin.ink[:3]) + (255,)
             self.soft = tuple(round(c * .6 + b * .4) for c, b in zip(skin.ink[:3], skin.base[:3])) + (255,)
             self.accent = tuple(skin.caption_accent[:3]) + (255,)
@@ -287,8 +287,10 @@ def card_image(card, look, W, H, progress=1.):
 class DataCards:
     """Every data card of an episode with its time window; ``paint`` draws the live one over a finished frame."""
 
-    def __init__(self, entries, skin, lang, frame_size):
+    def __init__(self, entries, skin, lang, frame_size, written=()):
         self.entries = entries                 # [(start, end, card, beat id)], sorted, never overlapping
+        # cards whose figures the board itself writes while they are said: not repeated over the board
+        self.on_board = {k for k, e in enumerate(entries) if _written(e, written)}
         self.skin, self.lang = skin, lang
         self.W, self.H = frame_size
         self.unit = min(self.W, self.H) / 1080
@@ -317,7 +319,11 @@ class DataCards:
         W, H = self.W, self.H
         top, bottom = TOP * H, CAPTION_TOP * H
         mid = min(max(top, (top + bottom) / 2 - h / 2), bottom - h)
-        return [(W * (1 - SIDE) - w, mid), (W * LEFT_RAIL, mid), ((W - w) / 2, top), ((W - w) / 2, bottom - h)]
+        spots = [(W * (1 - SIDE) - w, mid), (W * LEFT_RAIL, mid), ((W - w) / 2, top), ((W - w) / 2, bottom - h)]
+        # then every spot of a grid over the safe area, so a card finds the gap beside any picture
+        x0, x1, y1 = W * LEFT_RAIL, W * (1 - SIDE) - w, max(top, bottom - h)
+        spots += [(x0 + (x1 - x0) * i / 6, top + (y1 - top) * j / 4) for j in range(5) for i in range(6, -1, -1)]
+        return spots
 
     def place(self, k, size, measures=()):
         """(top-left, scale) of card ``k``: the candidate spot with the least ink on ``measures`` (the frames the
@@ -333,13 +339,15 @@ class DataCards:
                     paper = np.median(a.reshape(-1, 3), axis=0)
                     mask = np.abs(a - paper).max(axis=2) > INK
                     inked = mask if inked is None else inked | mask
+                total = np.pad(inked.astype(np.int32).cumsum(0).cumsum(1), ((1, 0), (1, 0)))
                 scores = []
                 for scale in (1., SHRINK):
                     sw, sh = w * scale, h * scale
                     for i, (x, y) in enumerate(self._candidates(sw, sh)):
                         x0, y0 = max(0, int(x / 4)), max(0, int(y / 4))
-                        region = inked[y0:y0 + int(sh / 4) + 1, x0:x0 + int(sw / 4) + 1]
-                        covered = float(region.sum()) / max(1., w * h / 16)    # inked share of the full-size card
+                        x1, y1 = min(inked.shape[1], x0 + int(sw / 4) + 1), min(inked.shape[0], y0 + int(sh / 4) + 1)
+                        count = total[y1, x1] - total[y0, x1] - total[y1, x0] + total[y0, x0]
+                        covered = float(count) / max(1., w * h / 16)    # inked share of the full-size card
                         scores.append((round(covered + (.04 if scale < 1 else 0.), 2), scale < 1, i, (x, y), scale))
                 _, _, _, spot, scale = min(scores)
                 best = (spot, scale)
@@ -352,8 +360,8 @@ class DataCards:
         if self._measuring:
             return
         k = self.at(t)
-        if k is None:
-            return
+        if k is None or (k in self.on_board and getattr(host, 'data_cards', None) is self):
+            return                          # the whiteboard page on screen already writes these figures
         start, end, card, _ = self.entries[k]
         look = 'clean' if clean else 'board'
         final = self.image(k, look)
@@ -388,6 +396,29 @@ class DataCards:
         ink.paste(frame, img, x, y)
 
 
+def _keys(card) -> list[str]:
+    """The figures a card shows, as written."""
+    if card.kind in ('change', 'bars'):
+        texts = [t for t, _, _ in card.items]
+    elif card.kind in ('stat', 'event'):
+        texts = card.rows
+    else:
+        texts = [card.value]
+    return [m.group() for t in texts for m in re.finditer(r'[$€£¥₹]?\d[\d,.:]*\s?%?', t)] or texts
+
+
+def _squash(text):
+    return re.sub(r'\s+', '', text).lower()
+
+
+def _written(entry, written) -> bool:
+    """The board writes every figure of the card while its beat is said (``written``: (time, text) of the board's
+    written words)."""
+    start, end, card, _ = entry
+    board = _squash(' '.join(text for at, text in written if start - 1.5 <= at <= end))
+    return bool(board) and all(_squash(k) in board for k in _keys(card))
+
+
 def entries(episode, tline, lang) -> list:
     """(start, end, card, beat id) of every card: from the first figure's word to its sentence's end plus TAIL (at
     least MIN_HOLD, at most MAX_HOLD), never past the next card or the end card."""
@@ -414,7 +445,12 @@ def entries(episode, tline, lang) -> list:
     return [tuple(e) for e in found if e[1] - e[0] > .5]
 
 
-def build(episode, tline, lang, skin, frame_size):
-    """The DataCards of an episode, or None when its script states no figures."""
+def build(episode, tline, lang, skin, frame_size, elements=()):
+    """The DataCards of an episode, or None when its script states no figures. ``elements``: the whiteboard's
+    drawn elements, whose written words show some figures already."""
     found = entries(episode, tline, lang)
-    return DataCards(found, skin, lang, frame_size) if found else None
+    if not found:
+        return None
+    written = [(el.trigger, ' '.join(el.drawing.lines)) for el in elements
+               if isinstance(el.drawing, ink.TextDrawing) and isinstance(el.trigger, (int, float))]
+    return DataCards(found, skin, lang, frame_size, written)

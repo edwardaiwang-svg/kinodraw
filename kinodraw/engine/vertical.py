@@ -234,6 +234,10 @@ class PortraitFrame:
     # ------------------------------------------------------------ frame
     def frame(self, t):
         board = self.prod.frame(t)
+        cards = getattr(getattr(self.prod, 'whiteboard', self.prod), 'data_cards', None)
+        if cards is not None and cards.at(t) is not None:     # a figure being said (data_cards), on the board
+            board = board.convert('RGBA')
+            cards.paint(board, t, False, self.prod)
         if self.native:
             out = board.copy()
         else:
