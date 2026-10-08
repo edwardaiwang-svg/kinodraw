@@ -16,6 +16,8 @@ from kinodraw import ingest, pipeline, script, styles
 from kinodraw.director import style
 from kinodraw.director.llm import cloud, providers
 from kinodraw.director.v3.rules import from_rules
+from kinodraw.director.v3.semantics import beats
+from kinodraw.director.validate import _doodles
 from kinodraw.director.v3.schema import PLAN_SCHEMA
 from kinodraw.studio import integration, server
 
@@ -340,10 +342,13 @@ def test_studio_defaults_to_v3_cloud_and_saves_the_whole_plan(studio, fake_cloud
     doc.lang = lang
     assert len(doc.sections) == 3 and all(len(' '.join(s.paragraphs)) > 600 for s in doc.sections)
     assert end_fact not in text[:600] and end_fact not in ' '.join(doc.sections[0].paragraphs)
-    expected_board = script.build(doc, story='story')
+    expected_board = script.build(doc, story='story', title_card=True)       # as a new project builds it
     expected_spoken = [b['spoken'][lang] for b in expected_board['beats']]
     assert len(expected_spoken) > 3 and sum(map(len, expected_spoken)) > 600
-    fake_cloud.plan = from_rules(expected_board)
+    # The cloud picks pictures from the ones the Studio offers it: the rules draft's own. (The offline director's
+    # staged places and objects are its own wider offer, which the Studio rightly drops from a cloud answer.)
+    fake_cloud.plan = from_rules(expected_board, candidates={b['id']: list(_doodles(b['visuals']))
+                                                             for b in beats(expected_board)})
     fake_cloud.plan['style']['whiteboard_skin'] = 'notebook'
     fake_cloud.plan['cast'] = [{
         'id': 'leo', 'name': 'Leo', 'kind': 'quadruped', 'species': 'lion', 'family': 'feline',
@@ -369,6 +374,7 @@ def test_studio_defaults_to_v3_cloud_and_saves_the_whole_plan(studio, fake_cloud
     assert cfg['series_bible']['cast'] == fake_cloud.plan['cast']
     assert cfg['scene_treatments'] == fake_cloud.plan['scenes'] and board['look'] == 'notebook'
     assert not cfg['plan_v3_report']['fallback'] and 'style_pick' not in cfg
+    assert cfg['plan_v3_report']['repairs'] == []
     assert [(c['path'], c['auth']) for c in fake_cloud.seen] == [
         ('/v1/anonymous', None), ('/v3/videos', 'Bearer anon-default'), ('/v3/plan', 'Bearer anon-default')]
     sent = fake_cloud.seen[-1]['body']['storyboard']

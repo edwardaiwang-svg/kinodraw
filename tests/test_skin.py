@@ -208,6 +208,9 @@ def test_the_cli_and_the_studio_make_chalkboard_and_notebook_videos(tmp_path, mo
     for look in SKINS:
         assert f'{look}/explain' in offered
     monkeypatch.setattr(server, 'projects_root', lambda: tmp_path)
+    # The v3 plan is stubbed too, and no cloud provider is made for it: no live cloud call, no anonymous token.
+    monkeypatch.setitem(server.STUDIO_HOOKS, 'provider', lambda body: 'rules')
+    monkeypatch.setattr(server.pipeline, 'direct_v3', lambda *a, **k: {'notes': [], 'usage': None})
     jid = server.create_project({'text': (FIX / 'tiny.md').read_text(encoding='utf-8'), 'title': 'Notes',
                                  'look': 'notebook', 'story': 'explain'})['job']
     import time

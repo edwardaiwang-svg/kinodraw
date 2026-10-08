@@ -446,6 +446,9 @@ def test_project_server_voice_is_saved_through_http_and_builtin_choices_stay_val
 
 def test_new_video_takes_a_server_voice_only_while_the_server_is_on(studio_http, monkeypatch):
     monkeypatch.setattr(studio_server.director, 'direct', lambda *a, **k: {'notes': [], 'usage': None})
+    # The v3 plan is stubbed too, and no cloud provider is made for it: no live cloud call, no anonymous token.
+    monkeypatch.setitem(studio_server.STUDIO_HOOKS, 'provider', lambda body: 'rules')
+    monkeypatch.setattr(studio_server.pipeline, 'direct_v3', lambda *a, **k: {'notes': [], 'usage': None})
     cfg = studio_server._config()
     cfg['voice_server'] = {'on': True, 'url': 'http://127.0.0.1:1234', 'model': 'test-model', 'voice': 'default-choice'}
     studio_server._save_config(cfg)

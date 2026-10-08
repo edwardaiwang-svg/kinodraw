@@ -211,6 +211,9 @@ def test_voice_settings_round_trip_and_validate_before_writing(studio):
 
 def test_new_project_saves_speed_and_rejects_bad_settings(studio, monkeypatch):
     monkeypatch.setattr(server.director, 'direct', lambda *a: {})
+    # The v3 plan is stubbed too, and no cloud provider is made for it: no live cloud call, no anonymous token.
+    monkeypatch.setitem(server.STUDIO_HOOKS, 'provider', lambda body: 'rules')
+    monkeypatch.setattr(server.pipeline, 'direct_v3', lambda *a, **k: {'notes': [], 'usage': None})
     body = {'text': '# Speed\n\nA short script.', 'voice': 'am_michael', 'speed': 1.1}
     status, created = studio('/api/projects', body)
     assert status == 200

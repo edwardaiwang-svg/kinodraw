@@ -357,11 +357,16 @@ def load_zh(src: Path) -> dict:
     return table
 
 
+# Search words an emoji's metadata lacks: a creature with no emoji of its own finds its nearest picture (a firefly
+# is a beetle; the "bug" emoji is a caterpillar).
+EN_MORE = {'beetle': ['firefly']}
+
+
 def tags_for(meta: dict, zh: dict) -> dict:
     seq = ''.join(chr(int(h, 16)) for h in meta['unicode'].split())
     ann = zh.get(seq.replace(VS16, '')) or zh.get(meta['glyph'].replace(VS16, ''), {})
     name_words = [w for w in meta['cldr'].lower().split() if w not in STOPWORDS]
-    en = dedupe([k.lower() for k in meta['keywords']] + name_words)
+    en = dedupe([k.lower() for k in meta['keywords']] + name_words + EN_MORE.get(meta['cldr'].lower(), []))
     return {'desc': meta['cldr'], 'category': meta['group'], 'en': en[:12],
             'zh': dedupe(ann.get('tts', []) + ann.get('default', []))[:8]}
 
