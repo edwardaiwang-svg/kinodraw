@@ -159,3 +159,12 @@ def test_a_screen_cuts_in_and_never_crossfades_over_the_picture():
     for t in (1.02, 1.1, 3.9, 3.98):                    # right after it starts and right before it ends
         assert screens.cover(prod, face, t).getpixel((8, 8)) == (250, 250, 245)
     assert screens.cover(prod, face, 4.01).getpixel((8, 8)) == (200, 30, 30)
+
+
+def test_a_phone_thread_held_while_it_is_read_is_a_narrated_page_not_a_freeze():
+    from kinodraw import pipeline
+    cfg = {'director_v3': True, 'plan_v3': {'scenes': []}}
+    rows = [{'kind': 'message', 'start': 29.6, 'end': 31.8}, {'kind': 'message', 'start': 31.8, 'end': 34.0},
+            {'kind': 'message', 'start': 34.0, 'end': 36.2}, {'kind': 'screen', 'start': 40., 'end': 42.},
+            {'kind': 'message', 'start': 42.5, 'end': 44.}]
+    assert pipeline._narrated_pages(cfg, {'beats': {}}, rows) == [(29.6, 36.2), (42.5, 44.)]
