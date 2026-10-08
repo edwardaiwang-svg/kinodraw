@@ -263,6 +263,10 @@ def _way(kind, verb, tail, target, things):
     if re.search(r'\b(?:emerg|appear|return|arriv|enter)', v) or re.match(r'\s*(?:in|inside|through)\b', t) \
             or re.search(r'\b(?:came|comes)\s+(?:back|in|into|inside|through)\b', v) or v.startswith('burst'):
         return 'in'
+    out_of = re.match(r'\s*out\s+of\s+(?:the\s+|a\s+|an\s+|his\s+|her\s+|their\s+|its\s+)?([\w-]+)', t)
+    if out_of:                                             # out of the burrow / the fog: onto the page, unless
+        noun = out_of.group(1)                             # the page draws the place it comes out of
+        return 'across' if any(n == noun or noun.startswith(n) for n in things) else 'in'
     if re.search(r'\b(?:scatter|fled|flee|left)', v) or re.search(r'\b(?:away|off|outside|downstairs|upstairs)\b', v) \
             or re.match(r'\s*(?:away|off|outside|downstairs|upstairs|out\b(?!\s+of)|into\s+the\s+(?:dark|night|'
                         r'bush|distance|wood|forest|shadow|fog|trees|grass))', t):

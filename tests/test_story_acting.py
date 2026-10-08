@@ -124,12 +124,26 @@ def test_tiptoe_out_moves_at_its_word_and_fly_up_shrinks_to_a_speck(tmp_path):
     _, p1, word = page(prod, 'tiptoed')
     pip = fig(p1, 'pip')
     start, mid, end = (state(prod, p1, pip, word + d) for d in (-.1, 1., 3.))
-    assert start.x == end.x - (end.x - start.x) and abs(end.x - start.x) > .1
+    assert abs(end.x - start.x) > .1
     assert mid.moving == 'tiptoe' and mid.pose == 'walk' and start.moving is None
     _, p2, zoom = page(prod, 'zoomed')
     flick = fig(p2, 'flick')
     up = state(prod, p2, flick, zoom + 2.5)
     assert up.scale < .2 and up.dy < -.4 and state(prod, p2, flick, zoom - .1).scale == 1.
+
+
+def test_out_of_somewhere_off_the_page_comes_onto_it_and_a_later_noun_is_not_its_goal(tmp_path):
+    """r3 Pip: "tiptoed out of the burrow in his leaf-print pajamas" with a fallen leaf on the page read as going to
+    the leaf, a .07 shuffle. Out of a place the page does not draw is coming onto the page, from off the frame."""
+    text = '# Pip\n\nSo Pip tiptoed out of the burrow in his leaf-print pajamas and looked up.'
+    beats = script.build(ingest.read(text), story='story')['beats']
+    leaf = {'ref': 'fl_fallen_leaf', 'relation': 'on', 'to': 'fl_wood', 'motion': 'none'}
+    prod = staged(tmp_path, text, WOOD, shots=[shot(beats[0]['id'], 'So Pip tiptoed', 'wide', [('pip', 'young', 'walk')],
+                                                    props=[leaf])])
+    _, p, word = page(prod, 'tiptoed')
+    pip = fig(p, 'pip')
+    start, end = state(prod, p, pip, word + .05), state(prod, p, pip, word + 3.5)
+    assert not visible(p, start.x) and visible(p, end.x) and abs(end.x - start.x) > .2
 
 
 def test_walk_home_and_curl_up_next_to_someone_ends_touching_them(tmp_path):
