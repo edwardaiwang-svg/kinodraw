@@ -20,6 +20,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from . import markup
+
 EMOJI = re.compile('[\U0001F000-\U0001FAFF☀-➿⬀-⯿⌀-⏿︎️‍⃣'
                    '\U000E0020-\U000E007F]')
 # NAME: at a line start (a speaker label), optionally with a (parenthetical) before the colon.
@@ -145,6 +147,7 @@ def hidden(text: str, labels: set | None = None) -> list[tuple[int, int]]:
         for m in re.finditer(r'\([^)]*(?:\)|$)', text):
             if m.start() >= found[0][0]:
                 spans.append(m.span())
+    spans += markup.hidden_spans(text)              # fenced code and display formulas are pictures (markup.py)
     for m in EMOJI.finditer(text):
         spans.append(m.span())
     for m in re.finditer(r'(?<![\w*])\*{1,3}(?=\S)|(?<=\S)\*{1,3}(?![\w*])|`+|~~|^\s*#{1,6}\s+|^\s*>\s?', text, re.M):
@@ -481,7 +484,7 @@ def voice_parts(board: dict, plan: dict | None, narrator: str, available=None) -
     out = {}
     for b in beats:
         parts = [(s, *voices.get(s.speaker, (narrator, 1.))) for s in found[b['id']]]
-        hold = None if parts else TITLE_HOLD if b['silent'] else DIRECTION_HOLD
+        hold = None if parts else TITLE_HOLD if b['silent'] else markup.hold(b['display']) or DIRECTION_HOLD
         out[b['id']] = {'parts': parts, 'hold': hold}
     return out
 
