@@ -4,7 +4,13 @@ Four checks on a v3 plan (and, for the frozen composition, the finished video), 
 qa.json's ``content`` (never in its problems or ok: they are heuristics for review, not customer problems):
 
 - ``unshown``: more than UNSHOWN of the sentences that name something concrete (a person, place, object or sky)
-  have nothing in their scene that matches it.
+  have nothing in their scene that matches it. A picture matches only when a word of the sentence names it in the
+  sense the sentence uses that word (director.v3.offer.Sense: "jump three" is no kangaroo, "the order" no menu
+  icon); with the video, the thing shown must also be readable: at the sentence's middle and end its drawing covers
+  at least READABLE of the frame (the bounding box of the largest drawn shape that the sentence brought on, else of
+  the largest one on screen; a board diagram or a page is measured whole).
+- ``numbers_as_icons``: a sentence with numbers or a comparison (an explainer's revenue, a lesson's "3 times 5") is
+  shown only by an icon, with no board, chart or counter to show the numbers themselves.
 - ``same_picture``: one composition stays on screen for more than SAME_RUN sentences in a row (measured on the
   video's frames at each sentence's middle, the caption band left out).
 - ``no_people``: a story names people but no scene puts anyone on screen.
@@ -21,6 +27,15 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 UNSHOWN = .2              # share of concrete sentences allowed to show nothing they name
+# A drawing covers at least this share of the frame (its bounding box) to count as shown. Measured 10/8 on the
+# gauntlet renders: the pancake video's ingredient icons that its critic called unreadable box 1.6-2.3% of the frame;
+# the lesson's kangaroo and menu icons 3-5%; story pages and board diagrams 5-30%.
+READABLE = .03
+INK = 48                  # a pixel is drawn when a colour channel differs from the paper by more than this
+NUMERIC = re.compile(r"\d|%|\$|£|€|\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|"
+                     r"thirty|forty|fifty|hundred|thousand|million|billion|percent|half|twice|double|triple|dozen)\b|"
+                     r"\b(?:more|less|fewer|higher|lower|bigger|smaller)\s+than\b|\bcompared\s+(?:to|with)\b",
+                     re.I)
 MIN_CONCRETE = 3          # fewer concrete sentences than this are too few to judge
 SAME_RUN = 2              # more sentences than this in a row on one unchanged picture is a frozen composition
 SAME_PIXELS = .02         # a composition changed when more than this share of the picture area changed
@@ -40,6 +55,10 @@ class Line:
     dialogue: bool = False
     speaker_shown: bool = False
     at: float | None = None     # seconds: the sentence's middle in the video
+    until: float | None = None  # seconds: its end
+    numeric: bool = False       # it gives numbers or a comparison
+    by: str = ''                # what shows it: board, chart, text, cast, sky, picture or '' (nothing)
+    size: float | None = None   # share of the frame its drawing covers (with the video)
 
 
 def _spoken(board, lang):
@@ -62,10 +81,17 @@ def lines(plan, board, timeline=None) -> list[Line]:
     missing = people(script, cast) if story else []
     person_words = [c['name'] for c in cast + missing]
     reader = Reader(cast)
+    sense = _sense(lang, [spoken.get(b['id'], '') for b in board['beats']])
     out, place = [], None
     for index, scene in enumerate(plan['scenes']):
         staged = {e['ref'] for e in scene['elements'] if e['kind'] == 'cast'}
         pictures = [e['ref'] for e in scene['elements'] if e['kind'] == 'picture']
+        # A picture no sentence of the scene names is the planner's own choice: it stands for every sentence. One a
+        # sentence names stands for the sentences that name it in its sense ("jump three" names no kangaroo).
+        texts = [spoken.get(bid, '') for bid in scene['beat_ids']]
+        free = [p for p in pictures if all(sense.judge(p, t) is None for t in texts)]
+        drawn = [b for b in scene['beat_ids']]                 # board items persist to the end of their scene
+        board_beats = {item.get('beat_id') for board_ in scene.get('boards') or [] for item in board_.get('items') or []}
         for bid in scene['beat_ids']:
             text = spoken.get(bid, '')
             read = reader.read(bid, text)
@@ -76,12 +102,20 @@ def lines(plan, board, timeline=None) -> list[Line]:
             for k, s in enumerate(staging):
                 sentence = next((r for r in read if r.start <= s.start < r.end), None)
                 line = Line(bid, s.start, s.end, s.text, index)
+                line.numeric = bool(NUMERIC.search(s.text))
+                named_here = [p for p in pictures if sense.judge(p, s.text)]
+                on_board = bool(board_beats & set(drawn[:drawn.index(bid) + 1]))
                 if not story:
-                    # An explainer, promo or lesson shows its sentences in its own ways (drawings on the word,
-                    # kinetic type, charts): it only fails when a scene shows nothing at all.
+                    # An explainer, promo or lesson shows its sentences in its own ways: a board diagram, a chart, a
+                    # counter, its words as type, or a picture its words name in their sense (or the planner's own
+                    # choice for the scene). Numbers need more than an icon.
                     line.concrete = bool(re.search(r'\w', s.text))
-                    line.shown = bool(scene['elements']) or scene['treatment'] in ('kinetic_type', 'chart') or \
-                        scene['text']['kind'] in ('kinetic', 'title', 'quote', 'counter', 'cta')
+                    data = scene['treatment'] == 'chart' or scene['text']['kind'] == 'counter'
+                    words = scene['treatment'] == 'kinetic_type' or \
+                        scene['text']['kind'] in ('kinetic', 'title', 'quote', 'cta')
+                    line.by = ('board' if on_board else 'chart' if data else
+                               'picture' if named_here or free else 'text' if words else '')
+                    line.shown = bool(line.by) and not (line.numeric and line.by == 'text')
                 else:
                     # Someone the sentence itself names or points to (not merely still standing on the page).
                     refs = {r[1] for r in reader.references(s.text, [])} if sentence else set()
@@ -89,10 +123,12 @@ def lines(plan, board, timeline=None) -> list[Line]:
                     present = (set(sentence.present) & refs) if sentence else set()
                     drawable = bool(s.objects or s.named_place or s.sky)
                     line.concrete = bool(named or present or drawable)
-                    line.shown = bool(any(e['kind'] == 'diagram' for e in scene['elements']) or (present & staged) or
-                                      any(mentions(c['name'], s.text) for c in cast if c['id'] in staged) or
-                                      any(p in shares[k] and _named(p, s.text) for p in pictures) or
-                                      s.sky)          # the storybook draws the sky the words name
+                    people = (present & staged) or any(mentions(c['name'], s.text) for c in cast if c['id'] in staged)
+                    line.by = ('board' if on_board or any(e['kind'] == 'diagram' for e in scene['elements']) else
+                               'cast' if people else
+                               'picture' if any(p in shares[k] for p in named_here) else
+                               'sky' if s.sky else '')   # the storybook draws the sky the words name
+                    line.shown = bool(line.by)
                 quoted = bool(sentence and sentence.quotes)
                 label = re.match(r'\s*\[?([A-Z][A-Z]+(?: [A-Z][A-Z]+)?)\]?\s*:', s.text)
                 line.dialogue = quoted or bool(label)
@@ -107,13 +143,14 @@ def lines(plan, board, timeline=None) -> list[Line]:
                         a = times[min(s.start, len(times) - 1)]
                         b = times[min(max(s.start, s.end - 1), len(times) - 1)]
                         line.at = beat['start'] + (a + b) / 2
+                        line.until = beat['start'] + b
                 out.append(line)
     return out
 
 
-def _named(doodle, text):
-    from ..director.v3.staging import names
-    return names(doodle, text)
+def _sense(lang, texts):
+    from ..director.v3.offer import Offer
+    return Offer(lang, texts=texts).sense
 
 
 def _frames(video, times, width=160, height=90):
@@ -124,6 +161,77 @@ def _frames(video, times, width=160, height=90):
     raw = subprocess.run(command, capture_output=True, check=True).stdout
     frames = np.frombuffer(raw, np.uint8).reshape(-1, height, width)
     return [frames[min(len(frames) - 1, max(0, int(round(t * 10))))].astype(np.int16) for t in times]
+
+
+def readable(video, found: list[Line]) -> None:
+    """Measure what each timed, shown sentence draws (``size``); one drawn smaller than READABLE shows nothing.
+
+    Drawn = a colour channel off the paper by more than INK, above the caption band, at both the sentence's middle
+    and near its end (a drawing hand passing through is in only one of them), and not on nearly every frame (a title
+    tag or logo). Shapes closer than a few pixels are one drawing (a grid of dots, a word). A picture is measured by
+    what the sentence brought on, when it brought anything; a board, a page, a chart or words by everything drawn."""
+    from scipy import ndimage
+    timed = [line for line in found if line.shown and line.at is not None]
+    if not timed:
+        return
+    times = []
+    for line in timed:
+        end = line.until if line.until is not None else line.at
+        times.append((line, (max(0., line.at - (end - line.at) - .1), line.at, max(line.at, end - .05))))
+    frames = _colour_frames(video, [t for _, ts in times for t in ts])
+    if not frames:
+        return
+    band = int(next(iter(frames.values())).shape[0] * CAPTION_BAND)
+
+    def ink(frame):
+        region = frame[:band]
+        paper = np.median(region.reshape(-1, 3), axis=0)
+        return np.abs(region - paper).max(axis=2) > INK
+
+    inks = {i: ink(f) for i, f in frames.items()}
+    area = band / CAPTION_BAND * next(iter(frames.values())).shape[1]
+
+    def boxes(mask):
+        labels, _ = ndimage.label(ndimage.binary_dilation(mask, iterations=3))
+        return labels, [(b, (b[0].stop - b[0].start) * (b[1].stop - b[1].start) / area)
+                        for b in ndimage.find_objects(labels) if b]
+
+    def largest(mask):
+        return max((share for _, share in boxes(mask)[1]), default=0)
+
+    # A small mark on nearly every frame is a title tag or a logo, not what any sentence shows.
+    overlay = np.zeros_like(next(iter(inks.values())))
+    if len(inks) >= 8:
+        labels, found = boxes(np.mean(list(inks.values()), axis=0) > .9)
+        for k, (box, share) in enumerate(found, 1):
+            if share < READABLE:
+                overlay[box] |= labels[box] == k
+
+    for line, (t0, t1, t2) in times:
+        before, middle, end = (inks[_frame_index(t)] for t in (t0, t1, t2))
+        kept = middle & end & ~overlay
+        new = kept & ~ndimage.binary_dilation(before, iterations=1)
+        line.size = round(largest(new if line.by == 'picture' and new.mean() > .003 else kept), 4)
+        if line.size < READABLE:
+            line.shown = False
+
+
+def _frame_index(t):
+    return max(0, int(round(t * 10)))
+
+
+def _colour_frames(video, times, width=320, height=180):
+    """{frame index at 10 per second: RGB frame} for the given seconds, in one decode."""
+    from .probes import FFMPEG
+    wanted = sorted({_frame_index(t) for t in times})
+    pick = '+'.join(f'eq(n\\,{i})' for i in wanted)
+    command = [FFMPEG, '-hide_banner', '-nostdin', '-v', 'error', '-threads', '2', '-i', str(video), '-an',
+               '-vf', f"fps=10,select='{pick}',scale={width}:{height}", '-vsync', '0', '-pix_fmt', 'rgb24',
+               '-f', 'rawvideo', '-']
+    raw = subprocess.run(command, capture_output=True, check=True).stdout
+    frames = np.frombuffer(raw, np.uint8).reshape(-1, height, width, 3).astype(np.int16)
+    last = frames[-1] if len(frames) else None
+    return {i: (frames[k] if k < len(frames) else last) for k, i in enumerate(wanted)} if last is not None else {}
 
 
 def same_runs(video, timed: list[Line]) -> list[tuple[int, int]]:
@@ -149,6 +257,8 @@ def check(plan, board, timeline=None, video=None) -> dict:
         # The readings (places, objects, people, sentences) are English word lists.
         return {'problems': [], 'findings': [], 'stats': {'skipped': f'language {board.get("lang")}'}, 'lines': []}
     found = lines(plan, board, timeline)
+    if video is not None:
+        readable(video, found)
     findings = []
     concrete = [line for line in found if line.concrete]
     unshown = [line for line in concrete if not line.shown]
@@ -160,6 +270,13 @@ def check(plan, board, timeline=None, video=None) -> dict:
                                     f'(more than {UNSHOWN:.0%}), for example '
                                     f'{_when(example, clock)}"{_short(example.text)}".'})
     story = (plan.get('storyboard') or {}).get('genre') == 'story'
+    icons = [line for line in found if line.numeric and line.by == 'picture'] if not story else []
+    if icons:
+        example = icons[0]
+        findings.append({'check': 'numbers_as_icons', 'count': len(icons), 'at': example.at,
+                         'problem': f'{len(icons)} sentence{"s" if len(icons) > 1 else ""} with numbers or a comparison '
+                                    f'{"are" if len(icons) > 1 else "is"} shown only by an icon (no board, chart or '
+                                    f'counter), for example {_when(example, clock)}"{_short(example.text)}".'})
     if story:
         from ..director.v3.semantics import beats
         from ..director.v3.staging import people
@@ -189,6 +306,8 @@ def check(plan, board, timeline=None, video=None) -> dict:
                                         f'{len(runs)} such stretch{"es" if len(runs) > 1 else ""} in the video.'})
     return {'problems': [f['problem'] for f in findings], 'findings': findings,
             'stats': {'sentences': len(found), 'concrete': len(concrete), 'unshown': len(unshown),
+                      'too_small': sum(1 for line in found if line.size is not None and line.size < READABLE),
+                      'numbers_as_icons': len(icons),
                       'dialogue': len(dialogue), 'dialogue_unshown': len(silent),
                       'same_runs': [(clock(a.at), clock(b.at), n) for a, b, n in runs]},
             'lines': [asdict(line) for line in found]}
