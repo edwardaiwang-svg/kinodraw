@@ -22,7 +22,7 @@ from defusedxml.ElementTree import fromstring
 from PIL import Image, ImageDraw, ImageFont
 
 from .. import library
-from . import ink, sets
+from . import ink, sets, shots as planned
 from ..director.v3.story import SKY_IDS, Reader, story_picture, titled
 from .creatures.actions import Action, action_pose
 
@@ -378,6 +378,10 @@ class Shot:
     set: list = field(default_factory=list)          # sets.Piece: the place's set and the things in it, back to front
     place: str | None = None                         # where the page takes place (engine.sets.SETS)
     supports: list = field(default_factory=list)     # sets.Support: where things rest and figures sit or lie
+    view: tuple = (.5, .5, 1.)                       # the shot's locked camera (x, y, zoom): its framing
+    framing: str = ''                                # a plan shot's type (engine.shots)
+    page: dict | None = None                         # a first_person page, map or phone filling the frame
+    screen: list = field(default_factory=list)       # (TV piece, what it shows): pictures and cast figures
 
 
 @dataclass(eq=False)
@@ -386,6 +390,8 @@ class Bubble:
     text: str
     start: float                      # span-local seconds it pops in and out
     end: float
+    times: tuple = ()                 # span-local seconds each character of text is spoken: it types along
+    side: str | None = None           # 'l'/'r': a voice heard from off the frame's edge, its speaker not drawn
 
 
 def _seed(text):
@@ -414,10 +420,17 @@ class Storybook:
         self._bubbles = {}
         self.stager = sets.Stager(self)
         self.rests = {}          # who sat or lay on which furniture last, and where: they stay there until they move
+        self.planned = planned.Shots(self)       # scenes whose plan gives shots are staged from them
+        # Every quoted span drawn in a bubble: {beat, start, end (char offsets in the beat's spoken text), speaker,
+        # text}. The captions leave these to the bubbles (build/bubbles.json).
+        self.bubbled = []
 
     # ---------------- planning
     def prepare(self, spec, start, end):
-        """Shots for one scene span (local seconds), from its beats' sentences and the plan's cast."""
+        """Shots for one scene span (local seconds), from its beats' sentences and the plan's cast; a scene whose plan
+        gives shots is staged from them (engine.shots)."""
+        if spec.get('shots'):
+            return self.planned.prepare(spec, start, end)
         shots = []
         staged = [e['ref'] for e in spec['elements'] if e['kind'] == 'cast' and e['ref'] in self.cast]
         pictures = [e['ref'] for e in spec['elements'] if e['kind'] == 'picture' and story_picture(e['ref'])]
@@ -443,7 +456,7 @@ class Storybook:
             for i, line in enumerate(lines):
                 joined += [cid for cid in staged if cid in line.present + line.extras and cid not in joined]
                 begin = timing['start'] - start if i == 0 else at(line.start)
-                shot = self._shot(line, begin, at, joined, pictures, spec, scene)
+                shot = self._shot(line, begin, at, joined, pictures, spec, scene, bid)
                 if shots and shot.start - shots[-1].start < 1.1 and not (shot.lesson or shot.eyes):
                     # Very short sentences share the previous picture instead of flashing a new one.
                     previous = shots[-1]
@@ -509,7 +522,7 @@ class Storybook:
         self.looks[cid] = {'sex': sex, 'outfit': chosen[0], 'tone': chosen[1]}
         return self.looks[cid]
 
-    def _shot(self, line, begin, at, staged, pictures, spec, scene=None):
+    def _shot(self, line, begin, at, staged, pictures, spec, scene=None, bid=None):
         shot = Shot(begin, begin)
         present = [cid for cid in line.present if cid in self.cast]
         if line.roar_lesson or not present:
@@ -596,10 +609,48 @@ class Storybook:
                 text = line.text[q0 - line.start:q1 - line.start].strip().rstrip(',;:').strip()
                 cjk = sum(1 for ch in text if ink.is_cjk(ch))
                 if text and (cjk / 2 if cjk else len(text.split())) <= BUBBLE_WORDS:
+                    lead = q0 + len(line.text[q0 - line.start:]) - len(line.text[q0 - line.start:].lstrip(' "“'))
+                    times = tuple(at(lead + i) for i in range(len(text)))
                     if shot.bubbles:
-                        shot.bubbles[-1].end = min(shot.bubbles[-1].end, at(q0) - .1)
-                    shot.bubbles.append(Bubble(line.speaker, text, max(begin, at(q0) - .1), at(q1) + .6))
+                        shot.bubbles[-1].end = min(shot.bubbles[-1].end, times[0] - .05)
+                    shot.bubbles.append(Bubble(line.speaker, text, max(begin, times[0]), max(at(q1), times[-1]) + .6,
+                                               times=times))
+                    if bid is not None:
+                        self.bubbled.append({'beat': bid, 'start': lead, 'end': lead + len(text),
+                                             'speaker': line.speaker, 'text': text})
+        self.props_clear(shot, figures)
         return shot
+
+    def props_clear(self, shot, figures):
+        """Nothing placed sits on or inside a person: a thing nobody holds whose picture overlaps someone's body
+        moves aside to the nearest free spot on its own ground line (along the desk or table it stands on)."""
+        bodies = [self._shape(f, self._pose_name(f.pose), f.x)[0] for f in figures]
+        if not bodies:
+            return
+
+        def hits(box):
+            return any(min(box[2], b[2]) - max(box[0], b[0]) > .15 * min(box[2] - box[0], b[2] - b[0])
+                       and min(box[3], b[3]) - max(box[1], b[1]) > .15 * min(box[3] - box[1], b[3] - b[1])
+                       for b in bodies)
+
+        def aside(doodle, x, ground, height, mirror=False):
+            box = self.stager.frame(doodle, x, ground, height, mirror)[2]
+            if not hits(box):
+                return x
+            half = (box[2] - box[0]) / 2
+            lo, hi = half + .01, 1 - half - .01
+            under = next((s for s in shot.supports if s.kind == 'top' and abs(s.y - ground) < .01
+                          and s.x0 - .01 <= x <= s.x1 + .01), None)
+            if under is not None:
+                lo, hi = max(lo, under.x0 + half), min(hi, under.x1 - half)
+            spots = [lo + (hi - lo) * i / 60 for i in range(61)] if hi > lo else []
+            spots = [s for s in spots if not hits((s - half, box[1], s + half, box[3]))]
+            return min(spots, key=lambda s: abs(s - x)) if spots else x
+
+        for piece in shot.set:
+            if piece.kind == 'thing' and not piece.holder and not piece.lone:
+                piece.x = aside(piece.doodle, piece.x, piece.ground, piece.height, piece.mirror)
+        shot.props = [(d, aside(d, x, g, hh), g, hh) for d, x, g, hh in shot.props]
 
     def _face_speaker(self, figures, speaker):
         """A conversation: the speaker turns to the nearest listener, and everyone else turns to the speaker."""
@@ -917,6 +968,8 @@ class Storybook:
         if pose == 'roar' and f.cue is not None and local > f.cue + ROAR_SECONDS:
             pose = 'stand'
         name = {'look': 'stand', 'happy': 'stand', 'nuzzle': 'stand', 'bow': 'stand'}.get(pose, pose)
+        if name in ('walk', 'run') and not f.travel and f.carried is None:
+            name = pose = 'stand'                       # walking nowhere is standing: no stride, no head wobble
         if name == 'walk':
             stride = int((local + f.phase) * 4) % 2
             doodle, mirror = preset(f.species, f.age, f.sex, 'walk2' if stride else 'walk', f.facing, f.marks)
@@ -928,7 +981,7 @@ class Storybook:
     def _camera(self, shot, local):
         """[x, y, zoom] of the camera over the page: locked, apart from a push into the eyes and a roar's shake.
         A push per shot restarted at every sentence, so the picture zoomed in and jumped back every 2-3 s."""
-        cam = [.5, .5, 1.]
+        cam = list(shot.view)
         shake = 0.
         roaring = [f for f in shot.figures if f.pose == 'roar' and f.cue is not None]
         for f in roaring:
@@ -942,8 +995,10 @@ class Storybook:
 
     def _draw(self, shot, local):
         w, h = self.size
+        if shot.page:
+            return planned.first_person(self, shot, local)
         cam = self._camera(shot, local)
-        canvas = self._page(cam)
+        canvas = self._page(cam if shot.eyes is not None else (.5, .5, 1.))    # the paper stays put under a framing
         overlay = Image.new('RGBA', (w, h), (0, 0, 0, 0))
         through = any(p.doodle in sets.WINDOWS for p in shot.set)
         if not through:
@@ -952,6 +1007,9 @@ class Storybook:
         for piece in shot.set:
             if not piece.front:
                 self._piece(overlay, piece, shot, local, cam)
+                for host, shown in shot.screen:
+                    if host is piece:
+                        planned.draw_screen(self, overlay, piece, shown, shot, local, cam)
             if through and piece.doodle in sets.WINDOWS:
                 for doodle, x, y, height in shot.sky:
                     self._paste(overlay, doodle, False, x, y + height / 2, height, cam)
@@ -962,7 +1020,9 @@ class Storybook:
         if any(f.crowd for f in shot.figures) or shot.figures:
             self._shadows(overlay, shot, local, cam)
         effects = []
-        for f in sorted(shot.figures, key=lambda f: f.depth):
+        order = list(self.cast)
+        # A steady order: who is in front of whom never flips between pages of one set.
+        for f in sorted(shot.figures, key=lambda f: (f.depth, order.index(f.key) if f.key in order else len(order))):
             effects += self._figure(overlay, f, shot, local, cam)
         for piece in shot.set:
             if piece.front:
@@ -1014,18 +1074,29 @@ class Storybook:
             return
         x, ground, rotate, anchor_y = piece.x, piece.ground, piece.rotate, 1.
         if piece.kind == 'hand':
-            f = next((f for f in shot.figures if f.key == piece.holder), None)
-            if f is None:
+            held = self.held_at(piece, shot, local)
+            if held is None:
                 return
-            doodle, mirror, _ = self._pose_doodle(f, local)
-            u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
-            fx = f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u))
-            x, ground = self._point(doodle, mirror, 'carry', fx, f.ground, f.height, self._reference(f))
-            ground, anchor_y = ground, .5
+            x, ground, anchor_y = held
         elif piece.motion and piece.cue is not None:
             x, ground, rotate, anchor_y = self._moving(piece, local)
         self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, rotate=rotate,
                     anchor_y=anchor_y)
+
+    def held_at(self, piece, shot, local):
+        """(x, ground, anchor_y) of a thing in its holder's hands: in the lap of someone sitting or lying, else in
+        the hand and never above the chin, so it never covers the face. None when the holder is not on the page."""
+        f = next((f for f in shot.figures if f.key == piece.holder), None)
+        if f is None:
+            return None
+        doodle, mirror, _ = self._pose_doodle(f, local)
+        u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
+        fx = f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u))
+        x, ground = self._point(doodle, mirror, 'carry', fx, f.ground, f.height, self._reference(f))
+        if f.pose in ('sit', 'lie', 'sleep'):              # in the lap of someone sitting, by their hands
+            return fx + (1 if f.facing == 'r' else -1) * .12 * f.height, f.ground - .02 * f.height, 1.
+        _, chin = self._point(doodle, mirror, 'mouth', fx, f.ground, f.height, self._reference(f))
+        return x, max(ground, chin + .02 * f.height + piece.height / 2), .5
 
     @staticmethod
     def _moving(piece, local):
@@ -1046,6 +1117,9 @@ class Storybook:
             drop = .2 * (1 - u * u)
             hop = .025 * abs(math.sin(math.pi * min(1., max(0., (t - .45) / .3)))) if t > .45 else 0.
             return piece.x, piece.ground - drop - hop, 10. * min(1., t / .75), 1.
+        if piece.motion == 'slide':                   # a truck going by: straight across, steady
+            u = min(1., max(0., t / 2.4))
+            return piece.x + dx * u, piece.ground + dg * u, 0., 1.
         if piece.motion == 'fly':
             u = min(1., max(0., t / 2.6))
             return (piece.x + dx * u, piece.ground + dg * u + .015 * math.sin(local * 3), 6 * math.sin(local * 2),
@@ -1107,6 +1181,8 @@ class Storybook:
             image = padded.rotate(rotate, resample=Image.Resampling.BICUBIC, center=(foot_x + pad, foot_y + pad))
             foot_x, foot_y = foot_x + pad, foot_y + pad
         at = (round(sx - foot_x), round(sy - foot_y))
+        if at[0] >= overlay.width or at[1] >= overlay.height or at[0] + image.width <= 0 or at[1] + image.height <= 0:
+            return None                          # framed out of a closer shot
         overlay.alpha_composite(image, (max(0, at[0]), max(0, at[1])),
                                 (max(0, -at[0]), max(0, -at[1])))
         return at[0], at[1], image.width, image.height
@@ -1221,6 +1297,8 @@ class Storybook:
         for f in shot.figures:
             if f.ground > 1.0 or f.ground < .6:
                 continue
+            if f.pose in ('sit', 'lie', 'sleep') and f.ground < sets.FLOOR - .02:
+                continue                                # resting on a seat or bed: its shadow is the furniture's
             u = min(1., max(0., (local - shot.start) / max(.01, shot.end - shot.start)))
             x = f.x + (1 if f.facing == 'r' else -1) * f.travel * (u * u * (3 - 2 * u))
             sx, sy, zoom = self._to_screen(x, f.ground, cam)
@@ -1280,27 +1358,53 @@ class Storybook:
                     crown=.2 * push if 'crown' in f.marks else 0., shut=self._blinking(f, local))
         return page.convert('RGB'), alpha
 
+    def faces(self, shot, view=None):
+        """Screen boxes (pixels) of every face on the page under the shot's framing: from the top of the head (hair,
+        mane) down past the mouth, a little wider than the head. A bubble never covers one."""
+        w, h = self.size
+        view = list(shot.view if view is None else view)
+        out = []
+        for g in shot.figures:
+            for body, head in self._shapes(g):
+                x0, y0, x1, y1 = head[0], min(head[1], body[1]), head[2], head[3]
+                pad = .01
+                (a, b, _), (c, d, _) = (self._to_screen(x0 - pad, y0 - pad, view),
+                                        self._to_screen(x1 + pad, y1 + pad, view))
+                out.append((a, b, c, d))
+        return out
+
     def _bubble_plan(self, shot, bubble):
-        """Where a bubble sits on the page (camera at rest), worked out once: (mouth in frame shares, box and tip in
-        pixels, text lines, font size, language). The box sits as near the speaker's mouth as it can, above it,
-        clear of every head on the page and above the captions; the tail runs down from its bottom edge to the mouth."""
+        """Where a bubble sits on the frame under the shot's framing, worked out once: (speaker's mouth in frame
+        shares or None, box and tip in pixels, text lines, font size, language). The box sits as near the speaker's
+        mouth as it can, above or beside the head, clear of every face on the page and above the captions; the
+        tail runs from its bottom edge to the mouth. A voice whose speaker is off the frame comes in from its edge."""
         if bubble in self._bubbles:
             return self._bubbles[bubble]
         w, h = self.size
-        f = next(g for g in shot.figures if g.key == bubble.speaker)
-        middle = (bubble.start + bubble.end) / 2
-        doodle, mirror, _ = self._pose_doodle(f, middle)
-        mouth = self._point(doodle, mirror, 'mouth', f.x, f.ground, f.height, self._reference(f))
-        mx, my = mouth[0] * w, mouth[1] * h
+        view = list(shot.view)
+        f = next((g for g in shot.figures if g.key == bubble.speaker), None)
+        mouth = None
+        if f is not None:
+            middle = (bubble.start + bubble.end) / 2
+            doodle, mirror, _ = self._pose_doodle(f, middle)
+            mouth = self._point(doodle, mirror, 'mouth', f.x, f.ground, f.height, self._reference(f))
+            mx, my, _ = self._to_screen(*mouth, view)
+            if not (.02 * w <= mx <= .98 * w and .05 * h <= my <= .8 * h):
+                mouth = None                                    # framed out: heard from that side
+        if mouth is None:
+            side = bubble.side or ('l' if f is not None and mx < w / 2 else 'r')
+            mx, my = (3. if side == 'l' else w - 3.), .5 * h
         lang = 'zh' if any(ink.is_cjk(ch) for ch in bubble.text) else 'en'
         lines, size = ink.fit_text(bubble.text, lang, .3 * w, 3, round(.04 * h), min_size=round(.028 * h))
         bw = max(ink.text_width(line, lang, size) for line in lines) + 1.6 * size
         bh = len(lines) * 1.25 * size + 1.1 * size
-        heads = [(x0 * w, y0 * h, x1 * w, y1 * h) for g in shot.figures for _, (x0, y0, x1, y1) in self._shapes(g)]
-        bodies = [(x0 * w, y0 * h, x1 * w, y1 * h) for g in shot.figures for (x0, y0, x1, y1), _ in self._shapes(g)]
-        pad, side, edge = .015 * h, (1 if f.facing == 'r' else -1), (.55 + .4) * size    # corner radius + tail
+        heads = self.faces(shot)
+        bodies = [tuple(v for p in (self._to_screen(x0, y0, view), self._to_screen(x1, y1, view)) for v in p[:2])
+                  for g in shot.figures for (x0, y0, x1, y1), _ in self._shapes(g)]
+        pad, edge = .02 * h, (.55 + .4) * size                       # clear of faces; corner radius + tail
+        side = 1 if f is None or f.facing == 'r' else -1
         best = None
-        for y0 in np.arange(.03 * h, min(.76 * h, my - .08 * h) - bh, .015 * h):     # a tail long enough to read
+        for y0 in np.arange(.03 * h, min(.76 * h, my - .04 * h) - bh, .015 * h):     # a tail long enough to read
             for x0 in np.arange(.02 * w, .98 * w - bw, .01 * w):
                 box = (x0, y0, x0 + bw, y0 + bh)
                 if any(_overlap(box, (a - pad, b - pad, c + pad, d + pad), 0) for a, b, c, d in heads):
@@ -1316,8 +1420,11 @@ class Storybook:
             self._bubbles[bubble] = None
             return None
         _, box, base = best
-        reach = math.hypot(base - mx, box[3] - my)
-        tip = (mx + (base - mx) * .03 * h / max(1., reach), my + (box[3] - my) * .03 * h / max(1., reach))
+        if mouth is None:
+            tip = (mx, my)
+        else:
+            reach = math.hypot(base - mx, box[3] - my)
+            tip = (mx + (base - mx) * .012 * h / max(1., reach), my + (box[3] - my) * .012 * h / max(1., reach))
         plan = (mouth, box, tip, base, lines, size, lang, _seed(bubble.text))
         self._bubbles[bubble] = plan
         return plan
@@ -1328,10 +1435,12 @@ class Storybook:
         plan = self._bubble_plan(shot, bubble)
         if plan is None:
             return None
-        (mx, my), box, tip, *_ = plan
-        w, h = self.size
-        sx, sy, _ = self._to_screen(mx, my, self._camera(shot, local))
-        dx, dy = sx - mx * w, sy - my * h
+        mouth, box, tip, *_ = plan
+        dx = dy = 0.
+        if mouth is not None:
+            sx, sy, _ = self._to_screen(*mouth, self._camera(shot, local))
+            rx, ry, _ = self._to_screen(*mouth, list(shot.view))
+            dx, dy = sx - rx, sy - ry
         u = (local - bubble.start) / BUBBLE_POP
         if u < 1:
             c = 1.70158
@@ -1339,6 +1448,18 @@ class Storybook:
         else:
             scale = min(1., max(0., (bubble.end - local) / BUBBLE_OUT)) ** .5
         return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy), (tip[0] + dx, tip[1] + dy), scale
+
+    @staticmethod
+    def shown(bubble, local):
+        """How many characters of a bubble's text show: as many as have been spoken, and never fewer than its first
+        word, so a bubble is never empty."""
+        first = len(bubble.text.split(' ', 1)[0])
+        if bubble.times:
+            said = sum(1 for t in bubble.times if t <= local + .04)
+        else:
+            cps = max(TYPE_CPS, len(bubble.text) / max(.4, .55 * (bubble.end - bubble.start)))
+            said = int(max(0., local - bubble.start) * cps)
+        return min(len(bubble.text), max(first, said))
 
     def _bubble(self, overlay, shot, bubble, local, cam):
         layout = self._bubble_layout(shot, bubble, local)
@@ -1349,8 +1470,7 @@ class Storybook:
         image, (ox, oy) = _bubble_shape(round(box[2] - box[0]), round(box[3] - box[1]), round(base - box[0]),
                                         round(tip[0] - box[0]), round(tip[1] - box[1]), size, seed)
         image = image.copy()
-        cps = max(TYPE_CPS, len(bubble.text) / max(.4, .55 * (bubble.end - bubble.start)))
-        shown = int(max(0., local - bubble.start - .1) * cps)
+        shown = self.shown(bubble, local)
         draw = ImageDraw.Draw(image)
         y = oy + .55 * size
         for line in lines:
