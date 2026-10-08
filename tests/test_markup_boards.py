@@ -191,14 +191,15 @@ def test_during_a_long_pause_the_hand_rests_off_the_words_and_keeps_moving():
     prod = _resting_production([words, link, a, b], [a, b])
     frame = Image.new('RGBA', (1920, 1080))
     spots = []
-    for t in (2.5, 3.5):
+    for t in (2.5, 3.5, 4.5):
         prod._hand(frame, t, 0)
         spots.append(prod.hand.pasted[-1])
     for x, y in spots:                                   # the whole hand is clear of the words and the drawings
         hand = (x - 20, y - 26, x + 180 + 14, y + 274 + 18)
         for e in (words, a, b):
             assert hand[2] <= e.x or e.x + e.w <= hand[0] or hand[3] <= e.y or e.y + e.h <= hand[1]
-    assert math.dist(*spots) >= 20                       # resting, it still moves: the picture never freezes
+    assert min(math.dist(p, q) for p, q in zip(spots, spots[1:])) >= 40     # resting, it keeps moving, fast enough
+                                                                            # that the picture never reads as frozen
     prod._hand(frame, .9 + 6 - .05, 0)                   # and it comes back to start the next drawing
     assert abs(prod.hand.pasted[-1][0] - 710) < 30 and abs(prod.hand.pasted[-1][1] - 340) < 30
 

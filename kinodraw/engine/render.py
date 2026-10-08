@@ -56,7 +56,7 @@ def ease(u):
 HANDS = ('right', 'left', 'none')     # storyboard "hand": which hand draws, or none
 HAND_IN, HAND_OUT = .45, .35           # seconds the hand takes to slide in before a board, and out after it
 PARK = 2.0                             # a pause longer than this between drawings: the hand leaves the text it wrote
-DRIFT = 36                             # px/s a resting hand drifts: slower reads as a frozen picture (QA freezedetect)
+DRIFT = 60                             # px/s a resting hand drifts: slower reads as a frozen picture (QA freezedetect)
 HAND_EDGE = .55                        # ...half across the frame edge this far into the slide
 
 
@@ -818,12 +818,19 @@ class Production:
         p1 = self._first_pen(nxt) if back else None
         there = (nxt.x + p1[0], nxt.y + p1[1]) if p1 is not None else b
         go = min(.8, gap * .3)
+
+        def drift(tt):                                   # to and fro between the two spots at DRIFT px/s
+            d = math.dist(a, b)
+            phase = DRIFT * max(0., tt - prev.end - go) % (2 * d) if d >= 1 else 0.
+            v = phase / d if phase <= d else 2 - phase / d
+            return a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v
+
         if t < prev.end + go:
             u, frm, to = ease((t - prev.end) / go), here, a
         elif back and t > until - go:
-            u, frm, to = ease((t - until + go) / go), b, there
+            u, frm, to = ease((t - until + go) / go), drift(until - go), there
         else:
-            u, frm, to = (t - prev.end - go) / max(1e-6, gap - (2 if back else 1) * go), a, b
+            u, frm, to = 0., drift(t), drift(t)
         return frm[0] + (to[0] - frm[0]) * u - L, frm[1] + (to[1] - frm[1]) * u
 
     def _rest(self, prev, nxt, L, pause):
