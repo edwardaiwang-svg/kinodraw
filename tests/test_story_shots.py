@@ -468,3 +468,66 @@ def test_a_phone_with_no_signal_and_the_map_she_unfolds_fill_the_frame(tmp_path)
     assert 'b006' not in [r['beat'] for r in prod.storybook.bubbled]     # the caption carries the line
     _, (unfolded,) = pages(prod, 'b008')
     assert unfolded.page['kind'] == 'map'
+
+
+# ------------------------------------------------------------------ who gets the bed, and where a placeless shot is
+def test_the_person_the_text_puts_in_bed_gets_the_bed_and_keeps_it(tmp_path):
+    from kinodraw.engine.sets import settles
+    assert settles('Nana was sitting up in bed, tired.') == ('sit', 9)          # no "the" needed: "in bed"
+    assert settles('Dad lay in bed all morning.')[0] == 'lie'
+    both = lambda: [('mia', 'young', 'sit', 'no'), ('ada', 'old', 'sit', 'no')]  # the plan lists Mia first
+    prod = staged(tmp_path, 'Years later, Mia came to the hospital. Ada was sitting up in bed, tired, with a phone on '
+                            'her blanket.\n\n"You came," Ada said.\n\nMia held her hand for a long time.',
+                  [shot('b001', 'Years later', 'wide', both(), place='hospital', set_refs=['fl_bed']),
+                   shot('b001', 'Ada was', 'medium', both(), place='hospital', set_refs=['fl_bed']),
+                   shot('b002', 'You came', 'two_shot', [('ada', 'old', 'talk', 'yes'), ('mia', 'young', 'sit', 'no')],
+                        place='hospital', set_refs=['fl_bed'], lines=[('You came,', 'ada')]),
+                   shot('b003', 'Mia held', 'wide', both(), place='hospital', set_refs=['fl_bed'])])
+    _, story = pages(prod, 'b001')
+    assert len(story) == 2                                                # before the words name her, too
+    for page in story + [pages(prod, 'b002')[1][0], pages(prod, 'b003')[1][0]]:
+        bid = page.framing
+        bed = next(s for s in page.supports if s.kind == 'bed')
+        on = {f.key: bed.x0 <= f.x <= bed.x1 and abs(f.ground - bed.y) < 1e-6 for f in page.figures}
+        assert on == {'ada': True, 'mia': False}, (bid, on)
+
+
+def test_a_pronoun_never_hands_the_bed_to_the_wrong_person(tmp_path):
+    both = [('mia', 'young', 'sit', 'no'), ('ada', 'old', 'sit', 'no')]
+    prod = staged(tmp_path, 'Ada smiled at Mia. She was sitting in bed.',
+                  [shot('b001', 'Ada smiled', 'wide', both, place='hospital', set_refs=['fl_bed'])])
+    _, (page,) = pages(prod, 'b001')
+    bed = next(s for s in page.supports if s.kind == 'bed')
+    # "She" could be either: nobody is chosen by the pronoun, so the plan's order stands (Mia first)
+    assert [f.key for f in page.figures if bed.x0 <= f.x <= bed.x1 and abs(f.ground - bed.y) < 1e-6] == ['mia']
+
+
+def test_a_shot_with_no_place_does_not_borrow_a_set_its_people_were_never_in(tmp_path):
+    text = ('Ada made tea in the kitchen.\n\nMia rode the bus to school.\n\n'
+            'Ada never forgot to send it.\n\nMia read it on the bus.\n\nShe smiled.')
+    prod = staged(tmp_path, text, [
+        shot('b001', 'Ada made', 'wide', [('ada', 'old', 'stand', 'no')], place='kitchen'),
+        shot('b002', 'Mia rode', 'wide', [('mia', 'young', 'sit', 'no')], place='bus'),
+        shot('b003', 'Ada never', 'close', [('ada', 'old', 'look', 'no')], place='none', focus='fl_mobile_phone'),
+        shot('b004', 'Mia read', 'wide', [('mia', 'young', 'sit', 'no')], place='bus'),
+        shot('b005', 'She smiled', 'close', [('mia', 'young', 'look', 'no')], place='none')])
+    _, (ada,) = pages(prod, 'b003')
+    assert ada.place == 'kitchen'                                         # where Ada was last seen, not the bus
+    _, (mia,) = pages(prod, 'b005')
+    assert mia.place == 'bus'                                             # the same person goes on: the set stays
+    cast = PEOPLE + [{'id': 'kim', 'name': 'Kim', 'kind': 'human', 'species': 'human', 'age': 'adult', 'sex': 'female'}]
+    prod = staged(tmp_path, 'Mia rode the bus to school.\n\nKim never forgot.', [
+        shot('b001', 'Mia rode', 'wide', [('mia', 'young', 'sit', 'no')], place='bus'),
+        shot('b002', 'Kim never', 'close', [('kim', 'adult', 'look', 'no')], place='none')], cast=cast)
+    _, (kim,) = pages(prod, 'b002')
+    assert kim.place is None and not [p for p in kim.set if p.kind != 'strip']   # never seen anywhere: a plain page
+
+
+def test_a_seat_somewhere_else_does_not_put_someone_first_in_line_for_the_bed(tmp_path):
+    prod = staged(tmp_path, 'Mia sat on the bus.\n\nYears later, Mia came to the hospital. Ada was sitting up in bed.',
+                  [shot('b001', 'Mia sat', 'wide', [('mia', 'young', 'sit', 'no')], place='bus'),
+                   shot('b002', 'Years later', 'wide', [('mia', 'young', 'sit', 'no'), ('ada', 'old', 'sit', 'no')],
+                        place='hospital', set_refs=['fl_bed'])])
+    _, (page,) = pages(prod, 'b002')
+    bed = next(s for s in page.supports if s.kind == 'bed')
+    assert [f.key for f in page.figures if bed.x0 <= f.x <= bed.x1 and abs(f.ground - bed.y) < 1e-6] == ['ada']
