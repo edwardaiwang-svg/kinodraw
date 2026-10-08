@@ -1302,7 +1302,7 @@ class HybridProduction:
         spec, local = span.spec, max(0, t - span.start)
         if span.story is not None:
             return self.storybook.frame(span.story, local)
-        if span.source_proof or spec['treatment'] == 'whiteboard' or (spec['treatment'] == 'character' and not span.actors):
+        if self._on_board(span):
             return self.cutaway.frame(t).convert('RGB')
         if span.scientific:
             from ..scientific import render_plots
@@ -1576,9 +1576,18 @@ class HybridProduction:
         wb.cap_starts = [c['start'] for c in wb.tl['captions']]
         wb.cap_words = [c['words'] for c in wb.tl['captions']]
 
+    @staticmethod
+    def _on_board(span):
+        """The scene is shown as the source whiteboard instead of its own motion art."""
+        treatment = span.spec['treatment']
+        return span.source_proof or treatment == 'whiteboard' or (treatment == 'character' and not span.actors)
+
     def _written(self, span, t):
         """The words being said are already written on screen by this scene (kinetic type, a title, a quote, a call
-        to action): no caption repeats them underneath."""
+        to action): no caption repeats them underneath. A scene shown as a story page, the whiteboard or a plot never
+        draws its own text elements, so there the caption stays."""
+        if span.story is not None or span.scientific or self._on_board(span):
+            return False
         beat = next((b for b in span.spec['beat_ids'] if self.tl['beats'][b]['start'] <= t < self.tl['beats'][b]['end']),
                     None)
         return beat in span.on_screen
