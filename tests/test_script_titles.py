@@ -248,3 +248,22 @@ def test_a_sentence_drawn_by_the_board_instead_keeps_its_caption(tmp_path):
     prod.whiteboard._caption = lambda image, t, *a, **k: drawn.append(round(t, 3))
     prod.frame(t)
     assert not prod._written(span, t) and drawn == [round(t, 3)]
+
+
+def test_a_saved_plan_without_the_title_beat_gets_a_title_card_not_a_blank_page():
+    # Script 09 (r02): a plan saved before the title beat existed had no scene for b000; the repair added a motion
+    # scene with nothing in it, 0-3.2 s of blank paper (frozen_picture). The added scene draws the heading's card.
+    from kinodraw.director.rules import RulesDirector
+    from kinodraw.director.v3.rules import from_rules
+    from kinodraw.director.v3.validate import validate
+    board = board_of('# Greenleaf Q3 Update\n\nHi everyone, it\'s Rosa.\n\nHere\'s how our third quarter went.')
+    RulesDirector('en').direct(board)
+    plan = from_rules(board)
+    plan['style']['mode'] = 'motion'
+    plan['scenes'] = [s for s in plan['scenes'] if 'b000' not in s['beat_ids']]
+    for s in plan['scenes']:
+        s['treatment'] = 'motion'
+    fixed, repairs = validate(plan, board, {})
+    title = next(s for s in fixed['scenes'] if 'b000' in s['beat_ids'])
+    assert 'scenes: added missing beat b000' in repairs
+    assert title['treatment'] == 'kinetic_type' and title['text'] == {'kind': 'title', 'ref': 'b000'}
