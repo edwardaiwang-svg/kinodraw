@@ -78,7 +78,7 @@ def test_a_display_formula_is_said_in_words_and_left_to_the_board():
     board = board_of(CODE)
     b = beat_with(board, 'A = P')
     assert b['markup'] == {'kind': 'math'}
-    assert said(b) == 'A equals P times one plus r, to the power of n.'
+    assert said(b) == 'A equals P times one plus r to the power of n'
     assert '^' not in said(b) and caption(b) == ''
     assert markup.board(b, 'en') == {'kind': 'math', 'formula': 'A = P(1 + r)^n'}
 
@@ -111,6 +111,13 @@ def test_key_combos():
     assert markup.combos('press Ctrl + Shift + N to open, or Cmd+K.') == [
         (6, 22, ['Ctrl', 'Shift', 'N']), (35, 40, ['Cmd', 'K'])]
     assert markup.combos('A + B is not a key combo') == []
+
+
+def test_markup_beats_pass_the_storyboard_checks():
+    from kinodraw.director.validate import validate as validate_storyboard
+    board = board_of(CODE)
+    report = validate_storyboard(board)
+    assert not [e for e in report['errors'] if any(b['id'] in e for b in board['beats'] if b.get('markup'))]
 
 
 def test_code_beats_keep_their_ids_and_the_timeline_has_no_caption_for_them():

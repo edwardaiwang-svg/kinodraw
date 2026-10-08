@@ -104,11 +104,13 @@ def marked_beats(paragraphs: list[str], lang: str) -> list[tuple[str, str, dict 
         run = [k] if found else []
     out = []
     for k, para in enumerate(paragraphs):
-        if markup.code_block(para):
-            out.append((para, para, {'kind': 'code'}))
+        if markup.code_block(para):                      # never said (speech.hidden); numbers as words like any beat
+            out.append((para, normalize(para, lang).spoken, {'kind': 'code'}))
             continue
         if markup.math_line(para):
-            out.append((para, normalize(markup.say_math(para), lang).spoken, {'kind': 'math'}))
+            # Said in words with the formula's own clause punctuation (none), as captions and checks expect.
+            said = re.sub(r'\s*[,.;:!?]+', '', normalize(markup.say_math(para), lang).spoken)
+            out.append((para, said, {'kind': 'math'}))
             continue
         mark = None
         if steps[k] and of.get(k, 0) >= 2:
