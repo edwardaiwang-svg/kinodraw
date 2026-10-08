@@ -25,6 +25,8 @@ SPECIES = {
     'gorilla': ('quadruped', 'primate'), 'chimpanzee': ('quadruped', 'primate'),
     'squirrel': ('quadruped', 'rodent'), 'crocodile': ('quadruped', 'reptile'), 'turtle': ('quadruped', 'reptile'),
     'frog': ('quadruped', 'other'), 'parrot': ('bird', 'bird'), 'penguin': ('bird', 'bird'),
+    'hedgehog': ('quadruped', 'rodent'), 'tortoise': ('quadruped', 'reptile'), 'snail': ('blob', 'other'),
+    'firefly': ('bird', 'other'),
 }
 SPECIES_RE = re.compile(r'\b(' + '|'.join(SPECIES) + r')\b', re.I)
 HUMAN_SPECIES = {'human', 'boy', 'girl', 'man', 'woman'}

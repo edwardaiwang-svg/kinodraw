@@ -6,6 +6,8 @@ import json
 
 import pytest
 
+from kinodraw.director.v3.semantics import SPECIES
+from kinodraw.director.v3.story import Reader
 from kinodraw.engine import storybook
 from kinodraw.library import ASSETS, catalog, creatures
 
@@ -71,3 +73,27 @@ def test_a_firefly_glows():
     assert 'fill-opacity' in svg
     asleep = (ASSETS / 'creatures' / 'cr_firefly_any_young_sleep_r.svg').read_text(encoding='utf-8')
     assert 'fill-opacity' not in asleep          # the light dims while she sleeps
+
+
+def test_species_words_in_three_languages():
+    for word, zh in (('hedgehog', '刺猬'), ('tortoise', '陆龟'), ('firefly', '萤火虫'), ('snail', '蜗牛')):
+        search = [e for e in catalog().values() if e.get('set') == 'creatures' and e.get('search', True)
+                  and e['creature']['species'] == word]
+        assert any(word in e['en'] for e in search) and any(zh in e['zh'] for e in search), word
+        assert word in SPECIES
+    from kinodraw.director.match import es_gloss
+    assert es_gloss('el erizo, la tortuga terrestre, las luciérnagas y el caracol').split() == [
+        'hedgehog', 'tortoise', 'firefly', 'snail']
+
+
+def _cast(*members):
+    return [{'id': i, 'name': n, 'kind': 'quadruped', 'species': sp, 'family': 'other', 'age': 'adult',
+             'sex': 'female', 'size': 1., 'palette': {}, 'marks': []} for i, n, sp in members]
+
+
+def test_a_cast_tortoise_named_by_her_species_gets_no_second_tortoise_beside_her():
+    reader = Reader(_cast(('moss', 'Grandma Moss', 'tortoise'), ('pip', 'Pip', 'hedgehog')))
+    line = reader.read('b1', 'By the pond he found Grandma Moss, the oldest tortoise in the wood.')[0]
+    assert line.crowd == []
+    line = reader.read('b2', 'Lupita had a jar full of fireflies and two snails.')[0]
+    assert dict(line.crowd) == {'firefly': 3, 'snail': 2}
