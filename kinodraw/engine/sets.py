@@ -232,6 +232,17 @@ def _bush():
         'stroke-linecap="round"/>'))
 
 
+def _acacia():
+    """A flat-topped savanna tree: a thin forked trunk under a wide, low crown."""
+    return _svg(360, 300, (
+        f'<path d="M172 296L176 200Q150 160 104 128L116 120Q156 146 180 180Q196 140 236 118L246 128Q206 156 192 200'
+        f'L196 296Z" fill="#8D6E63" {INK}/>'
+        f'<path d="M20 112Q40 70 110 66Q150 34 210 50Q290 44 336 96Q346 120 318 126Q240 136 180 130Q90 140 36 132'
+        f'Q8 128 20 112Z" fill="#7CA947" {INK}/>'
+        '<path d="M90 104Q130 94 170 104M210 92Q250 86 290 100" fill="none" stroke="#5E8A33" stroke-width="5" '
+        'stroke-linecap="round"/>'))
+
+
 def _porthole():
     return _svg(220, 220, (
         f'<circle cx="110" cy="110" r="100" fill="#B0BEC5" {INK}/>'
@@ -311,7 +322,7 @@ SVG = {    'set_window': _window(False), 'set_window_night': _window(True), 'set
     'set_stove': _stove(), 'set_fridge': _fridge(), 'set_bookshelf': _bookshelf(), 'set_chalkboard': _chalkboard(),
     'set_school_desk': _school_desk(), 'set_shop_shelves': _shop_shelves(), 'set_grocery_bag': _grocery_bag(),
     'set_streetlight': _streetlight(), 'set_swing': _swing(), 'set_church': _church(), 'set_bush': _bush(),
-    'set_porthole': _porthole(), 'set_wall_clock': _wall_clock(), 'set_remote': _remote(),
+    'set_porthole': _porthole(), 'set_acacia': _acacia(), 'set_wall_clock': _wall_clock(), 'set_remote': _remote(),
     'set_bus_seat': _bus_seat('#E53935'), 'set_train_seat': _bus_seat('#3F6FB5'), 'set_pole': _pole(),
     'set_windscreen': _windscreen(False), 'set_windscreen_night': _windscreen(True), 'set_car_seat': _car_seat('#8D6E63'),
     'set_dashboard': _dashboard(),
@@ -347,6 +358,13 @@ def strip(kind, width, height=90):
                 + f'L{w + 130} {h + 10}L-10 {h + 10}Z" fill="#9CCC65" {INK}/>'
                 + _tile(w, 170, lambda x: f'<path d="M{x + 40} {h * .8:.0f}l6 -16l6 16M{x + 110} {h * .65:.0f}l5 -14l5 14" '
                                           'fill="none" stroke="#689F38" stroke-width="4" stroke-linecap="round"/>'))
+    elif kind == 'drygrass':
+        body = (f'<path d="M-10 {h * .35:.0f}' + _tile(w, 120, lambda x: f'Q{x + 30} {h * .2:.0f} {x + 60} {h * .33:.0f}'
+                                                                      f'T{x + 120} {h * .35:.0f}')
+                + f'L{w + 130} {h + 10}L-10 {h + 10}Z" fill="#E3C46A" {INK}/>'
+                + _tile(w, 90, lambda x: f'<path d="M{x + 20} {h * .75:.0f}l4 -22M{x + 28} {h * .75:.0f}l-2 -18'
+                                         f'M{x + 64} {h * .6:.0f}l3 -16" fill="none" stroke="#B8943A" stroke-width="4" '
+                                         'stroke-linecap="round"/>'))
     elif kind == 'sand':
         body = (f'<path d="M-10 {h * .3:.0f}Q{w * .3:.0f} {h * .1:.0f} {w * .6:.0f} {h * .28:.0f}T{w + 10} {h * .25:.0f}'
                 f'L{w + 10} {h + 10}L-10 {h + 10}Z" fill="#F3D98B" {INK}/>'
@@ -410,8 +428,9 @@ SUPPORTS = {
 FLOOR, BACKLINE = .785, .7
 INTERIOR = {'room', 'living_room', 'bedroom', 'study', 'kitchen', 'dining', 'bathroom', 'office', 'classroom', 'hospital',
             'shop', 'library', 'cafe', 'bus', 'train', 'space', 'car_inside'}
-# Nature places keep the story's own trees, rivers and hills: their set only fills a page that is otherwise empty.
-NATURE = {'forest', 'jungle', 'countryside', 'outdoors'}
+# Nature places keep the story's own trees, rivers and hills: their set only fills a page that is otherwise empty,
+# unless the page is staged from a plan shot (stage_explicit), which reads no trees from the text.
+NATURE = {'forest', 'jungle', 'countryside', 'outdoors', 'savanna'}
 _ROOM = ('strip:floor', .725, .805)
 SETS = {
     'room': [_ROOM, ('set_window', .5, .42, .24)],          # a room the story does not furnish (a hallway, a stage)
@@ -479,6 +498,7 @@ SETS = {
     'forest': [('strip:grass', .7, .805), ('fl_evergreen_tree', .08, .76, .38), ('fl_evergreen_tree', .26, .72, .28),
                ('fl_deciduous_tree', .74, .74, .32), ('fl_evergreen_tree', .92, .76, .4)],
     'jungle': [('fl_palm_tree', .12, .78, .5), ('fl_deciduous_tree', .88, .78, .5)],
+    'savanna': [('strip:drygrass', .7, .805), ('set_acacia', .13, .74, .34), ('fl_rock', .9, .76, .12)],
     'countryside': [('strip:hills', .62, .805), ('fl_deciduous_tree', .14, .78, .34), ('set_bush', .86, .79, .09)],
     'outdoors': [('strip:grass', .7, .805), ('fl_deciduous_tree', .12, .78, .4), ('set_bush', .3, .79, .08),
                  ('fl_evergreen_tree', .88, .78, .34)],
@@ -689,15 +709,18 @@ class Stager:
         """Stage a page from explicit ids instead of the text (a plan's shot): the set for ``place`` (a SETS key),
         the furniture in ``set_refs`` and ``props``, each {ref, relation: none|on|against|in|under|beside|behind|
         held_by, to, motion: roll|fall|drop|fly|None, at}, where ``at`` (passed to ``at()``, seconds by default) is
-        when the motion starts. Fills shot.set and shot.supports like stage(); returns whether a set was built."""
+        when the motion starts. Fills shot.set and shot.supports like stage(); returns whether a set was built. A
+        nature place (a forest, a jungle, the savanna) is drawn with the cast on it: a plan shot names its place and
+        nothing else draws the trees or the ground."""
         things = [explicit_thing(ref) for ref in set_refs] + [explicit_thing(**p) for p in props]
         line = SimpleNamespace(place=place, things=things, text='')
-        return self.stage(shot, line, self.scene([]), place, figures, at, not figures, night)
+        return self.stage(shot, line, self.scene([]), place, figures, at, not figures, night, nature=True)
 
-    def stage(self, shot, line, scene, place, figures, at, empty, night=False):
+    def stage(self, shot, line, scene, place, figures, at, empty, night=False, nature=False):
         """Fill shot.set and shot.supports for one line. Returns the sky doodles the page still draws in its sky
-        (an interior shows them through its window instead)."""
-        built = place in SETS and (place not in NATURE or empty)
+        (an interior shows them through its window instead). ``nature``: build a nature place's set even with
+        figures on the page (the text reading draws the story's own trees there instead)."""
+        built = place in SETS and (place not in NATURE or empty or nature)
         if place is None and empty:
             place, built = 'outdoors', True
         pieces = []
