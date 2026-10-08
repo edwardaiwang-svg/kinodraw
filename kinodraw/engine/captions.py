@@ -44,7 +44,7 @@ def clause_marks(text, lang):
     must share. A period that ends an abbreviation ("p.m.", "Dr.", "U.S.") is not one."""
     pat = ES_PUNCT if lang == 'es' else EN_PUNCT if lang == 'en' else ZH_PUNCT
     return [m for m in pat.finditer(text)
-            if not (lang != 'zh' and m.group() == '.' and ABBREVIATIONS.search(text[:m.end()]))]
+            if not (lang != 'zh' and m.group() == '.' and _abbreviated(text[:m.end()]))]
 
 
 def clause_spans(text, lang):
@@ -122,14 +122,23 @@ def split_long(text, lang, fits=fits):
 
 
 # Periods that end an abbreviation, not a sentence: titles, "a.m."/"p.m.", and initialisms such as "U.S.".
-ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m)\.|'
-                           r'(?:[A-Z]\.){2,})$', re.I)
+_ABBREVIATIONS = re.compile(r'(?:^|\s)(?:(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|vs|etc|e\.g|i\.e|No|Prof|Mt|a\.m|p\.m)\.|'
+                            r'(?:[A-Z]\.){2,})$', re.I)
+# Capitalised only, so a sentence ending "in the sun." or "she sat." still ends: months, weekdays, streets, offices.
+_CAPITAL_ABBREVIATIONS = re.compile(
+    r'(?:^|[\s(])(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun|'
+    r'Rd|Ave|Blvd|Ln|Hwy|Rte|Dept|Gov|Sen|Rep|Gen|Capt|Lt|Sgt|Col|Inc|Corp|Ltd|Co|Bros|Univ|Assn|Fig|Vol|Ch)\.$')
+
+
+def _abbreviated(text):
+    """Does ``text`` end with an abbreviation's period ("p.m.", "Dr.", "U.S.", "Oct.", "Rd.", "Dept.")?"""
+    return bool(_ABBREVIATIONS.search(text) or _CAPITAL_ABBREVIATIONS.search(text))
 
 
 def sentence_end(text):
     """Does this caption text end a sentence? A cue never runs on into the next sentence."""
     text = text.rstrip().rstrip(CLOSERS + '"”’」』)）')
-    return bool(text) and text[-1] in '.!?…。！？' and not ABBREVIATIONS.search(text)
+    return bool(text) and text[-1] in '.!?…。！？' and not _abbreviated(text)
 
 
 def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words=False):
