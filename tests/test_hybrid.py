@@ -441,17 +441,21 @@ def test_all_six_dispatch_real_frames(tmp_path, kind):
         assert frame.convert('RGB').tobytes() != prod.whiteboard.frame(prod.spans[1].start + 1).convert('RGB').tobytes()
 
 
+def texts(span):
+    return [e for e in span.motion.elements if e.kind == 'text']
+
+
 def test_caption_only_does_not_invent_foreground_text(tmp_path):
     board, plan, tl = fixture(tmp_path)
     scene = plan['scenes'][1]
     scene.update(treatment='motion', elements=[], text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
     prod = save_production(tmp_path, board, plan, tl)
-    assert not prod.spans[1].motion.elements
+    assert not texts(prod.spans[1])           # (the stage still draws the beat's own pictures: test_hybrid_stage)
     scene['elements'] = [{'kind': 'text', 'ref': scene['beat_ids'][0]}]
     # The narration the caption shows is never written out a second time (script 02, r01).
-    assert not save_production(tmp_path, board, plan, tl).spans[1].motion.elements
+    assert not texts(save_production(tmp_path, board, plan, tl).spans[1])
     scene['elements'] = [{'kind': 'text', 'ref': board['beats'][0]['id']}]     # another scene's words may be
-    assert len(save_production(tmp_path, board, plan, tl).spans[1].motion.elements) == 1
+    assert len(texts(save_production(tmp_path, board, plan, tl).spans[1])) == 1
 
 
 def test_whiteboard_join_has_no_stale_caption(tmp_path):
