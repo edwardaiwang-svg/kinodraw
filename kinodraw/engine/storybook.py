@@ -482,8 +482,8 @@ class Storybook:
 
     def __init__(self, plan, by_id, timeline, size, paper, title=''):
         # Screen boxes (px) of the figures, the props (and sky objects) and the heads (faces with a crown or hat) drawn
-        # since the frame began: the caption avoids them.
-        self.figure_boxes, self.prop_boxes, self.head_boxes = [], [], []
+        # since the frame began, and the title's: the caption avoids them.
+        self.figure_boxes, self.prop_boxes, self.head_boxes, self.title_boxes = [], [], [], []
         self.reader = Reader(plan['cast'])
         self.texts = [b['spoken'] for b in by_id.values()]
         self.reader.prime(self.texts)
@@ -1290,7 +1290,8 @@ class Storybook:
                 a = a if b is None else tuple(q + (p_ - q) * e for p_, q in zip(a, b))
             if a is not None:
                 x, ground, anchor_y = a
-                self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, anchor_y=anchor_y)
+                self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, anchor_y=anchor_y,
+                            record=self.prop_boxes)
                 return
         if piece.kind == 'hand':
             held = self.held_at(piece, shot, local)
@@ -1300,7 +1301,7 @@ class Storybook:
         elif piece.motion and piece.cue is not None:
             x, ground, rotate, anchor_y = self._moving(piece, local)
         self._paste(overlay, piece.doodle, piece.mirror, x, ground, piece.height, cam, rotate=rotate,
-                    anchor_y=anchor_y)
+                    anchor_y=anchor_y, record=self.prop_boxes if piece.kind in ('thing', 'hand') else None)
 
     def held_at(self, piece, shot, local, holder=None):
         """(x, ground, anchor_y) of a thing in its holder's hands: in the lap of someone sitting or lying, else in
@@ -1849,11 +1850,15 @@ class Storybook:
         draw = ImageDraw.Draw(layer)
         lines = _wrap(title, font, w * .8, draw)
         y = h * .09
+        widest = 0
         for line in lines[:2]:
             width = draw.textlength(line, font=font)
+            widest = max(widest, width)
             draw.text(((w - width) / 2, y), line, font=font, fill=(27, 27, 27, int(255 * alpha)))
             y += size * 1.2
         canvas.paste(layer, (0, 0), layer)
+        # The title is kept clear like a face: the caption takes the other band (captions.caption_spot).
+        self.title_boxes.append(((w - widest) / 2 - 12, h * .09 - 8, (w + widest) / 2 + 12, y + 8))
 
     def roar_cues(self, shots, start):
         """(absolute time, sound) of on-screen roars: a cub's try is its own small 'cub_roar', an adult's the roar."""

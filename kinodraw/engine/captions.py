@@ -624,12 +624,13 @@ def caption_spot(frame_size, caption_size, bottom, avoid=(), margin=60):
     return min(spots, key=covered)
 
 
-def clearance(frame_size, box, heads, most=.14):
-    """Where the caption at ``box`` still covers a head (no band was clear of them): how far (px) the picture under
-    it moves away from the caption so no head stays under it: positive moves it up (a caption in the bottom band),
-    negative down (the top band). Never more than ``most`` of the frame height, and 0 when nothing is covered or
-    the move would push another head out of the frame."""
+def clearance(frame_size, box, heads, most=.14, keep=None):
+    """Where the caption at ``box`` still covers something in ``heads`` (no band was clear of it): how far (px) the
+    picture under it moves away from the caption so none of them stays under it: positive moves it up (a caption in
+    the bottom band), negative down (the top band). Never more than ``most`` of the frame height nor so far that one
+    of ``keep`` (default ``heads``) leaves the frame (then it moves as far as it can); 0 when nothing is covered."""
     w, h = frame_size
+    keep = heads if keep is None else tuple(keep) + tuple(heads)
     hit = [b for b in heads if _overlap(box, b) > 0]
     if not hit:
         return 0
@@ -637,9 +638,20 @@ def clearance(frame_size, box, heads, most=.14):
     need = max(b[3] - box[1] for b in hit) + 8 if bottom_band else -(box[3] - min(b[1] for b in hit) + 8)
     if abs(need) > most * h:
         return 0
-    if bottom_band and min(b[1] for b in heads) - need < 0 or not bottom_band and max(b[3] for b in heads) - need > h:
-        return 0
-    return round(need)
+    room = min(b[1] for b in keep) - 4 if bottom_band else h - 4 - max(b[3] for b in keep)
+    return round(max(0, min(need, room)) if bottom_band else -max(0, min(-need, room)))
+
+
+def free_margin(frame, top):
+    """Rows (px) of empty background at the top (else the bottom) edge of ``frame`` before anything drawn: how far
+    the picture can move that way without losing any of it."""
+    grey = np.asarray(frame.convert('L').reduce(4), np.int16)
+    ground = np.median(grey)
+    drawn = (np.abs(grey - ground) > 30).mean(axis=1) > .04         # specks of dust or grain are not drawings
+    rows = np.flatnonzero(drawn)
+    if rows.size == 0:
+        return frame.height
+    return int(rows[0] * 4) if top else int(frame.height - (rows[-1] + 1) * 4)
 
 
 def unwrap(text):

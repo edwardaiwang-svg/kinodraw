@@ -1780,8 +1780,10 @@ class HybridProduction:
         return self._draw_screen_text(image, t) if self.screen_notes else image
 
     def _frame_at(self, t):
+        self.whiteboard.card_box = None
         if getattr(self, 'storybook', None) is not None:
-            self.storybook.figure_boxes, self.storybook.prop_boxes, self.storybook.head_boxes = [], [], []
+            sb = self.storybook
+            sb.figure_boxes, sb.prop_boxes, sb.head_boxes, sb.title_boxes = [], [], [], []
         if not self.spans or t < self.starts[0]:
             return self.whiteboard.frame(t)
         end_start = self.tl['end_card']['start']
@@ -1853,13 +1855,17 @@ class HybridProduction:
         """What the caption keeps clear of on this frame: (figure boxes, prop boxes, head boxes) in px. A story page's
         are recorded as it is drawn; a motion scene's pictures are its props."""
         props = self._picture_boxes(span, t) if span is not None and span.story is None else ()
+        card = getattr(self.whiteboard, 'card_box', None)          # a data card drawn on this frame (render._steps)
+        props += (card,) if card else ()
         if getattr(self, 'storybook', None) is None:
             return (), props, ()
         sb = self.storybook
-        return tuple(sb.figure_boxes), tuple(sb.prop_boxes) + props, tuple(sb.head_boxes)
+        # A page's title is kept clear like a face: the caption takes the other band.
+        return tuple(sb.figure_boxes), tuple(sb.prop_boxes) + props, tuple(sb.head_boxes) + tuple(sb.title_boxes)
 
     def _picture_boxes(self, span, t):
-        """Screen boxes (px) of the pictures a drawn motion scene shows at time t."""
+        """Screen boxes (px) of what a drawn motion scene shows at time t: its pictures, charts, buttons and written
+        text."""
         if span.motion is None or span.scientific or self._on_board(span) or span.actors:
             return ()
         from .bold.render import H, W, element_pose
@@ -1868,14 +1874,16 @@ class HybridProduction:
         zoom, dx, dy = self._camera(span, local)
         out = []
         for j, e in enumerate(span.motion.elements):
-            if e.kind != 'picture':
+            if e.kind not in ('picture', 'chart', 'button', 'text'):
                 continue
             x, y, scale, alpha = element_pose(span.motion, e, j, local)
-            if alpha <= .05:
+            if alpha <= .05 or e.kind == 'text' and not e.text.strip():
                 continue
+            half_w, half_h = e.width / 2, e.height / 2
+            if e.kind == 'text':
+                half_h = (e.text.count('\n') + 1) * e.size * .6
             boxes = []
-            for px, py in ((x - e.width * scale / 2, y - e.height * scale / 2), (x + e.width * scale / 2,
-                                                                                  y + e.height * scale / 2)):
+            for px, py in ((x - half_w * scale, y - half_h * scale), (x + half_w * scale, y + half_h * scale)):
                 px, py = px * w / W, py * h / H
                 boxes.append((w / 2 + zoom * (px - dx - w / 2), h / 2 + zoom * (py - dy - h / 2)))
             out.append((boxes[0][0], boxes[0][1], boxes[1][0], boxes[1][1]))

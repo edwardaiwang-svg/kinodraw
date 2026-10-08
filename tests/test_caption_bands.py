@@ -252,3 +252,24 @@ def test_dark_text_on_plain_paper_keeps_the_palette(tmp_path):
     prod = _hybrid(tmp_path, palette={'background': '#f6f4ee', 'ink': '#1f2a3a'})
     texts = [e for s in prod.spans if s.motion for e in s.motion.elements if e.kind == 'text' and not e.accent]
     assert texts and all(getattr(e, 'color', None) is None for e in texts)
+
+
+def test_the_first_caption_never_shares_the_band_with_the_title_or_covers_a_head():
+    from tests.test_storybook import production
+    import tempfile
+    from pathlib import Path
+    prod = production(Path(tempfile.mkdtemp()))[0]
+    span = next(s for s in prod.spans if s.story)
+    shot = next(s for s in span.story if s.title)
+    for f in shot.figures:
+        f.ground = .98                                     # the cast fills the bottom band of the title page
+    c = next(c for c in prod.tl['captions'] if c['end'] > span.start + shot.start)
+    t = max(c['start'], span.start + shot.start) + .6
+    assert t < span.start + min(shot.end, 4.5)             # the title is up
+    prod.frame(t)
+    x0, y0, x1, y1 = prod.whiteboard.caption_box
+    h = prod.size[1]
+    title = (0, .09 * h - 8, prod.size[0], .09 * h + 2 * 1.2 * .07 * h + 8)
+    assert not captions._overlap((x0, y0, x1, y1), title)
+    for head in getattr(prod.storybook, 'head_boxes', ()):
+        assert not captions._overlap((x0, y0, x1, y1), head), head
