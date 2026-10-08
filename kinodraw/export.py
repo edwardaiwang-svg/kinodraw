@@ -238,6 +238,7 @@ def _caption_image(text, lang, skin, size, aspect, look=None, word=None, accent=
     """Reflow the original cue, keeping its caption face and panel treatment. ``look`` = (letters, outline, stroke)
     letters it in an outline of other colours (a hybrid's palette); ``word`` (captions.word_spans) is in ``accent``."""
     from .engine import captions
+    text = text.replace('\n', ' ')            # reflowed to this size: a verse caption's line break is a space here
     s = size[1] / 1080
     max_w, max_h = round(size[0] * (.92 if aspect == '16:9' else .88)), round(size[1] * .18)
     kind = 'en_caption' if lang in ('en', 'es') else 'zh_caption'
