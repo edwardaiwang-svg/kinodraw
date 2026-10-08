@@ -180,59 +180,115 @@ def test_master_reaches_the_target_under_the_ceiling():
 
 
 # ------------------------------------------------------------------ mix per look
-def _mix_before(storyboard, tl, out_dir):
-    """mix.mix() as it was before the animated looks (the whiteboard must still sound exactly like this)."""
+BED_RANGE = (15, 24)   # dB of voice over bed on the synthetic buzz; never closer than 15 dB, never buried
+
+
+def _bed_levels(x, speech):
+    """The mix minus its narration (least squares), in 50 ms RMS as the reviewers measure a video: (dB the voice is over
+    the bed while it speaks, dB the bed rises in the pauses, quietest 100 ms of the bed inside the video in dBFS)."""
+    mono = x.mean(1).astype(np.float64)
+    voice = speech.astype(np.float64)
+    gain = np.dot(mono, voice) / np.dot(voice, voice)
+    bed = mono - gain * voice
+    w = SR // 20
+    db = lambda y: 10 * np.log10((y[:len(y) // w * w].reshape(-1, w) ** 2).mean(1) + 1e-12)
+    said, music = db(gain * voice), db(bed)
+    held = mix.envelope(speech)[w // 2::w][:len(said)]                          # phrases, not the gaps between words
+    speaking, pause = (said > said.max() - 30) & (held > .9), held < .5
+    inside = bed[int(.3 * SR):len(bed) - int(mix.FADE * SR)]                  # past the fade in, before the fade out
+    win = inside[:len(inside) // (SR // 10) * (SR // 10)].reshape(-1, SR // 10)
+    floor = 20 * np.log10(np.sqrt((win ** 2).mean(1)).min() + 1e-12)
+    under = np.median(music[speaking])
+    return np.median(said[speaking]) - under, np.median(music[pause]) - under, floor
+
+
+@pytest.mark.parametrize('look', ['whiteboard', 'collage'])
+def test_every_look_has_a_bed_under_the_whole_narration_and_is_mastered(tmp_path, look):
+    """Music from the first word to the end, clearly under the voice and rising in the pauses; mastered. (On real
+    narrations this bed measures 17.6-17.8 dB under the voice; this buzz reads a few dB more, hence BED_RANGE.)"""
+    board, tl = _project(tmp_path, look=look)
+    x = mix.read_wav(mix.mix(board, tl, tmp_path))[0]
+    over, lift, floor = _bed_levels(x, mix.read_wav(tl['audio'])[0][:, 0])
+    assert BED_RANGE[0] <= over <= BED_RANGE[1] and lift >= 4 and floor > -60, (over, lift, floor)
+    assert abs(master.loudness(x, SR) + 14) < .5 and master.true_peak(x, SR) <= mix.CEILING_DBTP + .05
+    silent = mix.read_wav(mix.mix(dict(board, music=False), tl, tmp_path))[0]     # your choice: no music
+    assert _bed_levels(silent, mix.read_wav(tl['audio'])[0][:, 0])[2] < -80
+
+
+@pytest.mark.parametrize('slug', ['fresh_focus', 'natural_vibes'])
+def test_a_looped_track_never_drops_out(slug):
+    """The bundled tracks end in a 2 s fade; looped over a long video that fade was a silent gap in the bed."""
+    audio, _ = mix.track(slug)
+    bed = mix.loop(audio, len(audio) * 2 + 10 * SR).mean(1)
+    win = bed[:len(bed) // (SR // 10) * (SR // 10)].reshape(-1, SR // 10)
+    assert 20 * np.log10(np.sqrt((win ** 2).mean(1)).min()) > -60
+
+
+def test_the_music_comes_up_over_the_end_card():
+    tl = {'beats': {'b1': {'speech_end': 9.5}}, 'end_card': {'start': 10.0}}
+    gain = 20 * np.log10(mix.outro(tl, 14 * SR))
+    assert gain[:10 * SR].max() == 0 and np.isclose(gain[11 * SR:].min(), mix.OUTRO_DB)
+    assert 0 < gain[round(10.5 * SR)] < mix.OUTRO_DB                    # over a second, no jump
+    assert np.all(mix.outro({'beats': {}}, SR) == 1)
+
+
+def test_the_bed_is_there_from_the_first_word():
+    open_bed = mix.bed(np.zeros(6 * SR, np.float32), [], 'fresh_focus')
+    rms = lambda a, b: 20 * np.log10(np.sqrt((open_bed[int(a * SR):int(b * SR)] ** 2).mean()))
+    assert rms(.3, .6) > rms(3, 3.3) - 4
+
+
+def test_the_words_sound_effects_play_in_the_mix(tmp_path):
+    board, tl = _project(tmp_path, master=False)
+    tl['captions'] = [{'start': 4., 'end': 6., 'text': 'Then the thunder came.', 'words': [4., 4.3, 4.6, 5.2]}]
+    x = mix.read_wav(mix.mix(board, tl, tmp_path))[0]
+    plain = mix.read_wav(mix.mix(dict(board, sfx=False), tl, tmp_path))[0]
+    diff = np.abs(x - plain).max(1)
+    assert diff[:int(4.5 * SR)].max() < 1e-3 < diff[int(4.6 * SR):int(5.5 * SR)].max()   # thunder from its word
+
+
+def _ffmpeg_true_peak(path):
+    err = subprocess.run(['ffmpeg', '-hide_banner', '-nostats', '-i', str(path), '-map', '0:a:0', '-af',
+                          'ebur128=peak=true', '-f', 'null', '-'], capture_output=True, text=True).stderr
+    return float(re.search(r'True peak:\s+Peak:\s+(-?[\d.]+) dBFS', err[err.rfind('Summary:'):])[1])
+
+
+def test_the_encoded_video_keeps_the_true_peak_ceiling(tmp_path):
+    """AAC adds about half a dB of peaks to a mix limited to -1 dBTP; the mp4 people get still reads -1.0 or lower."""
+    from kinodraw import package
+    rng = np.random.default_rng(0)
+    cues = [{'t': .2 + .13 * i, 'kind': ['impact', 'slam', 'kick', 'pop', 'stamp', 'tap', 'confetti'][i % 7],
+             'id': f'c{i}'} for i in range(40)]
+    x = master.master(sfx.render(cues, 6) * 30 + .05 * rng.standard_normal((6 * SR, 2)).astype(np.float32), SR)
+    mix.write_wav(tmp_path / 'mix.wav', x)
+    subprocess.run([package.FFMPEG, '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=white:s=64x64:r=30:d=6',
+                    '-c:v', 'libx264', str(tmp_path / 'silent.mp4')], check=True)
+    tl = {'duration': 6.0, 'chapters': [{'start': 0, 'end': 6, 'title': 'One'}]}
+    out = tmp_path / 'video.mp4'
+    package.mux(tl, tmp_path / 'silent.mp4', tmp_path / 'mix.wav', out, 'en', 'Peaks', tmp_path)
+    assert _ffmpeg_true_peak(out) <= -1.0
+    assert master.loudness(x, SR) - master.loudness(mix.read_wav(tmp_path / 'mix.wav')[0], SR) < .5  # about as loud
+    assert np.corrcoef(x[:, 0], mix.read_wav(tmp_path / 'mix.wav')[0][:, 0])[0, 1] > .99   # the same mix
+
+
+def test_a_whiteboard_v3_plan_gets_the_score_even_when_it_asks_for_no_music(tmp_path):
+    """An all-whiteboard plan used to play music only on the end card, and a plan's music_mood 'none' none at all;
+    only your own choice of no music (storyboard music false) leaves the bed out."""
+    from kinodraw import pipeline
+    board, tl = _project(tmp_path, look='whiteboard', title={'en': 'Bed test'})
+    tl.update(beat_order=['b1'], beats={'b1': {'start': 0, 'speech_end': 19, 'end': 20}}, end_card={'start': 20},
+              captions=[], language='en')
+    cfg = {'lang': 'en', 'director_v3': True,
+           'plan_v3': {'style': {'mode': 'whiteboard', 'music_mood': 'none', 'tempo_bpm': 96},
+                       'scenes': [{'treatment': 'whiteboard', 'beat_ids': ['b1'], 'actions': []}], 'cast': []}}
+    assert pipeline._scored(cfg, board)
     speech = mix.read_wav(tl['audio'])[0][:, 0]
-    total = len(speech)
-    music = np.zeros((total, 2), np.float32)
-    setting = storyboard.get('music', True)
-    if setting:
-        tracks = {**mix.DEFAULT_TRACKS, **(setting if isinstance(setting, dict) else {})}
-        kinds = {c['id']: c['kind'] for c in storyboard['chapters']}
-        spans = {kinds[c['id']]: c for c in tl['chapters']}
-        intro_end = spans['intro']['end'] if 'intro' in spans else 0
-        outro_start = spans['outro']['start'] if 'outro' in spans else tl['duration']
-        env, cache = mix.envelope(speech), {}
-        for win in tl['music']:
-            a, b = win['start'], min(win['end'], total / SR)
-            slug = tracks['primary'] if (a < intro_end + 1 or b > outro_start - 1) else tracks['secondary']
-            if slug not in cache:
-                path = mix.MUSIC / f'{slug}.mp3'
-                audio = mix.decode(path, 2)
-                nz = np.flatnonzero(np.abs(audio).max(1) > 1e-3)
-                cache[slug] = (audio[nz[0]:nz[-1] + 1] if len(nz) else audio, float(mix.loudness(path)['input_i']))
-            audio, lufs = cache[slug]
-            n = int((b - a) * SR)
-            if n <= 0:
-                continue
-            seg, pos, xf = np.zeros((n, 2), np.float32), 0, SR
-            while pos < n:
-                take = min(len(audio), n - pos)
-                piece = audio[:take].copy()
-                if pos > 0:
-                    ramp = np.linspace(0, 1, min(xf, take))[:, None]
-                    piece[:len(ramp)] *= ramp
-                    seg[pos:pos + len(ramp)] *= (1 - ramp)
-                seg[pos:pos + take] += piece
-                pos += take - (xf if take == len(audio) else 0)
-            g_under, g_open = 10 ** ((mix.UNDER_SPEECH_LUFS - lufs) / 20), 10 ** ((mix.OPEN_LUFS - lufs) / 20)
-            i0 = int(a * SR)
-            gain = g_open + (g_under - g_open) * env[i0:i0 + n]
-            fade = np.ones(n, np.float32)
-            f = min(int(mix.FADE * SR), n // 2)
-            fade[:f] = np.linspace(0, 1, f) ** 1.5
-            fade[n - f:] = np.linspace(1, 0, f) ** 1.5
-            music[i0:i0 + n] += seg * (gain * fade)[:, None]
-    out = out_dir / 'mix-before.wav'
-    mix.write_wav(out, speech[:, None].repeat(2, axis=1) + music)
-    return out
-
-
-@pytest.mark.parametrize('music', [True, False, {'primary': 'inventing_flight'}], ids=['music', 'silent', 'own-track'])
-def test_the_whiteboard_mix_is_unchanged(tmp_path, music):
-    board, tl = _project(tmp_path, music=music)
-    (tmp_path / 'cues.json').write_text(json.dumps({'cues': _cues()}), encoding='utf-8')   # cues alone do not change the whiteboard
-    assert mix.mix(board, tl, tmp_path).read_bytes() == _mix_before(board, tl, tmp_path).read_bytes()
+    x = mix.read_wav(pipeline._hybrid_audio(board, tl, tmp_path, cfg))[0]
+    over, lift, floor = _bed_levels(x, speech)
+    assert BED_RANGE[0] <= over <= BED_RANGE[1] and lift >= 4 and floor > -60, (over, lift, floor)
+    assert abs(master.loudness(x, SR) + 14) < .5
+    off = mix.read_wav(pipeline._hybrid_audio(dict(board, music=False), tl, tmp_path, cfg))[0]
+    assert _bed_levels(off, speech)[2] < -80
 
 
 def test_animated_looks_are_mastered_with_their_sound_effects(tmp_path):
