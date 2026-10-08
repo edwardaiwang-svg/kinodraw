@@ -275,6 +275,21 @@ def test_layout_keeps_text_on_the_page_and_off_pictures(layout, items):
     assert all(r.inside(1800, 738) for r in lay.place.values())
 
 
+def test_charges_on_a_small_picture_sit_beside_it_big_enough_to_read():
+    def small(it, rect):                                     # a little ice-cube doodle
+        return pd.Rect(rect.cx - 75, rect.cy - 75, 150, 150)
+    items = [_item('cube', 'b', 'picture', ref='ice_cube', at='center'),
+             _item('plus', 'b', 'charges', to='cube', at='top', style='plus'),
+             _item('minus', 'b', 'charges', to='cube', at='bottom', style='minus')]
+    lay = pd.Layout({'layout': 'parts', 'items': items}, 1800, 738, _measure, small)
+    cube = lay.place['cube']
+    for key, above in (('plus', True), ('minus', False)):
+        area = lay.place[key]
+        assert not area.hits(cube)
+        assert (area.y + area.h <= cube.y) if above else (area.y >= cube.y + cube.h)
+        assert pd.charge_radius(area, 738) >= 738 * .022 and area.h >= pd.charge_radius(area, 738) * 2.8
+
+
 def _render(tmp_path, source, plan_edit):
     board = _board(source)
     plan = from_rules(board)

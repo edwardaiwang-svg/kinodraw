@@ -322,6 +322,22 @@ def region(rect: Rect, where: str) -> Rect:
         where, Rect(x + w * .15, y + h * .2, w * .7, h * .6))
 
 
+def charge_radius(area: Rect, H) -> float:
+    """A charge sign's radius: big enough to read at a glance, whatever it marks."""
+    return min(H * .032, max(H * .022, min(area.w, area.h) * .14))
+
+
+def beside(rect: Rect, where: str, r: float) -> Rect:
+    """A band of charge signs just outside a picture too small to hold them, on the side the plan names."""
+    band, gap = r * 2.8, r * .6
+    w = max(rect.w, band * 3)
+    side = {'left': Rect(rect.x - gap - band * 2, rect.cy - band, band * 2, band * 2),
+            'right': Rect(rect.x + rect.w + gap, rect.cy - band, band * 2, band * 2),
+            'bottom': Rect(rect.cx - w / 2, rect.y + rect.h + gap, w, band)}
+    return side.get(where.split('_')[0] if where.startswith('bottom') else where,
+                    Rect(rect.cx - w / 2, rect.y - gap - band, w, band))
+
+
 class Layout:
     """Places one board's items on a page W x H (page pixels) so text stays inside the page and off pictures.
 
@@ -614,7 +630,13 @@ class Layout:
             if it['kind'] == 'charges' and it['to'] in self.place:
                 where = it['at'] if it['at'] != 'auto' else 'center'
                 target = self.place[it['to']]
-                self.place[it['id']] = region(target, where)
+                area = region(target, where)
+                r = charge_radius(area, H)
+                # signs go inside a big picture (a cloud); on a small or busy doodle they would not read: beside it
+                if target.w < H * .35 or area.w < r * 2.8 * 2 or area.h < r * 2.8:
+                    area = self.clamp(beside(target, where, r))
+                    self.taken.append(area)
+                self.place[it['id']] = area
 
 
 # ------------------------------------------------------------------ drawings
@@ -1072,7 +1094,7 @@ class Boards:
 
     @staticmethod
     def _charges(area, sign, colour, W, H, width):
-        r = min(H * .032, max(H * .022, min(area.w, area.h) * .14))     # signs big enough to read at a glance
+        r = charge_radius(area, H)
         cols = max(1, min(5, int(area.w // (r * 2.8))))
         rows = max(1, min(3, int(area.h // (r * 2.8))))
         n = max(2, min(9, cols * rows))
