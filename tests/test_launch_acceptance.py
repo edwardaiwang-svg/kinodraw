@@ -60,9 +60,11 @@ def test_source_copy_and_generated_prop_have_separate_vertical_space(tmp_path):
     plan = from_rules(board)
     plan['style'].update(mode='hybrid', motion_floor='drifting')
     scene = plan['scenes'][-1]
+    # The scene writes its own words on screen (kinetic copy, so no caption repeats them) beside a generated prop.
+    # A caption_only scene would draw no copy at all: its narration is shown once, in the caption.
     scene.update(treatment='motion', composition='center',
-                 elements=[{'kind': 'text', 'ref': scene['beat_ids'][0]}, {'kind': 'picture', 'ref': 'gen-workspace'}],
-                 text={'kind': 'caption_only', 'ref': scene['beat_ids'][0]})
+                 elements=[{'kind': 'picture', 'ref': 'gen-workspace'}],
+                 text={'kind': 'kinetic', 'ref': scene['beat_ids'][0]})
     (tmp_path/'doodles').mkdir()
     (tmp_path/'doodles/gen-workspace.svg').write_text(ART)
     (tmp_path/'project.json').write_text(json.dumps({'director_v3': True, 'plan_v3': plan}))
@@ -71,7 +73,8 @@ def test_source_copy_and_generated_prop_have_separate_vertical_space(tmp_path):
     elements = prod.spans[-1].motion.elements
     assert prod.spans[-1].motion.continuous_drift
     picture = next(e for e in elements if e.kind == 'picture')
-    copy = next(e for e in elements if e.kind == 'text')
+    copy, = [e for e in elements if e.kind == 'text']
+    assert scene['beat_ids'][0] in prod.spans[-1].on_screen
     assert picture.preserve_svg_palette
     assert ' '.join(copy.text.split()) == board['beats'][-1]['spoken']['en']
     assert '\n' in copy.text and copy.size >= 96
