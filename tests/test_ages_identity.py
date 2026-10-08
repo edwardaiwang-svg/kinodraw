@@ -185,3 +185,11 @@ def test_dates_and_holidays_are_never_cast_members():
 def test_a_person_named_like_a_month_still_acts():
     assert cast_names('May said hello to Theo.') == ['May']
     assert 'June' in cast_names('June laughed. Theo laughed too.')
+
+
+def test_an_old_woman_wears_her_hair_in_a_bun_and_a_dress():
+    look = ('sex:female', 'everyday:villager', 'top:#6E9E4A', 'bottom:#3D4A5C', 'hair:#3B2B24',
+            'elder_hair:#E6E2DA', 'style:long', 'tone:brown', 'accent:#C0504D')
+    did = storybook.preset('human', 'elder', 'female', 'stand', 'r', look)[0]
+    assert '_bun_' in did and did.split('_')[-3] == 'gd'           # glasses and a dress
+    assert '_long_' in storybook.preset('human', 'adult', 'female', 'stand', 'r', look)[0]

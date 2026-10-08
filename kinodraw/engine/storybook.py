@@ -241,14 +241,16 @@ def _person(age, sex, pose, facing, marks):
         drawn = DRAWN_AGE.get(age, 'adult')
         role = look.get('role')
         outfit = 'casual' if drawn == 'child' else role or ('casual' if drawn == 'teen' else look.get('everyday', 'villager'))
+        elder_woman = drawn == 'elder' and sex == 'female'      # a grey bun and a long dress or skirt
         flags = ''.join(f for f, on in (('g', look.get('glasses') == '1' or drawn == 'elder'),
                                         ('b', look.get('beard') == '1' and sex == 'male' and drawn not in ('child', 'teen')),
                                         ('c', drawn == 'elder' and sex == 'male' and look.get('cane') == '1'),
-                                        ('d', sex == 'female' and look.get('dress') == '1' and outfit not in (
-                                            'suit', 'labcoat', 'uniform', 'worker'))) if on)
+                                        ('d', sex == 'female' and (look.get('dress') == '1' or elder_woman)
+                                         and outfit not in ('suit', 'labcoat', 'uniform', 'worker'))) if on)
         hair = look['elder_hair'] if drawn == 'elder' else people.greying(look['hair']) if drawn == 'middle' else \
             look['hair']
-        style = 'bald' if drawn == 'elder' and sex == 'male' and look.get('style') == 'short' else look['style']
+        style = 'bald' if drawn == 'elder' and sex == 'male' and look.get('style') == 'short' else \
+            'bun' if elder_woman and look['style'] in ('long', 'ponytail') else look['style']
         key = people.look_key(sex, drawn, outfit, tone if tone in people.SKIN else 'tan', look['top'],
                               look['bottom'], hair, style, look.get('accent', '#C62828'), flags or 'x')
         pid = f"{key}_{info.get('pose', 'stand')}_{info.get('facing', 'r')}"
