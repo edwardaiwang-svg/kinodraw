@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import math
 import re
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import NamedTuple
@@ -68,7 +69,6 @@ def glyph_problems() -> list:
 
 
 def _drawn(ch):
-    import unicodedata
     return not ch.isspace() and unicodedata.category(ch) not in ('Cc', 'Cf') and not '\ufe00' <= ch <= '\ufe0f'
 
 
@@ -89,7 +89,7 @@ class FallbackFont(ImageFont.FreeTypeFont):
         self.__init__(*state)
 
     def _has(self, ch):
-        return not _drawn(ch) or ord(ch) in _cmap(str(self.path), self.index)
+        return ord(ch) in _cmap(str(self.path), self.index) or not _drawn(ch)
 
     def _pieces(self, text):
         """[(text, font or None for this font itself, baseline shift)] or None when this font covers it all."""
