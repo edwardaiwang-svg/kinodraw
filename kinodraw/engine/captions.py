@@ -24,6 +24,9 @@ from . import ink
 from .skin import contrast
 
 SIZE = 70
+PAUSE = .6          # seconds of silence between words that ends a caption (a line left to a speech bubble)
+LINGER = .45        # seconds a caption stays after its last word starts when a silence follows
+LEAD = .3           # a beat's first caption comes up with the picture when its first word starts this soon
 MAX_W = 1760
 EN_PUNCT = re.compile(r'[,.;:?!…](?=\s|$|["”’」』)])|—')
 ES_PUNCT = re.compile(r'[,.;:?!…](?=\s|$|["”’»」』)])|—')
@@ -182,8 +185,10 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
         # A period inside an open quotation ("Come here. Now.") does not end the narrating sentence.
         quoted = said.count('“') > said.count('”') or said.count('"') % 2 == 1
         said += text
+        # Words said either side of a silence (a line left to a speech bubble) are never one caption.
+        apart = cur_spots and spots and char_time(int(spots[0])) - char_time(int(cur_spots[-1])) > PAUSE
         if cur and (not fits(trial, lang) or (len(cur.strip()) >= minimum and len(trial.strip()) > target)
-                    or (sentence_end(cur) and not quoted)):
+                    or (sentence_end(cur) and not quoted) or apart):
             cues.append((cur_pos, cur, cur_spots))
             cur, cur_pos, cur_spots = text, pos, spots
         else:
@@ -199,13 +204,19 @@ def cues_for_beat(spoken, display, lang, char_time, speech_end, fits=fits, words
         cues[-2:] = [(p, t + cues[-1][1], spots + cues[-1][2])]
     out = []
     for i, (pos, text, spots) in enumerate(cues):
-        start = 0. if i == 0 else max(0., char_time(int(pos)) - .05)
+        # A caption comes up as its first word is said (at the beat's start when that is where its words begin) and
+        # stays until the next one, or until just after its last word when a silence follows: never over a line
+        # that someone else says in a bubble.
+        start = max(0., char_time(int(spots[0] if spots else pos)) - .05)
+        start = 0. if i == 0 and start <= LEAD else start
         lead, said = len(text) - len(text.lstrip()), [start]
         for a, _ in word_spans(text.strip(), lang):
             said.append(max(said[-1], char_time(int(spots[lead + a]))))
-        out.append([start, None, text.strip(), said[1:]])
+        out.append([start, None, text.strip(), said[1:], char_time(int(spots[-1])) + LINGER if spots else None])
     for i in range(len(out)):
-        out[i][1] = out[i + 1][0] if i + 1 < len(out) else speech_end
+        until = out[i + 1][0] if i + 1 < len(out) else speech_end
+        last = out[i].pop()
+        out[i][1] = until if last is None or until - last <= PAUSE else max(last, out[i][0] + .4)
         if out[i][1] <= out[i][0]:
             out[i][1] = out[i][0] + .4
     return [tuple(c) if words else tuple(c[:3]) for c in out]
