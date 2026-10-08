@@ -12,7 +12,7 @@ import json
 import math
 import re
 import textwrap
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 import numpy as np
@@ -181,11 +181,22 @@ class HybridProduction:
                                     highlight_color(palette[k], palette['ink'], palette['background']) != palette['ink']),
                                    palette['accent'])
         self.storybook = None
-        if STORY_DOODLES and plan['storyboard']['genre'] == 'story':
+        self.story_genre = plan['storyboard']['genre'] == 'story'
+        if STORY_DOODLES and (self.story_genre or any(self._staged(s) for s in plan['scenes'])):
+            # Stories, and the people and animals of every other genre (a recipe's cook, a promo's customer), are
+            # staged by the storybook: sets for places, people presets, the plan's shots. Only a story gets its
+            # picture-book title page.
             from .storybook import Storybook
             title = episode.get('title', '')
             title = title.get(lang, next(iter(title.values()), '')) if isinstance(title, dict) else str(title or '')
-            self.storybook = Storybook(plan, self.by_id, tline, self.size, whiteboard.skin.background, title)
+            self.storybook = Storybook(plan, self.by_id, tline, self.size, whiteboard.skin.background,
+                                       title if self.story_genre else '')
+        for c in plan['cast']:
+            if c['id'] in self.cast and self.cast[c['id']].family == 'human':
+                # A person's skin is a skin tone, never the plan palette's body colour (a green Marcus); the palette
+                # still dresses them.
+                self.cast[c['id']] = replace(self.cast[c['id']], palette=replace(
+                    self.cast[c['id']].palette, body=self._skin(c)))
         # Same score selection as finish; the procedural score and every recording start on beat zero.
         from ..audio import score
         self.score_beats = np.array([])
@@ -232,12 +243,34 @@ class HybridProduction:
                                              encoding='utf-8')
         self._leave_bubbled_lines_to_the_bubbles()
 
+    @staticmethod
+    def _staged(spec):
+        """A scene of a genre other than story that the storybook stages from its plan shots: a character scene, or
+        any scene with cast on stage, that is not a board, chart, diagram or kinetic type and whose on-screen text is
+        at most a caption or a quote (a title, call to action, counter or kinetic text stays a motion scene)."""
+        return bool(spec.get('shots')) and spec['treatment'] not in ('whiteboard', 'chart', 'kinetic_type') and (
+            spec['text']['kind'] in ('none', 'caption_only', 'quote')) and not any(
+            e['kind'] == 'diagram' for e in spec['elements']) and (
+            spec['treatment'] == 'character' or any(e['kind'] == 'cast' for e in spec['elements']))
+
+    def _skin(self, entry):
+        """A person's skin colour: the tone the storybook dresses them in, else their tone mark, else one of the
+        people presets' tones chosen from their id."""
+        from .storybook import TONE_MARKS, TONES
+        from .shots import SKIN
+        tone = None
+        if self.storybook is not None and entry['id'] in self.storybook.cast and self.storybook._human(entry['id']):
+            tone = self.storybook._look(entry['id'])['tone']
+        tone = tone or next((TONE_MARKS[m] for m in map(str.lower, entry.get('marks') or ()) if m in TONE_MARKS),
+                            TONES[sum((i + 1) * ord(ch) for i, ch in enumerate(entry['id'])) % 3])
+        return '#%02X%02X%02X' % SKIN[tone]
+
     def _prepare(self, span, project_dir):
         spec = span.spec
         duration = span.end - span.start
         treatment = spec['treatment']
-        if (self.storybook is not None and treatment not in ('whiteboard', 'chart')
-                and not any(e['kind'] == 'diagram' for e in spec['elements'])):
+        if self.storybook is not None and (self._staged(spec) if not self.story_genre else (
+                treatment not in ('whiteboard', 'chart') and not any(e['kind'] == 'diagram' for e in spec['elements']))):
             # A story page: preset doodles on the whiteboard paper, one shot per narrated sentence.
             span.story = self.storybook.prepare(spec, span.start, span.end)
             return
@@ -461,12 +494,12 @@ class HybridProduction:
             for e in copy_elements:
                 e.text = '\n'.join(textwrap.wrap(e.text, 36, break_long_words=False))
                 e.size = 96
-            if pictures and copy_elements and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
+            if pictures and copy_elements and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 for e in copy_elements:
                     e.y, e.width = .23, 1400
                 for e in pictures:
                     e.y = .60
-            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split', 'full_bleed') and not span.stacked:
+            if len(pictures) > 1 and spec['composition'] not in ('grid', 'split') and not span.stacked:
                 # A stable frame: one fixed slot per picture, left to right in spoken order, so a picture that
                 # arrives with a later clause never covers or shifts the ones already on the board.
                 pictures.sort(key=lambda e: e.start)
@@ -478,8 +511,10 @@ class HybridProduction:
                 elements[:] = [next(order) if e.kind == 'picture' else e for e in elements]
         camera = 'static'  # Camera is applied to the whole composed scene, including creatures/atmospheres.
         transition = spec['transition_in']
+        # A full-bleed scene is laid out like a centred one: a library picture is an object, never the whole frame,
+        # so a truck or a skyline never balloons over the page (J 10/8: no random zooms).
         span.motion = MotionScene(elements, duration=max(.01, duration), composition='center' if
-            spec['composition'] == 'stage' else spec['composition'], camera=camera,
+            spec['composition'] in ('stage', 'full_bleed') else spec['composition'], camera=camera,
             transition_in=transition,
             palette=Palette(p['background'], p['ink'], p['accent']), energy=self.style['energy'],
             motion_floor={'still': 0, 'breathing': .4, 'drifting': .7, 'lively': 1}[self.style['motion_floor']],
@@ -1518,7 +1553,7 @@ class HybridProduction:
                 card_t = max(t, end_start + last.join_length) if last.story is not None else t
                 current = self.whiteboard.frame(card_t).convert('RGB')
                 array = render_transition(np.asarray(previous), np.asarray(current), t - end_start, *self.size,
-                                          kind='page' if last.story is not None else 'match',
+                                          kind='page' if last.story is not None and self.story_genre else 'match',
                                           duration=last.join_length)      # a picture book turns to its last page
                 image = self._draw_anchor(Image.fromarray(array).convert('RGBA'), t)
                 if not self.vertical:
@@ -1532,6 +1567,8 @@ class HybridProduction:
             return self.whiteboard.frame(t)
         local = t - span.join
         kind = span.spec['transition_in']
+        if kind == 'zoom_through':
+            kind = 'match'          # the camera stays locked between scenes too: a dissolve, never a zoom (J 10/8)
         if span.scientific or (i and self.spans[i - 1].scientific):
             # Scientific panels follow the source clock and retain their exact
             # canvas/axis transform through both sides of every scene boundary.

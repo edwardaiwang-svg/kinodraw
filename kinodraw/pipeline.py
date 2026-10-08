@@ -673,9 +673,15 @@ def _scored(cfg, board):
                                 and styles.renderer(board.get('look')) == 'whiteboard')
 
 
+# A page holds a moment past its last word: the picture changes on the score beat after it (hybrid's join), a natural
+# pause between sentences. A still picture longer than this with no narration is still a frozen picture.
+NATURAL_PAUSE = .5
+
+
 def _narrated_pages(cfg, tl):
     """(start, end) of each story or motion page of a hybrid plan while its narration speaks: from the scene's first
-    spoken word to its last. Whiteboard, chart and diagram scenes draw as they speak and get none."""
+    spoken word to a natural pause after its last. Whiteboard, chart and diagram scenes draw as they speak and get
+    none."""
     if not _hybrid(cfg):
         return []
     pages = []
@@ -683,7 +689,7 @@ def _narrated_pages(cfg, tl):
         beats = [tl['beats'][b] for b in scene['beat_ids'] if b in tl['beats']]
         if beats and scene['treatment'] not in ('whiteboard', 'chart') and not any(
                 e['kind'] == 'diagram' for e in scene['elements']):
-            pages.append((min(b['start'] for b in beats), max(b['speech_end'] for b in beats)))
+            pages.append((min(b['start'] for b in beats), max(b['speech_end'] for b in beats) + NATURAL_PAUSE))
     return pages
 
 
