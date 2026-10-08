@@ -35,7 +35,7 @@ def isolated_providers(monkeypatch, tmp_path):
     monkeypatch.setattr(match, 'ensure_model', lambda *args: None)
     monkeypatch.setattr(hybrid, 'prepare_props', lambda *args: [])
     monkeypatch.setattr(LLMDirector, '_payload', lambda self, board, chapter, beats, count: {
-        'beats': [{'beat_id': b['id'], 'candidates': []} for b in beats]})
+        'beats': [{'beat_id': b['id'], 'text': b.get('text', ''), 'candidates': []} for b in beats]})
 
 
 def project(tmp_path, **settings):
