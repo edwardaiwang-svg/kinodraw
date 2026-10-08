@@ -9,6 +9,7 @@ frame the viewer sees, so a speaking character or a picture keeps its place.
 """
 from __future__ import annotations
 
+import bisect
 import math
 import re
 from functools import lru_cache
@@ -302,10 +303,10 @@ def _dilate(mask, steps):
 class DataCards:
     """Every data card of an episode with its time window; ``paint`` draws the live one over a finished frame."""
 
-    def __init__(self, entries, skin, lang, frame_size, written=()):
+    def __init__(self, entries, skin, lang, frame_size, written=(), cuts=()):
         self.entries = entries                 # [(start, end, card, beat id)], sorted, never overlapping
-        # cards whose figures the board itself writes while they are said: not repeated over the board
-        self.on_board = {k for k, e in enumerate(entries) if _written(e, written)}
+        # cards whose figures the board page on screen already writes: not repeated over that page
+        self.on_board = {k for k, e in enumerate(entries) if _written(e, written, cuts)}
         self.skin, self.lang = skin, lang
         self.W, self.H = frame_size
         self.unit = min(self.W, self.H) / 1080
@@ -427,11 +428,13 @@ def _squash(text):
     return re.sub(r'\s+', '', text).lower()
 
 
-def _written(entry, written) -> bool:
-    """The board writes every figure of the card while its beat is said (``written``: (time, text) of the board's
-    written words)."""
+def _written(entry, written, cuts=()) -> bool:
+    """The board page on screen while the card is up writes every figure of the card (``written``: (time, camera
+    stop, text) of the board's written words; ``cuts``: the times the camera moves to each stop)."""
     start, end, card, _ = entry
-    board = _squash(' '.join(text for at, text in written if start - 1.5 <= at <= end))
+    stop = max(0, bisect.bisect_right(list(cuts), start + .3) - 1) if cuts else None
+    board = _squash(' '.join(text for at, k, text in written
+                             if at <= end and (k == stop if stop is not None else start - 1.5 <= at)))
     return bool(board) and all(_squash(k) in board for k in _keys(card))
 
 
@@ -461,12 +464,14 @@ def entries(episode, tline, lang) -> list:
     return [tuple(e) for e in found if e[1] - e[0] > .5]
 
 
-def build(episode, tline, lang, skin, frame_size, elements=()):
+def build(episode, tline, lang, skin, frame_size, elements=(), cuts=()):
     """The DataCards of an episode, or None when its script states no figures. ``elements``: the whiteboard's
     drawn elements, whose written words show some figures already."""
     found = entries(episode, tline, lang)
     if not found:
         return None
-    written = [(el.trigger, ' '.join(el.drawing.lines)) for el in elements
-               if isinstance(el.drawing, ink.TextDrawing) and isinstance(el.trigger, (int, float))]
-    return DataCards(found, skin, lang, frame_size, written)
+    written = [(el.trigger if getattr(el, 'start', None) is None else el.start, getattr(el, 'stretch', 0),
+                ' '.join(el.drawing.lines)) for el in elements
+               if isinstance(el.drawing, ink.TextDrawing) and isinstance(el.trigger, (int, float))
+               and not getattr(el, 'skipped', False)]
+    return DataCards(found, skin, lang, frame_size, written, [c[0] for c in cuts])
