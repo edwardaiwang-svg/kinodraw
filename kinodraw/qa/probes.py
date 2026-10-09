@@ -82,8 +82,9 @@ class QAReport:
 
 def declared_holds(timeline: dict) -> list[Span]:
     intervals = list(timeline.get('holds', []))
-    if timeline.get('end_card'):
-        intervals.append(timeline['end_card'])
+    if timeline.get('end_card'):                        # with its wait for the last page's pictures, if any
+        card = timeline['end_card']
+        intervals.append({'start': card['start'] - card.get('wait', 0.), 'end': card['end']})
     intervals += [{'start': t['speech_end'], 'end': t['hold_end']}
                   for t in timeline.get('transitions', [])]
     for key, seconds in timeline.get('pauses', {}).items():
