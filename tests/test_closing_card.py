@@ -134,3 +134,21 @@ def test_a_long_card_is_written_with_time_left_to_read_it(tmp_path):
     assert all(e.hand for e in els if e.group == 'endcard')                # a long card is written by the hand
     assert max(done.values()) <= end['ready'] + 1 / 30                     # complete, credit too, by its ready time
     assert end['end'] - end['ready'] >= end['read'] >= 2.5                 # and then read
+
+
+def test_the_closing_card_waits_for_the_last_picture_of_a_short_piece(tmp_path):
+    # One short sentence ends before its picture can be drawn: the card cuts in late enough for the hand to finish it
+    # (never skipping it on a blank page), and the wait counts as the card's own hold for QA.
+    from kinodraw.qa import probes
+    board = board_of('A.')
+    board['beats'][0]['visuals'] = [{'id': 'b001v0', 'type': 'cluster', 'items': [{'doodle': 'narrator_explain'}],
+                                     'relation': 'none'}]
+    clips = {'b001': {'speech': 1.11, 'char_times': [.32, .32]}}        # one word, said in about a second
+    tl = timeline.layout(board, 'en', clips, render.pacing(board, 'en', clips, tmp_path))
+    prod = render.make_production(board, tl, 'en', tmp_path)
+    pictures = [e for e in prod.ctx.elements if e.beat and e.hand]
+    assert pictures and not any(e.skipped for e in pictures)
+    card = tl['end_card']
+    assert max(e.end for e in pictures) <= card['start']
+    assert 0 < card['wait'] <= 1.5 and card['start'] - card['wait'] >= tl['beats'][tl['beat_order'][-1]]['speech_end'] - 1e-3
+    assert any(abs(s.start - (card['start'] - card['wait'])) < 1e-3 for s in probes.declared_holds(tl))

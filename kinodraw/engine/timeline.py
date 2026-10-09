@@ -28,6 +28,8 @@ ZH_DWELL = .5             # extra reading pause per Mandarin paragraph (9/19 pre
 ZOOM_IN = .35             # first part of each section: zoom into its agenda card
 TAKE_PREROLL = .15        # start the note's camera move just before its words
 OVERLAP = .2              # a line that breaks off ("Dad, turn it off—"): the next speaker comes in this much early
+CLOSING_HOLD = 1.5        # at most this long the closing card waits for the last page's pictures (pacing measures it),
+                          # as long as a page change may wait for the hand (board.CUT_GRACE)
 
 
 class Pacing(dict):
@@ -36,10 +38,12 @@ class Pacing(dict):
     Takeaway preparation is separate from post-speech pauses: its artwork starts
     during the preceding narration, and only the measured shortfall delays speech.
     ``layout`` serializes that plan into each affected beat for the renderer.
+    ``closing`` is the measured wait before the closing card for the last page's pictures.
     """
     def __init__(self):
         super().__init__()
         self.takeaways = {}
+        self.closing = 0.
 
 
 def _cue_options(episode, lang):
@@ -196,6 +200,13 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
         at = closing.narrated_from(close, last, info, lang, info['speech_end']) if last else None
         if at is not None:
             card_start = at
+    # The card cuts in as the words end; when the last page's pictures cannot finish by then, even hurried, it waits
+    # for them (pacing measures how long, at most CLOSING_HOLD) with its music already playing, rather than the hand
+    # skipping them and leaving the page blank.
+    held = min(CLOSING_HOLD, max(0., float(getattr(pauses, 'closing', 0.)))) if card_start == cursor and order else 0.
+    if held:
+        cursor = card_start = cursor + held
+        out_beats[order[-1]]['end'] = round(cursor, 4)
     appear = card_start + card['clear']
     ready = appear + card['draw']
     duration = max(ready + card['read'], cursor + (closing.AFTER_VOICE if card_start < cursor else 0.))
@@ -217,7 +228,7 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
             music.append([info['start'], info['end']])
     for tr in transitions:
         music.append([tr['hold_end'], tr['end']])
-    music.append([duration - tail, duration])
+    music.append([duration - tail - held, duration])
     music.sort()
     merged = []
     for a, b in music:
@@ -231,7 +242,7 @@ def layout(episode, lang, clips, pauses=None, credit=True, bubbled=None):
             'music': [{'start': round(a, 4), 'end': round(b, 4)} for a, b in merged],
             'end_card': {'start': round(card_start, 4), 'end': duration, 'appear': round(appear, 4),
                          'ready': round(ready, 4), 'read': card['read'], 'quick': card['quick'],
-                         'narrated': card_start < cursor},
+                         'narrated': card_start < cursor, **({'wait': round(held, 4)} if held else {})},
             'credit': {'start': round(duration - tail, 4), 'end': duration} if credit else None}
 
 

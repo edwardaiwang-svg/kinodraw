@@ -1292,6 +1292,32 @@ def pacing(episode, lang, clips, project_dir, aspect='16:9', portrait=None, roun
                 changed = True
         if not changed:
             break
+    # The closing card cuts in as the words end (a cut, which waits for no hand): the last page's pictures must
+    # finish SETTLE before it. Replay that page at the real speed ceiling without skipping; whatever still runs over
+    # becomes the card's wait (timeline.CLOSING_HOLD at most) instead of a skipped picture on a blank page.
+    from .board import SETTLE
+    for _ in range(rounds):
+        timing = tl.layout(episode, lang, clips, pauses)
+        if timing['end_card'].get('narrated'):
+            break
+        prod = make_production(episode, timing, lang, project_dir, aspect=aspect, portrait=portrait)
+        cuts = getattr(prod, 'cuts', None)
+        if not cuts or len(cuts) < 2:
+            break
+        originals = [e for e in prod.ctx.elements if not (e.fixed and not e.hand)]
+        copies = {id(e): copy(e) for e in originals}
+        for e in originals:
+            c = copies[id(e)]
+            c.after = copies.get(id(e.after)) if e.after is not None else None
+            c.start, c.rate, c.skipped = None, 1., False
+        Scheduler(Camera(prod.g, locked=prod.camera.locked), prod.g).run(list(copies.values()), cuts, measure=True)
+        ends = [c.end for c in copies.values() if c.stretch == len(cuts) - 2 and c.beat and c.hand and not c.fixed
+                and not c.optional and c.start is not None]
+        deficit = max(ends) + SETTLE - cuts[-1][0] if ends else 0.
+        room = tl.CLOSING_HOLD - pauses.closing
+        if deficit <= .001 or room <= .001:
+            break
+        pauses.closing = round(pauses.closing + min(deficit + .01, room), 4)
     return pauses
 
 
